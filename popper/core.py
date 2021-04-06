@@ -222,7 +222,7 @@ class OrderedProgram:
 
 # -----------------------------------------------------------------------------
 # Constraint related. @NOTE: Copied from original without modificatoin. Jk,
-# refactor. Has implications for calls in contrain.py.
+# refactor. Has implications for calls in constrain.py.
 
 @dataclass(frozen=True)
 class ConstraintSymbol(PredicateSymbol):
@@ -256,6 +256,14 @@ class ConstraintLiteral(Literal):
         return cls(cls.predicate, arguments=args, polarity=False)
 
 @dataclass(frozen=True)
+class LT(ConstraintLiteral):
+    predicate = ConstraintSymbol(name = '<', arity = 2, operator = op.lt)
+
+@dataclass(frozen=True)
+class GT(ConstraintLiteral):
+    predicate = ConstraintSymbol(name = '>', arity = 2, operator = op.gt)
+
+@dataclass(frozen=True)
 class EQ(ConstraintLiteral):
     predicate = ConstraintSymbol(name = '==', arity = 2, operator = op.eq)
 
@@ -264,16 +272,8 @@ class NEQ(ConstraintLiteral):
     predicate = ConstraintSymbol(name = '!=', arity = 2, operator = op.ne)
 
 @dataclass(frozen=True)
-class GT(ConstraintLiteral):
-    predicate = ConstraintSymbol(name = '>', arity = 2, operator = op.gt)
-
-@dataclass(frozen=True)
 class GTEQ(ConstraintLiteral):
     predicate = ConstraintSymbol(name = '>=', arity = 2, operator = op.ge)
-
-@dataclass(frozen=True)
-class LT(ConstraintLiteral):
-    predicate = ConstraintSymbol(name = '<', arity = 2, operator = op.lt)
 
 @dataclass(frozen=True)
 class LTEQ(ConstraintLiteral):
