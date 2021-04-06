@@ -29,10 +29,23 @@ class Atom:
             assert isinstance(self.arguments, Tuple)
         assert self.predicate.arity in (None, len(self.arguments))
 
-    def __str__(self):
-        args = (str(arg) for arg in self.arguments)
-        return f'{self.predicate.name}({",".join(args)})'
+    #def __str__(self):
+    #    args = (str(arg) for arg in self.arguments)
+    #   return f'{self.predicate.name}({",".join(args)})'
     
+    #"""
+    def __str__(self):
+        def args_formatter():
+            for arg in self.arguments:
+                if isinstance(arg, Variable):
+                    yield f"{arg.name}"
+                elif isinstance(arg, tuple):
+                    yield '(' + ','.join(str(a) for a in arg) + ',)'
+                else:
+                    yield str(arg)
+        return f"{self.predicate.name}({','.join(args_formatter())})"
+    #"""
+
     @property
     def arity(self):
         return len(self.arguments)
@@ -91,6 +104,16 @@ class ProgramLiteral:
             if mode == ArgumentMode.Output: outputs.add((idx,arg))
             if mode == ArgumentMode.Unknown: unknowns.add((idx,arg))
         return inputs, outputs, unknowns
+    
+    # @NOTE: Inherited from atom in the original. Cleanup is next refactor.
+    def all_vars(self):
+        for argument in self.arguments:
+            if isinstance(argument, Variable):
+                yield argument
+            elif isinstance(argument, tuple):
+                for t_argument in argument:
+                    if isinstance(t_argument, Variable):
+                        yield t_argument
 
     @property
     def code_args(self):
@@ -109,7 +132,7 @@ class ProgramLiteral:
     def unknowns(self):
         return set(map(lambda idx_arg: idx_arg[1], self.split_arguments()[2]))
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class Clause:
     head : FrozenSet
     body : FrozenSet
@@ -126,6 +149,10 @@ class Clause:
         return len(self.head) <= 1 and \
                (literal.polarity for literal in chain(self.head, self.body))
     
+    def all_vars(self):
+        return set(variable for literal in chain(self.head, self.body) 
+                            for variable in literal.all_vars())
+
     def is_definite(self):
         return self.is_horn() and len(self.head) == 1
     
@@ -223,6 +250,16 @@ class OrderedProgram:
 # -----------------------------------------------------------------------------
 # Constraint related. @NOTE: Copied from original without modificatoin. Jk,
 # refactor. Has implications for calls in constrain.py.
+
+# @NOTE: This can be implemented in a way that doesn't require the creation of 
+#        an empty class.
+@dataclass(frozen=True, order=True)
+class VarVariable(Variable):
+    pass # Subclass serves as tag to indicate it ranges over variable indices
+
+@dataclass(frozen=True, order=True)
+class ClauseVariable(Variable):
+    pass # Subclass serves as tag to indicate it ranges over clause indices
 
 @dataclass(frozen=True)
 class ConstraintSymbol(PredicateSymbol):

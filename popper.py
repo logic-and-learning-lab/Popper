@@ -1,8 +1,8 @@
 import sys
 from popper.solver import Clingo
 from popper.tester import Tester
+from popper.constrain import Constrain
 from popper.generate import generate_program
-from popper.constrain import constrain
 
 def popper(solver, tester, max_literals = 3):
     for size in range(1, max_literals + 1):
@@ -21,7 +21,7 @@ def popper(solver, tester, max_literals = 3):
 
             # 3. Constrain
 
-def direct_popper(solver, tester, size):
+def direct_popper(solver, tester, constrain, size):
     unordered_program = generate_program(solver, size)
     if unordered_program == None:
         print('NO Program Returned')
@@ -32,7 +32,7 @@ def direct_popper(solver, tester, size):
     if program_outcomes[ordered_program] == ('all', 'none'):
         return ordered_program
     
-    constrain(solver, program_outcomes)
+    constrain.constrain_solver(solver, program_outcomes)
 
 def output_program(program):
     if program:
@@ -44,8 +44,9 @@ def output_program(program):
 def main(kbpath):
     solver = Clingo(kbpath)
     tester = Tester(kbpath)
+    constrain = Constrain()
     #program = popper(solver, tester)
-    program = direct_popper(solver, tester, 7)
+    program = direct_popper(solver, tester, constrain, 7)
 
 
     #output_program(program)
