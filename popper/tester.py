@@ -93,6 +93,6 @@ class Tester():
             # negative_outcome = Outcome.All
         # inconsistent
         else:
-            negative_outcome = Outcome.Some
+            negative_outcome = 'some'
         
         return {program:(positive_outcome, negative_outcome)}

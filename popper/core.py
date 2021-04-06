@@ -1,16 +1,17 @@
+import operator as op
 from enum import Enum
 from itertools import chain
 from dataclasses import dataclass
 from typing import Union, Any, FrozenSet, Tuple, Optional, Sequence, Callable
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class Variable:
     name : Any
     
     def __str__(self):
         return f'{self.name}'
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class PredicateSymbol:
     name : str
     arity : Optional[int] = None
@@ -36,6 +37,15 @@ class Atom:
     def arity(self):
         return len(self.arguments)
 
+@dataclass(frozen=True)
+class Literal(Atom):
+    polarity : bool
+    naf : bool = True
+
+    def __str__(self):
+        if self.polarity: return super().__str__()
+        return 'not ' + super().__str__()
+
 class ArgumentMode(Enum):
     Input   = '+'
     Output  = '-'
@@ -46,12 +56,13 @@ class ModeDeclaration:
     predicate : PredicateSymbol
     arguments : Sequence[ArgumentMode]
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class ProgramLiteral:
     predicate : PredicateSymbol
     arguments : Tuple
     mode : ModeDeclaration
     polarity : bool
+    naf : bool = True
 
     def __str__(self):
         args = (f'V{arg}' for arg in self.arguments)
@@ -202,6 +213,68 @@ class OrderedProgram:
     def __iter__(self):
         return iter(self.clauses)
     
+    def __len__(self):
+        return len(self.clauses)
+    
     def to_code(self):
         for clause in self.clauses:
             yield clause.to_code() + '.'
+
+# -----------------------------------------------------------------------------
+# Constraint related. @NOTE: Copied from original without modificatoin. Jk,
+# refactor. Has implications for calls in contrain.py.
+
+@dataclass(frozen=True)
+class ConstraintSymbol(PredicateSymbol):
+    operator : Callable = None
+    fixed_interpretation : bool = True
+    
+@dataclass(frozen=True)
+class ConstraintLiteral(Literal):
+    predicate : ConstraintSymbol
+    naf : bool = False
+
+    def __str__(self):
+        if self.predicate.arity == 2:
+            assert self.polarity, 'need to think about negated operator literals'
+            arg0, arg1 = self.arguments[0], self.arguments[1]
+            return f'{arg0}{self.predicate.name}{arg1}'
+        return super().__str__()
+
+    def evaluate(self, var_assignment: dict):
+        args = ((var_assignment[arg] if isinstance(arg, Variable) else arg)
+                for arg in self.arguments)
+        eval_ = self.predicate.operator(*args)
+        return self.polarity == eval_  # take into accout whether literal was negative
+
+    @classmethod
+    def pos(cls, *args):
+        return cls(cls.predicate, arguments=args, polarity=True)
+
+    @classmethod
+    def neg(cls, *args):
+        return cls(cls.predicate, arguments=args, polarity=False)
+
+@dataclass(frozen=True)
+class EQ(ConstraintLiteral):
+    predicate = ConstraintSymbol(name = '==', arity = 2, operator = op.eq)
+
+@dataclass(frozen=True)
+class NEQ(ConstraintLiteral):
+    predicate = ConstraintSymbol(name = '!=', arity = 2, operator = op.ne)
+
+@dataclass(frozen=True)
+class GT(ConstraintLiteral):
+    predicate = ConstraintSymbol(name = '>', arity = 2, operator = op.gt)
+
+@dataclass(frozen=True)
+class GTEQ(ConstraintLiteral):
+    predicate = ConstraintSymbol(name = '>=', arity = 2, operator = op.ge)
+
+@dataclass(frozen=True)
+class LT(ConstraintLiteral):
+    predicate = ConstraintSymbol(name = '<', arity = 2, operator = op.lt)
+
+@dataclass(frozen=True)
+class LTEQ(ConstraintLiteral):
+    predicate = ConstraintSymbol(name = '<=', arity = 2, operator = op.le)
