@@ -1,6 +1,6 @@
 from . import core
 from collections import defaultdict
-from itertools import chain, product, combinations
+from itertools import chain, product
 
 class Constrain:
     def __init__(self, no_pruning = False):
@@ -52,9 +52,9 @@ class Constrain:
 
         # Ensure only groundings for distinct clauses are generated
         # AC: replace with an AllDiff constraint
-        for clause_number1, clause_number2 in combinations(range(len(program)), 2):
-            yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
-                               core.ClauseVariable(f'C{clause_number2}'))
+        # for clause_number1, clause_number2 in combinations(range(len(program)), 2):
+        #     yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
+        #                        core.ClauseVariable(f'C{clause_number2}'))
 
     def banish_constraint(self, program):
         for clause_number, clause in enumerate(program):
@@ -182,8 +182,8 @@ class Constrain:
 
             # Ensure only groundings for distinct variables are used
             # AC: replace with an AllDiff constraint
-            for var1, var2 in combinations(clause.all_vars(), 2):
-                yield core.NEQ.pos(core.VarVariable(var1.name), core.VarVariable(var2.name))
+            # for var1, var2 in combinations(clause.all_vars(), 2):
+            #     yield core.NEQ.pos(core.VarVariable(var1.name), core.VarVariable(var2.name))
 
             for idx, var in enumerate(clause.head[0].arguments):
                 yield core.EQ.pos(core.VarVariable(var.name), idx)
@@ -212,9 +212,9 @@ class Constrain:
 
             # Ensure only groundings for distinct clauses are used
             # AC: replace with an AllDiff constraint
-            for clause_number1, clause_number2 in combinations(range(len(program)), 2):
-                yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
-                                   core.ClauseVariable(f'C{clause_number2}'))
+            # for clause_number1, clause_number2 in combinations(range(len(program)), 2):
+            #     yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
+            #                        core.ClauseVariable(f'C{clause_number2}'))
 
         head = (core.Literal(predicate = 'included_program',
                              arguments = (program_handle,),

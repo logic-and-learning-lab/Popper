@@ -2,9 +2,9 @@ import os
 import re
 import clingo
 import numbers
+import popper
 from . import core
 from collections import OrderedDict
-from ortools.sat.python import cp_model
 
 # AC: rename file to ClingoSolver.
 
@@ -18,14 +18,16 @@ NUM_OF_LITERALS = (
     #sum{K+1,Clause : clause_size(Clause,K)} != n.
 """)
 
-# NUM_OF_CLAUSES = (
-# """
-# %%% External atom for number of clauses in the program %%%%%
-# #external size_in_clauses(n).
-# :-
-#     size_in_clauses(n),
-#     #sum{K : clause(K)} != n.
-# """)
+GROUNDER = """\
+        #show v_var/2.
+        #show c_var/2.
+        c_val(0..num_c_vals-1).
+        v_val(0..num_v_vals-1).
+        1 {c_var(V,X): c_val(X)} 1:- V=0..num_c_vars-1.
+        1 {v_var(V,X): v_val(X)} 1:- V=0..num_v_vars-1.
+        :- c_val(X), #count{I : c_var(I,X)} > 1.
+        :- v_val(X), #count{I : v_var(I,X)} > 1.
+    """
 
 def arg_to_symbol(arg):
     if isinstance(arg, core.Variable):
@@ -42,92 +44,24 @@ def atom_to_symbol(lit):
     args = tuple(arg_to_symbol(arg) for arg in lit.arguments)
     return clingo.Function(name = lit.predicate.name, arguments = args)
 
-class SolutionPrinter(cp_model.CpSolverSolutionCallback):
-
-    def __init__(self, cp_to_vars):
-        cp_model.CpSolverSolutionCallback.__init__(self)
-        self.cp_to_vars = cp_to_vars
-        self.assignments = []
-
-    def on_solution_callback(self):
-        assignment = dict((self.cp_to_vars[k], self.Value(k)) for k in self.cp_to_vars.keys())
-        self.assignments.append(assignment)
-
-import popper
-def aux(ast, max_clauses, max_vars):
-    model = cp_model.CpModel()
-
-    vars_to_cp = {}
-    cp_to_vars = {}
-
-    var_vals = []
-    for var in ast.all_vars():
-        if isinstance(var, core.ClauseVariable):
-            cp_var = model.NewIntVar(0, max_clauses - 1, var.name)
-        elif isinstance(var, core.VarVariable):
-            cp_var = model.NewIntVar(0, max_vars - 1, var.name)
-            var_vals.append(cp_var)
-        else:
-            assert False, 'Whut??' # Jk: Hahahaha
-        vars_to_cp[var] = cp_var
-        cp_to_vars[cp_var] = var
-
-    # print(vars_to_cp)
-
-    for lit in ast.body:
-        if not isinstance(lit, core.ConstraintLiteral):
-            continue
-        def args():
-            for arg in lit.arguments:
-                if isinstance(arg, core.Variable):
-                    yield vars_to_cp[arg]
-                else:
-                    yield arg
-        x = lit.predicate.operator(*args())
-        model.Add(x)
-
-
-    # print('---')
-    # print(model)
-    cp_solver = cp_model.CpSolver()
-    solution_printer = SolutionPrinter(cp_to_vars)
-    cp_solver.SearchForAllSolutions(model, solution_printer)
-    xs =  solution_printer.assignments
-    # if len(vars_to_cp) == 0:
-    #     print('WTF')
-    #     print(xs)
-    return xs
-
 def aux_clingo(ast, max_clauses, max_vars):
-    solver = clingo.Control([])
+    # solver = clingo.Control(['--seed=1'])
+    solver = clingo.Control(['--seed=1','--rand-freq=0'])
 
     # ask for all models
     solver.configuration.solve.models = 0
 
-    # AC:tidy
-    path = os.path.abspath('popper/')
-    prevwd = os.getcwd()
-    with open(path + '/cons.pl') as alan:
-        os.chdir(path)
-        solver.add('base', [], alan.read())
-        os.chdir(prevwd)
+    # add the base reasoning
+    solver.add("base", [], GROUNDER)
 
     # for each var in the program, map it to an integer
     c_vars = {v.name:i for i,v in enumerate(var for var in ast.all_vars() if isinstance(var, core.ClauseVariable))}
     v_vars = {v.name:i for i,v in enumerate(var for var in ast.all_vars() if isinstance(var, core.VarVariable))}
 
-    # print(c_vars)
-    # print(v_vars)
-
     c_var_count = len(c_vars)
-
     v_var_count = len(v_vars)
     if c_var_count == 0 and v_var_count == 0:
         return [{}]
-
-    # print(c_var_count, max_clauses)
-    # print(v_var_count, max_vars)
-
 
     solver.add('base', [], f'#const num_c_vars={c_var_count}.')
     solver.add('base', [], f'#const num_c_vals={max_clauses}.')
@@ -161,15 +95,10 @@ def aux_clingo(ast, max_clauses, max_vars):
             var1 = c_vars[lit.arguments[0].name]
             var2 = c_vars[lit.arguments[1].name]
             solver.add('base', [], f':- c_var({var1},Val1), c_var({var2},Val2), Val1>=Val2.')
-            # print(var1,var2)
-        # else:
-            # print(lit)
-
 
     solver.ground([("base", [])])
 
     out = []
-
     def on_model(m):
         xs = m.symbols(shown = True)
         c_var_assignments = {}
@@ -194,13 +123,13 @@ def aux_clingo(ast, max_clauses, max_vars):
 
 class Clingo():
     def __init__(self, kbpath):
-        self.solver = clingo.Control([])
+        self.solver = clingo.Control(['--seed=1','--rand-freq=0'])
         self.max_vars = 0
         self.max_clauses = 0
 
         # Runtime attributes
         # AC: what is this used for?
-        self.grounded = []
+        # self.grounded = []
         self.assigned = OrderedDict()
         # AC: why an OrderedDict? We never remove from it
         self.added = OrderedDict()
@@ -233,7 +162,7 @@ class Clingo():
         # Ground 'alan' and 'modes_file'
         parts = [('alan', []), ('modes_file', [])]
         self.solver.ground(parts)
-        self.grounded.extend(parts)
+        # self.grounded.extend(parts)
 
     def get_model(self):
         with self.solver.solve(yield_ = True) as handle:
@@ -273,54 +202,25 @@ class Clingo():
             self.solver.add(name, arguments, code)
         self.added[name] = code
 
-    # AC: rm will (hopefully) soon change the solver back to clingo
-    # AC: I find this method to be incomprehensible
-    # AC: it should be split into two: ground constraints and then add to the solver
-    # AC: it is difficult to reason
-
     def ground(self, name, context = None):
         ast = self.added[name]
         clbody = tuple(lit for lit in ast.body if not isinstance(lit, core.ConstraintLiteral))
         clause = core.Clause(head = ast.head, body = clbody)
 
         with self.solver.backend() as backend:
-
-            # cp_assignments = list(aux(ast,self.max_clauses,self.max_vars))
-            # clingo_assignments = list(aux_clingo(ast,self.max_clauses,self.max_vars))
-
-            # if len(cp_assignments) != len(clingo_assignments):
-            #     print('--')
-            #     print('clause',clause)
-            #     print('mismatch',len(cp_assignments),len(clingo_assignments))
-            #     print(cp_assignments)
-            #     print(clingo_assignments)
-
-            #     exit()
-
-            for assignment in aux(ast,self.max_clauses,self.max_vars):
-                ground_clause = clause.ground(assignment)
-
-            # for assignment in aux_clingo(ast,self.max_clauses,self.max_vars):
-                # ground_clause = clause.ground_new(assignment)
-
-                # print(assignment)
-                # print('ground_clause',ground_clause)
-
-                head_symbs = []
+            for assignment in aux_clingo(ast,self.max_clauses,self.max_vars):
+                ground_clause = clause.ground_new(assignment)
                 head_atoms = []
-                body_symbs = []
                 body_lits = []
                 for lit in ground_clause.head:
                     symbol = atom_to_symbol(lit)
-                    head_symbs.append(symbol)
                     head_atoms.append(backend.add_atom(symbol))
                 for lit in ground_clause.body:
                     symbol = atom_to_symbol(lit)
-                    body_symbs.append(symbol)
                     body_atom = backend.add_atom(symbol)
                     body_lits.append(body_atom if lit.polarity else -body_atom)
 
                 backend.add_rule(head_atoms, body_lits, choice = False)
 
-        self.grounded.extend((name, []))
+        # self.grounded.extend((name, []))
 
