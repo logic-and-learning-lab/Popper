@@ -28,25 +28,25 @@ def direct_popper(solver, tester, constrain, size):
     c = 1
     while True:
         print(c)
-        print('Generate')
+        # print('Generate')
         unordered_program = generate_program(solver)
         if unordered_program == None:
             print('No Program Returned')
             break
         ordered_program = unordered_program.to_ordered()
 
-        print('Test')
+        # print('Test')
         # 2. Test
         program_outcomes = tester.test(ordered_program)
         #print(program_outcomes)
         if program_outcomes[ordered_program] == ('all', 'none'):
             return ordered_program
 
-        print('Const')
+        # print('Const')
         constrain.constrain_solver(solver, program_outcomes)
 
         c += 1
-        print()
+        # print()
 
 def output_program(program):
     if program:

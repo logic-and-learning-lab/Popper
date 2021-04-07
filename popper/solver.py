@@ -53,6 +53,145 @@ class SolutionPrinter(cp_model.CpSolverSolutionCallback):
         assignment = dict((self.cp_to_vars[k], self.Value(k)) for k in self.cp_to_vars.keys())
         self.assignments.append(assignment)
 
+import popper
+def aux(ast, max_clauses, max_vars):
+    model = cp_model.CpModel()
+
+    vars_to_cp = {}
+    cp_to_vars = {}
+
+    var_vals = []
+    for var in ast.all_vars():
+        if isinstance(var, core.ClauseVariable):
+            cp_var = model.NewIntVar(0, max_clauses - 1, var.name)
+        elif isinstance(var, core.VarVariable):
+            cp_var = model.NewIntVar(0, max_vars - 1, var.name)
+            var_vals.append(cp_var)
+        else:
+            assert False, 'Whut??' # Jk: Hahahaha
+        vars_to_cp[var] = cp_var
+        cp_to_vars[cp_var] = var
+
+    # print(vars_to_cp)
+
+    for lit in ast.body:
+        if not isinstance(lit, core.ConstraintLiteral):
+            continue
+        def args():
+            for arg in lit.arguments:
+                if isinstance(arg, core.Variable):
+                    yield vars_to_cp[arg]
+                else:
+                    yield arg
+        x = lit.predicate.operator(*args())
+        model.Add(x)
+
+
+    # print('---')
+    # print(model)
+    cp_solver = cp_model.CpSolver()
+    solution_printer = SolutionPrinter(cp_to_vars)
+    cp_solver.SearchForAllSolutions(model, solution_printer)
+    xs =  solution_printer.assignments
+    # if len(vars_to_cp) == 0:
+    #     print('WTF')
+    #     print(xs)
+    return xs
+
+def aux_clingo(ast, max_clauses, max_vars):
+    solver = clingo.Control([])
+
+    # ask for all models
+    solver.configuration.solve.models = 0
+
+    # AC:tidy
+    path = os.path.abspath('popper/')
+    prevwd = os.getcwd()
+    with open(path + '/cons.pl') as alan:
+        os.chdir(path)
+        solver.add('base', [], alan.read())
+        os.chdir(prevwd)
+
+    # for each var in the program, map it to an integer
+    c_vars = {v.name:i for i,v in enumerate(var for var in ast.all_vars() if isinstance(var, core.ClauseVariable))}
+    v_vars = {v.name:i for i,v in enumerate(var for var in ast.all_vars() if isinstance(var, core.VarVariable))}
+
+    # print(c_vars)
+    # print(v_vars)
+
+    c_var_count = len(c_vars)
+
+    v_var_count = len(v_vars)
+    if c_var_count == 0 and v_var_count == 0:
+        return [{}]
+
+    # print(c_var_count, max_clauses)
+    # print(v_var_count, max_vars)
+
+
+    solver.add('base', [], f'#const num_c_vars={c_var_count}.')
+    solver.add('base', [], f'#const num_c_vals={max_clauses}.')
+    solver.add('base', [], f'#const num_v_vars={v_var_count}.')
+    solver.add('base', [], f'#const num_v_vals={max_vars}.')
+
+    for lit in ast.body:
+        if not isinstance(lit, core.ConstraintLiteral):
+            continue
+        if isinstance(lit, popper.core.EQ):
+            # lit A==0 <class 'popper.core.EQ'>
+            # arg A <class 'popper.core.VarVariable'>
+            # arg 0 <class 'int'>
+            var = lit.arguments[0]
+            val = lit.arguments[1]
+            if isinstance(var, popper.core.VarVariable):
+                var = v_vars[var.name]
+                solver.add('base', [], f':- not v_var({var},{val}).')
+        elif isinstance(lit, popper.core.GTEQ):
+            # lit Cl>=0 <class 'popper.core.GTEQ'>
+            # arg Cl <class 'popper.core.ClauseVariable'>
+            # arg 0 <class 'int'>
+            var = lit.arguments[0]
+            val = lit.arguments[1]
+            if isinstance(var, popper.core.ClauseVariable):
+                var = c_vars[var.name]
+                for i in range(val):
+                    solver.add('base', [], f':- not c_var({var},{val}).')
+        elif isinstance(lit, popper.core.LT):
+            # print('LIT',lit)
+            var1 = c_vars[lit.arguments[0].name]
+            var2 = c_vars[lit.arguments[1].name]
+            solver.add('base', [], f':- c_var({var1},Val1), c_var({var2},Val2), Val1>=Val2.')
+            # print(var1,var2)
+        # else:
+            # print(lit)
+
+
+    solver.ground([("base", [])])
+
+    out = []
+
+    def on_model(m):
+        xs = m.symbols(shown = True)
+        c_var_assignments = {}
+        v_var_assignments = {}
+        for x in xs:
+            var = x.arguments[0].number
+            val = x.arguments[1].number
+            if x.name == 'c_var':
+                c_var_assignments[var] = val
+            if x.name == 'v_var':
+                v_var_assignments[var] = val
+        assignments = {}
+        for k, v in c_vars.items():
+            assignments[k] = c_var_assignments[v]
+        for k, v in v_vars.items():
+            assignments[k] = v_var_assignments[v]
+        out.append(assignments)
+
+    solver.solve(on_model=on_model)
+
+    return out
+
 class Clingo():
     def __init__(self, kbpath):
         self.solver = clingo.Control([])
@@ -141,53 +280,31 @@ class Clingo():
 
     def ground(self, name, context = None):
         ast = self.added[name]
-        model = cp_model.CpModel()
-
-        vars_to_cp = {}
-        cp_to_vars = {}
-
-        var_vals = []
-        for var in ast.all_vars():
-            if isinstance(var, core.ClauseVariable):
-                cp_var = model.NewIntVar(0, self.max_clauses - 1, var.name)
-            elif isinstance(var, core.VarVariable):
-                cp_var = model.NewIntVar(0, self.max_vars - 1, var.name)
-                var_vals.append(cp_var)
-            else:
-                assert False, 'Whut??' # Jk: Hahahaha
-            vars_to_cp[var] = cp_var
-            cp_to_vars[cp_var] = var
-
-        # AC: ADD ALL DIFF CONSTRAINTS
-        # AC: ADD ALL DIFF CONSTRAINTS
-
-        for lit in ast.body:
-            if not isinstance(lit, core.ConstraintLiteral):
-                continue
-            # print(lit, type(lit))
-            def args():
-                for arg in lit.arguments:
-                    # print(type(arg))
-                    if isinstance(arg, core.Variable):
-                        yield vars_to_cp[arg]
-                    else:
-                        yield arg
-                        # print(arg)
-            # AC: why they weird syntax? why not push the reasoning in the loop?
-            x = lit.predicate.operator(*args())
-            # print(type(x))
-            model.Add(x)
-            # print(x)
-
-        cp_solver = cp_model.CpSolver()
-        solution_printer = SolutionPrinter(cp_to_vars)
-        status = cp_solver.SearchForAllSolutions(model, solution_printer)
         clbody = tuple(lit for lit in ast.body if not isinstance(lit, core.ConstraintLiteral))
         clause = core.Clause(head = ast.head, body = clbody)
 
         with self.solver.backend() as backend:
-            for assignment in solution_printer.assignments:
+
+            # cp_assignments = list(aux(ast,self.max_clauses,self.max_vars))
+            # clingo_assignments = list(aux_clingo(ast,self.max_clauses,self.max_vars))
+
+            # if len(cp_assignments) != len(clingo_assignments):
+            #     print('--')
+            #     print('clause',clause)
+            #     print('mismatch',len(cp_assignments),len(clingo_assignments))
+            #     print(cp_assignments)
+            #     print(clingo_assignments)
+
+            #     exit()
+
+            for assignment in aux(ast,self.max_clauses,self.max_vars):
                 ground_clause = clause.ground(assignment)
+
+            # for assignment in aux_clingo(ast,self.max_clauses,self.max_vars):
+                # ground_clause = clause.ground_new(assignment)
+
+                # print(assignment)
+                # print('ground_clause',ground_clause)
 
                 head_symbs = []
                 head_atoms = []
@@ -206,3 +323,4 @@ class Clingo():
                 backend.add_rule(head_atoms, body_lits, choice = False)
 
         self.grounded.extend((name, []))
+

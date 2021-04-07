@@ -76,6 +76,21 @@ class Literal(Atom):
         return __class__(predicate = self.predicate, arguments = tuple(args()),
                          polarity = self.polarity, naf = self.naf)
 
+
+    def ground_new(self, assignment):
+        def args():
+            for arg in self.arguments:
+                if isinstance(arg, Variable):
+                    yield assignment[arg.name]
+                elif isinstance(arg, tuple):
+                    yield tuple((assignment[a.name] if isinstance(a, Variable) else a)
+                                for a in arg)
+                else:
+                    yield arg
+        return __class__(predicate = self.predicate, arguments = tuple(args()),
+                         polarity = self.polarity, naf = self.naf)
+
+
 class ArgumentMode(Enum):
     Input   = '+'
     Output  = '-'
@@ -186,6 +201,10 @@ class Clause:
     def ground(self, assignment):
         return __class__(head = tuple(lit.ground(assignment) for lit in self.head),
                          body = tuple(lit.ground(assignment) for lit in self.body))
+
+    def ground_new(self, assignment):
+        return __class__(head = tuple(lit.ground_new(assignment) for lit in self.head),
+                         body = tuple(lit.ground_new(assignment) for lit in self.body))
 
 class UnorderedClause(Clause):
     def __init__(self, head, body, min_num):
