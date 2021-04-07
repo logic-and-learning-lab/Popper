@@ -51,13 +51,16 @@ def generate_unordered_program(clingo_model):
             clause_id_to_body[clause_id].add(body_atom)
 
     # Set modes
-    for clause_id, atom in clause_id_to_head.items():
+    for clause_id in clause_id_to_head.keys():
+        atom = clause_id_to_head[clause_id]
         dirs = tuple(directions[atom.predicate.name][i] 
                      for i in range(atom.arity))
         mode = core.ModeDeclaration(atom.predicate, dirs)
         clause_id_to_head[clause_id] = core.ProgramLiteral(
-                                            atom.predicate, atom.arguments,
-                                            mode, True)
+                                            predicate = atom.predicate, 
+                                            arguments = atom.arguments,
+                                            mode = mode, 
+                                            polarity = True)
     
     for clause_id, body in clause_id_to_body.items():
         body_with_dirs = set()
@@ -66,20 +69,22 @@ def generate_unordered_program(clingo_model):
                     for i in range(atom.arity))
             mode = core.ModeDeclaration(atom.predicate, tuple(dirs))
             body_with_dirs.add(core.ProgramLiteral(
-                                    atom.predicate, atom.arguments, mode, True))
+                                    predicate = atom.predicate, 
+                                    arguments = atom.arguments, 
+                                    mode = mode, 
+                                    polarity = True))
         clause_id_to_body[clause_id] = body_with_dirs
+    
+    def build_clauses():
+        for clause_key in sorted(clause_id_to_head.keys()):
+            head = (clause_id_to_head[clause_key],)
+            body = tuple(clause_id_to_body[clause_key])
+            min_num = min_clause[clause_key]
+            yield core.UnorderedClause(head = head, body = body, min_num = min_num)
 
-    clauses = []
-    for clause_key in sorted(clause_id_to_head.keys()):
-        head = (clause_id_to_head[clause_key],)
-        body = tuple(clause_id_to_body[clause_key])
-        min_num = min_clause[clause_key]
-        clauses.append(core.UnorderedClause(head, body, min_num))
+    return core.UnorderedProgram(clauses = tuple(build_clauses()), before = before)
 
-    return core.UnorderedProgram(clauses, before)
-
-def generate_program(solver, number_of_literals):
-    solver.update_number_of_literals(number_of_literals)
+def generate_program(solver):
     clingo_model = solver.get_model()
     
     if clingo_model:

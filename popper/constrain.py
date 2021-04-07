@@ -1,4 +1,5 @@
 from . import core
+from collections import defaultdict
 from itertools import chain, product, combinations
 
 class Constrain:
@@ -26,25 +27,24 @@ class Constrain:
     # Specific constraints
     def generalisation_constraint(self, program):
         for clause_number, clause in enumerate(program):
-            #print(clause_number, clause)
             clause_handle = self.make_clause_handle(clause)
             ic_arguments = (clause_handle, core.ClauseVariable(f'C{clause_number}'))
             ic_literal = core.Literal(predicate = 'included_clause', 
                                       arguments = ic_arguments,
                                       polarity = True)
+            yield ic_literal
+
             cs_arguments = (core.ClauseVariable(f'C{clause_number}'), len(clause.body))
             cs_literal = core.Literal(predicate = 'clause_size',
                                       arguments = cs_arguments,
                                       polarity = True)
-            
-            yield ic_literal
             yield cs_literal
         
         # Use clauses' metadata concerning clause ordering to restrict groundings
         for clause_number1, clause_numbers in program.before.items():
             for clause_number2 in clause_numbers:
-                yield core.LT.pos(core.ClauseVariable(f'C{cl_num1}'), 
-                                  core.ClauseVariable(f'C{cl_num2}'))
+                yield core.LT.pos(core.ClauseVariable(f'C{clause_number1}'), 
+                                  core.ClauseVariable(f'C{clause_number2}'))
         # Use clauses' metadata concerning minimal clause index to restrict 
         # groundings.
         for clause_number, clause in enumerate(program):
@@ -53,7 +53,7 @@ class Constrain:
         # Ensure only groundings for distinct clauses are generated    
         for clause_number1, clause_number2 in combinations(range(len(program)), 2):
             yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'), 
-                            core.ClauseVariable(f'C{clause_number2}'))
+                               core.ClauseVariable(f'C{clause_number2}'))
 
     def banish_constraint(self, program):
         for clause_number, clause in enumerate(program):
@@ -74,9 +74,9 @@ class Constrain:
                                 polarity  = True)
         neg_body = core.Literal(predicate = 'clause', 
                                 arguments = (len(program),),
-                                polarity  = True)
+                                polarity  = False)
         
-        return Clause(head = (), body = (pos_body, neg_body))
+        return core.Clause(head = (), body = (pos_body, neg_body))
 
     # @NOTE: The computational complexity of this function isn't great. Jk: Discuss 
     # possible improvements after getting a more detailed specification.
@@ -94,7 +94,7 @@ class Constrain:
             something_added = False
             for clause in program:
                 head, body = clause.head[0], clause.body
-                recursive = clause.recursive()
+                recursive = clause.is_recursive()
                 for body_pred in (body_literal.predicate for body_literal in body):
                     if body_pred not in preds_num_clauses:
                         continue
@@ -119,7 +119,7 @@ class Constrain:
                                      arguments = (pred.name, num_recursive),
                                      polarity  = True))
             
-            yield Clause(head = (), body = tuple(lits))
+            yield core.Clause(head = (), body = tuple(lits))
 
     def derive_constraint_types(self, program, positive_outcome, negative_outcome):
         outcome_to_constraints = {
@@ -141,11 +141,11 @@ class Constrain:
     def constraints_from_type(self, program, constraint_type):
         if constraint_type == 'banish': 
             cc = core.Clause(head = (), 
-                            body = tuple(self.banish_constraint(program)))
+                             body = tuple(self.banish_constraint(program)))
             return [cc] 
         
         if constraint_type == 'redundancy': 
-            return [self.redundancy_constraint(program)] 
+            return list(self.redundancy_constraint(program)) 
         
         if constraint_type == 'specialisation': 
             return [self.specialisation_constraint(program)]
@@ -228,7 +228,7 @@ class Constrain:
                     yield ('inclusion_rule', clause_handle, rule)
         
         if 'redundancy' in constraint_types or 'specialisation' in constraint_types:
-            program_handle, rule = self.make_program_inclusion_rule(clause)
+            program_handle, rule = self.make_program_inclusion_rule(program)
             yield ('inclusion_rule', program_handle, rule)
 
     def derive_constraints(self, program, constraint_types):
@@ -260,9 +260,16 @@ class Constrain:
         for program, (positive_outcome, negative_outcome) in program_outcomes.items():
             constraint_types[program] = \
             self.derive_constraint_types(program, positive_outcome, negative_outcome)
-        
+
         named_constraints = self.map_ctypes_and_inclusion_rules(constraint_types)
+        
+        
         self.impose(solver, named_constraints)
 
     def impose(self, solver, named_constraints):
-        pass
+        names = []
+        for name, constraint in named_constraints:
+            if name not in solver.added:
+                solver.add(constraint, name = name)
+                names.append(name)
+        solver.ground(*names)

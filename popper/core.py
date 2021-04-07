@@ -29,26 +29,29 @@ class Atom:
             assert isinstance(self.arguments, Tuple)
         assert self.predicate.arity in (None, len(self.arguments))
 
-    #def __str__(self):
-    #    args = (str(arg) for arg in self.arguments)
-    #   return f'{self.predicate.name}({",".join(args)})'
-    
-    #"""
     def __str__(self):
         def args_formatter():
             for arg in self.arguments:
                 if isinstance(arg, Variable):
-                    yield f"{arg.name}"
+                    yield f'{arg.name}'
                 elif isinstance(arg, tuple):
                     yield '(' + ','.join(str(a) for a in arg) + ',)'
                 else:
                     yield str(arg)
-        return f"{self.predicate.name}({','.join(args_formatter())})"
-    #"""
+        return f'{self.predicate.name}({",".join(args_formatter())})'
 
     @property
     def arity(self):
         return len(self.arguments)
+    
+    def all_vars(self):
+        for argument in self.arguments:
+            if isinstance(argument, Variable):
+                yield argument
+            elif isinstance(argument, tuple):
+                for t_argument in argument:
+                    if isinstance(t_argument, Variable):
+                        yield t_argument
 
 @dataclass(frozen=True)
 class Literal(Atom):
@@ -59,6 +62,20 @@ class Literal(Atom):
         if self.polarity: return super().__str__()
         return 'not ' + super().__str__()
 
+    # @NOTE: Direct copy from original. Jk: Rewrite.
+    def ground(self, assignment):
+        def args():
+            for arg in self.arguments:
+                if isinstance(arg, Variable):
+                    yield assignment[arg]
+                elif isinstance(arg, tuple):
+                    yield tuple((assignment[a] if isinstance(a, Variable) else a)
+                                for a in arg)
+                else:
+                    yield arg
+        return __class__(predicate = self.predicate, arguments = tuple(args()),
+                         polarity = self.polarity, naf = self.naf)
+
 class ArgumentMode(Enum):
     Input   = '+'
     Output  = '-'
@@ -68,6 +85,9 @@ class ArgumentMode(Enum):
 class ModeDeclaration:
     predicate : PredicateSymbol
     arguments : Sequence[ArgumentMode]
+
+    def __str__(self):
+        return self.predicate.name + "(" + ",".join(mode.value for mode in self.arguments) + ")"
 
 @dataclass(frozen=True, order=True)
 class ProgramLiteral:
@@ -105,7 +125,7 @@ class ProgramLiteral:
             if mode == ArgumentMode.Unknown: unknowns.add((idx,arg))
         return inputs, outputs, unknowns
     
-    # @NOTE: Inherited from atom in the original. Cleanup is next refactor.
+    # @NOTE: Direct copy from original. Jk: Rewrite.
     def all_vars(self):
         for argument in self.arguments:
             if isinstance(argument, Variable):
@@ -159,6 +179,11 @@ class Clause:
     def is_recursive(self):
         return set(literal.predicate for literal in self.head) & \
                set(literal.predicate for literal in self.body) != set()
+
+    # @NOTE: Direct copy from original. Jk: Rewrite.
+    def ground(self, assignment):
+        return __class__(head = tuple(lit.ground(assignment) for lit in self.head),
+                         body = tuple(lit.ground(assignment) for lit in self.body))
 
 class UnorderedClause(Clause):
     def __init__(self, head, body, min_num):
@@ -215,7 +240,7 @@ class OrderedClause(Clause):
 
 class UnorderedProgram:
     def __init__(self, clauses, before):
-        self.clauses = clauses
+        self.clauses : FrozenSet[Clause] = clauses
         self.before : Dict[int, Set[int]] = before
     
     def __iter__(self):

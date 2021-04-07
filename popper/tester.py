@@ -1,7 +1,8 @@
+from pyswip import Prolog
+
 import re
 import os
 from enum import Enum
-from pyswip import Prolog
 from contextlib import contextmanager
 
 class Tester():
@@ -21,9 +22,6 @@ class Tester():
         self.current_clauses = set()
 
     def load_basic(self, kbpath):
-        # Assert evaluation timeout
-        self.prolog.assertz(f'timeout({self.eval_timeout})')
-
         # Consult background and test file
         self.prolog.consult(kbpath + 'bk.pl')
         testfile_path = os.path.abspath('popper') + '/test.pl'
@@ -43,12 +41,16 @@ class Tester():
         for example in self.neg_examples:
             self.prolog.assertz(f'neg({example})')
         
+        # Assert evaluation timeout
+        self.prolog.assertz(f'timeout({self.eval_timeout})')
+
         self.num_pos = len(self.pos_examples)
         self.num_neg = len(self.neg_examples)
 
         self.prolog.assertz(f'num_pos({self.num_pos})')
         self.prolog.assertz(f'num_neg({self.num_neg})')        
-    
+
+    """
     @contextmanager
     def using(self, program):
         current_clauses = set()
@@ -63,16 +65,44 @@ class Tester():
                 args = ','.join(['_'] * head_literal.arity)
                 self.prolog.retractall(f'{head_literal.predicate.name}({args})')
                 self.prolog.retractall(f'{head_literal.predicate.name}({args},_,_)')
-            
+    #"""
+
+    def assert_program(self, program, basic=None):
+        assert basic in (True, None)
+        for clause in program:
+            self.prolog.assertz(clause.to_code())
+            self.current_clauses.add(clause)
+
+    def retract(self):
+        head_lits = set(cl.head[0] for cl in self.current_clauses)
+        for head_lit in head_lits:
+            args = ','.join(['_'] * head_lit.arity)
+            self.prolog.retractall(f"{head_lit.predicate.name}({args})")
+            # for instrumented programs
+            self.prolog.retractall(f"{head_lit.predicate.name}({args},_,_)")
+        self.current_clauses = set()
+
+    @contextmanager
+    def using(self, program, *args, **kwargs):
+        try:
+            self.assert_program(program, *args, **kwargs)
+            yield
+        finally:
+            self.retract()
+
     def test(self, program):
+        print(' Start test')
         with self.using(program):
             if self.minimal_testing:
-                res = list(self.prolog.query("do_test_minimal(TP,FN,TN,FP)"))[0]
+                print('  In minimal')
+                res = list(self.prolog.query('do_test_minimal(TP,FN,TN,FP)'))[0]
+                print('  End minimal')
             else:
-                res = list(self.prolog.query("do_test(TP,FN,TN,FP)"))[0]
+                res = list(self.prolog.query('do_test(TP,FN,TN,FP)'))[0]
             # AC: TN is not a true value with minimal testing
             TP, FN, TN, FP = res['TP'], res['FN'], res['TN'], res['FP']
-        
+        print(' End test')
+
         # @NOTE: Andrew to clean up at some point. 
         # complete (FN=0)
         if TP == self.num_pos:
