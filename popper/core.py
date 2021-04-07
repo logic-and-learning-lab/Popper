@@ -7,7 +7,7 @@ from typing import Union, Any, FrozenSet, Tuple, Optional, Sequence, Callable
 @dataclass(frozen=True, order=True)
 class Variable:
     name : Any
-    
+
     def __str__(self):
         return f'{self.name}'
 
@@ -43,7 +43,7 @@ class Atom:
     @property
     def arity(self):
         return len(self.arguments)
-    
+
     def all_vars(self):
         for argument in self.arguments:
             if isinstance(argument, Variable):
@@ -100,14 +100,14 @@ class ProgramLiteral:
     def __str__(self):
         args = (f'V{arg}' for arg in self.arguments)
         return f'{self.predicate}({",".join(args)})'
-    
+
     # @NOTE: In the orignal Rolf states that this is wrong but useful for
     #        debugging.
-    def __repr__(self): 
-        mode_args = (f'{m.value}V{arg.name}' 
+    def __repr__(self):
+        mode_args = (f'{m.value}V{arg.name}'
                      for arg, m in zip(self.arguments, self.mode.arguments))
         return f'{self.predicate.name}({",".join(mode_args)})'
-    
+
     @property
     def arity(self):
         return len(self.arguments)
@@ -115,16 +115,16 @@ class ProgramLiteral:
     def to_code(self):
         code_args = ','.join(str(arg) for arg in self.arguments)
         return f'{self.predicate.name}({code_args})'
-    
+
     def split_arguments(self):
         inputs, outputs, unknowns = set(), set(), set()
-        
+
         for idx, (mode, arg) in enumerate(zip(self.mode.arguments, self.arguments)):
             if mode == ArgumentMode.Input: inputs.add((idx,arg))
             if mode == ArgumentMode.Output: outputs.add((idx,arg))
             if mode == ArgumentMode.Unknown: unknowns.add((idx,arg))
         return inputs, outputs, unknowns
-    
+
     # @NOTE: Direct copy from original. Jk: Rewrite.
     def all_vars(self):
         for argument in self.arguments:
@@ -142,6 +142,8 @@ class ProgramLiteral:
 
     @property
     def inputs(self):
+        # AC: can we not rewrite to:
+        # return set(x[1] for x in self.split_arguments()[0])
         return set(map(lambda idx_arg: idx_arg[1], self.split_arguments()[0]))
 
     @property
@@ -168,14 +170,14 @@ class Clause:
     def is_horn(self):
         return len(self.head) <= 1 and \
                (literal.polarity for literal in chain(self.head, self.body))
-    
+
     def all_vars(self):
-        return set(variable for literal in chain(self.head, self.body) 
+        return set(variable for literal in chain(self.head, self.body)
                             for variable in literal.all_vars())
 
     def is_definite(self):
         return self.is_horn() and len(self.head) == 1
-    
+
     def is_recursive(self):
         return set(literal.predicate for literal in self.head) & \
                set(literal.predicate for literal in self.body) != set()
@@ -190,12 +192,12 @@ class UnorderedClause(Clause):
         self.min_num = min_num
         super().__init__(head, body)
         assert self.is_definite() # @CarryOver: Sanity check?
-    
+
     def to_code(self):
-        head_ = str(self.head[0].to_code()) 
+        head_ = str(self.head[0].to_code())
         body_ = (atom.to_code() for atom in self.body)
         return f'{head_} :- {{ {",".join(body_)} }}'
-    
+
     # @NOTE: Straight copy from the original. Revise later.
     def to_ordered(self):
         assert self.is_definite()
@@ -222,8 +224,8 @@ class UnorderedClause(Clause):
                                      grounded_vars.union(selected_lit.outputs),
                                      literals.difference({selected_lit}))
 
-        ordered_body = tuple(selection_closure([], self.head[0].predicate, 
-                                               self.head[0].inputs, 
+        ordered_body = tuple(selection_closure([], self.head[0].predicate,
+                                               self.head[0].inputs,
                                                set(self.body)))
 
         return OrderedClause(self.head, ordered_body, self.min_num)
@@ -232,42 +234,42 @@ class OrderedClause(Clause):
     def __init__(self, head, body, min_num):
         self.min_num = min_num
         super().__init__(head, body)
-    
+
     def to_code(self):
         head_ = str(self.head[0].to_code())
-        body_ = (atom.to_code() for atom in self.body) 
+        body_ = (atom.to_code() for atom in self.body)
         return f'{head_} :- {",".join(body_)}'
 
 class UnorderedProgram:
     def __init__(self, clauses, before):
         self.clauses : FrozenSet[Clause] = clauses
         self.before : Dict[int, Set[int]] = before
-    
+
     def __iter__(self):
         return iter(self.clauses)
 
     def to_code(self):
         for clause in self.clauses:
             yield clause.to_code() + '.'
-    
+
     def to_ordered(self):
         ordered_clauses = []
         for clause in self.clauses:
             ordered_clauses.append(clause.to_ordered())
-        
+
         return OrderedProgram(tuple(ordered_clauses), self.before)
 
 class OrderedProgram:
     def __init__(self, clauses, before):
         self.clauses = clauses
         self.before : Dict[int, Set[int]] = before
-    
+
     def __iter__(self):
         return iter(self.clauses)
-    
+
     def __len__(self):
         return len(self.clauses)
-    
+
     def to_code(self):
         for clause in self.clauses:
             yield clause.to_code() + '.'
@@ -276,7 +278,7 @@ class OrderedProgram:
 # Constraint related. @NOTE: Copied from original without modificatoin. Jk,
 # refactor. Has implications for calls in constrain.py.
 
-# @NOTE: This can be implemented in a way that doesn't require the creation of 
+# @NOTE: This can be implemented in a way that doesn't require the creation of
 #        an empty class.
 @dataclass(frozen=True, order=True)
 class VarVariable(Variable):
@@ -290,7 +292,7 @@ class ClauseVariable(Variable):
 class ConstraintSymbol(PredicateSymbol):
     operator : Callable = None
     fixed_interpretation : bool = True
-    
+
 @dataclass(frozen=True)
 class ConstraintLiteral(Literal):
     predicate : ConstraintSymbol

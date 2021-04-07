@@ -10,8 +10,8 @@ class Constrain:
         self.included_clause_handles = set()
 
     # Specific constraint helper functions
-    # @NOTE: The two functions below have a "ground" attribute in the orginal. 
-    # Ask about it. 
+    # @NOTE: The two functions below have a "ground" attribute in the orginal.
+    # Ask about it.
     def make_clause_handle(self, clause):
         atoms = [clause.head[0]] + sorted(clause.body)
         def atom_handle(atom):
@@ -21,7 +21,7 @@ class Constrain:
         return ''.join(map(atom_handle, atoms))
 
     def make_program_handle(self, program):
-        return ('prog_' + 
+        return ('prog_' +
                 '_'.join(sorted(self.make_clause_handle(clause) for clause in program)))
 
     # Specific constraints
@@ -29,7 +29,7 @@ class Constrain:
         for clause_number, clause in enumerate(program):
             clause_handle = self.make_clause_handle(clause)
             ic_arguments = (clause_handle, core.ClauseVariable(f'C{clause_number}'))
-            ic_literal = core.Literal(predicate = 'included_clause', 
+            ic_literal = core.Literal(predicate = 'included_clause',
                                       arguments = ic_arguments,
                                       polarity = True)
             yield ic_literal
@@ -39,26 +39,27 @@ class Constrain:
                                       arguments = cs_arguments,
                                       polarity = True)
             yield cs_literal
-        
+
         # Use clauses' metadata concerning clause ordering to restrict groundings
         for clause_number1, clause_numbers in program.before.items():
             for clause_number2 in clause_numbers:
-                yield core.LT.pos(core.ClauseVariable(f'C{clause_number1}'), 
+                yield core.LT.pos(core.ClauseVariable(f'C{clause_number1}'),
                                   core.ClauseVariable(f'C{clause_number2}'))
-        # Use clauses' metadata concerning minimal clause index to restrict 
-        # groundings.
+
+        # Use clauses' metadata concerning minimal clause index to restrict groundings.
         for clause_number, clause in enumerate(program):
-            yield core.GTEQ.pos(core.ClauseVariable(f'C{clause_number}'), clause.min_num)    
-            
-        # Ensure only groundings for distinct clauses are generated    
+            yield core.GTEQ.pos(core.ClauseVariable(f'C{clause_number}'), clause.min_num)
+
+        # Ensure only groundings for distinct clauses are generated
+        # AC: replace with an AllDiff constraint
         for clause_number1, clause_number2 in combinations(range(len(program)), 2):
-            yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'), 
+            yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
                                core.ClauseVariable(f'C{clause_number2}'))
 
     def banish_constraint(self, program):
         for clause_number, clause in enumerate(program):
             clause_handle = self.make_clause_handle(clause)
-            yield core.Literal(predicate = 'included_clause', 
+            yield core.Literal(predicate = 'included_clause',
                                arguments = (clause_handle, clause_number),
                                polarity  = True)
             yield core.Literal(predicate = 'clause_size',
@@ -69,16 +70,16 @@ class Constrain:
 
     def specialisation_constraint(self, program):
         program_handle = self.make_program_handle(program)
-        pos_body = core.Literal(predicate = 'included_program', 
+        pos_body = core.Literal(predicate = 'included_program',
                                 arguments = (program_handle,),
                                 polarity  = True)
-        neg_body = core.Literal(predicate = 'clause', 
+        neg_body = core.Literal(predicate = 'clause',
                                 arguments = (len(program),),
                                 polarity  = False)
-        
+
         return core.Clause(head = (), body = (pos_body, neg_body))
 
-    # @NOTE: The computational complexity of this function isn't great. Jk: Discuss 
+    # @NOTE: The computational complexity of this function isn't great. Jk: Discuss
     # possible improvements after getting a more detailed specification.
     def redundancy_constraint(self, program):
         preds_num_clauses = defaultdict(int)
@@ -88,7 +89,7 @@ class Constrain:
             preds_num_clauses[head.predicate] += 1
             if clause.is_recursive():
                 preds_num_recursive_clauses[head.predicate] += 1
-        
+
         recursively_called = set()
         while True:
             something_added = False
@@ -103,10 +104,10 @@ class Constrain:
                         something_added |= not body_pred in recursively_called
                         recursively_called.add(body_pred)
             if not something_added: break
-        
+
         program_handle = self.make_program_handle(program)
         for pred in preds_num_clauses.keys() - recursively_called:
-            lits = [core.Literal(predicate = 'included_program', 
+            lits = [core.Literal(predicate = 'included_program',
                                  arguments = (program_handle,),
                                  polarity  = True)]
             for other_pred, num_clauses in preds_num_clauses.items():
@@ -118,7 +119,7 @@ class Constrain:
             lits.append(core.Literal(predicate = 'num_recursive',
                                      arguments = (pred.name, num_recursive),
                                      polarity  = True))
-            
+
             yield core.Clause(head = (), body = tuple(lits))
 
     def derive_constraint_types(self, program, positive_outcome, negative_outcome):
@@ -130,66 +131,67 @@ class Constrain:
             ('none', 'none') : ('specialisation', 'redundancy'),
             ('none', 'some') : ('specialisation', 'redundancy', 'generalisation')
         }
-        
+
         if self.no_pruning:
             positive_outcome, negative_outcome = 'all', 'none'
         if negative_outcome == 'all':
             negative_outcome = 'some'
-        
+
         return outcome_to_constraints[(positive_outcome, negative_outcome)]
 
     def constraints_from_type(self, program, constraint_type):
-        if constraint_type == 'banish': 
-            cc = core.Clause(head = (), 
+        if constraint_type == 'banish':
+            cc = core.Clause(head = (),
                              body = tuple(self.banish_constraint(program)))
-            return [cc] 
-        
-        if constraint_type == 'redundancy': 
-            return list(self.redundancy_constraint(program)) 
-        
-        if constraint_type == 'specialisation': 
+            return [cc]
+
+        if constraint_type == 'redundancy':
+            return list(self.redundancy_constraint(program))
+
+        if constraint_type == 'specialisation':
             return [self.specialisation_constraint(program)]
-    
-        if constraint_type == 'generalisation': 
-            cc = core.Clause(head = (), 
+
+        if constraint_type == 'generalisation':
+            cc = core.Clause(head = (),
                              body = tuple(self.generalisation_constraint(program)))
             return [cc]
-        
+
         assert False, f'Unrecognized constraint type: {constraint_type}.'
 
-    # @NOTE: Jk: Refactor with better variable names after sorting note below. 
+    # @NOTE: Jk: Refactor with better variable names after sorting note below.
     # The way VarVariable and ClauseVariable are used needs to be urgently fixed.
-    # Adds unneeded complexity. 
+    # Adds unneeded complexity.
     def make_clause_inclusion_rule(self, clause):
         clause_handle = self.make_clause_handle(clause)
         clause_number = core.ClauseVariable('Cl')
 
-        # @NOTE: This function is not necessary. Jk, refactor after getting a 
-        # clearer specification from Rolf. 
+        # @NOTE: This function is not necessary. Jk, refactor after getting a
+        # clearer specification from Rolf.
         def literals_generator():
             for metapred, lit in chain(product(('head_literal',), clause.head),
                                        product(('body_literal',), clause.body)):
                 assert all(isinstance(arg, core.Variable) for arg in lit.arguments)
                 yield core.Literal(predicate = metapred,
-                                   arguments = (clause_number, lit.predicate.name, 
-                                                lit.arity, 
-                                                tuple(core.VarVariable(v.name) 
+                                   arguments = (clause_number, lit.predicate.name,
+                                                lit.arity,
+                                                tuple(core.VarVariable(v.name)
                                                       for v in lit.arguments)),
                                    polarity  = True)
-                
+
             yield core.GTEQ.pos(clause_number, clause.min_num)
 
             # Ensure only groundings for distinct variables are used
+            # AC: replace with an AllDiff constraint
             for var1, var2 in combinations(clause.all_vars(), 2):
                 yield core.NEQ.pos(core.VarVariable(var1.name), core.VarVariable(var2.name))
 
             for idx, var in enumerate(clause.head[0].arguments):
                 yield core.EQ.pos(core.VarVariable(var.name), idx)
 
-        head = (core.Literal(predicate = 'included_clause', 
+        head = (core.Literal(predicate = 'included_clause',
                              arguments = (clause_handle, clause_number),
                              polarity  = True),)
-    
+
         return clause_handle, core.Clause(head = head, body = tuple(literals_generator()))
 
     def make_program_inclusion_rule(self, program):
@@ -199,21 +201,22 @@ class Constrain:
             for clause_number, clause in enumerate(program):
                 clause_handle = self.make_clause_handle(clause)
                 clause_variable = core.ClauseVariable(f'C{clause_number}')
-                yield core.Literal(predicate = 'included_clause', 
+                yield core.Literal(predicate = 'included_clause',
                                    arguments = (clause_handle, clause_variable),
                                    polarity  = True)
-            
+
             for clause_number1, clause_numbers in program.before.items():
                 for clause_number2 in clause_numbers:
                     yield core.LT.pos(core.ClauseVariable(f'C{clause_number1}'),
                                       core.ClauseVariable(f'C{clause_number2}'))
-            
+
             # Ensure only groundings for distinct clauses are used
+            # AC: replace with an AllDiff constraint
             for clause_number1, clause_number2 in combinations(range(len(program)), 2):
                 yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
                                    core.ClauseVariable(f'C{clause_number2}'))
-        
-        head = (core.Literal(predicate = 'included_program', 
+
+        head = (core.Literal(predicate = 'included_program',
                              arguments = (program_handle,),
                              polarity  = True),)
 
@@ -226,7 +229,7 @@ class Constrain:
                 if clause_handle not in self.included_clause_handles:
                     self.included_clause_handles.add(clause_handle)
                     yield ('inclusion_rule', clause_handle, rule)
-        
+
         if 'redundancy' in constraint_types or 'specialisation' in constraint_types:
             program_handle, rule = self.make_program_inclusion_rule(program)
             yield ('inclusion_rule', program_handle, rule)
@@ -258,12 +261,9 @@ class Constrain:
     def constrain_solver(self, solver, program_outcomes):
         constraint_types = {}
         for program, (positive_outcome, negative_outcome) in program_outcomes.items():
-            constraint_types[program] = \
-            self.derive_constraint_types(program, positive_outcome, negative_outcome)
+            constraint_types[program] = self.derive_constraint_types(program, positive_outcome, negative_outcome)
 
         named_constraints = self.map_ctypes_and_inclusion_rules(constraint_types)
-        
-        
         self.impose(solver, named_constraints)
 
     def impose(self, solver, named_constraints):
@@ -272,4 +272,5 @@ class Constrain:
             if name not in solver.added:
                 solver.add(constraint, name = name)
                 names.append(name)
+        # AC: why not push the ground call in the loop? It removes the unneessary * syntax and list operation
         solver.ground(*names)

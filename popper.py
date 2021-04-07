@@ -13,10 +13,10 @@ def popper(solver, tester, constrain, max_literals = 100):
             unordered_program = generate_program(solver)
             if unordered_program == None:
                 break
-            ordered_program = unordered_program.to_ordered()    
-            
+            ordered_program = unordered_program.to_ordered()
+
             # 2. Test
-            program_outcomes = tester.test(ordered_program)     
+            program_outcomes = tester.test(ordered_program)
             if program_outcomes[ordered_program] == ('all', 'none'):
                 return ordered_program
 
@@ -33,15 +33,15 @@ def direct_popper(solver, tester, constrain, size):
         if unordered_program == None:
             print('No Program Returned')
             break
-        ordered_program = unordered_program.to_ordered()    
-        
+        ordered_program = unordered_program.to_ordered()
+
         print('Test')
         # 2. Test
         program_outcomes = tester.test(ordered_program)
-        #print(program_outcomes)     
+        #print(program_outcomes)
         if program_outcomes[ordered_program] == ('all', 'none'):
             return ordered_program
-        
+
         print('Const')
         constrain.constrain_solver(solver, program_outcomes)
 
@@ -60,9 +60,9 @@ def main(kbpath):
     tester = Tester(kbpath)
     constrain = Constrain()
 
-    #program = popper(solver, tester, constrain)
-    program = direct_popper(solver, tester, constrain, 7)
-    #output_program(program)
-    
+    program = popper(solver, tester, constrain)
+    # program = direct_popper(solver, tester, constrain, 7)
+    output_program(program)
+
 if __name__ == '__main__':
     main(sys.argv[1])

@@ -6,11 +6,11 @@ from enum import Enum
 from contextlib import contextmanager
 
 class Tester():
-    def __init__(self, kbpath, eval_timeout = 60, minimal_testing = True):
+    def __init__(self, kbpath, eval_timeout = 0.1, minimal_testing = True):
         self.prolog = Prolog()
         self.eval_timeout = eval_timeout
         self.minimal_testing = minimal_testing
-        
+
         self.pos_examples = []
         self.neg_examples = []
         self.num_pos = 0
@@ -34,13 +34,13 @@ class Tester():
                     continue
                 self.pos_examples.extend(re.findall("pos\((.*)\)\.", line))
                 self.neg_examples.extend(re.findall("neg\((.*)\)\.", line))
-        
+
         # Assert negative and positive examples
         for example in self.pos_examples:
             self.prolog.assertz(f'pos({example})')
         for example in self.neg_examples:
             self.prolog.assertz(f'neg({example})')
-        
+
         # Assert evaluation timeout
         self.prolog.assertz(f'timeout({self.eval_timeout})')
 
@@ -48,7 +48,7 @@ class Tester():
         self.num_neg = len(self.neg_examples)
 
         self.prolog.assertz(f'num_pos({self.num_pos})')
-        self.prolog.assertz(f'num_neg({self.num_neg})')        
+        self.prolog.assertz(f'num_neg({self.num_neg})')
 
     """
     @contextmanager
@@ -91,19 +91,19 @@ class Tester():
             self.retract()
 
     def test(self, program):
-        print(' Start test')
+        # print(' Start test')
         with self.using(program):
             if self.minimal_testing:
-                print('  In minimal')
+                # print('  In minimal')
                 res = list(self.prolog.query('do_test_minimal(TP,FN,TN,FP)'))[0]
-                print('  End minimal')
+                # print('  End minimal')
             else:
                 res = list(self.prolog.query('do_test(TP,FN,TN,FP)'))[0]
             # AC: TN is not a true value with minimal testing
             TP, FN, TN, FP = res['TP'], res['FN'], res['TN'], res['FP']
-        print(' End test')
+        # print(' End test')
 
-        # @NOTE: Andrew to clean up at some point. 
+        # @NOTE: Andrew to clean up at some point.
         # complete (FN=0)
         if TP == self.num_pos:
             positive_outcome = 'all'
@@ -124,5 +124,5 @@ class Tester():
         # inconsistent
         else:
             negative_outcome = 'some'
-        
+
         return {program:(positive_outcome, negative_outcome)}
