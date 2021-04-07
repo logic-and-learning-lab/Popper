@@ -45,14 +45,6 @@ def atom_to_symbol(lit):
     return clingo.Function(name = lit.predicate.name, arguments = args)
 
 def clingo_var_bindings(ast, max_clauses, max_vars):
-    solver = clingo.Control(['--seed=1','--rand-freq=0'])
-
-    # ask for all models
-    solver.configuration.solve.models = 0
-
-    # add the base reasoning
-    solver.add("base", [], GROUNDER)
-
     # map each clause var in the program to an integer
     c_vars = {v.name:i for i,v in enumerate(var for var in ast.all_vars() if isinstance(var, core.ClauseVariable))}
     # map each var var in the program to an integer
@@ -63,10 +55,17 @@ def clingo_var_bindings(ast, max_clauses, max_vars):
     if c_var_count == 0 and v_var_count == 0:
         return [{}]
 
-    solver.add('base', [], f'#const num_c_vars={c_var_count}.')
-    solver.add('base', [], f'#const num_c_vals={max_clauses}.')
-    solver.add('base', [], f'#const num_v_vars={v_var_count}.')
-    solver.add('base', [], f'#const num_v_vals={max_vars}.')
+    solver = clingo.Control(['--seed=1','--rand-freq=0'])
+    # ask for all models
+    solver.configuration.solve.models = 0
+
+    # add the base reasoning
+    solver.add('base', [], GROUNDER + f"""\
+        #const num_c_vars={c_var_count}.
+        #const num_c_vals={max_clauses}.
+        #const num_v_vars={v_var_count}.
+        #const num_v_vals={max_vars}.
+    """)
 
     for lit in ast.body:
         if not isinstance(lit, core.ConstraintLiteral):
@@ -91,7 +90,6 @@ def clingo_var_bindings(ast, max_clauses, max_vars):
                 for i in range(val):
                     solver.add('base', [], f':- not c_var({var},{val}).')
         elif isinstance(lit, popper.core.LT):
-            # print('LIT',lit)
             var1 = c_vars[lit.arguments[0].name]
             var2 = c_vars[lit.arguments[1].name]
             solver.add('base', [], f':- c_var({var1},Val1), c_var({var2},Val2), Val1>=Val2.')
@@ -155,12 +153,10 @@ class Clingo():
         # within Clingo is reset by loading Alan? (bottom two).
         self.solver.add('invented', ['predicate', 'arity'], '#external invented(pred,arity).')
         self.solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
-        # self.solver.add('number_of_clauses', ['n'], NUM_OF_CLAUSES)
 
         # Ground 'alan' and 'modes_file'
         parts = [('alan', []), ('modes_file', [])]
         self.solver.ground(parts)
-        # self.grounded.extend(parts)
 
     def get_model(self):
         with self.solver.solve(yield_ = True) as handle:
@@ -208,6 +204,3 @@ class Clingo():
                     body_lits.append(body_atom if lit.polarity else -body_atom)
 
                 backend.add_rule(head_atoms, body_lits, choice = False)
-
-        # self.grounded.extend((name, []))
-

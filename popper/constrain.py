@@ -51,7 +51,7 @@ class Constrain:
             yield core.GTEQ.pos(core.ClauseVariable(f'C{clause_number}'), clause.min_num)
 
         # Ensure only groundings for distinct clauses are generated
-        # AC: replace with an AllDiff constraint
+        # AC: this is now covered by an ASP constraint
         # for clause_number1, clause_number2 in combinations(range(len(program)), 2):
         #     yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
         #                        core.ClauseVariable(f'C{clause_number2}'))
@@ -181,7 +181,7 @@ class Constrain:
             yield core.GTEQ.pos(clause_number, clause.min_num)
 
             # Ensure only groundings for distinct variables are used
-            # AC: replace with an AllDiff constraint
+            # AC: now handled by an ASP constraint
             # for var1, var2 in combinations(clause.all_vars(), 2):
             #     yield core.NEQ.pos(core.VarVariable(var1.name), core.VarVariable(var2.name))
 
@@ -211,7 +211,7 @@ class Constrain:
                                       core.ClauseVariable(f'C{clause_number2}'))
 
             # Ensure only groundings for distinct clauses are used
-            # AC: replace with an AllDiff constraint
+            # AC: now handled by an ASP constraint
             # for clause_number1, clause_number2 in combinations(range(len(program)), 2):
             #     yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
             #                        core.ClauseVariable(f'C{clause_number2}'))
