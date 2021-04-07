@@ -268,7 +268,5 @@ class Constrain:
 
     def impose(self, solver, named_constraints):
         for name, constraint in named_constraints:
-            if name in solver.added:
-                continue
-            solver.add(constraint, name = name)
-            solver.ground(name)
+            if name not in solver.added:
+                solver.ground(constraint, name)

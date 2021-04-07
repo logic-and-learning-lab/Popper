@@ -63,20 +63,20 @@ class Literal(Atom):
         return 'not ' + super().__str__()
 
     # @NOTE: Direct copy from original. Jk: Rewrite.
-    def ground(self, assignment):
-        def args():
-            for arg in self.arguments:
-                if isinstance(arg, Variable):
-                    yield assignment[arg]
-                elif isinstance(arg, tuple):
-                    yield tuple((assignment[a] if isinstance(a, Variable) else a)
-                                for a in arg)
-                else:
-                    yield arg
-        return __class__(predicate = self.predicate, arguments = tuple(args()),
-                         polarity = self.polarity, naf = self.naf)
+    # def ground(self, assignment):
+    #     def args():
+    #         for arg in self.arguments:
+    #             if isinstance(arg, Variable):
+    #                 yield assignment[arg]
+    #             elif isinstance(arg, tuple):
+    #                 yield tuple((assignment[a] if isinstance(a, Variable) else a)
+    #                             for a in arg)
+    #             else:
+    #                 yield arg
+    #     return __class__(predicate = self.predicate, arguments = tuple(args()),
+    #                      polarity = self.polarity, naf = self.naf)
 
-
+    # AC: added but not cleaned
     def ground_new(self, assignment):
         def args():
             for arg in self.arguments:

@@ -44,8 +44,7 @@ def atom_to_symbol(lit):
     args = tuple(arg_to_symbol(arg) for arg in lit.arguments)
     return clingo.Function(name = lit.predicate.name, arguments = args)
 
-def aux_clingo(ast, max_clauses, max_vars):
-    # solver = clingo.Control(['--seed=1'])
+def clingo_var_bindings(ast, max_clauses, max_vars):
     solver = clingo.Control(['--seed=1','--rand-freq=0'])
 
     # ask for all models
@@ -54,8 +53,9 @@ def aux_clingo(ast, max_clauses, max_vars):
     # add the base reasoning
     solver.add("base", [], GROUNDER)
 
-    # for each var in the program, map it to an integer
+    # map each clause var in the program to an integer
     c_vars = {v.name:i for i,v in enumerate(var for var in ast.all_vars() if isinstance(var, core.ClauseVariable))}
+    # map each var var in the program to an integer
     v_vars = {v.name:i for i,v in enumerate(var for var in ast.all_vars() if isinstance(var, core.VarVariable))}
 
     c_var_count = len(c_vars)
@@ -121,6 +121,7 @@ def aux_clingo(ast, max_clauses, max_vars):
 
     return out
 
+# AC: should rename to avoid confusion with clingo
 class Clingo():
     def __init__(self, kbpath):
         self.solver = clingo.Control(['--seed=1','--rand-freq=0'])
@@ -128,12 +129,9 @@ class Clingo():
         self.max_clauses = 0
 
         # Runtime attributes
-        # AC: what is this used for?
-        # self.grounded = []
         self.assigned = OrderedDict()
         # AC: why an OrderedDict? We never remove from it
         self.added = OrderedDict()
-
         self.load_basic(kbpath)
 
     def load_basic(self, kbpath):
@@ -192,23 +190,12 @@ class Clingo():
         symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
         self.solver.assign_external(symbol, True)
 
-    # AC: what is base? If it is important, create separate functions to distinguish the reasoning
-    def add(self, code, name = None, arguments = [], base = False):
-        if name is None:
-            # AC: does the dict maintain its len as a value, or does it recompute it each time?
-            name = f'fragment{len(self.added) + 1}'
-
-        if base:
-            self.solver.add(name, arguments, code)
-        self.added[name] = code
-
-    def ground(self, name, context = None):
-        ast = self.added[name]
+    def ground(self, ast, name):
         clbody = tuple(lit for lit in ast.body if not isinstance(lit, core.ConstraintLiteral))
         clause = core.Clause(head = ast.head, body = clbody)
 
         with self.solver.backend() as backend:
-            for assignment in aux_clingo(ast,self.max_clauses,self.max_vars):
+            for assignment in clingo_var_bindings(ast, self.max_clauses, self.max_vars):
                 ground_clause = clause.ground_new(assignment)
                 head_atoms = []
                 body_lits = []
