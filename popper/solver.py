@@ -42,6 +42,17 @@ def atom_to_symbol(lit):
     args = tuple(arg_to_symbol(arg) for arg in lit.arguments)
     return clingo.Function(name = lit.predicate.name, arguments = args)
 
+class SolutionPrinter(cp_model.CpSolverSolutionCallback):
+
+    def __init__(self, cp_to_vars):
+        cp_model.CpSolverSolutionCallback.__init__(self)
+        self.cp_to_vars = cp_to_vars
+        self.assignments = []
+
+    def on_solution_callback(self):
+        assignment = dict((self.cp_to_vars[k], self.Value(k)) for k in self.cp_to_vars.keys())
+        self.assignments.append(assignment)
+
 class Clingo():
     def __init__(self, kbpath):
         self.solver = clingo.Control([])
@@ -127,80 +138,71 @@ class Clingo():
     # AC: I find this method to be incomprehensible
     # AC: it should be split into two: ground constraints and then add to the solver
     # AC: it is difficult to reason
-    def ground(self, *args, context = None):
-        parts = [(name, []) for name in args]
-        for name, args in parts:
-            # @NOTE: Not needed in this implementation
-            assert len(args) == 0, 'Arguments not yet supported'
 
-            ast = self.added[name]
-            model = cp_model.CpModel()
+    def ground(self, name, context = None):
+        ast = self.added[name]
+        model = cp_model.CpModel()
 
-            vars_to_cp = {}
-            cp_to_vars = {}
+        vars_to_cp = {}
+        cp_to_vars = {}
 
-            var_vals = []
-            for var in ast.all_vars():
-                if isinstance(var, core.ClauseVariable):
-                    cp_var = model.NewIntVar(0, self.max_clauses - 1, var.name)
-                elif isinstance(var, core.VarVariable):
-                    cp_var = model.NewIntVar(0, self.max_vars - 1, var.name)
-                    var_vals.append(cp_var)
-                else:
-                    assert False, 'Whut??' # Jk: Hahahaha
-                vars_to_cp[var] = cp_var
-                cp_to_vars[cp_var] = var
+        var_vals = []
+        for var in ast.all_vars():
+            if isinstance(var, core.ClauseVariable):
+                cp_var = model.NewIntVar(0, self.max_clauses - 1, var.name)
+            elif isinstance(var, core.VarVariable):
+                cp_var = model.NewIntVar(0, self.max_vars - 1, var.name)
+                var_vals.append(cp_var)
+            else:
+                assert False, 'Whut??' # Jk: Hahahaha
+            vars_to_cp[var] = cp_var
+            cp_to_vars[cp_var] = var
 
-            for lit in ast.body:
-                if not isinstance(lit, core.ConstraintLiteral):
-                    continue
-                def args():
-                    for arg in lit.arguments:
-                        if isinstance(arg, core.Variable):
-                            yield vars_to_cp[arg]
-                        else:
-                            yield arg
-                # AC: why they weird syntax? why not push the reasoning in the loop?
-                x = lit.predicate.operator(*args())
-                model.Add(x)
+        # AC: ADD ALL DIFF CONSTRAINTS
+        # AC: ADD ALL DIFF CONSTRAINTS
 
-            class SolutionPrinter(cp_model.CpSolverSolutionCallback):
+        for lit in ast.body:
+            if not isinstance(lit, core.ConstraintLiteral):
+                continue
+            # print(lit, type(lit))
+            def args():
+                for arg in lit.arguments:
+                    # print(type(arg))
+                    if isinstance(arg, core.Variable):
+                        yield vars_to_cp[arg]
+                    else:
+                        yield arg
+                        # print(arg)
+            # AC: why they weird syntax? why not push the reasoning in the loop?
+            x = lit.predicate.operator(*args())
+            # print(type(x))
+            model.Add(x)
+            # print(x)
 
-                def __init__(self, cp_to_vars):
-                    cp_model.CpSolverSolutionCallback.__init__(self)
-                    self.cp_to_vars = cp_to_vars
-                    self.assignments = []
+        cp_solver = cp_model.CpSolver()
+        solution_printer = SolutionPrinter(cp_to_vars)
+        status = cp_solver.SearchForAllSolutions(model, solution_printer)
+        clbody = tuple(lit for lit in ast.body if not isinstance(lit, core.ConstraintLiteral))
+        clause = core.Clause(head = ast.head, body = clbody)
 
-                def on_solution_callback(self):
-                    assignment = dict((self.cp_to_vars[k], self.Value(k))
-                                      for k in self.cp_to_vars.keys())
-                    self.assignments.append(assignment)
+        with self.solver.backend() as backend:
+            for assignment in solution_printer.assignments:
+                ground_clause = clause.ground(assignment)
 
-            cp_solver = cp_model.CpSolver()
-            solution_printer = SolutionPrinter(cp_to_vars)
-            status = cp_solver.SearchForAllSolutions(model, solution_printer)
-            clbody = tuple(lit for lit in ast.body
-                           if not isinstance(lit, core.ConstraintLiteral))
-            clause = core.Clause(head = ast.head, body = clbody)
+                head_symbs = []
+                head_atoms = []
+                body_symbs = []
+                body_lits = []
+                for lit in ground_clause.head:
+                    symbol = atom_to_symbol(lit)
+                    head_symbs.append(symbol)
+                    head_atoms.append(backend.add_atom(symbol))
+                for lit in ground_clause.body:
+                    symbol = atom_to_symbol(lit)
+                    body_symbs.append(symbol)
+                    body_atom = backend.add_atom(symbol)
+                    body_lits.append(body_atom if lit.polarity else -body_atom)
 
-            with self.solver.backend() as backend:
-                for assignment in solution_printer.assignments:
-                    ground_clause = clause.ground(assignment)
+                backend.add_rule(head_atoms, body_lits, choice = False)
 
-                    head_symbs = []
-                    head_atoms = []
-                    body_symbs = []
-                    body_lits = []
-                    for lit in ground_clause.head:
-                        symbol = atom_to_symbol(lit)
-                        head_symbs.append(symbol)
-                        head_atoms.append(backend.add_atom(symbol))
-                    for lit in ground_clause.body:
-                        symbol = atom_to_symbol(lit)
-                        body_symbs.append(symbol)
-                        body_atom = backend.add_atom(symbol)
-                        body_lits.append(body_atom if lit.polarity else -body_atom)
-
-                    backend.add_rule(head_atoms, body_lits, choice = False)
-
-        self.grounded.extend(parts)
+        self.grounded.extend((name, []))

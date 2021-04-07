@@ -11,15 +11,13 @@ class Tester():
         self.eval_timeout = eval_timeout
         self.minimal_testing = minimal_testing
 
+        # AC: no need to maintain these
         self.pos_examples = []
         self.neg_examples = []
         self.num_pos = 0
         self.num_neg = 0
 
         self.load_basic(kbpath)
-
-        # Track current clauses currently being evaluated
-        self.current_clauses = set()
 
     def load_basic(self, kbpath):
         # Consult background and test file
@@ -71,10 +69,10 @@ class Tester():
         assert basic in (True, None)
         for clause in program:
             self.prolog.assertz(clause.to_code())
-            self.current_clauses.add(clause)
+            yield clause
 
-    def retract(self):
-        head_lits = set(cl.head[0] for cl in self.current_clauses)
+    def retract(self, current_clauses):
+        head_lits = set(cl.head[0] for cl in current_clauses)
         for head_lit in head_lits:
             args = ','.join(['_'] * head_lit.arity)
             self.prolog.retractall(f"{head_lit.predicate.name}({args})")
@@ -84,11 +82,14 @@ class Tester():
 
     @contextmanager
     def using(self, program, *args, **kwargs):
+        # Track current clauses currently being evaluated
+        current_clauses = set()
         try:
-            self.assert_program(program, *args, **kwargs)
+            for x in self.assert_program(program, *args, **kwargs):
+                current_clauses.add(x)
             yield
         finally:
-            self.retract()
+            self.retract(current_clauses)
 
     def test(self, program):
         # print(' Start test')
