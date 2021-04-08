@@ -1,6 +1,6 @@
 from . import core
 from collections import defaultdict
-from itertools import chain, product
+from itertools import chain, product, combinations
 
 class Constrain:
     def __init__(self, no_pruning = False):
@@ -12,17 +12,16 @@ class Constrain:
     # Specific constraint helper functions
     # @NOTE: The two functions below have a "ground" attribute in the orginal.
     # Ask about it.
+    def atom_handle(self, atom):
+        variables = (f'{variable}' for variable in atom.arguments)
+        return f'{atom.predicate.name}' + ''.join(variables)
+
     def make_clause_handle(self, clause):
         atoms = [clause.head[0]] + sorted(clause.body)
-        def atom_handle(atom):
-            variables = (f'{variable}' for variable in atom.arguments)
-            return f'{atom.predicate.name}' + ''.join(variables)
-
-        return ''.join(map(atom_handle, atoms))
+        return ''.join(self.atom_handle(atom) for atom in atoms)
 
     def make_program_handle(self, program):
-        return ('prog_' +
-                '_'.join(sorted(self.make_clause_handle(clause) for clause in program)))
+        return ('prog_' +'_'.join(sorted(self.make_clause_handle(clause) for clause in program)))
 
     # Specific constraints
     def generalisation_constraint(self, program):
@@ -51,10 +50,10 @@ class Constrain:
             yield core.GTEQ.pos(core.ClauseVariable(f'C{clause_number}'), clause.min_num)
 
         # Ensure only groundings for distinct clauses are generated
-        # AC: this is now covered by an ASP constraint
-        # for clause_number1, clause_number2 in combinations(range(len(program)), 2):
-        #     yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
-        #                        core.ClauseVariable(f'C{clause_number2}'))
+        # AC: replace with AllDiff
+        for clause_number1, clause_number2 in combinations(range(len(program)), 2):
+            yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
+                               core.ClauseVariable(f'C{clause_number2}'))
 
     def banish_constraint(self, program):
         for clause_number, clause in enumerate(program):
@@ -122,8 +121,7 @@ class Constrain:
 
             yield core.Clause(head = (), body = tuple(lits))
 
-    def derive_constraint_types(self, program, positive_outcome, negative_outcome):
-        outcome_to_constraints = {
+    outcome_to_constraints = {
             ('all', 'none')  : ('banish',),
             ('all', 'some')  : ('generalisation',),
             ('some', 'none') : ('specialisation',),
@@ -132,17 +130,16 @@ class Constrain:
             ('none', 'some') : ('specialisation', 'redundancy', 'generalisation')
         }
 
+    def derive_constraint_types(self, positive_outcome, negative_outcome):
         if self.no_pruning:
             positive_outcome, negative_outcome = 'all', 'none'
         if negative_outcome == 'all':
             negative_outcome = 'some'
-
-        return outcome_to_constraints[(positive_outcome, negative_outcome)]
+        return self.outcome_to_constraints[(positive_outcome, negative_outcome)]
 
     def constraints_from_type(self, program, constraint_type):
         if constraint_type == 'banish':
-            cc = core.Clause(head = (),
-                             body = tuple(self.banish_constraint(program)))
+            cc = core.Clause(head = (), body = tuple(self.banish_constraint(program)))
             return [cc]
 
         if constraint_type == 'redundancy':
@@ -152,8 +149,7 @@ class Constrain:
             return [self.specialisation_constraint(program)]
 
         if constraint_type == 'generalisation':
-            cc = core.Clause(head = (),
-                             body = tuple(self.generalisation_constraint(program)))
+            cc = core.Clause(head = (), body = tuple(self.generalisation_constraint(program)))
             return [cc]
 
         assert False, f'Unrecognized constraint type: {constraint_type}.'
@@ -181,9 +177,9 @@ class Constrain:
             yield core.GTEQ.pos(clause_number, clause.min_num)
 
             # Ensure only groundings for distinct variables are used
-            # AC: now handled by an ASP constraint
-            # for var1, var2 in combinations(clause.all_vars(), 2):
-            #     yield core.NEQ.pos(core.VarVariable(var1.name), core.VarVariable(var2.name))
+            # AC: replace with AllDiff
+            for var1, var2 in combinations(clause.all_vars(), 2):
+                yield core.NEQ.pos(core.VarVariable(var1.name), core.VarVariable(var2.name))
 
             for idx, var in enumerate(clause.head[0].arguments):
                 yield core.EQ.pos(core.VarVariable(var.name), idx)
@@ -194,33 +190,34 @@ class Constrain:
 
         return clause_handle, core.Clause(head = head, body = tuple(literals_generator()))
 
+    def literals_generator(self, program):
+        for clause_number, clause in enumerate(program):
+            clause_handle = self.make_clause_handle(clause)
+            clause_variable = core.ClauseVariable(f'C{clause_number}')
+            yield core.Literal(predicate = 'included_clause',
+                               arguments = (clause_handle, clause_variable),
+                               polarity  = True)
+
+        for clause_number1, clause_numbers in program.before.items():
+            for clause_number2 in clause_numbers:
+                yield core.LT.pos(core.ClauseVariable(f'C{clause_number1}'),
+                                  core.ClauseVariable(f'C{clause_number2}'))
+
+        # Ensure only groundings for distinct clauses are used
+        # AC: replace with an AllDiff constraint
+        for clause_number1, clause_number2 in combinations(range(len(program)), 2):
+            yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
+                               core.ClauseVariable(f'C{clause_number2}'))
+
     def make_program_inclusion_rule(self, program):
         program_handle = self.make_program_handle(program)
 
-        def literals_generator():
-            for clause_number, clause in enumerate(program):
-                clause_handle = self.make_clause_handle(clause)
-                clause_variable = core.ClauseVariable(f'C{clause_number}')
-                yield core.Literal(predicate = 'included_clause',
-                                   arguments = (clause_handle, clause_variable),
-                                   polarity  = True)
-
-            for clause_number1, clause_numbers in program.before.items():
-                for clause_number2 in clause_numbers:
-                    yield core.LT.pos(core.ClauseVariable(f'C{clause_number1}'),
-                                      core.ClauseVariable(f'C{clause_number2}'))
-
-            # Ensure only groundings for distinct clauses are used
-            # AC: now handled by an ASP constraint
-            # for clause_number1, clause_number2 in combinations(range(len(program)), 2):
-            #     yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
-            #                        core.ClauseVariable(f'C{clause_number2}'))
 
         head = (core.Literal(predicate = 'included_program',
                              arguments = (program_handle,),
                              polarity  = True),)
 
-        return program_handle, core.Clause(head = head, body = tuple(literals_generator()))
+        return program_handle, core.Clause(head = head, body = tuple(self.literals_generator(program)))
 
     def derive_inclusion_rules(self, program, constraint_types):
         if 'specialisation' in constraint_types or 'generalisation' in constraint_types:
@@ -228,14 +225,13 @@ class Constrain:
                 clause_handle, rule = self.make_clause_inclusion_rule(clause)
                 if clause_handle not in self.included_clause_handles:
                     self.included_clause_handles.add(clause_handle)
-                    yield ('inclusion_rule', clause_handle, rule)
+                    yield (clause_handle, rule)
 
         if 'redundancy' in constraint_types or 'specialisation' in constraint_types:
             program_handle, rule = self.make_program_inclusion_rule(program)
-            yield ('inclusion_rule', program_handle, rule)
+            yield (program_handle, rule)
 
     def derive_constraints(self, program, constraint_types):
-        named_constraints = []
         for constraint_type in constraint_types:
             for constraint in self.constraints_from_type(program, constraint_type):
                 if constraint in self.rule_to_cid:
@@ -244,29 +240,12 @@ class Constrain:
                     name = f'{constraint_type}{self.cid_counter}'
                     self.cid_counter += 1
                     self.rule_to_cid[constraint] = name
-                named_constraints.append((constraint_type, name, constraint))
+                yield (name, constraint)
 
-        return named_constraints
-
-    def map_ctypes_and_inclusion_rules(self, constraint_types):
-        constraints = []
-        inclusion_rules = []
-        for program, program_constraint_types in constraint_types.items():
-            # @NOTE: Why "+=" instead of append()?
-            constraints += self.derive_constraints(program, program_constraint_types)
-            inclusion_rules += self.derive_inclusion_rules(program, program_constraint_types)
-
-        return ((name, rule) for _, name, rule in chain(inclusion_rules, constraints))
-
-    def constrain_solver(self, solver, program_outcomes):
-        constraint_types = {}
+    def build_constraints(self, program_outcomes):
         for program, (positive_outcome, negative_outcome) in program_outcomes.items():
-            constraint_types[program] = self.derive_constraint_types(program, positive_outcome, negative_outcome)
-
-        named_constraints = self.map_ctypes_and_inclusion_rules(constraint_types)
-        self.impose(solver, named_constraints)
-
-    def impose(self, solver, named_constraints):
-        for name, constraint in named_constraints:
-            if name not in solver.added:
-                solver.ground(constraint, name)
+            constraint_types = self.derive_constraint_types(positive_outcome, negative_outcome)
+            for x in self.derive_constraints(program, constraint_types):
+                yield x
+            for x in self.derive_inclusion_rules(program, constraint_types):
+                yield x

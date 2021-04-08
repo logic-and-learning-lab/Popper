@@ -1,14 +1,18 @@
 import sys
-from popper.solver import Clingo
+from popper.aspsolver import Clingo
+from popper.cpsolver import CPSolver
 from popper.tester import Tester
 from popper.constrain import Constrain
 from popper.generate import generate_program
+from popper import core
+from datetime import datetime
 
 def popper(solver, tester, constrain, max_literals = 100):
     for size in range(1, max_literals + 1):
         print(size)
         solver.update_number_of_literals(size)
         while True:
+
             # 1. Generate
             unordered_program = generate_program(solver)
             if unordered_program == None:
@@ -20,33 +24,30 @@ def popper(solver, tester, constrain, max_literals = 100):
             if program_outcomes[ordered_program] == ('all', 'none'):
                 return ordered_program
 
-            # 3. Constrain
-            constrain.constrain_solver(solver, program_outcomes)
+            # 3. Build the constraints
+            named_constraints = constrain.build_constraints(program_outcomes)
 
-def direct_popper(solver, tester, constrain, size):
-    solver.update_number_of_literals(size)
-    c = 1
-    while True:
-        print(c)
-        # print('Generate')
-        unordered_program = generate_program(solver)
-        if unordered_program == None:
-            print('No Program Returned')
-            break
-        ordered_program = unordered_program.to_ordered()
+            # 4. Ground constraints and add to the solver
+            for name, ast in named_constraints:
+                # find all bindings for the variables in the constraint
+                assignments = CPSolver.ground_program(ast, solver.max_clauses, solver.max_vars)
+                # assignments = Clingo.ground_program(ast, solver.max_clauses, solver.max_vars)
 
-        # print('Test')
-        # 2. Test
-        program_outcomes = tester.test(ordered_program)
-        #print(program_outcomes)
-        if program_outcomes[ordered_program] == ('all', 'none'):
-            return ordered_program
+                # build the clause object
+                clbody = tuple(lit for lit in ast.body if not isinstance(lit, core.ConstraintLiteral))
+                clause = core.Clause(head = ast.head, body = clbody)
 
-        # print('Const')
-        constrain.constrain_solver(solver, program_outcomes)
+                # For each variable assignment, ground the clause
+                for assignment in assignments:
+                    # AC: clause.ground is called often. Can we optimise it?
+                    x = clause.ground(assignment)
+                    solver.add_ground_clause(x)
 
-        c += 1
-        # print()
+                # AC: many methods above all loop of the clause :
+                # AC: 'core.Clause(head = ast.head, body = clbody)'
+                # AC: 'clause.ground'
+                # AC: 'solver.add_ground_clause(x)' does
+                # AC: can we refactor to only need one pass
 
 def output_program(program):
     if program:
