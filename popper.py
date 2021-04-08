@@ -1,5 +1,6 @@
 import sys
 from popper.solver import Clingo
+from popper.cpsolver import CPSolver
 from popper.tester import Tester
 from popper.constrain import Constrain
 from popper.generate import generate_program
@@ -21,32 +22,41 @@ def popper(solver, tester, constrain, max_literals = 100):
                 return ordered_program
 
             # 3. Constrain
-            constrain.constrain_solver(solver, program_outcomes)
+            named_constraints = constrain.build_constraints(program_outcomes)
+            for name, constraint in named_constraints:
+                for ground_clause in CPSolver.ground_program(constraint, name, solver.max_clauses, solver.max_vars):
+                    solver.add_ground_clause(ground_clause)
 
-def direct_popper(solver, tester, constrain, size):
-    solver.update_number_of_literals(size)
-    c = 1
-    while True:
-        print(c)
-        print('Generate')
-        unordered_program = generate_program(solver)
-        if unordered_program == None:
-            print('No Program Returned')
-            break
-        ordered_program = unordered_program.to_ordered()
 
-        print('Test')
-        # 2. Test
-        program_outcomes = tester.test(ordered_program)
-        #print(program_outcomes)
-        if program_outcomes[ordered_program] == ('all', 'none'):
-            return ordered_program
+# def direct_popper(solver, tester, constrain, size):
+#     solver.update_number_of_literals(size)
+#     c = 1
+#     while True:
+#         print(c)
+#         print('Generate')
+#         unordered_program = generate_program(solver)
+#         if unordered_program == None:
+#             print('No Program Returned')
+#             break
+#         ordered_program = unordered_program.to_ordered()
 
-        print('Const')
-        constrain.constrain_solver(solver, program_outcomes)
+#         print('Test')
+#         # 2. Test
+#         program_outcomes = tester.test(ordered_program)
+#         #print(program_outcomes)
+#         if program_outcomes[ordered_program] == ('all', 'none'):
+#             return ordered_program
 
-        c += 1
-        print()
+#         print('Const')
+#         named_constraints = constrain.build_constraints(program_outcomes)
+#         for name, constraint in named_constraints:
+#             for ground_clause in CPSolver.ground_program(constraint, name):
+#                 solver.add_ground_clause(ground_clause)
+
+
+
+#         c += 1
+#         print()
 
 def output_program(program):
     if program:

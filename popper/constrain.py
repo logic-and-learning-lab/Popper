@@ -258,19 +258,18 @@ class Constrain:
 
         return ((name, rule) for _, name, rule in chain(inclusion_rules, constraints))
 
-    def constrain_solver(self, solver, program_outcomes):
+    def build_constraints(self, program_outcomes):
         constraint_types = {}
         for program, (positive_outcome, negative_outcome) in program_outcomes.items():
             constraint_types[program] = self.derive_constraint_types(program, positive_outcome, negative_outcome)
+        return self.map_ctypes_and_inclusion_rules(constraint_types)
+        # self.impose(solver, named_constraints)
 
-        named_constraints = self.map_ctypes_and_inclusion_rules(constraint_types)
-        self.impose(solver, named_constraints)
-
-    def impose(self, solver, named_constraints):
-        names = []
-        for name, constraint in named_constraints:
-            if name not in solver.added:
-                solver.add(constraint, name = name)
-                names.append(name)
-        # AC: why not push the ground call in the loop? It removes the unneessary * syntax and list operation
-        solver.ground(*names)
+    # def impose(self, solver, named_constraints):
+    #     for name, constraint in named_constraints:
+    #         # AC: I THINK this code is useless, will double check
+    #         # if name in solver.added:
+    #         #     continue
+    #         # solver.added.add(name)
+    #         for ground_clause in solver.ground_program(constraint, name):
+    #             solver.add_ground_clause(ground_clause)
