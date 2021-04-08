@@ -129,3 +129,90 @@ class Clingo():
                 body_lits.append(body_atom if lit.polarity else -body_atom)
 
             backend.add_rule(head_atoms, body_lits, choice = False)
+
+
+
+    def ground_program(ast, max_clauses, max_vars):
+
+        # map each clause var in the program to an integer
+        c_vars = {v:i for i,v in enumerate(var for var in ast.all_vars() if isinstance(var, core.ClauseVariable))}
+        # map each var var in the program to an integer
+        v_vars = {v:i for i,v in enumerate(var for var in ast.all_vars() if isinstance(var, core.VarVariable))}
+
+        c_var_count = len(c_vars)
+        v_var_count = len(v_vars)
+        if c_var_count == 0 and v_var_count == 0:
+            return [{}]
+
+        solver = clingo.Control(['--seed=1','--rand-freq=0'])
+        # ask for all models
+        solver.configuration.solve.models = 0
+
+        # add the base reasoning
+        solver.add('base', [], """\
+            #show v_var/2.
+            #show c_var/2.
+            c_val(0..num_c_vals-1).
+            v_val(0..num_v_vals-1).
+            1 {c_var(V,X): c_val(X)} 1:- V=0..num_c_vars-1.
+            1 {v_var(V,X): v_val(X)} 1:- V=0..num_v_vars-1.
+            :- c_val(X), #count{I : c_var(I,X)} > 1.
+            :- v_val(X), #count{I : v_var(I,X)} > 1."""
+            +
+            f"""\
+            #const num_c_vars={c_var_count}.
+            #const num_c_vals={max_clauses}.
+            #const num_v_vars={v_var_count}.
+            #const num_v_vals={max_vars}.
+        """)
+
+        for lit in ast.body:
+            if not isinstance(lit, core.ConstraintLiteral):
+                continue
+            if isinstance(lit, core.EQ):
+                # lit A==0 <class 'popper.core.EQ'>
+                # arg A <class 'popper.core.VarVariable'>
+                # arg 0 <class 'int'>
+                var = lit.arguments[0]
+                val = lit.arguments[1]
+                if isinstance(var, core.VarVariable):
+                    var = v_vars[var]
+                    solver.add('base', [], f':- not v_var({var},{val}).')
+            elif isinstance(lit, core.GTEQ):
+                # lit Cl>=0 <class 'popper.core.GTEQ'>
+                # arg Cl <class 'popper.core.ClauseVariable'>
+                # arg 0 <class 'int'>
+                var = lit.arguments[0]
+                val = lit.arguments[1]
+                if isinstance(var, core.ClauseVariable):
+                    var = c_vars[var]
+                    for i in range(val):
+                        solver.add('base', [], f':- c_var({var},{i}).')
+            elif isinstance(lit, core.LT):
+                var1 = c_vars[lit.arguments[0]]
+                var2 = c_vars[lit.arguments[1]]
+                solver.add('base', [], f':- c_var({var1},Val1), c_var({var2},Val2), Val1>=Val2.')
+
+        solver.ground([("base", [])])
+
+        out = []
+        def on_model(m):
+            xs = m.symbols(shown = True)
+            c_var_assignments = {}
+            v_var_assignments = {}
+            for x in xs:
+                var = x.arguments[0].number
+                val = x.arguments[1].number
+                if x.name == 'c_var':
+                    c_var_assignments[var] = val
+                if x.name == 'v_var':
+                    v_var_assignments[var] = val
+            assignments = {}
+            for k, v in c_vars.items():
+                assignments[k] = c_var_assignments[v]
+            for k, v in v_vars.items():
+                assignments[k] = v_var_assignments[v]
+            out.append(assignments)
+
+        solver.solve(on_model=on_model)
+        return out
