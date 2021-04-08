@@ -122,8 +122,7 @@ class Constrain:
 
             yield core.Clause(head = (), body = tuple(lits))
 
-    def derive_constraint_types(self, program, positive_outcome, negative_outcome):
-        outcome_to_constraints = {
+    outcome_to_constraints = {
             ('all', 'none')  : ('banish',),
             ('all', 'some')  : ('generalisation',),
             ('some', 'none') : ('specialisation',),
@@ -132,12 +131,12 @@ class Constrain:
             ('none', 'some') : ('specialisation', 'redundancy', 'generalisation')
         }
 
+    def derive_constraint_types(self, positive_outcome, negative_outcome):
         if self.no_pruning:
             positive_outcome, negative_outcome = 'all', 'none'
         if negative_outcome == 'all':
             negative_outcome = 'some'
-
-        return outcome_to_constraints[(positive_outcome, negative_outcome)]
+        return self.outcome_to_constraints[(positive_outcome, negative_outcome)]
 
     def constraints_from_type(self, program, constraint_type):
         if constraint_type == 'banish':
@@ -228,14 +227,13 @@ class Constrain:
                 clause_handle, rule = self.make_clause_inclusion_rule(clause)
                 if clause_handle not in self.included_clause_handles:
                     self.included_clause_handles.add(clause_handle)
-                    yield ('inclusion_rule', clause_handle, rule)
+                    yield (clause_handle, rule)
 
         if 'redundancy' in constraint_types or 'specialisation' in constraint_types:
             program_handle, rule = self.make_program_inclusion_rule(program)
-            yield ('inclusion_rule', program_handle, rule)
+            yield (program_handle, rule)
 
     def derive_constraints(self, program, constraint_types):
-        named_constraints = []
         for constraint_type in constraint_types:
             for constraint in self.constraints_from_type(program, constraint_type):
                 if constraint in self.rule_to_cid:
@@ -244,32 +242,12 @@ class Constrain:
                     name = f'{constraint_type}{self.cid_counter}'
                     self.cid_counter += 1
                     self.rule_to_cid[constraint] = name
-                named_constraints.append((constraint_type, name, constraint))
-
-        return named_constraints
-
-    def map_ctypes_and_inclusion_rules(self, constraint_types):
-        constraints = []
-        inclusion_rules = []
-        for program, program_constraint_types in constraint_types.items():
-            # @NOTE: Why "+=" instead of append()?
-            constraints += self.derive_constraints(program, program_constraint_types)
-            inclusion_rules += self.derive_inclusion_rules(program, program_constraint_types)
-
-        return ((name, rule) for _, name, rule in chain(inclusion_rules, constraints))
+                yield (name, constraint)
 
     def build_constraints(self, program_outcomes):
-        constraint_types = {}
         for program, (positive_outcome, negative_outcome) in program_outcomes.items():
-            constraint_types[program] = self.derive_constraint_types(program, positive_outcome, negative_outcome)
-        return self.map_ctypes_and_inclusion_rules(constraint_types)
-        # self.impose(solver, named_constraints)
-
-    # def impose(self, solver, named_constraints):
-    #     for name, constraint in named_constraints:
-    #         # AC: I THINK this code is useless, will double check
-    #         # if name in solver.added:
-    #         #     continue
-    #         # solver.added.add(name)
-    #         for ground_clause in solver.ground_program(constraint, name):
-    #             solver.add_ground_clause(ground_clause)
+            constraint_types = self.derive_constraint_types(positive_outcome, negative_outcome)
+            for x in self.derive_constraints(program, constraint_types):
+                yield x
+            for x in self.derive_inclusion_rules(program, constraint_types):
+                yield x

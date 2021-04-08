@@ -43,17 +43,11 @@ def atom_to_symbol(lit):
 
 class Clingo():
     def __init__(self, kbpath):
-        self.solver = clingo.Control([])
+        self.solver = clingo.Control()
         self.max_vars = 0
         self.max_clauses = 0
-
-        # Runtime attributes
-        # AC: what is this used for?
-        # self.grounded = []
         # AC: why an OrderedDict? We never remove from it
         self.assigned = OrderedDict()
-        # self.added = set()
-
         self.load_basic(kbpath)
 
     def load_basic(self, kbpath):
@@ -114,37 +108,33 @@ class Clingo():
 
     def add_ground_clause(self, ground_clause):
         with self.solver.backend() as backend:
-            head_symbs = []
             head_atoms = []
-            body_symbs = []
             body_lits = []
             for lit in ground_clause.head:
                 symbol = atom_to_symbol(lit)
-                head_symbs.append(symbol)
                 head_atoms.append(backend.add_atom(symbol))
             for lit in ground_clause.body:
                 symbol = atom_to_symbol(lit)
-                body_symbs.append(symbol)
                 body_atom = backend.add_atom(symbol)
                 body_lits.append(body_atom if lit.polarity else -body_atom)
-
             backend.add_rule(head_atoms, body_lits, choice = False)
 
-
-
     def ground_program(ast, max_clauses, max_vars):
-
-        # map each clause var in the program to an integer
+        # map each clause_var and var_var in the program to an integer
         c_vars = {v:i for i,v in enumerate(var for var in ast.all_vars() if isinstance(var, core.ClauseVariable))}
-        # map each var var in the program to an integer
         v_vars = {v:i for i,v in enumerate(var for var in ast.all_vars() if isinstance(var, core.VarVariable))}
+
+        # transpose for return lookup
+        c_vars_ = {v:k for k,v in c_vars.items()}
+        v_vars_ = {v:k for k,v in v_vars.items()}
 
         c_var_count = len(c_vars)
         v_var_count = len(v_vars)
         if c_var_count == 0 and v_var_count == 0:
             return [{}]
 
-        solver = clingo.Control(['--seed=1','--rand-freq=0'])
+        solver = clingo.Control()
+
         # ask for all models
         solver.configuration.solve.models = 0
 
@@ -166,13 +156,12 @@ class Clingo():
             #const num_v_vals={max_vars}.
         """)
 
+        # add constraints to the ASP program based on the AST thing
         for lit in ast.body:
             if not isinstance(lit, core.ConstraintLiteral):
                 continue
             if isinstance(lit, core.EQ):
                 # lit A==0 <class 'popper.core.EQ'>
-                # arg A <class 'popper.core.VarVariable'>
-                # arg 0 <class 'int'>
                 var = lit.arguments[0]
                 val = lit.arguments[1]
                 if isinstance(var, core.VarVariable):
@@ -180,8 +169,6 @@ class Clingo():
                     solver.add('base', [], f':- not v_var({var},{val}).')
             elif isinstance(lit, core.GTEQ):
                 # lit Cl>=0 <class 'popper.core.GTEQ'>
-                # arg Cl <class 'popper.core.ClauseVariable'>
-                # arg 0 <class 'int'>
                 var = lit.arguments[0]
                 val = lit.arguments[1]
                 if isinstance(var, core.ClauseVariable):
@@ -198,21 +185,15 @@ class Clingo():
         out = []
         def on_model(m):
             xs = m.symbols(shown = True)
-            c_var_assignments = {}
-            v_var_assignments = {}
+            # map a variable to a program variable
+            assignment = {}
             for x in xs:
                 var = x.arguments[0].number
                 val = x.arguments[1].number
                 if x.name == 'c_var':
-                    c_var_assignments[var] = val
+                    assignment[c_vars_[var]] = val
                 if x.name == 'v_var':
-                    v_var_assignments[var] = val
-            assignments = {}
-            for k, v in c_vars.items():
-                assignments[k] = c_var_assignments[v]
-            for k, v in v_vars.items():
-                assignments[k] = v_var_assignments[v]
-            out.append(assignments)
-
+                    assignment[v_vars_[var]] = val
+            out.append(assignment)
         solver.solve(on_model=on_model)
         return out
