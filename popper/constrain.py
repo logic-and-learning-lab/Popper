@@ -12,17 +12,16 @@ class Constrain:
     # Specific constraint helper functions
     # @NOTE: The two functions below have a "ground" attribute in the orginal.
     # Ask about it.
+    def atom_handle(self, atom):
+        variables = (f'{variable}' for variable in atom.arguments)
+        return f'{atom.predicate.name}' + ''.join(variables)
+
     def make_clause_handle(self, clause):
         atoms = [clause.head[0]] + sorted(clause.body)
-        def atom_handle(atom):
-            variables = (f'{variable}' for variable in atom.arguments)
-            return f'{atom.predicate.name}' + ''.join(variables)
-
-        return ''.join(map(atom_handle, atoms))
+        return ''.join(self.atom_handle(atom) for atom in atoms)
 
     def make_program_handle(self, program):
-        return ('prog_' +
-                '_'.join(sorted(self.make_clause_handle(clause) for clause in program)))
+        return ('prog_' +'_'.join(sorted(self.make_clause_handle(clause) for clause in program)))
 
     # Specific constraints
     def generalisation_constraint(self, program):
@@ -140,8 +139,7 @@ class Constrain:
 
     def constraints_from_type(self, program, constraint_type):
         if constraint_type == 'banish':
-            cc = core.Clause(head = (),
-                             body = tuple(self.banish_constraint(program)))
+            cc = core.Clause(head = (), body = tuple(self.banish_constraint(program)))
             return [cc]
 
         if constraint_type == 'redundancy':
@@ -151,8 +149,7 @@ class Constrain:
             return [self.specialisation_constraint(program)]
 
         if constraint_type == 'generalisation':
-            cc = core.Clause(head = (),
-                             body = tuple(self.generalisation_constraint(program)))
+            cc = core.Clause(head = (), body = tuple(self.generalisation_constraint(program)))
             return [cc]
 
         assert False, f'Unrecognized constraint type: {constraint_type}.'
@@ -193,33 +190,33 @@ class Constrain:
 
         return clause_handle, core.Clause(head = head, body = tuple(literals_generator()))
 
+    def literals_generator(self, program):
+        for clause_number, clause in enumerate(program):
+            clause_handle = self.make_clause_handle(clause)
+            clause_variable = core.ClauseVariable(f'C{clause_number}')
+            yield core.Literal(predicate = 'included_clause',
+                               arguments = (clause_handle, clause_variable),
+                               polarity  = True)
+
+        for clause_number1, clause_numbers in program.before.items():
+            for clause_number2 in clause_numbers:
+                yield core.LT.pos(core.ClauseVariable(f'C{clause_number1}'),
+                                  core.ClauseVariable(f'C{clause_number2}'))
+
+        # Ensure only groundings for distinct clauses are used
+        # AC: replace with an AllDiff constraint
+        for clause_number1, clause_number2 in combinations(range(len(program)), 2):
+            yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
+                               core.ClauseVariable(f'C{clause_number2}'))
+
     def make_program_inclusion_rule(self, program):
         program_handle = self.make_program_handle(program)
-
-        def literals_generator():
-            for clause_number, clause in enumerate(program):
-                clause_handle = self.make_clause_handle(clause)
-                clause_variable = core.ClauseVariable(f'C{clause_number}')
-                yield core.Literal(predicate = 'included_clause',
-                                   arguments = (clause_handle, clause_variable),
-                                   polarity  = True)
-
-            for clause_number1, clause_numbers in program.before.items():
-                for clause_number2 in clause_numbers:
-                    yield core.LT.pos(core.ClauseVariable(f'C{clause_number1}'),
-                                      core.ClauseVariable(f'C{clause_number2}'))
-
-            # Ensure only groundings for distinct clauses are used
-            # AC: replace with an AllDiff constraint
-            for clause_number1, clause_number2 in combinations(range(len(program)), 2):
-                yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
-                                   core.ClauseVariable(f'C{clause_number2}'))
 
         head = (core.Literal(predicate = 'included_program',
                              arguments = (program_handle,),
                              polarity  = True),)
 
-        return program_handle, core.Clause(head = head, body = tuple(literals_generator()))
+        return program_handle, core.Clause(head = head, body = tuple(self.literals_generator(program)))
 
     def derive_inclusion_rules(self, program, constraint_types):
         if 'specialisation' in constraint_types or 'generalisation' in constraint_types:

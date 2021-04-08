@@ -30,8 +30,8 @@ def popper(solver, tester, constrain, max_literals = 100):
             # 4. Ground constraints and add to the solver
             for name, ast in named_constraints:
                 # find all bindings for the variables in the constraint
-                assignments = list(CPSolver.ground_program(ast, solver.max_clauses, solver.max_vars))
-                # assignments = list(Clingo.ground_program(ast, solver.max_clauses, solver.max_vars))
+                assignments = CPSolver.ground_program(ast, solver.max_clauses, solver.max_vars)
+                # assignments = Clingo.ground_program(ast, solver.max_clauses, solver.max_vars)
 
                 # build the clause object
                 clbody = tuple(lit for lit in ast.body if not isinstance(lit, core.ConstraintLiteral))
