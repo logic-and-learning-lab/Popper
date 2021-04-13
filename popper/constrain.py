@@ -1,6 +1,59 @@
-from . import core
-from collections import defaultdict
+import operator
+from collections import namedtuple
 from itertools import chain, product, combinations
+from . core import ConstVar, ConstOpt, Constraint, Literal
+
+OUTCOME_TO_CONSTRAINTS = {
+    ('all', 'none')  : ('banish',),
+    ('all', 'some')  : ('generalisation',),
+    ('some', 'none') : ('specialisation',),
+    ('some', 'some') : ('specialisation', 'generalisation'),
+    ('none', 'none') : ('specialisation', 'redundancy'),
+    ('none', 'some') : ('specialisation', 'redundancy', 'generalisation')
+}
+
+def lt(args):
+    assert len(args) == 2
+    return ConstOpt(operator.lt, args, '<')
+
+def gt(args):
+    assert len(args) == 2
+    return ConstOpt(operator.gt, args, '>')
+
+def eq(args):
+    assert len(args) == 2
+    return ConstOpt(operator.eq, args, '==')
+
+def neq(args):
+    assert len(args) == 2
+    return ConstOpt(operator.ne, args, '!=') 
+
+def gteq(args):
+    assert len(args) == 2
+    return ConstOpt(operator.ge, args, '>=')
+
+def lteq(args):
+    assert len(args) == 2
+    return ConstOpt(operator.le, args, '<=')
+
+def voclause(variable):
+    """Returns variable over a clause"""
+    return ConstVar(f'C{variable}', 'Clause')
+
+def vovariable(variable):
+    """Returns variable over a variable"""
+    return ConstVar(f'{variable}', 'Variable')
+
+def make_clause_handle(clause):
+    body_literals = sorted(clause.body, key = operator.attrgetter('predicate'))
+    clause_handle = ''
+    for literal in [clause.head] + body_literals:
+        clause_handle += f'{literal.predicate}{"".join(literal.arguments)}'
+
+    return clause_handle 
+
+def make_program_handle(program):
+    return f'prog_{"_".join(sorted(make_clause_handle(clause) for clause in program))}'  
 
 class Constrain:
     def __init__(self, no_pruning = False):
@@ -8,216 +61,35 @@ class Constrain:
         self.rule_to_cid = {}
         self.cid_counter = 0
         self.included_clause_handles = set()
-
-    # Specific constraint helper functions
-    # @NOTE: The two functions below have a "ground" attribute in the orginal.
-    # Ask about it.
-    def atom_handle(self, atom):
-        variables = (f'{variable}' for variable in atom.arguments)
-        return f'{atom.predicate.name}' + ''.join(variables)
-
-    def make_clause_handle(self, clause):
-        atoms = [clause.head[0]] + sorted(clause.body)
-        return ''.join(self.atom_handle(atom) for atom in atoms)
-
-    def make_program_handle(self, program):
-        return ('prog_' +'_'.join(sorted(self.make_clause_handle(clause) for clause in program)))
-
-    # Specific constraints
-    def generalisation_constraint(self, program):
-        for clause_number, clause in enumerate(program):
-            clause_handle = self.make_clause_handle(clause)
-            ic_arguments = (clause_handle, core.ClauseVariable(f'C{clause_number}'))
-            ic_literal = core.Literal(predicate = 'included_clause',
-                                      arguments = ic_arguments,
-                                      polarity = True)
-            yield ic_literal
-
-            cs_arguments = (core.ClauseVariable(f'C{clause_number}'), len(clause.body))
-            cs_literal = core.Literal(predicate = 'clause_size',
-                                      arguments = cs_arguments,
-                                      polarity = True)
-            yield cs_literal
-
-        # Use clauses' metadata concerning clause ordering to restrict groundings
-        for clause_number1, clause_numbers in program.before.items():
-            for clause_number2 in clause_numbers:
-                yield core.LT.pos(core.ClauseVariable(f'C{clause_number1}'),
-                                  core.ClauseVariable(f'C{clause_number2}'))
-
-        # Use clauses' metadata concerning minimal clause index to restrict groundings.
-        for clause_number, clause in enumerate(program):
-            yield core.GTEQ.pos(core.ClauseVariable(f'C{clause_number}'), clause.min_num)
-
-        # Ensure only groundings for distinct clauses are generated
-        # AC: replace with AllDiff
-        for clause_number1, clause_number2 in combinations(range(len(program)), 2):
-            yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
-                               core.ClauseVariable(f'C{clause_number2}'))
-
-    def banish_constraint(self, program):
-        for clause_number, clause in enumerate(program):
-            clause_handle = self.make_clause_handle(clause)
-            yield core.Literal(predicate = 'included_clause',
-                               arguments = (clause_handle, clause_number),
-                               polarity  = True)
-            yield core.Literal(predicate = 'clause_size',
-                               arguments = (clause_number, len(clause.body)),
-                               polarity  = True)
-        yield core.Literal(predicate = 'clause', arguments = (len(program),),
-                           polarity  = False)
-
-    def specialisation_constraint(self, program):
-        program_handle = self.make_program_handle(program)
-        pos_body = core.Literal(predicate = 'included_program',
-                                arguments = (program_handle,),
-                                polarity  = True)
-        neg_body = core.Literal(predicate = 'clause',
-                                arguments = (len(program),),
-                                polarity  = False)
-
-        return core.Clause(head = (), body = (pos_body, neg_body))
-
-    # @NOTE: The computational complexity of this function isn't great. Jk: Discuss
-    # possible improvements after getting a more detailed specification.
-    def redundancy_constraint(self, program):
-        preds_num_clauses = defaultdict(int)
-        preds_num_recursive_clauses = defaultdict(int)
-        for clause in program:
-            head, body = clause.head[0], clause.body
-            preds_num_clauses[head.predicate] += 1
-            if clause.is_recursive():
-                preds_num_recursive_clauses[head.predicate] += 1
-
-        recursively_called = set()
-        while True:
-            something_added = False
-            for clause in program:
-                head, body = clause.head[0], clause.body
-                recursive = clause.is_recursive()
-                for body_pred in (body_literal.predicate for body_literal in body):
-                    if body_pred not in preds_num_clauses:
-                        continue
-                    if (body_pred != head.predicate and recursive) or \
-                    (head.predicate in recursively_called):
-                        something_added |= not body_pred in recursively_called
-                        recursively_called.add(body_pred)
-            if not something_added: break
-
-        program_handle = self.make_program_handle(program)
-        for pred in preds_num_clauses.keys() - recursively_called:
-            lits = [core.Literal(predicate = 'included_program',
-                                 arguments = (program_handle,),
-                                 polarity  = True)]
-            for other_pred, num_clauses in preds_num_clauses.items():
-                if other_pred == pred: continue
-                lits.append(core.Literal(predicate = 'num_clauses',
-                                         arguments = (other_pred, num_clauses),
-                                         polarity  = True))
-            num_recursive = preds_num_recursive_clauses[pred]
-            lits.append(core.Literal(predicate = 'num_recursive',
-                                     arguments = (pred.name, num_recursive),
-                                     polarity  = True))
-
-            yield core.Clause(head = (), body = tuple(lits))
-
-    outcome_to_constraints = {
-            ('all', 'none')  : ('banish',),
-            ('all', 'some')  : ('generalisation',),
-            ('some', 'none') : ('specialisation',),
-            ('some', 'some') : ('specialisation', 'generalisation'),
-            ('none', 'none') : ('specialisation', 'redundancy'),
-            ('none', 'some') : ('specialisation', 'redundancy', 'generalisation')
-        }
+    
+    def build_constraints(self, program_outcomes):
+        for program, (positive_outcome, negative_outcome) in program_outcomes.items():
+            constraint_types = self.derive_constraint_types(positive_outcome, negative_outcome)
+            for constraint in self.derive_constraints(program, constraint_types):
+                yield constraint
+            for inclusion_rule in self.derive_inclusion_rules(program, constraint_types):
+                yield inclusion_rule
 
     def derive_constraint_types(self, positive_outcome, negative_outcome):
         if self.no_pruning:
             positive_outcome, negative_outcome = 'all', 'none'
         if negative_outcome == 'all':
             negative_outcome = 'some'
-        return self.outcome_to_constraints[(positive_outcome, negative_outcome)]
+        return OUTCOME_TO_CONSTRAINTS[(positive_outcome, negative_outcome)]
+    
+    def derive_constraints(self, program, constraint_types):
+        for constraint_type in constraint_types:
+            if constraint_type == 'generalisation':
+                return self.generalisation_constraint(program)
+            
+            elif constraint_type == 'specialisation':
+                return self.specialisation_constraint(program)
 
-    def constraints_from_type(self, program, constraint_type):
-        if constraint_type == 'banish':
-            cc = core.Clause(head = (), body = tuple(self.banish_constraint(program)))
-            return [cc]
+            elif constraint_type == 'banish':
+                return self.banish_constraint(program)
 
-        if constraint_type == 'redundancy':
-            return list(self.redundancy_constraint(program))
-
-        if constraint_type == 'specialisation':
-            return [self.specialisation_constraint(program)]
-
-        if constraint_type == 'generalisation':
-            cc = core.Clause(head = (), body = tuple(self.generalisation_constraint(program)))
-            return [cc]
-
-        assert False, f'Unrecognized constraint type: {constraint_type}.'
-
-    # @NOTE: Jk: Refactor with better variable names after sorting note below.
-    # The way VarVariable and ClauseVariable are used needs to be urgently fixed.
-    # Adds unneeded complexity.
-    def make_clause_inclusion_rule(self, clause):
-        clause_handle = self.make_clause_handle(clause)
-        clause_number = core.ClauseVariable('Cl')
-
-        # @NOTE: This function is not necessary. Jk, refactor after getting a
-        # clearer specification from Rolf.
-        def literals_generator():
-            for metapred, lit in chain(product(('head_literal',), clause.head),
-                                       product(('body_literal',), clause.body)):
-                assert all(isinstance(arg, core.Variable) for arg in lit.arguments)
-                yield core.Literal(predicate = metapred,
-                                   arguments = (clause_number, lit.predicate.name,
-                                                lit.arity,
-                                                tuple(core.VarVariable(v.name)
-                                                      for v in lit.arguments)),
-                                   polarity  = True)
-
-            yield core.GTEQ.pos(clause_number, clause.min_num)
-
-            # Ensure only groundings for distinct variables are used
-            # AC: replace with AllDiff
-            for var1, var2 in combinations(clause.all_vars(), 2):
-                yield core.NEQ.pos(core.VarVariable(var1.name), core.VarVariable(var2.name))
-
-            for idx, var in enumerate(clause.head[0].arguments):
-                yield core.EQ.pos(core.VarVariable(var.name), idx)
-
-        head = (core.Literal(predicate = 'included_clause',
-                             arguments = (clause_handle, clause_number),
-                             polarity  = True),)
-
-        return clause_handle, core.Clause(head = head, body = tuple(literals_generator()))
-
-    def literals_generator(self, program):
-        for clause_number, clause in enumerate(program):
-            clause_handle = self.make_clause_handle(clause)
-            clause_variable = core.ClauseVariable(f'C{clause_number}')
-            yield core.Literal(predicate = 'included_clause',
-                               arguments = (clause_handle, clause_variable),
-                               polarity  = True)
-
-        for clause_number1, clause_numbers in program.before.items():
-            for clause_number2 in clause_numbers:
-                yield core.LT.pos(core.ClauseVariable(f'C{clause_number1}'),
-                                  core.ClauseVariable(f'C{clause_number2}'))
-
-        # Ensure only groundings for distinct clauses are used
-        # AC: replace with an AllDiff constraint
-        for clause_number1, clause_number2 in combinations(range(len(program)), 2):
-            yield core.NEQ.pos(core.ClauseVariable(f'C{clause_number1}'),
-                               core.ClauseVariable(f'C{clause_number2}'))
-
-    def make_program_inclusion_rule(self, program):
-        program_handle = self.make_program_handle(program)
-
-
-        head = (core.Literal(predicate = 'included_program',
-                             arguments = (program_handle,),
-                             polarity  = True),)
-
-        return program_handle, core.Clause(head = head, body = tuple(self.literals_generator(program)))
+            elif constraint_type == 'redundancy':
+                return self.redundancy_constraint(program)   
 
     def derive_inclusion_rules(self, program, constraint_types):
         if 'specialisation' in constraint_types or 'generalisation' in constraint_types:
@@ -225,27 +97,134 @@ class Constrain:
                 clause_handle, rule = self.make_clause_inclusion_rule(clause)
                 if clause_handle not in self.included_clause_handles:
                     self.included_clause_handles.add(clause_handle)
-                    yield (clause_handle, rule)
+                    yield rule
 
         if 'redundancy' in constraint_types or 'specialisation' in constraint_types:
-            program_handle, rule = self.make_program_inclusion_rule(program)
-            yield (program_handle, rule)
+            yield self.make_program_inclusion_rule(program)       
 
-    def derive_constraints(self, program, constraint_types):
-        for constraint_type in constraint_types:
-            for constraint in self.constraints_from_type(program, constraint_type):
-                if constraint in self.rule_to_cid:
-                    name = self.rule_to_cid[constraint]
-                else:
-                    name = f'{constraint_type}{self.cid_counter}'
-                    self.cid_counter += 1
-                    self.rule_to_cid[constraint] = name
-                yield (name, constraint)
+    def make_clause_inclusion_rule(self, clause):
+        clause_handle = make_clause_handle(clause)
+        clause_number = voclause('l')
 
-    def build_constraints(self, program_outcomes):
-        for program, (positive_outcome, negative_outcome) in program_outcomes.items():
-            constraint_types = self.derive_constraint_types(positive_outcome, negative_outcome)
-            for x in self.derive_constraints(program, constraint_types):
-                yield x
-            for x in self.derive_inclusion_rules(program, constraint_types):
-                yield x
+        constraints = []
+        for metapred, lit in chain([('head_literal', clause.head)], 
+                                   product(('body_literal',), clause.body)):
+            args = (clause_number, lit.predicate, lit.arity, 
+                    tuple(vovariable(v) for v in lit.arguments))
+            constraints.append(Literal(metapred, args))
+        constraints.append(gteq((clause_number, clause.min_num)))
+
+        for var1, var2 in combinations(clause.all_vars(), 2):
+            constraints.append(neq((vovariable(var1), vovariable(var2))))
+        
+        for idx, var in enumerate(clause.head.arguments):
+            constraints.append(eq((vovariable(var), idx)))
+
+        head = Literal('included_clause', (clause_handle, clause_number))
+
+        return clause_handle, Constraint('inclusion rule', head, tuple(constraints))
+
+    def make_program_inclusion_rule(self, program):
+        program_handle = make_program_handle(program)
+
+        constraints = []
+        for clause_number, clause in enumerate(program):
+            clause_handle = make_clause_handle(clause)
+            clause_variable = voclause(clause_number)
+            constraints.append(Literal('included_clause', (clause_handle, clause_variable)))
+
+        for clause_number1, clause_numbers in program.before.items():
+            for clause_number2 in clause_numbers:
+                args = (voclause(clause_number1), voclause(clause_number2))
+                constraints.append(lt(args))
+
+        #AC: replace with an AllDiff constraint
+        for clause_number1, clause_number2 in combinations(range(len(program)), 2):
+            args = voclause(clause_number1), voclause(clause_number2)
+            constraints.append(neq(args))
+        
+        head = Literal('included_program', (program_handle,))
+        
+        return Constraint('inclusion rule', head, tuple(constraints))
+
+    def generalisation_constraint(self, program):
+        constraints = []
+        for clause_number, clause in enumerate(program):
+            clause_handle = make_clause_handle(clause)
+            
+            ic_args = (clause_handle, voclause(clause_number))
+            constraints.append(Literal('included_clause', ic_args))
+                       
+            cs_args = (voclause(clause_number), len(clause.body))
+            constraints.append(Literal('clause_size', cs_args))
+        
+        for clause_number1, clause_numbers in program.before.items():
+            for clause_number2 in clause_numbers:
+                args = (voclause(clause_number1), voclause(clause_number2))
+                constraints.append(lt(args))
+
+        for clause_number, clause in enumerate(program):
+            args = (voclause(clause_number), clause.min_num)
+            constraints.append(gteq(args))
+
+        # AC: replace with AllDiff
+        for clause_number1, clause_number2 in combinations(range(len(program)), 2):
+            args = (voclause(clause_number1), voclause(clause_number2))
+            constraints.append(neq(args))
+        
+        return [Constraint('generalisation', None, tuple(constraints))]
+
+    def specialisation_constraint(self, program):
+        program_handle = make_program_handle(program)
+        pos_body = Literal('included_program', (program_handle, ))
+        neg_body = Literal('clause', (len(program), ), polarity = False)
+
+        return [Constraint('specialisation', None, (pos_body, neg_body))]
+
+    def banish_constraint(self, program):
+        constraints = []
+        for clause_number, clause in emumerate(program):
+            clause_handle = make_clause_handle(clause)
+            ic = Literal('included_clause', (clause_handle, clause_number))
+            cs = Literal('clause_size', (clause_number, len(clause.body)))
+            constraints.append(ic)
+            constraints.append(cs)
+        constraints.append(Literal('clause', (len(program),)))
+
+        return [Constraint('banish', None, tuple(constraints))]
+
+    # Jk: AC, I cleaned this up a bit, but this reorg is for you. Godspeed!
+    def redundancy_constraint(self, program):
+        lits_num_clauses = defaultdict(int)
+        lits_num_recursive_clauses = defaultdict(int)
+        for clause in program:
+            lits_num_clauses[clause.head] += 1
+            if clause.is_recursive():
+                lits_num_recursive_clauses[clause.head] += 1
+
+        recursively_called = set()
+        while True:
+            something_added = False
+            for clause in program:
+                for body_literal in clause.body:
+                    if body_literal not in lits_num_clauses:
+                        continue
+                    if (body_literal != clause.head and clause.is_recursive()) or \
+                       (clause.head in recursively_called):
+                        something_added |= not body_literal in recursively_called
+                        recursively_called.add(body_literal)
+            if not something_added: break
+        
+        all_constraints = []
+        program_handle = self.make_program_handle(program)
+        for lit in lits_num_clauses.keys() - recursively_called:
+            constraints = [Literal('included_program', (program_handle,))]
+            for other_lit, num_clauses in lits_num_clauses.items():
+                if other_lit == lit: continue
+                constraints.append(Literal('num_clauses', (other_lit, num_clauses)))
+            num_recursive = lits_num_recursive_clauses[pred]
+            constraints.append(Literal('num_recursive', arguments(lit.predicate, num_recursive)))
+            
+            all_constraints.append(Constraint('redundancy', None, tuple(constraints)))
+
+        return all_constraints

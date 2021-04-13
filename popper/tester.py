@@ -48,7 +48,6 @@ class Tester():
         self.prolog.assertz(f'num_pos({self.num_pos})')
         self.prolog.assertz(f'num_neg({self.num_neg})')
 
-    """
     @contextmanager
     def using(self, program):
         current_clauses = set()
@@ -57,52 +56,20 @@ class Tester():
                 self.prolog.assertz(clause.to_code())
                 current_clauses.add(clause)
             yield
-        finally:
-            head_literals = set(clause.head[0] for clause in current_clauses)
-            for head_literal in head_literals:
-                args = ','.join(['_'] * head_literal.arity)
-                self.prolog.retractall(f'{head_literal.predicate.name}({args})')
-                self.prolog.retractall(f'{head_literal.predicate.name}({args},_,_)')
-    #"""
-
-    def assert_program(self, program, basic=None):
-        assert basic in (True, None)
-        for clause in program:
-            self.prolog.assertz(clause.to_code())
-            yield clause
-
-    def retract(self, current_clauses):
-        head_lits = set(cl.head[0] for cl in current_clauses)
-        for head_lit in head_lits:
-            args = ','.join(['_'] * head_lit.arity)
-            self.prolog.retractall(f"{head_lit.predicate.name}({args})")
-            # for instrumented programs
-            self.prolog.retractall(f"{head_lit.predicate.name}({args},_,_)")
-        self.current_clauses = set()
-
-    @contextmanager
-    def using(self, program, *args, **kwargs):
-        # Track current clauses currently being evaluated
-        current_clauses = set()
-        try:
-            for x in self.assert_program(program, *args, **kwargs):
-                current_clauses.add(x)
-            yield
-        finally:
-            self.retract(current_clauses)
+        finally:            
+            for clause in current_clauses:
+                clause_head = clause.head
+                args = ','.join(['_'] * clause_head.arity)
+                self.prolog.retractall(f'{clause_head.predicate}({args})')
+                self.prolog.retractall(f'{clause_head.predicate}({args},_,_)')
 
     def test(self, program):
-        # print(' Start test')
         with self.using(program):
             if self.minimal_testing:
-                # print('  In minimal')
                 res = list(self.prolog.query('do_test_minimal(TP,FN,TN,FP)'))[0]
-                # print('  End minimal')
             else:
                 res = list(self.prolog.query('do_test(TP,FN,TN,FP)'))[0]
-            # AC: TN is not a true value with minimal testing
             TP, FN, TN, FP = res['TP'], res['FN'], res['TN'], res['FP']
-        # print(' End test')
 
         # @NOTE: Andrew to clean up at some point.
         # complete (FN=0)

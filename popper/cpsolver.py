@@ -1,5 +1,6 @@
 from ortools.sat.python import cp_model
 from . import core
+
 class CPSolver():
      def ground_program(ast, max_clauses, max_vars):
         model = cp_model.CpModel()
@@ -9,27 +10,24 @@ class CPSolver():
 
         var_vals = []
         for var in ast.all_vars():
-            if isinstance(var, core.ClauseVariable):
+            if var.type == 'Clause':
                 cp_var = model.NewIntVar(0, max_clauses - 1, var.name)
-            elif isinstance(var, core.VarVariable):
+            elif var.type == 'Variable':
                 cp_var = model.NewIntVar(0, max_vars - 1, var.name)
-                var_vals.append(cp_var)
-            else:
-                assert False, 'Whut??' # Jk: Hahahaha
             vars_to_cp[var] = cp_var
             cp_to_vars[cp_var] = var
 
         for lit in ast.body:
-            if not isinstance(lit, core.ConstraintLiteral):
+            if isinstance(lit, core.Literal):
                 continue
-            def args():
-                for arg in lit.arguments:
-                    if isinstance(arg, core.Variable):
-                        yield vars_to_cp[arg]
-                    else:
-                        yield arg
-            # AC: why they weird syntax? why not push the reasoning in the loop?
-            x = lit.predicate.operator(*args())
+            args = []
+            for arg in lit.arguments:
+                if isinstance(arg, core.ConstVar):
+                    args.append(vars_to_cp[arg])
+                else:
+                    args.append(arg)
+            a, b = args
+            x = lit.operator(a, b)
             model.Add(x)
 
         cp_solver = cp_model.CpSolver()

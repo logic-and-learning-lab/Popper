@@ -27,19 +27,17 @@ NUM_OF_LITERALS = (
 # """)
 
 def arg_to_symbol(arg):
-    if isinstance(arg, core.Variable):
-        assert False, 'Grounding only symbols for now'
     if isinstance(arg, tuple):
         return clingo.Tuple_(tuple(arg_to_symbol(a) for a in arg))
     if isinstance(arg, numbers.Number):
         return clingo.Number(arg)
     if isinstance(arg, str):
         return clingo.Function(arg)
-    assert False, 'Unhandled type'
+    assert False, f'Unhandled argtype({type(arg)}) in aspsolver.py arg_to_symbol()'
 
 def atom_to_symbol(lit):
     args = tuple(arg_to_symbol(arg) for arg in lit.arguments)
-    return clingo.Function(name = lit.predicate.name, arguments = args)
+    return clingo.Function(name = lit.predicate, arguments = args)
 
 class Clingo():
     def __init__(self, kbpath):
@@ -88,18 +86,16 @@ class Clingo():
     def update_number_of_literals(self, size):
         # 1. Release those that have already been assigned
         for atom, truth_value in self.assigned.items():
-            if atom.predicate.name == 'size_in_literals' and truth_value:
+            if atom[0] == 'size_in_literals' and truth_value:
                 self.assigned[atom] = False
-                atom_args = [clingo.Number(arg) for arg in atom.arguments]
-                symbol = clingo.Function('size_in_literals', atom_args)
+                symbol = clingo.Function('size_in_literals', [clingo.Number(atom[1])])
                 self.solver.release_external(symbol)
 
         # 2. Ground the new size
         self.solver.ground([('number_of_literals', [clingo.Number(size)])])
 
         # 3. Assign the new size
-        atom = core.Atom('size_in_literals', (size,))
-        self.assigned[atom] = True
+        self.assigned[('size_in_literals', size)] = True
 
         # @NOTE: Everything passed to Clingo must be Symbol. Refactor after
         # Clingo updates their cffi API
@@ -108,21 +104,23 @@ class Clingo():
 
     def add_ground_clause(self, ground_clause):
         with self.solver.backend() as backend:
-            head_atoms = []
+            head_lit = []
+            if ground_clause.head: 
+                symbol = atom_to_symbol(ground_clause.head)
+                head_lit = [backend.add_atom(symbol)]
+
             body_lits = []
-            for lit in ground_clause.head:
-                symbol = atom_to_symbol(lit)
-                head_atoms.append(backend.add_atom(symbol))
             for lit in ground_clause.body:
                 symbol = atom_to_symbol(lit)
                 body_atom = backend.add_atom(symbol)
-                body_lits.append(body_atom if lit.polarity else -body_atom)
-            backend.add_rule(head_atoms, body_lits, choice = False)
+                body_lits.append(body_atom if lit.polarity else -body_atom)          
+
+            backend.add_rule(head_lit, body_lits, choice = False)
 
     def ground_program(ast, max_clauses, max_vars):
         # map each clause_var and var_var in the program to an integer
-        c_vars = {v:i for i,v in enumerate(var for var in ast.all_vars() if isinstance(var, core.ClauseVariable))}
-        v_vars = {v:i for i,v in enumerate(var for var in ast.all_vars() if isinstance(var, core.VarVariable))}
+        c_vars = {v:i for i,v in enumerate(var for var in ast.all_vars() if var.type == 'Clause')}
+        v_vars = {v:i for i,v in enumerate(var for var in ast.all_vars() if var.type == 'Variable')}
 
         # transpose for return lookup
         c_vars_ = {v:k for k,v in c_vars.items()}
@@ -155,33 +153,31 @@ class Clingo():
             #const num_v_vars={v_var_count}.
             #const num_v_vals={max_vars}.
         """)
-
+   
         # add constraints to the ASP program based on the AST thing
         for lit in ast.body:
-            if not isinstance(lit, core.ConstraintLiteral):
+            if isinstance(lit, core.Literal):
                 continue
-            if isinstance(lit, core.EQ):
-                # lit A==0 <class 'popper.core.EQ'>
-                var = lit.arguments[0]
-                val = lit.arguments[1]
-                if isinstance(var, core.VarVariable):
+            if lit.operation == '==':
+                var, val = lit.arguments
+                if isinstance(var, core.ConstVar) and var.type == 'Variable':
                     var = v_vars[var]
                     solver.add('base', [], f':- not v_var({var},{val}).')
-            elif isinstance(lit, core.GTEQ):
-                # lit Cl>=0 <class 'popper.core.GTEQ'>
-                var = lit.arguments[0]
-                val = lit.arguments[1]
-                if isinstance(var, core.ClauseVariable):
+
+            elif lit.operation == '>=':
+                var, val = lit.arguments
+                if isinstance(var, core.ConstVar) and var.type == 'Clause':
                     var = c_vars[var]
                     for i in range(val):
                         solver.add('base', [], f':- c_var({var},{i}).')
-            elif isinstance(lit, core.LT):
+
+            elif lit.operation == '<':
                 var1 = c_vars[lit.arguments[0]]
                 var2 = c_vars[lit.arguments[1]]
                 solver.add('base', [], f':- c_var({var1},Val1), c_var({var2},Val2), Val1>=Val2.')
 
         solver.ground([("base", [])])
-
+        
         out = []
         def on_model(m):
             xs = m.symbols(shown = True)
