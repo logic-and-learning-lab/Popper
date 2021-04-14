@@ -1,5 +1,5 @@
 from itertools import chain
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 ConstVar = namedtuple('ConstVar', ['name', 'type'])
 ConstOpt = namedtuple('ConstOpt', ['operator', 'arguments', 'operation'])
@@ -11,7 +11,7 @@ class Literal:
         self.arity = len(arguments)
         self.mode = mode
         self.polarity = polarity
-    
+
     def __str__(self):
         # Mode is None for constraint literals.
         if self.mode:
@@ -48,23 +48,23 @@ class Literal:
         literal_inputs = set()
         for mode, arg in zip(self.mode, self.arguments):
             if mode == '+': literal_inputs.add(arg)
-        return literal_inputs 
+        return literal_inputs
 
     @property
     def outputs(self):
         literal_outputs = set()
         for mode, arg in zip(self.mode, self.arguments):
             if mode == '-': literal_outputs.add(arg)
-        
-        return literal_outputs 
+
+        return literal_outputs
 
     def to_code(self):
         return f'{self.predicate}({",".join(self.arguments)})'
-    
+
     def all_vars(self):
         for variable in self.arguments:
             yield variable
-    
+
     def ground(self, assignment):
         ground_args = []
         for arg in self.arguments:
@@ -82,20 +82,21 @@ class Literal:
                 ground_args.append(arg)
 
         return Literal(self.predicate, tuple(ground_args), self.mode, self.polarity)
-        
+
 class Clause:
-    def __init__(self, head, body, min_num = None):
+    def __init__(self, head, body, min_num = 0):
         self.head = head
         self.body = body
         self.min_num = min_num
         self.ordered = False
-    
-    def __str__(self):
-        if self.head:
-            return f'{str(self.head)} :- {", ".join(str(literal) for literal in self.body)}'
-        else:
-            return f':- {", ".join(str(literal) for literal in self.body)}'
 
+    # def __str__(self):
+    #     if self.head:
+    #         return f'{str(self.head)} :- {", ".join(str(literal) for literal in self.body)}'
+    #     else:
+    #         return f':- {", ".join(str(literal) for literal in self.body)}'
+
+    # AC: this method is rotten
     def to_ordered(self):
         if self.ordered: return
 
@@ -117,39 +118,39 @@ class Clause:
                 message = f'{selected_literal} in clause {self} could not be grounded'
                 raise ValueError(message)
             ordered_body.append(selected_literal)
-            
+
             grounded_variables = grounded_variables.union(selected_literal.outputs)
             body_literals = body_literals.difference({selected_literal})
 
         self.body = tuple(ordered_body)
         self.ordered = True
-    
+
     def to_code(self):
         return (
             f'{self.head.to_code()} :- '
             f'{",".join([blit.to_code() for blit in self.body])}'
         )
-    
+
     def is_recursive(self):
         return self.head.predicate in set(literal.predicate for literal in self.body)
-    
+
     def all_vars(self):
-        return set(variable for literal in chain([self.head], self.body) 
+        return set(variable for literal in chain([self.head], self.body)
                             for variable in literal.all_vars())
-    
+
     def ground(self, assignment):
-        ground_body = tuple(literal.ground(assignment) for literal in self.body) 
+        ground_body = tuple(literal.ground(assignment) for literal in self.body)
         if self.head:
             return Clause(self.head.ground(assignment), ground_body, self.min_num)
         else:
             return Clause(None, ground_body, self.min_num)
-            
+
 class Program:
-    def __init__(self, clauses, before):
+    def __init__(self, clauses, before = defaultdict(set)):
         self.clauses = clauses
         self.before = before
         self.ordered = False
-    
+
     def __iter__(self):
         return iter(self.clauses)
 
@@ -160,7 +161,7 @@ class Program:
         if self.ordered: return
         for clause in self.clauses: clause.to_ordered()
         self.ordered = True
-    
+
     def to_code(self):
         for clause in self.clauses:
             yield clause.to_code() + '.'
@@ -187,7 +188,7 @@ class Constraint:
                 else:
                     argb = str(argb)
                 constraint_literals.append(f'{arga}{constobj.operation}{argb}')
-        
+
         if self.head:
             return f'{self.head} :- {", ".join(constraint_literals)}'
         else:
@@ -202,6 +203,6 @@ class Constraint:
                 if isinstance(arg, tuple):
                     for t_arg in arg:
                         if isinstance(t_arg, ConstVar):
-                            vars.add(t_arg)    
-    
+                            vars.add(t_arg)
+
         return vars

@@ -41,7 +41,7 @@ def atom_to_symbol(lit):
 
 class Clingo():
     def __init__(self, kbpath):
-        self.solver = clingo.Control()
+        self.solver = clingo.Control(['--rand-freq=0'])
         self.max_vars = 0
         self.max_clauses = 0
         # AC: why an OrderedDict? We never remove from it
@@ -105,7 +105,7 @@ class Clingo():
     def add_ground_clause(self, ground_clause):
         with self.solver.backend() as backend:
             head_lit = []
-            if ground_clause.head: 
+            if ground_clause.head:
                 symbol = atom_to_symbol(ground_clause.head)
                 head_lit = [backend.add_atom(symbol)]
 
@@ -113,7 +113,7 @@ class Clingo():
             for lit in ground_clause.body:
                 symbol = atom_to_symbol(lit)
                 body_atom = backend.add_atom(symbol)
-                body_lits.append(body_atom if lit.polarity else -body_atom)          
+                body_lits.append(body_atom if lit.polarity else -body_atom)
 
             backend.add_rule(head_lit, body_lits, choice = False)
 
@@ -131,7 +131,8 @@ class Clingo():
         if c_var_count == 0 and v_var_count == 0:
             return [{}]
 
-        solver = clingo.Control()
+        # solver = clingo.Control()
+        solver = clingo.Control(['--rand-freq=0'])
 
         # ask for all models
         solver.configuration.solve.models = 0
@@ -153,7 +154,7 @@ class Clingo():
             #const num_v_vars={v_var_count}.
             #const num_v_vals={max_vars}.
         """)
-   
+
         # add constraints to the ASP program based on the AST thing
         for lit in ast.body:
             if isinstance(lit, core.Literal):
@@ -177,7 +178,7 @@ class Clingo():
                 solver.add('base', [], f':- c_var({var1},Val1), c_var({var2},Val2), Val1>=Val2.')
 
         solver.ground([("base", [])])
-        
+
         out = []
         def on_model(m):
             xs = m.symbols(shown = True)

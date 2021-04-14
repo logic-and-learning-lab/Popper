@@ -37,7 +37,7 @@ def generate_unordered_program(clingo_model):
             clause_id = atom.arguments[0].number
             predicate = atom.arguments[1].name
             arguments = tuple(chr(ord('A') + arg.number) for arg in atom.arguments[3].arguments)
-            head_literal = TempLiteral(predicate, arguments, len(arguments))            
+            head_literal = TempLiteral(predicate, arguments, len(arguments))
             clause_id_to_head[clause_id] = head_literal
 
         if atom.name == 'body_literal':
@@ -67,7 +67,8 @@ def generate_unordered_program(clingo_model):
         head_literal  = clause_id_to_head[clause_id]
         body_literals = tuple(clause_id_to_body[clause_id])
         min_num = min_clause[clause_id]
-        unordered_clauses.append(core.Clause(head_literal, body_literals, min_num))
+        c = core.Clause(head_literal, body_literals, min_num)
+        unordered_clauses.append(c)
 
     return core.Program(unordered_clauses, before)
 
