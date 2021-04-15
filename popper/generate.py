@@ -1,89 +1,77 @@
-from . import core
+from . core import Literal, Clause, Program
 from collections import defaultdict
 
-def generate_unordered_program(clingo_model):
+def gen_args(args):
+    return tuple(chr(ord('A') + arg.number) for arg in args)
+
+def generate_program(solver):
+    clingo_model = solver.get_model()
+
+    if not clingo_model:
+        return None
+
     before     = defaultdict(set)
     min_clause = defaultdict(lambda: 0)
-    directions = defaultdict(lambda: defaultdict(lambda: core.ArgumentMode.Unknown))
+    directions = defaultdict(lambda: defaultdict(lambda: '?'))
     clause_id_to_body = defaultdict(set)
     clause_id_to_head = {}
 
     for atom in clingo_model:
-        if atom.name == 'before':
-            clause1 = atom.arguments[0].number
-            clause2 = atom.arguments[1].number
-            before[clause1].add(clause2)
 
-        if atom.name == 'min_clause':
-            clause = atom.arguments[0].number
-            min_clause_num = atom.arguments[1].number
-            min_clause[clause] = max(min_clause[clause], min_clause_num)
+        if atom.name == 'body_literal':
+            clause_id = atom.arguments[0].number
+            predicate = atom.arguments[1].name
+            arity = atom.arguments[2].number
+            arguments = gen_args(atom.arguments[3].arguments)
+            body_literal = (predicate, arguments, arity)
+            clause_id_to_body[clause_id].add(body_literal)
 
-        if atom.name == 'direction':
+        elif atom.name == 'head_literal':
+            clause_id = atom.arguments[0].number
+            predicate = atom.arguments[1].name
+            arity = atom.arguments[2].number
+            args = atom.arguments[3].arguments
+            arguments = gen_args(atom.arguments[3].arguments)
+            head_literal = (predicate, arguments, arity)
+            clause_id_to_head[clause_id] = head_literal
+
+        elif atom.name == 'direction':
             pred_name = atom.arguments[0].name
             arg_index = atom.arguments[1].number
             arg_dir_str = atom.arguments[2].name
 
             if arg_dir_str == 'in':
-                arg_dir = core.ArgumentMode.Input
+                arg_dir = '+'
             elif arg_dir_str == 'out':
-                arg_dir = core.ArgumentMode.Output
+                arg_dir = '-'
             else:
                 raise Exception(f'Unrecognised argument direction "{arg_dir_str}"')
             directions[pred_name][arg_index] = arg_dir
 
-        if atom.name == 'head_literal':
-            clause_id = atom.arguments[0].number
-            predicate = atom.arguments[1].name
-            arguments = tuple(core.Variable(chr(ord('A') + arg.number))
-                              for arg in atom.arguments[3].arguments)
+        elif atom.name == 'before':
+            clause1 = atom.arguments[0].number
+            clause2 = atom.arguments[1].number
+            before[clause1].add(clause2)
 
-            head_atom = core.Atom(predicate, arguments)
-            clause_id_to_head[clause_id] = head_atom
+        elif atom.name == 'min_clause':
+            clause = atom.arguments[0].number
+            min_clause_num = atom.arguments[1].number
+            min_clause[clause] = max(min_clause[clause], min_clause_num)
 
-        if atom.name == 'body_literal':
-            clause_id = atom.arguments[0].number
-            predicate = atom.arguments[1].name
-            arguments = tuple(core.Variable(chr(ord('A') + arg.number))
-                              for arg in atom.arguments[3].arguments)
+    clauses = []
+    for clause_id in clause_id_to_head:
 
-            body_atom = core.Atom(predicate, arguments)
-            clause_id_to_body[clause_id].add(body_atom)
+        # head literal
+        (head_pred, head_args, head_arity) = clause_id_to_head[clause_id]
+        head_modes = tuple(directions[head_pred][i] for i in range(head_arity))
+        head_literal = Literal(head_pred, head_args, head_modes)
 
-    # Set modes
-    for clause_id in clause_id_to_head.keys():
-        atom = clause_id_to_head[clause_id]
-        dirs = tuple(directions[atom.predicate.name][i] for i in range(atom.arity))
-        mode = core.ModeDeclaration(atom.predicate, dirs)
-        clause_id_to_head[clause_id] = core.ProgramLiteral(
-                                            predicate = atom.predicate,
-                                            arguments = atom.arguments,
-                                            mode = mode,
-                                            polarity = True)
+        # body literals
+        body_with_modes = set()
+        for (body_pred, body_args, body_arity) in clause_id_to_body[clause_id]:
+            body_modes = tuple(directions[body_pred][i] for i in range(body_arity))
+            body_with_modes.add(Literal(body_pred, body_args, body_modes))
 
-    for clause_id, body in clause_id_to_body.items():
-        body_with_dirs = set()
-        for atom in body:
-            dirs = (directions[atom.predicate.name][i] for i in range(atom.arity))
-            mode = core.ModeDeclaration(atom.predicate, tuple(dirs))
-            body_with_dirs.add(core.ProgramLiteral(
-                                    predicate = atom.predicate,
-                                    arguments = atom.arguments,
-                                    mode = mode,
-                                    polarity = True))
-        clause_id_to_body[clause_id] = body_with_dirs
+        clauses.append(Clause(head_literal, body_with_modes, min_clause[clause_id]))
 
-    def build_clauses():
-        for clause_key in sorted(clause_id_to_head.keys()):
-            head = (clause_id_to_head[clause_key],)
-            body = tuple(clause_id_to_body[clause_key])
-            min_num = min_clause[clause_key]
-            yield core.UnorderedClause(head = head, body = body, min_num = min_num)
-
-    return core.UnorderedProgram(clauses = tuple(build_clauses()), before = before)
-
-def generate_program(solver):
-    clingo_model = solver.get_model()
-    if clingo_model:
-        return generate_unordered_program(clingo_model)
-    return None
+    return Program(clauses, before)

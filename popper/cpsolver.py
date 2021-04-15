@@ -1,40 +1,41 @@
 from ortools.sat.python import cp_model
 from . import core
+
 class CPSolver():
-     def ground_program(ast, max_clauses, max_vars):
+
+    def ground_program(program, max_clauses, max_vars):
         model = cp_model.CpModel()
 
         vars_to_cp = {}
         cp_to_vars = {}
 
         var_vals = []
-        for var in ast.all_vars():
-            if isinstance(var, core.ClauseVariable):
+        for var in program.all_vars:
+            if var.type == 'Clause':
                 cp_var = model.NewIntVar(0, max_clauses - 1, var.name)
-            elif isinstance(var, core.VarVariable):
+            elif var.type == 'Variable':
                 cp_var = model.NewIntVar(0, max_vars - 1, var.name)
-                var_vals.append(cp_var)
-            else:
-                assert False, 'Whut??' # Jk: Hahahaha
             vars_to_cp[var] = cp_var
             cp_to_vars[cp_var] = var
 
-        for lit in ast.body:
-            if not isinstance(lit, core.ConstraintLiteral):
+        for lit in program.body:
+            if not isinstance(lit, core.ConstOpt):
                 continue
-            def args():
-                for arg in lit.arguments:
-                    if isinstance(arg, core.Variable):
-                        yield vars_to_cp[arg]
-                    else:
-                        yield arg
-            # AC: why they weird syntax? why not push the reasoning in the loop?
-            x = lit.predicate.operator(*args())
+            if lit.operation == 'AllDifferent':
+                model.AddAllDifferent([vars_to_cp[x] for x in lit.arguments])
+                continue
+            args = []
+            for arg in lit.arguments:
+                if isinstance(arg, core.ConstVar):
+                    args.append(vars_to_cp[arg])
+                else:
+                    args.append(arg)
+            a, b = args
+            x = lit.operator(a, b)
             model.Add(x)
 
-        cp_solver = cp_model.CpSolver()
         solution_printer = SolutionPrinter(cp_to_vars)
-        status = cp_solver.SearchForAllSolutions(model, solution_printer)
+        status = cp_model.CpSolver().SearchForAllSolutions(model, solution_printer)
         return solution_printer.assignments
 
 class SolutionPrinter(cp_model.CpSolverSolutionCallback):

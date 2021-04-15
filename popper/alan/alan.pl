@@ -7,6 +7,9 @@
 
 #show head_literal/4.
 #show body_literal/4.
+#show before/2.
+#show min_clause/2.
+#show direction/3.
 
 #include "pi.pl".
 #include "types.pl".
