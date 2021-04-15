@@ -1,25 +1,27 @@
 from itertools import chain
 from collections import namedtuple, defaultdict
+from dataclasses import dataclass
+
 
 ConstVar = namedtuple('ConstVar', ['name', 'type'])
 ConstOpt = namedtuple('ConstOpt', ['operator', 'arguments', 'operation'])
 
 class Literal:
-    def __init__(self, predicate, arguments, mode = None, polarity = True):
+    def __init__(self, predicate, arguments, modes = None, positive = True):
         self.predicate = predicate
         self.arguments = arguments
         self.arity = len(arguments)
-        self.mode = mode
-        self.polarity = polarity
+        self.modes = modes
+        self.positive = positive
 
     def __str__(self):
         # Mode is None for constraint literals.
-        if self.mode:
-            vmodes = (varmode + var for var, varmode in zip(self.arguments, self.mode))
-            if self.polarity:
-                return f'{self.predicate}({",".join(vmodes)})'
-            else:
-                return f'not {self.predicate}({",".join(vmodes)})'
+        if self.modes:
+            vmodes = (varmode + var for var, varmode in zip(self.arguments, self.modes))
+            x = f'{self.predicate}({",".join(vmodes)})'
+            if not self.positive:
+                x = 'not ' + x
+            return x
         else:
             args = []
             for arg in self.arguments:
@@ -35,36 +37,29 @@ class Literal:
                     args.append(f'({",".join(t_args)})')
                 else:
                     args.append(str(arg))
-            if self.polarity:
-                return f'{self.predicate}({",".join(args)})'
-            else:
-                return f'not {self.predicate}({",".join(args)})'
 
+            x = f'{self.predicate}({",".join(args)})'
+            if not self.positive:
+                x = 'not ' + x
+            return x
+
+    # AC: @ALL, why?
     def __repr__(self):
         return self.__str__()
 
-    @property
     def inputs(self):
-        literal_inputs = set()
-        for mode, arg in zip(self.mode, self.arguments):
-            if mode == '+': literal_inputs.add(arg)
-        return literal_inputs
+        return set(arg for mode, arg in zip(self.modes, self.arguments) if mode == '+')
 
-    @property
     def outputs(self):
-        literal_outputs = set()
-        for mode, arg in zip(self.mode, self.arguments):
-            if mode == '-': literal_outputs.add(arg)
-
-        return literal_outputs
+        return set(arg for mode, arg in zip(self.modes, self.arguments) if mode == '-')
 
     def to_code(self):
         return f'{self.predicate}({",".join(self.arguments)})'
 
     def all_vars(self):
-        for variable in self.arguments:
-            yield variable
+        return self.arguments
 
+    # @profile
     def ground(self, assignment):
         ground_args = []
         for arg in self.arguments:
@@ -81,7 +76,7 @@ class Literal:
             else:
                 ground_args.append(arg)
 
-        return Literal(self.predicate, tuple(ground_args), self.mode, self.polarity)
+        return Literal(self.predicate, tuple(ground_args), self.modes, self.positive)
 
 class Clause:
     def __init__(self, head, body, min_num = 0):
@@ -89,37 +84,40 @@ class Clause:
         self.body = body
         self.min_num = min_num
         self.ordered = False
+        # self.body_size = len(body)
 
-    # def __str__(self):
-    #     if self.head:
-    #         return f'{str(self.head)} :- {", ".join(str(literal) for literal in self.body)}'
-    #     else:
-    #         return f':- {", ".join(str(literal) for literal in self.body)}'
+    def __str__(self):
+        if self.head:
+            return f'{str(self.head)} :- {", ".join(str(literal) for literal in self.body)}'
+        return f':- {", ".join(str(literal) for literal in self.body)}'
 
-    # AC: this method is rotten
     def to_ordered(self):
-        if self.ordered: return
+        if self.ordered:
+            return
 
         ordered_body = []
-        grounded_variables = self.head.inputs
+        grounded_variables = self.head.inputs()
         body_literals = set(self.body)
 
         while body_literals:
-            rec_literals, nonrec_literals = [], []
+            selected_literal = None
             for literal in body_literals:
-                if literal.inputs.issubset(grounded_variables):
-                    if literal.predicate == self.head.predicate:
-                        rec_literals.append(literal)
+                # AC: could cache for a micro-optimisation
+                if literal.inputs().issubset(grounded_variables):
+                    if literal.predicate != self.head.predicate:
+                        # find the first ground non-recursive body literal and stop
+                        selected_literal = literal
+                        break
                     else:
-                        nonrec_literals.append(literal)
-            selected_literal = next(chain(nonrec_literals, rec_literals), None)
+                        # otherwise use the recursive body literal
+                        selected_literal = literal
 
             if selected_literal == None:
                 message = f'{selected_literal} in clause {self} could not be grounded'
                 raise ValueError(message)
-            ordered_body.append(selected_literal)
 
-            grounded_variables = grounded_variables.union(selected_literal.outputs)
+            ordered_body.append(selected_literal)
+            grounded_variables = grounded_variables.union(selected_literal.outputs())
             body_literals = body_literals.difference({selected_literal})
 
         self.body = tuple(ordered_body)
@@ -138,6 +136,7 @@ class Clause:
         return set(variable for literal in chain([self.head], self.body)
                             for variable in literal.all_vars())
 
+    # @profile
     def ground(self, assignment):
         ground_body = tuple(literal.ground(assignment) for literal in self.body)
         if self.head:
@@ -150,18 +149,21 @@ class Program:
         self.clauses = clauses
         self.before = before
         self.ordered = False
+        self.num_clauses = len(clauses)
 
     def __iter__(self):
         return iter(self.clauses)
 
-    def __len__(self):
-        return len(self.clauses)
-
+    # AC: this method changes the program
     def to_ordered(self):
-        if self.ordered: return
-        for clause in self.clauses: clause.to_ordered()
+        if self.ordered:
+            return
+        # AC: do we need to also :reorder the clauses?
+        for clause in self.clauses:
+            clause.to_ordered()
         self.ordered = True
 
+    # AC: this method returns new objects - confusing given the above
     def to_code(self):
         for clause in self.clauses:
             yield clause.to_code() + '.'
@@ -194,6 +196,7 @@ class Constraint:
         else:
             return f':- {", ".join(constraint_literals)}'
 
+    # @profile
     def all_vars(self):
         vars = set()
         for constobj in self.body:
