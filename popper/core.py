@@ -1,7 +1,4 @@
-from itertools import chain
 from collections import namedtuple, defaultdict
-from dataclasses import dataclass
-
 
 ConstVar = namedtuple('ConstVar', ['name', 'type'])
 ConstOpt = namedtuple('ConstOpt', ['operator', 'arguments', 'operation'])
@@ -14,6 +11,7 @@ class Literal:
         self.modes = modes
         self.positive = positive
 
+    # AC: TODO - REFACTOR
     def __str__(self):
         # Mode is None for constraint literals.
         if self.modes:
@@ -56,17 +54,15 @@ class Literal:
     def to_code(self):
         return f'{self.predicate}({",".join(self.arguments)})'
 
-    def all_vars(self):
-        return self.arguments
-
-    # @profile
     def ground(self, assignment):
         ground_args = []
         for arg in self.arguments:
             if arg in assignment:
                 ground_args.append(assignment[arg])
+            # handles tuples of ConstVars
             elif isinstance(arg, tuple):
                 ground_t_args = []
+                # AC: really messy
                 for t_arg in arg:
                     if t_arg in assignment:
                         ground_t_args.append(assignment[t_arg])
@@ -84,13 +80,28 @@ class Clause:
         self.body = body
         self.min_num = min_num
         self.ordered = False
-        # self.body_size = len(body)
 
+        # compute all the 'vars' in the program
+        self.all_vars = set()
+        if head:
+            self.all_vars.update(head.arguments)
+        if body:
+            for blit in body:
+                self.all_vars.update(blit.arguments)
+
+        # AC: simplistic definition of recursive
+        if head and body:
+            self.recursive = head.predicate in set(blit.predicate for blit in body)
+        else:
+            self.recursive = False
+
+    # AC: @ALL, is this necessary?
     def __str__(self):
         if self.head:
             return f'{str(self.head)} :- {", ".join(str(literal) for literal in self.body)}'
         return f':- {", ".join(str(literal) for literal in self.body)}'
 
+    # AC: nasty
     def to_ordered(self):
         if self.ordered:
             return
@@ -129,39 +140,24 @@ class Clause:
             f'{",".join([blit.to_code() for blit in self.body])}'
         )
 
-    def is_recursive(self):
-        return self.head.predicate in set(literal.predicate for literal in self.body)
-
-    def all_vars(self):
-        return set(variable for literal in chain([self.head], self.body)
-                            for variable in literal.all_vars())
-
-    # @profile
     def ground(self, assignment):
-        ground_body = tuple(literal.ground(assignment) for literal in self.body)
+        ground_body = tuple(blit.ground(assignment) for blit in self.body)
         if self.head:
             return Clause(self.head.ground(assignment), ground_body, self.min_num)
-        else:
-            return Clause(None, ground_body, self.min_num)
+        return Clause(None, ground_body, self.min_num)
 
 class Program:
     def __init__(self, clauses, before = defaultdict(set)):
         self.clauses = clauses
         self.before = before
-        self.ordered = False
         self.num_clauses = len(clauses)
 
-    def __iter__(self):
-        return iter(self.clauses)
-
-    # AC: this method changes the program
+    # AC: this method changes the program!
+    # AC: no mutating please, it is the devils work!
     def to_ordered(self):
-        if self.ordered:
-            return
-        # AC: do we need to also :reorder the clauses?
+        # AC: do we also need to reorder the clauses?
         for clause in self.clauses:
             clause.to_ordered()
-        self.ordered = True
 
     # AC: this method returns new objects - confusing given the above
     def to_code(self):
@@ -173,6 +169,17 @@ class Constraint:
         self.ctype = ctype
         self.head = head
         self.body = body
+
+        # AC: also includes constants, so the name is incorrect
+        self.all_vars = set()
+        for lit in body:
+            for arg in lit.arguments:
+                if isinstance(arg, ConstVar):
+                    self.all_vars.add(arg)
+                if isinstance(arg, tuple):
+                    for t_arg in arg:
+                        if isinstance(t_arg, ConstVar):
+                            self.all_vars.add(t_arg)
 
     def __str__(self):
         constraint_literals = []
@@ -193,19 +200,4 @@ class Constraint:
 
         if self.head:
             return f'{self.head} :- {", ".join(constraint_literals)}'
-        else:
-            return f':- {", ".join(constraint_literals)}'
-
-    # @profile
-    def all_vars(self):
-        vars = set()
-        for constobj in self.body:
-            for arg in constobj.arguments:
-                if isinstance(arg, ConstVar):
-                    vars.add(arg)
-                if isinstance(arg, tuple):
-                    for t_arg in arg:
-                        if isinstance(t_arg, ConstVar):
-                            vars.add(t_arg)
-
-        return vars
+        return f':- {", ".join(constraint_literals)}'

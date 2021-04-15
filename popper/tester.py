@@ -40,7 +40,7 @@ class Tester():
     def using(self, program):
         current_clauses = set()
         try:
-            for clause in program:
+            for clause in program.clauses:
                 self.prolog.assertz(clause.to_code())
                 current_clauses.add((clause.head.predicate, clause.head.arity))
             yield

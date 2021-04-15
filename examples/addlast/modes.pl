@@ -2,15 +2,6 @@
 %% f(A,B) :- last(A,C),cons(C,A,B).
 %% python3 /Users/andrew/icloud/code/popper/popper.py exs.pl bias.pl bk.pl  0.15s user 0.03s system 90% cpu 0.199 total
 
-
-included_clause_fV0V1tailV0V1(C):-head_literal(C,f,2,(CV0,CV1)),body_literal(C,tail,2,(CV0,CV1)),CV1!=CV0.
-included_program_fV0V1tailV0V1:-included_clause_fV0V1tailV0V1(C0).
-%% (0.1) elimination constraint:
-:-included_program_fV0V1tailV0V1,num_recursive(f,0).
-%% (0.1) specialisation constraint:
-:-included_clause_fV0V1tailV0V1(C0),C0 < 1,not clause(1).
-
-
 max_vars(5).
 max_body(5).
 max_clauses(1).

@@ -1,6 +1,7 @@
 import os
 import re
 import clingo
+import operator
 import numbers
 from . import core
 from collections import OrderedDict
@@ -35,9 +36,6 @@ def arg_to_symbol(arg):
         return clingo.Function(arg)
     assert False, f'Unhandled argtype({type(arg)}) in aspsolver.py arg_to_symbol()'
 
-
-# AC: expensive
-# @profile
 def atom_to_symbol(lit):
     args = tuple(arg_to_symbol(arg) for arg in lit.arguments)
     return clingo.Function(name = lit.predicate, arguments = args)
@@ -105,30 +103,25 @@ class Clingo():
         symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
         self.solver.assign_external(symbol, True)
 
-    # @profile
     def add_ground_clauses(self, clauses):
         with self.solver.backend() as backend:
             for clause in clauses:
-                # print(clause)
                 head_lit = []
                 if clause.head:
                     symbol = atom_to_symbol(clause.head)
                     head_lit = [backend.add_atom(symbol)]
-
                 body_lits = []
                 for lit in clause.body:
-                    # print(lit)
                     symbol = atom_to_symbol(lit)
                     body_atom = backend.add_atom(symbol)
                     body_lits.append(body_atom if lit.positive else -body_atom)
                 backend.add_rule(head_lit, body_lits, choice = False)
 
-    # @profile
-    def ground_program(ast, max_clauses, max_vars):
+    def ground_program(program, max_clauses, max_vars):
         # map each clause_var and var_var in the program to an integer
         # AC: costly
-        c_vars = {v:i for i,v in enumerate(var for var in ast.all_vars() if var.type == 'Clause')}
-        v_vars = {v:i for i,v in enumerate(var for var in ast.all_vars() if var.type == 'Variable')}
+        c_vars = {v:i for i,v in enumerate(var for var in program.all_vars if var.type == 'Clause')}
+        v_vars = {v:i for i,v in enumerate(var for var in program.all_vars if var.type == 'Variable')}
 
         # transpose for return lookup
         c_vars_ = {v:k for k,v in c_vars.items()}
@@ -164,8 +157,8 @@ class Clingo():
         """)
 
         # add constraints to the ASP program based on the AST thing
-        for lit in ast.body:
-            if isinstance(lit, core.Literal):
+        for lit in program.body:
+            if not isinstance(lit, core.ConstOpt):
                 continue
             if lit.operation == '==':
                 var, val = lit.arguments

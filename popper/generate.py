@@ -1,7 +1,6 @@
-from . import core
-from collections import defaultdict, namedtuple
+from . core import Literal, Clause, Program
+from collections import defaultdict
 
-# AC: could cache
 def gen_args(args):
     return tuple(chr(ord('A') + arg.number) for arg in args)
 
@@ -65,14 +64,14 @@ def generate_program(solver):
         # head literal
         (head_pred, head_args, head_arity) = clause_id_to_head[clause_id]
         head_modes = tuple(directions[head_pred][i] for i in range(head_arity))
-        head_literal = core.Literal(head_pred, head_args, head_modes)
+        head_literal = Literal(head_pred, head_args, head_modes)
 
         # body literals
         body_with_modes = set()
         for (body_pred, body_args, body_arity) in clause_id_to_body[clause_id]:
             body_modes = tuple(directions[body_pred][i] for i in range(body_arity))
-            body_with_modes.add(core.Literal(body_pred, body_args, body_modes))
+            body_with_modes.add(Literal(body_pred, body_args, body_modes))
 
-        clauses.append(core.Clause(head_literal, body_with_modes, min_clause[clause_id]))
+        clauses.append(Clause(head_literal, body_with_modes, min_clause[clause_id]))
 
-    return core.Program(clauses, before)
+    return Program(clauses, before)

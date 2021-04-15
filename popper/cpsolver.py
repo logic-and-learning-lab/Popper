@@ -2,14 +2,15 @@ from ortools.sat.python import cp_model
 from . import core
 
 class CPSolver():
-     def ground_program(ast, max_clauses, max_vars):
+
+    def ground_program(program, max_clauses, max_vars):
         model = cp_model.CpModel()
 
         vars_to_cp = {}
         cp_to_vars = {}
 
         var_vals = []
-        for var in ast.all_vars():
+        for var in program.all_vars:
             if var.type == 'Clause':
                 cp_var = model.NewIntVar(0, max_clauses - 1, var.name)
             elif var.type == 'Variable':
@@ -17,8 +18,11 @@ class CPSolver():
             vars_to_cp[var] = cp_var
             cp_to_vars[cp_var] = var
 
-        for lit in ast.body:
-            if isinstance(lit, core.Literal):
+        for lit in program.body:
+            if not isinstance(lit, core.ConstOpt):
+                continue
+            if lit.operation == 'AllDifferent':
+                model.AddAllDifferent([vars_to_cp[x] for x in lit.arguments])
                 continue
             args = []
             for arg in lit.arguments:
@@ -30,9 +34,8 @@ class CPSolver():
             x = lit.operator(a, b)
             model.Add(x)
 
-        cp_solver = cp_model.CpSolver()
         solution_printer = SolutionPrinter(cp_to_vars)
-        status = cp_solver.SearchForAllSolutions(model, solution_printer)
+        status = cp_model.CpSolver().SearchForAllSolutions(model, solution_printer)
         return solution_printer.assignments
 
 class SolutionPrinter(cp_model.CpSolverSolutionCallback):

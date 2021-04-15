@@ -1,6 +1,5 @@
 import operator
 from collections import defaultdict
-from itertools import combinations
 from . core import ConstVar, ConstOpt, Constraint, Literal
 
 class Outcome:
@@ -23,23 +22,26 @@ OUTCOME_TO_CONSTRAINTS = {
     (Outcome.NONE, Outcome.SOME) : (Con.SPECIALISATION, Con.REDUNDANCY, Con.GENERALISATION)
 }
 
+def alldiff(vars):
+    return ConstOpt(None, vars, 'AllDifferent')
+
 def lt(a, b):
     return ConstOpt(operator.lt, (a, b), '<')
 
-def gt(a, b):
-    return ConstOpt(operator.gt, (a, b), '>')
+# def gt(a, b):
+    # return ConstOpt(operator.gt, (a, b), '>')
 
 def eq(a, b):
     return ConstOpt(operator.eq, (a, b), '==')
 
-def neq(a, b):
-    return ConstOpt(operator.ne, (a, b), '!=')
+# def neq(a, b):
+    # return ConstOpt(operator.ne, (a, b), '!=')
 
 def gteq(a, b):
     return ConstOpt(operator.ge, (a, b), '>=')
 
-def lteq(a, b):
-    return ConstOpt(operator.le, (a, b), '<=')
+# def lteq(a, b):
+    # return ConstOpt(operator.le, (a, b), '<=')
 
 def vo_clause(variable):
     """Returns variable over a clause"""
@@ -68,7 +70,7 @@ class Constrain:
 
     # AC: add caching
     def make_program_handle(self, program):
-        return f'prog_{"_".join(sorted(self.make_clause_handle(clause) for clause in program))}'
+        return f'prog_{"_".join(sorted(self.make_clause_handle(clause) for clause in program.clauses))}'
 
     def build_constraints(self, program_outcomes):
         for program, (positive_outcome, negative_outcome) in program_outcomes.items():
@@ -101,7 +103,7 @@ class Constrain:
 
     def derive_inclusion_rules(self, program, constraint_types):
         if Con.SPECIALISATION in constraint_types or Con.GENERALISATION in constraint_types:
-            for clause in program:
+            for clause in program.clauses:
                 clause_handle = self.make_clause_handle(clause)
                 if clause_handle not in self.included_clause_handles:
                     self.included_clause_handles.add(clause_handle)
@@ -123,9 +125,8 @@ class Constrain:
 
         literals.append(gteq(clause_number, clause.min_num))
 
-        # AC: replace with AllDiff
-        for var1, var2 in combinations(clause.all_vars(), 2):
-            literals.append(neq(vo_variable(var1), vo_variable(var2)))
+        # ensure that each var_var is ground to a unique value
+        literals.append(alldiff(tuple(vo_variable(v) for v in clause.all_vars)))
 
         for idx, var in enumerate(clause.head.arguments):
             literals.append(eq(vo_variable(var), idx))
@@ -136,7 +137,7 @@ class Constrain:
         program_handle = self.make_program_handle(program)
 
         literals = []
-        for clause_number, clause in enumerate(program):
+        for clause_number, clause in enumerate(program.clauses):
             clause_handle = self.make_clause_handle(clause)
             clause_variable = vo_clause(clause_number)
             literals.append(Literal('included_clause', (clause_handle, clause_variable)))
@@ -145,16 +146,15 @@ class Constrain:
             for clause_number2 in clause_numbers:
                 literals.append(lt(vo_clause(clause_number1), vo_clause(clause_number2)))
 
-        #AC: replace with an AllDiff constraint
-        for clause_number1, clause_number2 in combinations(range(program.num_clauses), 2):
-            literals.append(neq(vo_clause(clause_number1), vo_clause(clause_number2)))
+        # ensure that each clause_var is ground to a unique value
+        literals.append(alldiff(tuple(vo_clause(c) for c in range(program.num_clauses))))
 
         return Constraint('inclusion rule', Literal('included_program', (program_handle,)), tuple(literals))
 
     def generalisation_constraint(self, program):
         literals = []
 
-        for clause_number, clause in enumerate(program):
+        for clause_number, clause in enumerate(program.clauses):
             clause_handle = self.make_clause_handle(clause)
             literals.append(Literal('included_clause', (clause_handle, vo_clause(clause_number))))
             literals.append(Literal('clause_size', (vo_clause(clause_number), len(clause.body))))
@@ -163,12 +163,11 @@ class Constrain:
             for clause_number2 in clause_numbers:
                 literals.append(lt(vo_clause(clause_number1), vo_clause(clause_number2)))
 
-        for clause_number, clause in enumerate(program):
+        for clause_number, clause in enumerate(program.clauses):
             literals.append(gteq(vo_clause(clause_number), clause.min_num))
 
-        # AC: replace with AllDiff
-        for clause_number1, clause_number2 in combinations(range(program.num_clauses), 2):
-            literals.append(neq(vo_clause(clause_number1), vo_clause(clause_number2)))
+        # ensure that each clause_var is ground to a unique value
+        literals.append(alldiff(tuple(vo_clause(c) for c in range(program.num_clauses))))
 
         return Constraint(Con.GENERALISATION, None, tuple(literals))
 
@@ -194,22 +193,22 @@ class Constrain:
     def redundancy_constraint(self, program):
         lits_num_clauses = defaultdict(int)
         lits_num_recursive_clauses = defaultdict(int)
-        for clause in program:
+        for clause in program.clauses:
             head_pred = clause.head.predicate
             lits_num_clauses[head_pred] += 1
-            if clause.is_recursive():
+            if clause.recursive:
                 lits_num_recursive_clauses[head_pred] += 1
 
         recursively_called = set()
         while True:
             something_added = False
-            for clause in program:
+            for clause in program.clauses:
                 head_pred = clause.head.predicate
                 for body_literal in clause.body:
                     body_pred = body_literal.predicate
                     if body_pred not in lits_num_clauses:
                         continue
-                    if (body_pred != head_pred and clause.is_recursive()) or (head_pred in recursively_called):
+                    if (body_pred != head_pred and clause.recursive) or (head_pred in recursively_called):
                         something_added |= not body_pred in recursively_called
                         recursively_called.add(body_pred)
             if not something_added:
