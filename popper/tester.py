@@ -37,6 +37,7 @@ class Tester():
         self.prolog.assertz(f'timeout({self.eval_timeout})')
 
     @contextmanager
+    # @profile
     def using(self, program):
         current_clauses = set()
         try:
@@ -48,11 +49,23 @@ class Tester():
             for predicate, arity in current_clauses:
                 args = ','.join(['_'] * arity)
                 self.prolog.retractall(f'{predicate}({args})')
-
+    # @profile
     def test(self, program):
+        from datetime import datetime
+        import time
         with self.using(program):
             if self.minimal_testing:
+                a = time.time()
                 res = list(self.prolog.query('do_test_minimal(TP,FN,TN,FP)'))[0]
+                b = time.time()
+                d = b-a
+                # print(d)
+                if d > 0.1:
+                    print('--')
+                    print(d)
+                    for x in program.clauses:
+                        print(x)
+
             else:
                 res = list(self.prolog.query('do_test(TP,FN,TN,FP)'))[0]
             TP, FN, TN, FP = res['TP'], res['FN'], res['TN'], res['FP']
