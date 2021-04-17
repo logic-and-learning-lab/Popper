@@ -4,16 +4,18 @@ ConstVar = namedtuple('ConstVar', ['name', 'type'])
 ConstOpt = namedtuple('ConstOpt', ['operator', 'arguments', 'operation'])
 
 class Literal:
-    def __init__(self, predicate, arguments, modes = None, positive = True):
+    def __init__(self, predicate, arguments, modes = [], positive = True):
         self.predicate = predicate
         self.arguments = arguments
         self.arity = len(arguments)
         self.modes = modes
         self.positive = positive
 
+        self.inputs = set(arg for mode, arg in zip(self.modes, self.arguments) if mode == '+')
+        self.outputs = set(arg for mode, arg in zip(self.modes, self.arguments) if mode == '-')
+
     # AC: TODO - REFACTOR
     def __str__(self):
-        # Mode is None for constraint literals.
         if self.modes:
             vmodes = (varmode + var for var, varmode in zip(self.arguments, self.modes))
             x = f'{self.predicate}({",".join(vmodes)})'
@@ -32,10 +34,12 @@ class Literal:
                             t_args.append(t_arg.name)
                         else:
                             t_args.append(str(t_arg))
-                    args.append(f'({",".join(t_args)})')
+                    if len(t_args) > 1:
+                        args.append(f'({",".join(t_args)})')
+                    else:
+                        args.append(f'({",".join(t_args)},)')
                 else:
                     args.append(str(arg))
-
             x = f'{self.predicate}({",".join(args)})'
             if not self.positive:
                 x = 'not ' + x
@@ -44,12 +48,6 @@ class Literal:
     # AC: @ALL, why?
     def __repr__(self):
         return self.__str__()
-
-    def inputs(self):
-        return set(arg for mode, arg in zip(self.modes, self.arguments) if mode == '+')
-
-    def outputs(self):
-        return set(arg for mode, arg in zip(self.modes, self.arguments) if mode == '-')
 
     def to_code(self):
         return f'{self.predicate}({",".join(self.arguments)})'
@@ -95,11 +93,12 @@ class Clause:
         else:
             self.recursive = False
 
-    # AC: @ALL, is this necessary?
     def __str__(self):
+        x = f':- {", ".join(str(literal) for literal in self.body)}.'
         if self.head:
-            return f'{str(self.head)} :- {", ".join(str(literal) for literal in self.body)}'
-        return f':- {", ".join(str(literal) for literal in self.body)}'
+            return f'{str(self.head)}{x}'
+        return x
+
 
     # AC: nasty
     def to_ordered(self):
@@ -107,14 +106,14 @@ class Clause:
             return
 
         ordered_body = []
-        grounded_variables = self.head.inputs()
+        grounded_variables = self.head.inputs
         body_literals = set(self.body)
 
         while body_literals:
             selected_literal = None
             for literal in body_literals:
                 # AC: could cache for a micro-optimisation
-                if literal.inputs().issubset(grounded_variables):
+                if literal.inputs.issubset(grounded_variables):
                     if literal.predicate != self.head.predicate:
                         # find the first ground non-recursive body literal and stop
                         selected_literal = literal
@@ -128,7 +127,7 @@ class Clause:
                 raise ValueError(message)
 
             ordered_body.append(selected_literal)
-            grounded_variables = grounded_variables.union(selected_literal.outputs())
+            grounded_variables = grounded_variables.union(selected_literal.outputs)
             body_literals = body_literals.difference({selected_literal})
 
         self.body = tuple(ordered_body)

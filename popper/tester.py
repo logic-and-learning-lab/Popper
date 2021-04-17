@@ -48,7 +48,7 @@ class Tester():
             for predicate, arity in current_clauses:
                 args = ','.join(['_'] * arity)
                 self.prolog.retractall(f'{predicate}({args})')
-
+    # @profile
     def test(self, program):
         with self.using(program):
             if self.minimal_testing:

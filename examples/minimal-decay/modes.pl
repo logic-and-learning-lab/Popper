@@ -15,37 +15,22 @@ modeb(c3,1).
 modeb(c4,1).
 modeb(c5,1).
 
-type(next_value,0,ex).
-type(next_value,1,int).
-type(does,0,ex).
-type(does,1,agent).
-type(does,2,action).
-type(my_true_value,0,ex).
-type(my_true_value,1,int).
-type(my_succ,0,int).
-type(my_succ,1,int).
+type(next_value,(ex,int)).
+type(does,(ex,agent,action)).
+type(my_true_value,(ex,int)).
+type(my_succ,(int,int)).
 
-type(c_pressButton,0,action).
-type(c_noop,0,action).
+type(c_pressButton,(action,)).
+type(c_noop,(action,)).
 
-type(c1,0,int).
-type(c2,0,int).
-type(c3,0,int).
-type(c4,0,int).
-type(c5,0,int).
+type(c1,(int,)).
+type(c2,(int,)).
+type(c3,(int,)).
+type(c4,(int,)).
+type(c5,(int,)).
 
 :-
     body_literal(C,P1,A,1),
     body_literal(C,P2,A,1),
-    type(P1,0,int),
+    var_type(P1,0,int),
     P1 != P2.
-
-%% next_value(A) :-
-%%     does(B,C),
-%%     pressButton(C),
-%%     c5(A).
-%% next_value(A) :-
-%%     succ(A,B),
-%%     true_value(B),
-%%     does(C,D),
-%%     c_noop(D).

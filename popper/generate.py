@@ -6,7 +6,6 @@ def gen_args(args):
 
 def generate_program(solver):
     clingo_model = solver.get_model()
-
     if not clingo_model:
         return None
 
@@ -35,7 +34,7 @@ def generate_program(solver):
             head_literal = (predicate, arguments, arity)
             clause_id_to_head[clause_id] = head_literal
 
-        elif atom.name == 'direction':
+        elif atom.name == 'direction_':
             pred_name = atom.arguments[0].name
             arg_index = atom.arguments[1].number
             arg_dir_str = atom.arguments[2].name
