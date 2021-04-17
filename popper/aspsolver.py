@@ -7,8 +7,6 @@ from . import core
 from collections import OrderedDict
 
 # AC: rename file to ClingoSolver.
-
-# -----------------------------------------------------------------------------
 NUM_OF_LITERALS = (
 """
 %%% External atom for number of literals in the program %%%%%
@@ -17,15 +15,6 @@ NUM_OF_LITERALS = (
     size_in_literals(n),
     #sum{K+1,Clause : clause_size(Clause,K)} != n.
 """)
-
-# NUM_OF_CLAUSES = (
-# """
-# %%% External atom for number of clauses in the program %%%%%
-# #external size_in_clauses(n).
-# :-
-#     size_in_clauses(n),
-#     #sum{K : clause(K)} != n.
-# """)
 
 def arg_to_symbol(arg):
     if isinstance(arg, tuple):

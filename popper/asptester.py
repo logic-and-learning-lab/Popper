@@ -35,14 +35,14 @@ class ASPTester():
         print('--')
         code = '\n'.join(program.to_code())
         code = code.replace('f(',f'{key}(')
-        print(code)
+        # print(code)
         t1 = time.time()
-        self.solver.add(key, [], code)
+        # self.solver.add(key, [], code)
         t2 = time.time()
         d = t2-t1
 
         t1 = time.time()
-        self.solver.ground([(key, [])])
+        # self.solver.ground([(key, [])])
         t2 = time.time()
         e = t2-t1
 

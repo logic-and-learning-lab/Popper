@@ -55,16 +55,16 @@ class Tester():
         import time
         with self.using(program):
             if self.minimal_testing:
-                a = time.time()
+                # a = time.time()
                 res = list(self.prolog.query('do_test_minimal(TP,FN,TN,FP)'))[0]
-                b = time.time()
-                d = b-a
+                # b = time.time()
+                # d = b-a
                 # print(d)
-                if d > 0.1:
-                    print('--')
-                    print(d)
-                    for x in program.clauses:
-                        print(x)
+                # if d > 0.1:
+                #     print('--')
+                #     print(d)
+                #     for x in program.clauses:
+                #         print(x)
 
             else:
                 res = list(self.prolog.query('do_test(TP,FN,TN,FP)'))[0]

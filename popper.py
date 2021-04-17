@@ -22,10 +22,13 @@ def ground_constraints(max_clauses, max_vars, constraints):
             yield clause.ground(assignment)
 # @profile
 def popper(solver, tester, constrain, max_literals = 100):
+# def popper(solver, tester, constrain, max_literals = 9):
+    cnt = 0
     for size in range(1, max_literals + 1):
         print(size)
         solver.update_number_of_literals(size)
         while True:
+            cnt += 1
             # 1. Generate
             program = generate_program(solver)
             if program == None:
@@ -36,6 +39,7 @@ def popper(solver, tester, constrain, max_literals = 100):
             # 2. Test
             program_outcomes = tester.test(program)
             if program_outcomes[program] == (Outcome.ALL, Outcome.NONE):
+                print(cnt)
                 return program
 
             # 3. Build constraints
@@ -46,7 +50,7 @@ def popper(solver, tester, constrain, max_literals = 100):
 
             # 5. Add to the solver
             solver.add_ground_clauses(constraints)
-
+    print(cnt)
 def pprint(program):
     if program:
         for clause in program.to_code():
@@ -54,8 +58,8 @@ def pprint(program):
 
 def main(kbpath):
     solver = Clingo(kbpath)
-    # tester = Tester(kbpath)
-    tester = ASPTester(kbpath)
+    tester = Tester(kbpath)
+    # tester = ASPTester(kbpath)
     constrain = Constrain()
 
     program = popper(solver, tester, constrain)
