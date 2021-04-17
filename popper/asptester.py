@@ -6,11 +6,8 @@ from . constrain import Outcome
 
 class ASPTester():
     def __init__(self, kbpath):
-        self.solver = clingo.Control(['--rand-freq=0'])
-
         with open(kbpath + 'bk.pl') as f:
             self.bk = f.read()
-
         with open(kbpath + 'exs.pl') as f:
             for line in f:
                 if line.startswith('%'):
@@ -21,43 +18,43 @@ class ASPTester():
         self.num_neg = len(self.neg)
         self.cnt = 0
 
-        self.solver = clingo.Control(['--rand-freq=0'])
-        self.solver.add('bk', [], self.bk)
-        self.solver.add('bk', [], '#show f/1.')
-        self.solver.ground([('bk', [])])
-
     # @profile
     def test(self, program):
-        import time
+        self.solver = clingo.Control(['--rand-freq=0'])
+        self.solver.add('bk', [], self.bk)
+        # self.solver.add('bk', [], '#show f/1.')
+        self.solver.ground([('bk', [])])
+
+        # import time
         self.cnt+=1
 
         key = f'prog{self.cnt}'
-        print('--')
+        # print('--')
         code = '\n'.join(program.to_code())
         code = code.replace('f(',f'{key}(')
         # print(code)
-        t1 = time.time()
-        # self.solver.add(key, [], code)
-        t2 = time.time()
-        d = t2-t1
+        # t1 = time.time()
+        self.solver.add(key, [], code)
+        # t2 = time.time()
+        # d = t2-t1
 
-        t1 = time.time()
-        # self.solver.ground([(key, [])])
-        t2 = time.time()
-        e = t2-t1
+        # t1 = time.time()
+        self.solver.ground([(key, [])])
+        # t2 = time.time()
+        # e = t2-t1
 
         with self.solver.solve(yield_ = True) as handle:
-            t1 = time.time()
+            # t1 = time.time()
             m = handle.model()
-            t2 = time.time()
-            f = t2-t1
+            # t2 = time.time()
+            # f = t2-t1
 
-            t1 = time.time()
+            # t1 = time.time()
             m.symbols(shown = True)
-            t2 = time.time()
-            g = t2-t1
+            # t2 = time.time()
+            # g = t2-t1
 
-            print(self.cnt, d,e,f,g)
+            # print(self.cnt, d,e,f,g)
 
             # if m:
                 # for x in m.symbols(shown = True):

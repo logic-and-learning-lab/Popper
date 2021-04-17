@@ -17,3 +17,35 @@ modeb(two_load,1).
 modeb(circle,1).
 modeb(triangle,1).
 modeb(rectangle,1).
+
+type(f,(train,)).
+type(has_car,(train,car)).
+type(has_load,(train,load)).
+type(short,(car,)).
+type(long,(car,)).
+type(two_wheels,(car,)).
+type(three_wheels,(car,)).
+type(roof_open,(car,)).
+type(roof_closed,(car,)).
+type(zero_load,(car,)).
+type(one_load,(car,)).
+type(two_load,(car,)).
+type(circle,(load,)).
+type(triangle,(load,)).
+type(rectangle,(load,)).
+
+%% direction(f,(in,)).
+%% direction(has_car,(in,out)).
+%% direction(has_load,(in,out)).
+%% direction(short,(in,)).
+%% direction(long,(in,)).
+%% direction(two_wheels,(in,)).
+%% direction(three_wheels,(in,)).
+%% direction(roof_open,(in,)).
+%% direction(roof_closed,(in,)).
+%% direction(zero_load,(in,)).
+%% direction(one_load,(in,)).
+%% direction(two_load,(in,)).
+%% direction(circle,(in,)).
+%% direction(triangle,(in,)).
+%% direction(rectangle,(in,)).
