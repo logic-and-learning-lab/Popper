@@ -5,14 +5,14 @@ max_vars(7).
 max_body(7).
 max_clauses(2).
 
-modeh(f,1).
-modeb(f,1).
-modeb(tail,2).
-modeb(head,2).
-modeb(last,2).
-modeb(empty,1).
-modeb(zero,1).
-modeb(even,1).
+head_pred(f,1).
+body_pred(f,1).
+body_pred(tail,2).
+body_pred(head,2).
+body_pred(last,2).
+body_pred(empty,1).
+body_pred(zero,1).
+body_pred(even,1).
 
 type(f,(list,)).
 type(tail,(list,list)).

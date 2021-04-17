@@ -2,21 +2,21 @@ max_clauses(4).
 max_vars(5).
 max_body(5).
 
-modeh(f,1).
-modeb(has_car,2).
-modeb(has_load,2).
-modeb(short,1).
-modeb(long,1).
-modeb(two_wheels,1).
-modeb(three_wheels,1).
-modeb(roof_open,1).
-modeb(roof_closed,1).
-modeb(zero_load,1).
-modeb(one_load,1).
-modeb(two_load,1).
-modeb(circle,1).
-modeb(triangle,1).
-modeb(rectangle,1).
+head_pred(f,1).
+body_pred(has_car,2).
+body_pred(has_load,2).
+body_pred(short,1).
+body_pred(long,1).
+body_pred(two_wheels,1).
+body_pred(three_wheels,1).
+body_pred(roof_open,1).
+body_pred(roof_closed,1).
+body_pred(zero_load,1).
+body_pred(one_load,1).
+body_pred(two_load,1).
+body_pred(circle,1).
+body_pred(triangle,1).
+body_pred(rectangle,1).
 
 type(f,(train,)).
 type(has_car,(train,car)).

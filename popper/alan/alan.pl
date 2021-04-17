@@ -17,12 +17,12 @@
 #include "pi.pl".
 
 %% GUESS A SINGLE HEAD LITERAL
-0 {head_literal(C,P,A,Vars) : modeh(P,A), head_vars(A,Vars)} 1:-
+0 {head_literal(C,P,A,Vars) : head_pred(P,A), head_vars(A,Vars)} 1:-
     C = 0..N-1,
     max_clauses(N).
 
 %% GUESS AT LEAST 1 BUT AT MOST N BODY LITERALS PER CLAUSE
-1 {body_literal(C,P,A,Vars) : modeb(P,A), vars(A,Vars)} N:-
+1 {body_literal(C,P,A,Vars) : body_pred(P,A), vars(A,Vars)} N:-
     clause(C),
     max_body(N).
 
@@ -68,7 +68,6 @@ literal(C,P,Vars):-
     Var > 1,
     not clause_var(C,Var-1).
 
-
 %% ##################################################
 %% VARS ABOUT VARS - META4LIFE
 %% ##################################################
@@ -107,12 +106,12 @@ var_in_literal(C,P,Vars,Var):-
 
 %% HEAD VARS ARE ALWAYS 0,1,...,A-1
 head_vars(A,@pyhead_vars(A)):-
-    modeh(_,A).
+    head_pred(_,A).
 
 need_arity(A):-
-    modeh(_,A).
+    head_pred(_,A).
 need_arity(A):-
-    modeb(_,A).
+    body_pred(_,A).
 
 %% POSSIBLE VARIABLE COMBINATIONS
 vars(A,@pyvars(A,MaxVars)):-
@@ -124,9 +123,9 @@ var_pos(@pyvar_pos(Pos,Vars),Vars,Pos):-
     Pos = 0..A-1.
 
 mode(P,A):-
-    modeh(P,A).
+    head_pred(P,A).
 mode(P,A):-
-    modeb(P,A).
+    body_pred(P,A).
 
 %% ##################################################
 %% REDUCE CONSTRAINT GROUNDING BY ORDERING CLAUSES

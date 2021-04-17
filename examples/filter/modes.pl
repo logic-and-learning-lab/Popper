@@ -13,13 +13,13 @@ max_clauses(3).
 :-
     body_literal(2,empty,_,_).
 
-modeh(f,2).
-modeb(f,2).
-modeb(empty,1).
-modeb(odd,1).
-modeb(even,1).
-modeb(cons1,3).
-modeb(cons2,3).
+head_pred(f,2).
+body_pred(f,2).
+body_pred(empty,1).
+body_pred(odd,1).
+body_pred(even,1).
+body_pred(cons1,3).
+body_pred(cons2,3).
 
 type(f,(list,list)).
 type(empty,(list,)).

@@ -2,19 +2,19 @@ max_vars(5).
 max_body(5).
 max_clauses(2).
 
-modeh(f,2).
-modeb(f,2).
-modeb(head,2).
-modeb(tail,2).
-modeb(element,2).
-modeb(increment,2).
-modeb(decrement,2).
-modeb(geq,2).
-modeb(empty,1).
-modeb(even,1).
-modeb(odd,1).
-modeb(one,1).
-modeb(zero,1).
+head_pred(f,2).
+body_pred(f,2).
+body_pred(head,2).
+body_pred(tail,2).
+body_pred(element,2).
+body_pred(increment,2).
+body_pred(decrement,2).
+body_pred(geq,2).
+body_pred(empty,1).
+body_pred(even,1).
+body_pred(odd,1).
+body_pred(one,1).
+body_pred(zero,1).
 
 type(f,(list,element)).
 type(head,(list,element)).

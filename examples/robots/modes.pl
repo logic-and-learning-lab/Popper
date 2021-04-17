@@ -5,16 +5,16 @@ max_vars(6).
 max_body(6).
 max_clauses(3).
 
-modeh(f,2).
-modeb(up,2).
-modeb(down,2).
-modeb(left,2).
-modeb(right,2).
+head_pred(f,2).
+body_pred(up,2).
+body_pred(down,2).
+body_pred(left,2).
+body_pred(right,2).
 
 pred(P,A):-
-    modeh(P,A).
+    head_pred(P,A).
 pred(P,A):-
-    modeb(P,A).
+    body_pred(P,A).
 direction(P,0,in):-
     pred(P,2).
 direction(P,1,out):-

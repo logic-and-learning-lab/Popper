@@ -6,15 +6,15 @@
 #defined lower/2.
 
 pred(P,A):-
-    modeh(P,A).
+    head_pred(P,A).
 pred(P,A):-
-    modeb(P,A).
+    body_pred(P,A).
 lower(A,B):-
     lower(A,C),
     lower(C,B).
-modeh(P,A):-
+head_pred(P,A):-
     invented(P,A).
-modeb(P,A):-
+body_pred(P,A):-
     invented(P,A).
 
 multiclause(P,A):-
