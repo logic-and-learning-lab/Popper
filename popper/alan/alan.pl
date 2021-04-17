@@ -70,43 +70,44 @@ literal(C,P,Vars):-
 
 
 %% ##################################################
-%% VARS ABOUT VARS
+%% VARS ABOUT VARS - META4LIFE
 %% ##################################################
-
+#script (python)
+from itertools import permutations
+def pyhead_vars(arity):
+    return tuple(range(arity.number))
+def pyvars(arity, max_vars):
+    for x in permutations(range(max_vars.number),arity.number):
+        yield x
+def pyvar_pos(pos, vars):
+    return vars.arguments[pos.number]
+#end.
 
 var(0..N-1):-
     max_vars(N).
 
-clause_var(Clause,Var):-
-    head_var(Clause,Var).
-clause_var(Clause,Var):-
-    body_var(Clause,Var).
+clause_var(C,Var):-
+    head_var(C,Var).
+clause_var(C,Var):-
+    body_var(C,Var).
 
-head_var(Clause,Var):-
-    head_literal(Clause,_P,_A,Vars),
+head_var(C,Var):-
+    head_literal(C,_P,_A,Vars),
     var_member(Var,Vars).
-body_var(Clause,Var):-
-    body_literal(Clause,_P,_A,Vars),
+body_var(C,Var):-
+    body_literal(C,_P,_A,Vars),
     var_member(Var,Vars).
 
-%% VAR IS IN VARS
 var_member(Var,Vars):-
     var_pos(Var,Vars,_).
 
-%% VAR IS IN A LITERAL
-var_in_literal(Clause,P,Vars,Var):-
-    literal(Clause,P,Vars),
+var_in_literal(C,P,Vars,Var):-
+    literal(C,P,Vars),
     var_member(Var,Vars).
 
-%% TODO: GENERALISE FOR ARITIES > 4
-head_vars(1,(0,)):-
-    modeh(_,1).
-head_vars(2,(0,1)):-
-    modeh(_,2).
-head_vars(3,(0,1,2)):-
-    modeh(_,3).
-head_vars(4,(0,1,2,3)):-
-    modeh(_,4).
+%% HEAD VARS ARE ALWAYS 0,1,...,A-1
+head_vars(A,@pyhead_vars(A)):-
+    modeh(_,A).
 
 need_arity(A):-
     modeh(_,A).
@@ -114,69 +115,18 @@ need_arity(A):-
     modeb(_,A).
 
 %% POSSIBLE VARIABLE COMBINATIONS
-%% TODO: GENERALISE
-vars(1,(Var1,)):-
-    need_arity(1),
-    var(Var1).
-vars(2,(Var1,Var2)):-
-    need_arity(2),
-    var(Var1),
-    var(Var2),
-    Var1 != Var2.
-vars(3,(Var1,Var2,Var3)):-
-    need_arity(3),
-    var(Var1),
-    var(Var2),
-    var(Var3),
-    Var1 != Var2,
-    Var1 != Var3,
-    Var2 != Var3.
-vars(4,(Var1,Var2,Var3,Var4)):-
-    need_arity(4),
-    var(Var1),
-    var(Var2),
-    var(Var3),
-    var(Var4),
-    Var1 != Var2,
-    Var1 != Var3,
-    Var1 != Var4,
-    Var2 != Var3,
-    Var2 != Var4,
-    Var3 != Var4.
+vars(A,@pyvars(A,MaxVars)):-
+    max_vars(MaxVars),
+    need_arity(A).
 
-%% POSITION OF VAR IN VARS
-%% TODO: GENERALISE
-var_pos(Var1,(Var1,),0):-
-    vars(1,(Var1,)).
-var_pos(Var1,(Var1,Var2),0):-
-    vars(2,(Var1,Var2)).
-var_pos(Var2,(Var1,Var2),1):-
-    vars(2,(Var1,Var2)).
-var_pos(Var1,(Var1,Var2,Var3),0):-
-    vars(3,(Var1,Var2,Var3)).
-var_pos(Var2,(Var1,Var2,Var3),1):-
-    vars(3,(Var1,Var2,Var3)).
-var_pos(Var3,(Var1,Var2,Var3),2):-
-    vars(3,(Var1,Var2,Var3)).
-var_pos(Var1,(Var1,Var2,Var3,Var4),0):-
-    vars(4,(Var1,Var2,Var3,Var4)).
-var_pos(Var2,(Var1,Var2,Var3,Var4),1):-
-    vars(4,(Var1,Var2,Var3,Var4)).
-var_pos(Var3,(Var1,Var2,Var3,Var4),2):-
-    vars(4,(Var1,Var2,Var3,Var4)).
-var_pos(Var4,(Var1,Var2,Var3,Var4),3):-
-    vars(4,(Var1,Var2,Var3,Var4)).
+var_pos(@pyvar_pos(Pos,Vars),Vars,Pos):-
+    vars(A,Vars),
+    Pos = 0..A-1.
 
 mode(P,A):-
     modeh(P,A).
 mode(P,A):-
     modeb(P,A).
-
-
-
-
-
-
 
 %% ##################################################
 %% REDUCE CONSTRAINT GROUNDING BY ORDERING CLAUSES
