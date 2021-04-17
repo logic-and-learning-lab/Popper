@@ -186,6 +186,10 @@ class Constraint:
             if isinstance(constobj, Literal):
                 constraint_literals.append(str(constobj))
             elif isinstance(constobj, ConstOpt):
+                if constobj.operation == 'AllDifferent':
+                    # print(f'ALLDIFF:{constobj.arguments}')
+                    # AC: TODO!!!
+                    continue
                 arga, argb = constobj.arguments
                 if isinstance(arga, ConstVar):
                     arga = arga.name
@@ -197,6 +201,7 @@ class Constraint:
                     argb = str(argb)
                 constraint_literals.append(f'{arga}{constobj.operation}{argb}')
 
+        x = f':- {", ".join(constraint_literals)}.'
         if self.head:
-            return f'{self.head} :- {", ".join(constraint_literals)}'
-        return f':- {", ".join(constraint_literals)}'
+            return f'{self.head} :- {x}'
+        return x

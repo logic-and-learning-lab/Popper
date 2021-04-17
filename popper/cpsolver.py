@@ -3,14 +3,15 @@ from . import core
 
 class CPSolver():
 
-    def ground_program(program, max_clauses, max_vars):
+    def ground_program(constraint, max_clauses, max_vars):
+        # print(constraint)
         model = cp_model.CpModel()
 
         vars_to_cp = {}
         cp_to_vars = {}
 
         var_vals = []
-        for var in program.all_vars:
+        for var in constraint.all_vars:
             if var.type == 'Clause':
                 cp_var = model.NewIntVar(0, max_clauses - 1, var.name)
             elif var.type == 'Variable':
@@ -18,7 +19,7 @@ class CPSolver():
             vars_to_cp[var] = cp_var
             cp_to_vars[cp_var] = var
 
-        for lit in program.body:
+        for lit in constraint.body:
             if not isinstance(lit, core.ConstOpt):
                 continue
             if lit.operation == 'AllDifferent':

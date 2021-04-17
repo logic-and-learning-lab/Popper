@@ -1,6 +1,3 @@
-%% f(A) :- tail(A,C),head(C,D),last(A,B),even(B),even(D).
-%% python3 /Users/andrew/icloud/code/popper/popper.py exs.pl modes.pl bk.pl  2.61s user 0.04s system 99% cpu 2.649 total
-
 max_vars(7).
 max_body(7).
 max_clauses(2).

@@ -32,13 +32,9 @@ def atom_to_symbol(lit):
 class Clingo():
     def __init__(self, kbpath):
         self.solver = clingo.Control(['--rand-freq=0'])
-        self.max_vars = 0
-        self.max_clauses = 0
         # AC: why an OrderedDict? We never remove from it
         self.assigned = OrderedDict()
-        self.load_basic(kbpath)
 
-    def load_basic(self, kbpath):
         # Load Alan.
         alan_path = os.path.abspath('popper/alan/')
         prevwd = os.getcwd()
@@ -48,23 +44,17 @@ class Clingo():
             os.chdir(prevwd)
 
         # Load Mode file
-        # AC: refactor this function out.
-        with open(kbpath + 'modes.pl') as modefile:
-            contents = modefile.read()
+        with open(kbpath + 'bias.pl') as biasfile:
+            contents = biasfile.read()
             self.max_vars = int(re.search("max_vars\((\d+)\)\.", contents).group(1))
             self.max_clauses = int(re.search("max_clauses\((\d+)\)\.", contents).group(1))
-            self.solver.add('modes_file', [], contents)
+            self.solver.add('bias', [], contents)
 
         # Reset number of literals and clauses because size_in_literals literal
         # within Clingo is reset by loading Alan? (bottom two).
         self.solver.add('invented', ['predicate', 'arity'], '#external invented(pred,arity).')
         self.solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
-        # self.solver.add('number_of_clauses', ['n'], NUM_OF_CLAUSES)
-
-        # Ground 'alan' and 'modes_file'
-        parts = [('alan', []), ('modes_file', [])]
-        self.solver.ground(parts)
-        # self.grounded.extend(parts)
+        self.solver.ground([('alan', []), ('bias', [])])
 
     def get_model(self):
         with self.solver.solve(yield_ = True) as handle:

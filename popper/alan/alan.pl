@@ -36,7 +36,7 @@ clause_size(C,N):-
     max_body(MaxN),
     N > 0,
     N <= MaxN,
-    #count{P,Vars : body_literal(C,P,_,Vars)} = N.
+    #count{P,Vars : body_literal(C,P,_,Vars)} == N.
 
 num_clauses(P,N):-
     head_literal(_,P,_,_),
@@ -130,12 +130,15 @@ mode(P,A):-
 %% ##################################################
 %% REDUCE CONSTRAINT GROUNDING BY ORDERING CLAUSES
 %% ##################################################
+%% AC: @AC - I THINK WE CAN REDUCE GROUNDING MORE HERE
 before(C1,C2):-
+    %% C1 != C2,
     head_literal(C1,P,_,_),
     head_literal(C2,Q,_,_),
     lower(P,Q).
 
 before(C1,C2):-
+    %% C1 != C2,
     head_literal(C1,P,_,_),
     head_literal(C2,P,_,_),
     not recursive_clause(C1,P,A),
@@ -248,6 +251,7 @@ var_type(C,Var,@pytype(Pos,Types)):-
 %% p(A)<-q(A),r(A). (CLAUSE1)
 %% p(A)<-s(A). (CLAUSE2)
 %% AC: WHY DID I ADD THIS?
+%% AC: could refactor these for marginal gains
 :-
     C2 > C1,
     not recursive_clause(C1,P,A),
@@ -301,6 +305,11 @@ base_clause(Clause,P,A):-
 :-
     recursive_clause(0,_,_).
 
+%% A RECURSIVE CLAUSE MUST HAVE MORE THAN ONE BODY LITERAL
+:-
+    recursive_clause(C,_,_),
+    clause_size(C,1).
+
 %% STOP RECURSION BEFORE BASE CASES
 :-
     Clause1 > 0,
@@ -335,6 +344,7 @@ base_clause(Clause,P,A):-
     direction_(P,Pos2,in).
 
 %% TODO: REFACTOR
+%% @RM - what is this??
 :-
     Clause > 0,
     num_in_args(P,2),
