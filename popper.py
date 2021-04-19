@@ -3,7 +3,6 @@ import time
 from popper.aspsolver import Clingo
 from popper.cpsolver import CPSolver
 from popper.tester import Tester
-from popper.asptester import ASPTester
 from popper.constrain import Constrain, Outcome
 from popper.generate import generate_program
 from popper.core import Clause, Literal
