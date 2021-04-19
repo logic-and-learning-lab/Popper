@@ -8,10 +8,10 @@ from popper.constrain import Constrain, Outcome
 from popper.generate import generate_program
 from popper.core import Clause, Literal
 
-def ground_constraints(max_clauses, max_vars, constraints):
+def ground_constraints(grounder, max_clauses, max_vars, constraints):
     for constraint in constraints:
         # find all bindings for the variables in the constraint
-        assignments = CPSolver.ground_program(constraint, max_clauses, max_vars)
+        assignments = grounder.ground_program(constraint, max_clauses, max_vars)
         # assignments = Clingo.ground_program(constraint, max_clauses, max_vars)
 
         # build the clause object
@@ -21,8 +21,8 @@ def ground_constraints(max_clauses, max_vars, constraints):
         for assignment in assignments:
             yield clause.ground(assignment)
 
-# @profile
-def popper(solver, tester, constrain, max_literals = 100):
+@profile
+def popper(solver, tester, grounder, constrainer, max_literals = 100):
     prog_cnt = 0
     for size in range(1, max_literals + 1):
         print(size)
@@ -44,10 +44,10 @@ def popper(solver, tester, constrain, max_literals = 100):
                 return
 
             # 3. Build constraints
-            constraints = list(constrain.build_constraints(program_outcomes))
+            constraints = list(constrainer.build_constraints(program_outcomes))
 
             # 4. Ground constraints
-            constraints = list(ground_constraints(solver.max_clauses, solver.max_vars, constraints))
+            constraints = list(ground_constraints(grounder, solver.max_clauses, solver.max_vars, constraints))
 
             # 5. Add to the solver
             solver.add_ground_clauses(constraints)
@@ -62,8 +62,9 @@ def main(kbpath):
     solver = Clingo(kbpath)
     tester = Tester(kbpath)
     # tester = ASPTester(kbpath)
-    constrain = Constrain()
-    popper(solver, tester, constrain)
+    grounder = CPSolver()
+    constrainer = Constrain()
+    popper(solver, tester, grounder, constrainer)
 
 if __name__ == '__main__':
     main(sys.argv[1])
