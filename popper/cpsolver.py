@@ -14,7 +14,7 @@ class CPSolver():
             cons.add((lit.operation, lit.arguments))
         return hash((frozenset(constraint.all_vars),frozenset(cons)))
 
-    @profile
+    # @profile
     def ground_program(self, constraint, max_clauses, max_vars):
         if len(constraint.all_vars) == 0:
             return [{}]
@@ -23,7 +23,6 @@ class CPSolver():
         if k in self.seen_assignments:
             return self.seen_assignments[k]
 
-        # print(constraint)
         model = cp_model.CpModel()
 
         vars_to_cp = {}
@@ -58,7 +57,6 @@ class CPSolver():
         status = cp_model.CpSolver().SearchForAllSolutions(model, solution_printer)
         assignments = solution_printer.assignments
         self.seen_assignments[k] = assignments
-        # print(assignments)
         return assignments
 
 class SolutionPrinter(cp_model.CpSolverSolutionCallback):

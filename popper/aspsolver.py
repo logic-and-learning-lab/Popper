@@ -5,6 +5,7 @@ import operator
 import numbers
 from . import core
 from collections import OrderedDict
+from clingo import Function, Number, Tuple_
 
 # AC: rename file to ClingoSolver.
 NUM_OF_LITERALS = (
@@ -18,24 +19,24 @@ NUM_OF_LITERALS = (
 
 def arg_to_symbol(arg):
     if isinstance(arg, tuple):
-        return clingo.Tuple_(tuple(arg_to_symbol(a) for a in arg))
+        return Tuple_(tuple(arg_to_symbol(a) for a in arg))
     if isinstance(arg, numbers.Number):
-        return clingo.Number(arg)
+        return Number(arg)
     if isinstance(arg, str):
-        return clingo.Function(arg)
+        return Function(arg)
     assert False, f'Unhandled argtype({type(arg)}) in aspsolver.py arg_to_symbol()'
 
 def atom_to_symbol(lit):
-    args = tuple(arg_to_symbol(arg) for arg in lit.arguments)
-    return clingo.Function(name = lit.predicate, arguments = args)
+    xs = tuple(arg_to_symbol(arg) for arg in lit.arguments)
+    return Function(name = lit.predicate, arguments = xs)
 
 class Clingo():
     def __init__(self, kbpath):
         self.solver = clingo.Control(['--rand-freq=0'])
         # AC: why an OrderedDict? We never remove from it
         self.assigned = OrderedDict()
+        self.seen_symbols = {}
 
-        # Load Alan.
         alan_path = os.path.abspath('popper/alan/')
         prevwd = os.getcwd()
         with open(alan_path + '/alan.pl') as alan:
@@ -43,15 +44,13 @@ class Clingo():
             self.solver.add('alan', [], alan.read())
             os.chdir(prevwd)
 
-        # Load Mode file
         with open(kbpath + 'bias.pl') as biasfile:
             contents = biasfile.read()
             self.max_vars = int(re.search("max_vars\((\d+)\)\.", contents).group(1))
             self.max_clauses = int(re.search("max_clauses\((\d+)\)\.", contents).group(1))
             self.solver.add('bias', [], contents)
 
-        # Reset number of literals and clauses because size_in_literals literal
-        # within Clingo is reset by loading Alan? (bottom two).
+        # Reset number of literals and clauses because size_in_literals literal within Clingo is reset by loading Alan? (bottom two).
         self.solver.add('invented', ['predicate', 'arity'], '#external invented(pred,arity).')
         self.solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
         self.solver.ground([('alan', []), ('bias', [])])
@@ -82,20 +81,31 @@ class Clingo():
         symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
         self.solver.assign_external(symbol, True)
 
+    # @profile
     def add_ground_clauses(self, clauses):
         with self.solver.backend() as backend:
             for clause in clauses:
                 head_lit = []
                 if clause.head:
-                    symbol = atom_to_symbol(clause.head)
-                    head_lit = [backend.add_atom(symbol)]
+                    k = hash(clause.head)
+                    if k in self.seen_symbols:
+                        symbol = self.seen_symbols[k]
+                    else:
+                        symbol = backend.add_atom(atom_to_symbol(clause.head))
+                        self.seen_symbols[k] = symbol
+                    head_lit = [symbol]
                 body_lits = []
                 for lit in clause.body:
-                    symbol = atom_to_symbol(lit)
-                    body_atom = backend.add_atom(symbol)
-                    body_lits.append(body_atom if lit.positive else -body_atom)
-                backend.add_rule(head_lit, body_lits, choice = False)
+                    k = hash(lit)
+                    if k in self.seen_symbols:
+                        symbol = self.seen_symbols[k]
+                    else:
+                        symbol = backend.add_atom(atom_to_symbol(lit))
+                        self.seen_symbols[k] = symbol
+                    body_lits.append(symbol if lit.positive else -symbol)
+                backend.add_rule(head_lit, body_lits)
 
+    # TODO - ADD CACHING
     def ground_program(program, max_clauses, max_vars):
         # map each clause_var and var_var in the program to an integer
         # AC: costly
@@ -169,8 +179,12 @@ class Clingo():
                 val = x.arguments[1].number
                 if x.name == 'c_var':
                     assignment[c_vars_[var]] = val
-                if x.name == 'v_var':
+                elif x.name == 'v_var':
                     assignment[v_vars_[var]] = val
             out.append(assignment)
         solver.solve(on_model=on_model)
         return out
+
+
+    def __hash__(self):
+        return hash((self.predicate,self.arguments))

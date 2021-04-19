@@ -21,7 +21,7 @@ def ground_constraints(grounder, max_clauses, max_vars, constraints):
         for assignment in assignments:
             yield clause.ground(assignment)
 
-@profile
+# @profile
 def popper(solver, tester, grounder, constrainer, max_literals = 100):
     prog_cnt = 0
     for size in range(1, max_literals + 1):
