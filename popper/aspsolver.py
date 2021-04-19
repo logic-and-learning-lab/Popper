@@ -36,6 +36,7 @@ class Clingo():
         # AC: why an OrderedDict? We never remove from it
         self.assigned = OrderedDict()
         self.seen_symbols = {}
+        self.seen_assignments = {}
 
         alan_path = os.path.abspath('popper/alan/')
         prevwd = os.getcwd()
@@ -81,7 +82,6 @@ class Clingo():
         symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
         self.solver.assign_external(symbol, True)
 
-    # @profile
     def add_ground_clauses(self, clauses):
         with self.solver.backend() as backend:
             for clause in clauses:
@@ -105,12 +105,18 @@ class Clingo():
                     body_lits.append(symbol if lit.positive else -symbol)
                 backend.add_rule(head_lit, body_lits)
 
-    # TODO - ADD CACHING
-    def ground_program(program, max_clauses, max_vars):
+    def ground_program(self, constraint, max_clauses, max_vars):
+        if len(constraint.all_vars) == 0:
+            return [{}]
+
+        k = constraint.myhash()
+        if k in self.seen_assignments:
+            return self.seen_assignments[k]
+
         # map each clause_var and var_var in the program to an integer
         # AC: costly
-        c_vars = {v:i for i,v in enumerate(var for var in program.all_vars if var.type == 'Clause')}
-        v_vars = {v:i for i,v in enumerate(var for var in program.all_vars if var.type == 'Variable')}
+        c_vars = {v:i for i,v in enumerate(var for var in constraint.all_vars if var.type == 'Clause')}
+        v_vars = {v:i for i,v in enumerate(var for var in constraint.all_vars if var.type == 'Variable')}
 
         # transpose for return lookup
         c_vars_ = {v:k for k,v in c_vars.items()}
@@ -146,7 +152,7 @@ class Clingo():
         """)
 
         # add constraints to the ASP program based on the AST thing
-        for lit in program.body:
+        for lit in constraint.body:
             if not isinstance(lit, core.ConstOpt):
                 continue
             if lit.operation == '==':
@@ -183,8 +189,5 @@ class Clingo():
                     assignment[v_vars_[var]] = val
             out.append(assignment)
         solver.solve(on_model=on_model)
+        self.seen_assignments[k] = out
         return out
-
-
-    def __hash__(self):
-        return hash((self.predicate,self.arguments))

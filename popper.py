@@ -12,7 +12,6 @@ def ground_constraints(grounder, max_clauses, max_vars, constraints):
     for constraint in constraints:
         # find all bindings for the variables in the constraint
         assignments = grounder.ground_program(constraint, max_clauses, max_vars)
-        # assignments = Clingo.ground_program(constraint, max_clauses, max_vars)
 
         # build the clause object
         clause = Clause(constraint.head, tuple(lit for lit in constraint.body if isinstance(lit, Literal)))
@@ -21,25 +20,24 @@ def ground_constraints(grounder, max_clauses, max_vars, constraints):
         for assignment in assignments:
             yield clause.ground(assignment)
 
-# @profile
 def popper(solver, tester, grounder, constrainer, max_literals = 100):
     prog_cnt = 0
     for size in range(1, max_literals + 1):
-        print(size)
         solver.update_number_of_literals(size)
         while True:
             prog_cnt += 1
+
             # 1. Generate
             program = generate_program(solver)
             if program == None:
                 break
             program.to_ordered()
+            # print('--')
             # pprint(program)
 
             # 2. Test
             program_outcomes = tester.test(program)
             if program_outcomes[program] == (Outcome.ALL, Outcome.NONE):
-                print(prog_cnt)
                 pprint(program)
                 return
 
@@ -51,7 +49,7 @@ def popper(solver, tester, grounder, constrainer, max_literals = 100):
 
             # 5. Add to the solver
             solver.add_ground_clauses(constraints)
-    print(prog_cnt)
+    # print(prog_cnt)
 
 def pprint(program):
     if program:
@@ -61,8 +59,8 @@ def pprint(program):
 def main(kbpath):
     solver = Clingo(kbpath)
     tester = Tester(kbpath)
-    # tester = ASPTester(kbpath)
-    grounder = CPSolver()
+    # grounder = CPSolver()
+    grounder = solver
     constrainer = Constrain()
     popper(solver, tester, grounder, constrainer)
 

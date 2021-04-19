@@ -1,3 +1,8 @@
+%% time py popper.py examples/trains/
+%% f(A) :- has_car(A,C),has_car(A,B),three_wheels(B),long(C),roof_closed(C).
+%% python3 popper.py examples/trains/  0.94s user 0.05s system 99% cpu 0.998 total
+
+
 max_clauses(4).
 max_vars(5).
 max_body(5).

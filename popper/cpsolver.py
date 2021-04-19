@@ -6,20 +6,11 @@ class CPSolver():
     def __init__(self):
         self.seen_assignments = {}
 
-    def myhash(self, constraint):
-        cons = set()
-        for lit in constraint.body:
-            if not isinstance(lit, core.ConstOpt):
-                continue
-            cons.add((lit.operation, lit.arguments))
-        return hash((frozenset(constraint.all_vars),frozenset(cons)))
-
-    # @profile
     def ground_program(self, constraint, max_clauses, max_vars):
         if len(constraint.all_vars) == 0:
             return [{}]
 
-        k = self.myhash(constraint)
+        k = constraint.myhash()
         if k in self.seen_assignments:
             return self.seen_assignments[k]
 

@@ -21,15 +21,15 @@ my_true_value(6,2).
 my_true_value(8,2).
 
 
-c_pressButton(c_pressButton).
-c_noop(c_noop).
-c1(c1).
-c2(c2).
-c3(c3).
-c4(c4).
-c5(c5).
-c6(c6).
-c7(c7).
-c8(c8).
-c9(c9).
-c10(c10).
+c_pressButton(pressButton).
+c_noop(noop).
+c1(1).
+c2(2).
+c3(3).
+c4(4).
+c5(5).
+c6(6).
+c7(7).
+c8(8).
+c9(9).
+c10(10).

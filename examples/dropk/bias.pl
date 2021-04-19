@@ -1,14 +1,14 @@
-%% time py popper.py examples/find-dupl/
-%% f(A,B) :- head(A,B),tail(A,C),element(C,B).
-%% f(A,B) :- tail(A,C),f(C,B).
-%% python3 popper.py examples/find-dupl/  32.08s user 1.74s system 100% cpu 33.553 total
+%% time py popper.py examples/dropk/
+%% f(A,B,C) :- tail(A,C),one(B).
+%% f(A,B,C) :- tail(A,D),decrement(B,E),f(D,E,C).
+%% python3 popper.py examples/dropk/  0.83s user 0.09s system 102% cpu 0.903 total
 
 max_vars(5).
 max_body(5).
 max_clauses(2).
 
-head_pred(f,2).
-body_pred(f,2).
+head_pred(f,3).
+body_pred(f,3).
 body_pred(head,2).
 body_pred(tail,2).
 body_pred(element,2).
@@ -21,7 +21,7 @@ body_pred(odd,1).
 body_pred(one,1).
 body_pred(zero,1).
 
-type(f,(list,element)).
+type(f,(list,element,list)).
 type(head,(list,element)).
 type(tail,(list,list)).
 type(element,(list,element)).
@@ -35,7 +35,7 @@ type(odd,(element,)).
 type(one,(element,)).
 type(zero,(element,)).
 
-direction(f,(in,out)).
+direction(f,(in,in,out)).
 direction(head,(in,out)).
 direction(tail,(in,out)).
 direction(element,(in,out)).

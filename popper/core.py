@@ -186,6 +186,14 @@ class Constraint:
     # def __hash__(self):
       # return hash((self.ctype, self.head, tuple(self.body)))
 
+    def myhash(self):
+        cons = set()
+        for lit in self.body:
+            if not isinstance(lit, ConstOpt):
+                continue
+            cons.add((lit.operation, lit.arguments))
+        return hash((frozenset(self.all_vars),frozenset(cons)))
+
     def __str__(self):
         constraint_literals = []
         for constobj in self.body:
