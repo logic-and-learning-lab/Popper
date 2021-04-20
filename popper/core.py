@@ -46,8 +46,11 @@ class Literal:
             return x
 
     # AC: @ALL, why?
-    def __repr__(self):
-        return self.__str__()
+    # def __repr__(self):
+        # return self.__str__()
+
+    def __hash__(self):
+      return hash((self.predicate, self.arguments))
 
     def to_code(self):
         return f'{self.predicate}({",".join(self.arguments)})'
@@ -179,6 +182,17 @@ class Constraint:
                     for t_arg in arg:
                         if isinstance(t_arg, ConstVar):
                             self.all_vars.add(t_arg)
+
+    # def __hash__(self):
+      # return hash((self.ctype, self.head, tuple(self.body)))
+
+    def myhash(self):
+        cons = set()
+        for lit in self.body:
+            if not isinstance(lit, ConstOpt):
+                continue
+            cons.add((lit.operation, lit.arguments))
+        return hash((frozenset(self.all_vars),frozenset(cons)))
 
     def __str__(self):
         constraint_literals = []

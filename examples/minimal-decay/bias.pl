@@ -1,12 +1,12 @@
+%% PROLBEM IS UNSATISFIABLE - WE USE IT FOR TESTING!
 max_clauses(2).
 max_vars(5).
-max_body(4).
+max_body(5).
 
 head_pred(next_value,2).
 body_pred(does,3).
 body_pred(my_true_value,2).
 body_pred(my_succ,2).
-
 body_pred(c_pressButton,1).
 body_pred(c_noop,1).
 body_pred(c1,1).
@@ -28,6 +28,10 @@ type(c2,(int,)).
 type(c3,(int,)).
 type(c4,(int,)).
 type(c5,(int,)).
+
+functional(my_succ,2).
+irreflexive(my_succ,2).
+functional(my_true_value,2).
 
 :-
     body_literal(C,P1,A,1),
