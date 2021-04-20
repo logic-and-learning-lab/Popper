@@ -52,8 +52,8 @@ def vo_variable(variable):
     return ConstVar(f'{variable}', 'Variable')
 
 class Constrain:
-    def __init__(self, no_pruning = False):
-        self.no_pruning  = no_pruning
+    def __init__(self, experiment):
+        self.no_pruning  = experiment.args.no_pruning
         self.included_clause_handles = set()
         self.seen_clause_handle = {}
 

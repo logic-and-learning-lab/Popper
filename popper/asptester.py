@@ -5,10 +5,10 @@ from contextlib import contextmanager
 from . constrain import Outcome
 
 class ASPTester():
-    def __init__(self, kbpath):
-        with open(kbpath + 'bk.pl') as f:
+    def __init__(self, experiment):
+        with open(experiment.args.kbpath + 'bk.pl') as f:
             self.bk = f.read()
-        with open(kbpath + 'exs.pl') as f:
+        with open(experiment.args.kbpath + 'exs.pl') as f:
             for line in f:
                 if line.startswith('%'):
                     continue
