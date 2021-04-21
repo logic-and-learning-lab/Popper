@@ -6,13 +6,14 @@ from contextlib import contextmanager
 from . constrain import Outcome
 
 class Tester():
-    def __init__(self, kbpath, eval_timeout = 0.1, minimal_testing = True):
+    #def __init__(self, kbpath, eval_timeout = 0.1, minimal_testing = True):
+    def __init__(self, experiment): #kbpath, eval_timeout = 0.1, minimal_testing = True):
         self.prolog = Prolog()
-        self.eval_timeout = eval_timeout
-        self.minimal_testing = minimal_testing
+        self.eval_timeout = experiment.args.eval_timeout
+        self.minimal_testing = experiment.args.minimal_testing
         self.num_pos = 0
         self.num_neg = 0
-        self.load_basic(kbpath)
+        self.load_basic(experiment.args.kbpath)
 
     def load_basic(self, kbpath):
         # Consult background and test file
