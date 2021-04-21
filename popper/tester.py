@@ -6,8 +6,7 @@ from contextlib import contextmanager
 from . constrain import Outcome
 
 class Tester():
-    #def __init__(self, kbpath, eval_timeout = 0.1, minimal_testing = True):
-    def __init__(self, experiment): #kbpath, eval_timeout = 0.1, minimal_testing = True):
+    def __init__(self, experiment):
         self.prolog = Prolog()
         self.eval_timeout = experiment.args.eval_timeout
         self.minimal_testing = experiment.args.minimal_testing
@@ -49,7 +48,7 @@ class Tester():
             for predicate, arity in current_clauses:
                 args = ','.join(['_'] * arity)
                 self.prolog.retractall(f'{predicate}({args})')
-    # @profile
+
     def test(self, program):
         with self.using(program):
             if self.minimal_testing:
@@ -80,4 +79,4 @@ class Tester():
         else:
             negative_outcome = Outcome.SOME
 
-        return {program:(positive_outcome, negative_outcome)}
+        return ((positive_outcome, negative_outcome), (TP,FN,TN,FP))

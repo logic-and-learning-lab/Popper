@@ -49,7 +49,8 @@ class Experiment:
             message += f'{operation.title()}\n'
             message += f'Called: {called} times | Total: {total:0.5f}s | Mean: {mean:0.5f}s\n\n'
 
-            if operation != 'basic setup': total_op_time += total
+            if operation != 'basic setup':
+                total_op_time += total
         message += f'Total operation time: {total_op_time:0.2f}s\n'
         message += f'Total execution time: {total_exec_time:0.2f}s\n'
 

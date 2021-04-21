@@ -45,10 +45,6 @@ class Literal:
                 x = 'not ' + x
             return x
 
-    # AC: @ALL, why?
-    # def __repr__(self):
-        # return self.__str__()
-
     def __hash__(self):
       return hash((self.predicate, self.arguments))
 
@@ -80,7 +76,6 @@ class Clause:
         self.head = head
         self.body = body
         self.min_num = min_num
-        self.ordered = False
 
         # compute all the 'vars' in the program
         self.all_vars = set()
@@ -102,11 +97,8 @@ class Clause:
             return f'{str(self.head)}{x}'
         return x
 
-
     # AC: nasty
     def to_ordered(self):
-        if self.ordered:
-            return
 
         ordered_body = []
         grounded_variables = self.head.inputs
@@ -134,7 +126,6 @@ class Clause:
             body_literals = body_literals.difference({selected_literal})
 
         self.body = tuple(ordered_body)
-        self.ordered = True
 
     def to_code(self):
         return (
@@ -153,15 +144,11 @@ class Program:
         self.clauses = clauses
         self.before = before
         self.num_clauses = len(clauses)
-
-    # AC: this method changes the program!
-    # AC: no mutating please, it is the devils work!
-    def to_ordered(self):
-        # AC: do we also need to reorder the clauses?
+        # AC: this method changes the program!
+        # AC: no mutating please, it is the devils work!
         for clause in self.clauses:
             clause.to_ordered()
 
-    # AC: this method returns new objects - confusing given the above
     def to_code(self):
         for clause in self.clauses:
             yield clause.to_code() + '.'
@@ -182,9 +169,6 @@ class Constraint:
                     for t_arg in arg:
                         if isinstance(t_arg, ConstVar):
                             self.all_vars.add(t_arg)
-
-    # def __hash__(self):
-      # return hash((self.ctype, self.head, tuple(self.body)))
 
     def myhash(self):
         cons = set()

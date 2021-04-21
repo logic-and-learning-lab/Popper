@@ -72,7 +72,7 @@ class Constrain:
         return f'prog_{"_".join(sorted(self.make_clause_handle(clause) for clause in program.clauses))}'
 
     def build_constraints(self, program_outcomes):
-        for program, (positive_outcome, negative_outcome) in program_outcomes.items():
+        for program, (positive_outcome, negative_outcome) in program_outcomes:
             constraint_types = self.derive_constraint_types(positive_outcome, negative_outcome)
             for constraint in self.derive_constraints(program, constraint_types):
                 yield constraint

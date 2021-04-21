@@ -32,9 +32,3 @@ type(c5,(int,)).
 functional(my_succ,2).
 irreflexive(my_succ,2).
 functional(my_true_value,2).
-
-:-
-    body_literal(C,P1,A,1),
-    body_literal(C,P2,A,1),
-    var_type(P1,0,int),
-    P1 != P2.

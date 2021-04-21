@@ -1,6 +1,5 @@
 from popper.log import Experiment
 from popper.aspsolver import Clingo
-# from popper.cpsolver import CPSolver
 from popper.tester import Tester
 from popper.constrain import Constrain, Outcome
 from popper.generate import generate_program
@@ -23,18 +22,15 @@ def pprint(program):
         for clause in program.to_code():
             print(clause)
 
-# @profile
 def popper(experiment):
     solver = Clingo(experiment)
     tester = Tester(experiment)
     grounder = solver
     constrainer = Constrain(experiment)
 
-    iteration = 1
     for size in range(1, experiment.args.max_literals + 1):
         if experiment.args.debug:
             print(f'{"*" * 20} MAX LITERALS: {size} {"*" * 20}')
-
         solver.update_number_of_literals(size)
 
         while True:
@@ -45,19 +41,21 @@ def popper(experiment):
                 program = generate_program(solver)
             if program == None:
                 break
-            # AC: TODO ORDER BY DEFAULT
-            program.to_ordered()
 
             # 2. Test
             with experiment.duration('test'):
-                program_outcomes = tester.test(program)
+                (outcome, conf_matrix) = tester.test(program)
+
             if experiment.args.debug:
-                print(f'Program {iteration}:')
+                print(f'Program {experiment.total_programs}:')
                 for clause in program.to_code():
                     print(clause)
-                # AC: TODO - replace with confusion matrix
-                print('Outcome: ', program_outcomes[program])
-            if program_outcomes[program] == (Outcome.ALL, Outcome.NONE):
+                (TP,FN,TN,FP) = conf_matrix
+                approx_pos = '+' if TP + FN < tester.num_pos else ''
+                approx_neg = '+' if TN + FP < tester.num_neg else ''
+                print(f'TP: {TP}{approx_pos}, FN: {FN}{approx_pos}, TN: {TN}{approx_neg}, FP: {FP}{approx_neg}')
+
+            if outcome == (Outcome.ALL, Outcome.NONE):
                 if experiment.args.debug:
                     print()
                 if experiment.args.stats:
@@ -66,7 +64,7 @@ def popper(experiment):
                 return
 
             # 3. Build constraints
-            constraints = list(constrainer.build_constraints(program_outcomes))
+            constraints = list(constrainer.build_constraints([(program, outcome)]))
 
             if experiment.args.debug:
                 print('Constraints:')
@@ -81,8 +79,6 @@ def popper(experiment):
             # 5. Add to the solver
             with experiment.duration('adding'):
                 solver.add_ground_clauses(constraints)
-
-            iteration += 1
 
     if experiment.args.stats:
         experiment.stats(False)
