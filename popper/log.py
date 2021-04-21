@@ -53,4 +53,9 @@ class Experiment:
         message += f'Total operation time: {total_op_time:0.2f}s\n'
         message += f'Total execution time: {total_exec_time:0.2f}s\n'
 
+        if program:
+            message += '\nProgram:'
+        else:
+            message += '\nNo program returned'
+
         print(message)
