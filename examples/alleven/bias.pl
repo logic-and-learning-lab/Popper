@@ -1,3 +1,7 @@
+%% time py popper.py examples/alleven/
+%% f(A) :- tail(A,B),head(B,D),even(D),last(A,C),even(C).
+%% python3 popper.py examples/alleven/  2.57s user 0.06s system 99% cpu 2.635 total
+
 max_vars(7).
 max_body(7).
 max_clauses(2).

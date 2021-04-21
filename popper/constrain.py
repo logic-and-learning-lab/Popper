@@ -60,7 +60,6 @@ class Constrain:
     def literal_handle(self, literal):
         return f'{literal.predicate}{"".join(literal.arguments)}'
 
-    # AC: verify that caching works
     def make_clause_handle(self, clause):
         if clause not in self.seen_clause_handle:
             body_literals = sorted(clause.body, key = operator.attrgetter('predicate'))

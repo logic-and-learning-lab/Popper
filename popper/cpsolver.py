@@ -3,8 +3,17 @@ from . import core
 
 class CPSolver():
 
-    def ground_program(constraint, max_clauses, max_vars):
-        # print(constraint)
+    def __init__(self):
+        self.seen_assignments = {}
+
+    def ground_program(self, constraint, max_clauses, max_vars):
+        if len(constraint.all_vars) == 0:
+            return [{}]
+
+        k = constraint.myhash()
+        if k in self.seen_assignments:
+            return self.seen_assignments[k]
+
         model = cp_model.CpModel()
 
         vars_to_cp = {}
@@ -37,7 +46,9 @@ class CPSolver():
 
         solution_printer = SolutionPrinter(cp_to_vars)
         status = cp_model.CpSolver().SearchForAllSolutions(model, solution_printer)
-        return solution_printer.assignments
+        assignments = solution_printer.assignments
+        self.seen_assignments[k] = assignments
+        return assignments
 
 class SolutionPrinter(cp_model.CpSolverSolutionCallback):
     def __init__(self, cp_to_vars):

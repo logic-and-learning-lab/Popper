@@ -1,8 +1,8 @@
-%% (base) ➜  filter popp exs.pl modes2.pl bk.pl
+%% time py popper.py examples/filter/
 %% f(A,B) :- empty(B),empty(A).
-%% f(A,B) :- even(C),cons2(C,E,A),f(E,D),cons1(C,D,B).
-%% f(A,B) :- odd(C),cons2(C,D,A),f(D,B).
-%% python3 /Users/andrew/icloud/code/popper/popper.py exs.pl modes2.pl bk.pl  38.87s user 0.27s system 99% cpu 39.157 total
+%% f(A,B) :- cons2(C,D,A),odd(C),f(D,B).
+%% f(A,B) :- cons2(C,D,A),even(C),f(D,E),cons1(C,E,B).
+%% python3 popper.py examples/filter/  48.71s user 0.23s system 99% cpu 48.993 total
 
 max_vars(5).
 max_body(4).
