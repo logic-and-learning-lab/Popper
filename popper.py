@@ -1,6 +1,6 @@
 from popper.log import Experiment
 from popper.aspsolver import Clingo
-from popper.cpsolver import CPSolver
+# from popper.cpsolver import CPSolver
 from popper.tester import Tester
 from popper.constrain import Constrain, Outcome
 from popper.generate import generate_program
