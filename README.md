@@ -1,3 +1,6 @@
+# POPPER IS STILL A MAJOR WORK-IN-PROGRESS. BE PREPARED FOR BUGS, DEAMONS, AND BACKWARDS-BREAKING CHANGES!
+
+
 # Popper
 
 Popper is an inductive logic programming (ILP) system.
