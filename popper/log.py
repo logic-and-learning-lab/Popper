@@ -8,7 +8,7 @@ def parse_args():
     parser.add_argument('--eval-timeout', type=float, default=0.1, help='Prolog evaluation timeout in seconds')
     parser.add_argument('--max-literals', type=int, default=100, help='Maximum number of literals allowed in program')
     parser.add_argument('--minimal-testing', type=bool, default=True, help='Use minimal testing during testing')
-    parser.add_argument('--no-pruning', type=bool, default=False, help='Use pruning during constrain stage')
+    # parser.add_argument('--no-pruning', type=bool, default=False, help='Use pruning during constrain stage')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--stats', default= False, action='store_true', help='Print statistics at end of execution')
     return parser.parse_args()

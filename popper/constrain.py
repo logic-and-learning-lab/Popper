@@ -53,7 +53,7 @@ def vo_variable(variable):
 
 class Constrain:
     def __init__(self, experiment):
-        self.no_pruning  = experiment.args.no_pruning
+        # self.no_pruning  = experiment.args.no_pruning
         self.included_clause_handles = set()
         self.seen_clause_handle = {}
 
@@ -80,11 +80,11 @@ class Constrain:
                 yield inclusion_rule
 
     def derive_constraint_types(self, positive_outcome, negative_outcome):
-        if self.no_pruning:
-            positive_outcome = Outcome.ALL
-            negative_outcome = Outcome.NONE
+        # if self.no_pruning:
+            # positive_outcome = Outcome.ALL
+            # negative_outcome = Outcome.NONE
         # AC: @RM, what is this line about?
-        elif negative_outcome == Outcome.ALL:
+        if negative_outcome == Outcome.ALL:
             negative_outcome = Outcome.SOME
         return OUTCOME_TO_CONSTRAINTS[(positive_outcome, negative_outcome)]
 
