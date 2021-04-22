@@ -179,7 +179,7 @@ class Constrain:
 
     def banish_constraint(self, program):
         literals = []
-        for clause_number, clause in emumerate(program):
+        for clause_number, clause in enumerate(program):
             clause_handle = self.make_clause_handle(clause)
             literals.append(Literal('included_clause', (clause_handle, clause_number)))
             literals.append(Literal('clause_size', (clause_number, len(clause.body))))

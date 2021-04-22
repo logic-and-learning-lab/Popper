@@ -23,6 +23,8 @@ def pprint(program):
             print(clause)
 
 def popper(experiment):
+    if experiment.args.kbpath[-1] != '/':
+        experiment.args.kbpath += '/'
     solver = Clingo(experiment)
     tester = Tester(experiment)
     grounder = solver
