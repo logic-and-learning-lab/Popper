@@ -1,10 +1,11 @@
 %% time py popper.py examples/alleven/
-%% f(A) :- tail(A,B),head(B,D),even(D),last(A,C),even(C).
-%% python3 popper.py examples/alleven/  2.57s user 0.06s system 99% cpu 2.635 total
+%% f(A) :- empty(A).
+%% f(A) :- head(A,C),even(C),tail(A,B),f(B).
+%% python3 popper.py examples/alleven/  0.62s user 0.03s system 99% cpu 0.648 total
 
-max_vars(7).
-max_body(7).
 max_clauses(2).
+max_vars(5).
+max_body(5).
 
 head_pred(f,1).
 body_pred(f,1).
