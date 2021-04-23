@@ -9,7 +9,7 @@ class Tester():
     def __init__(self, experiment):
         self.prolog = Prolog()
         self.eval_timeout = experiment.args.eval_timeout
-        self.minimal_testing = experiment.args.minimal_testing
+        self.test_all = experiment.args.test_all
         self.num_pos = 0
         self.num_neg = 0
         self.load_basic(experiment.args.kbpath)
@@ -51,10 +51,12 @@ class Tester():
 
     def test(self, program):
         with self.using(program):
-            if self.minimal_testing:
-                res = list(self.prolog.query('do_test_minimal(TP,FN,TN,FP)'))[0]
-            else:
+            if self.test_all:
                 res = list(self.prolog.query('do_test(TP,FN,TN,FP)'))[0]
+            else:
+                # AC: TN is not calculated when performing minmal testing
+                res = list(self.prolog.query('do_test_minimal(TP,FN,TN,FP)'))[0]
+
             TP, FN, TN, FP = res['TP'], res['FN'], res['TN'], res['FP']
 
         # @NOTE: Andrew to clean up at some point.
