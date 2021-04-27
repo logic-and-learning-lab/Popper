@@ -73,11 +73,14 @@ literal(C,P,Vars):-
 %% ##################################################
 #script (python)
 from itertools import permutations
+from clingo.symbol import Tuple_, Number
+def mk_tuple(xs):
+    return Tuple_([Number(x) for x in xs])
 def pyhead_vars(arity):
-    return tuple(range(arity.number))
+    return mk_tuple(range(arity.number))
 def pyvars(arity, max_vars):
     for x in permutations(range(max_vars.number),arity.number):
-        yield x
+        yield mk_tuple(x)
 def pyvar_pos(pos, vars):
     return vars.arguments[pos.number]
 #end.

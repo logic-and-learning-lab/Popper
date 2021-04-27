@@ -6,6 +6,8 @@ import numbers
 from . import core
 from collections import OrderedDict
 from clingo import Function, Number, Tuple_
+import clingo.script
+clingo.script.enable_python()
 
 # AC: rename file to ClingoSolver.
 NUM_OF_LITERALS = (
