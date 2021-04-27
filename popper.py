@@ -36,13 +36,13 @@ def popper(experiment):
         solver.update_number_of_literals(size)
 
         while True:
-            experiment.total_programs += 1
-
             # 1. Generate
             with experiment.duration('generate'):
                 program = generate_program(solver)
             if program == None:
                 break
+
+            experiment.total_programs += 1
 
             # 2. Test
             with experiment.duration('test'):
