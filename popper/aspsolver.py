@@ -49,7 +49,7 @@ class Clingo():
 
         # Load Mode file
         with open(experiment.args.kbpath + 'bias.pl') as biasfile:
-            contents = biasfile.read()
+            contents = '\n'.join(line for line in biasfile if not line.startswith('%'))
             self.max_vars = int(re.search("max_vars\((\d+)\)\.", contents).group(1))
             self.max_clauses = int(re.search("max_clauses\((\d+)\)\.", contents).group(1))
             self.solver.add('bias', [], contents)
