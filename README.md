@@ -14,9 +14,6 @@ If you use Popper for research, please cite the paper [learning programs by lear
 
 [Clingo 5.5.0](https://potassco.org/clingo/)
 
-To install Clingo with Python support, I suggest you run the command `conda install -c potassco/label/dev-cpython clingo`
-
-
 [pyswip](https://pypi.org/project/pyswip/)
 
 
