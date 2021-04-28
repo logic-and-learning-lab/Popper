@@ -51,12 +51,17 @@ class Tester():
 
     def test(self, program):
         with self.using(program):
-            if self.test_all:
-                res = list(self.prolog.query('do_test(TP,FN,TN,FP)'))[0]
-            else:
-                # AC: TN is not calculated when performing minmal testing
-                res = list(self.prolog.query('do_test_minimal(TP,FN,TN,FP)'))[0]
-
+            try:
+                if self.test_all:
+                    res = list(self.prolog.query('do_test(TP,FN,TN,FP)'))[0]
+                else:
+                    # AC: TN is not calculated when performing minmal testing
+                    res = list(self.prolog.query('do_test_minimal(TP,FN,TN,FP)'))[0]
+            except:
+                print("A Prolog error occurred when testing the program:")
+                for clause in program.clauses:
+                    print('\t' + clause.to_code())
+                raise
             TP, FN, TN, FP = res['TP'], res['FN'], res['TN'], res['FP']
 
         # @NOTE: Andrew to clean up at some point.
