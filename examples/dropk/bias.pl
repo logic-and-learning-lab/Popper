@@ -1,7 +1,7 @@
-%% time py popper.py examples/dropk/
-%% f(A,B,C) :- tail(A,C),one(B).
+%% f(A,B,C) :- one(B),tail(A,C).
 %% f(A,B,C) :- tail(A,D),decrement(B,E),f(D,E,C).
-%% python3 popper.py examples/dropk/  0.83s user 0.09s system 102% cpu 0.903 total
+%% python3 popper.py examples/dropk  0.85s user 0.07s system 102% cpu 0.901 total
+
 
 max_vars(5).
 max_body(5).

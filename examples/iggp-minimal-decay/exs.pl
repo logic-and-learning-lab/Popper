@@ -1,7 +1,7 @@
-%% pos(next_value(1,5)).
-%% pos(next_value(2,2)).
-%% pos(next_value(3,5)).
-%% pos(next_value(4,5)).
+pos(next_value(1,5)).
+pos(next_value(2,2)).
+pos(next_value(3,5)).
+pos(next_value(4,5)).
 pos(next_value(5,5)).
 pos(next_value(6,1)).
 pos(next_value(8,5)).

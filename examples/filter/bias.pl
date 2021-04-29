@@ -1,7 +1,7 @@
-%% f(A,B) :- empty(B),empty(A).
-%% f(A,B) :- cons2(C,D,A),odd(C),f(D,B).
+%% f(A,B) :- empty(A),empty(B).
+%% f(A,B) :- cons2(D,C,A),odd(D),f(C,B).
 %% f(A,B) :- cons2(C,D,A),even(C),f(D,E),cons1(C,E,B).
-%% python3 popper.py examples/filter --eval-timeout=0.01 --debug  44.94s user 0.44s system 100% cpu 45.233 total
+%% python3 popper.py examples/filter --eval-timeout=0.01 43.94s user 0.40s system 100% cpu 44.223 total
 
 max_vars(5).
 max_body(4).

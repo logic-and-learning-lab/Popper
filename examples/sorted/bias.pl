@@ -1,7 +1,6 @@
-%% time py popper.py examples/sorted/
 %% f(A) :- tail(A,B),empty(B).
-%% f(A) :- tail(A,D),head(A,C),head(D,B),geq(B,C),f(D).
-%% python3 popper.py examples/sorted/  49.79s user 2.20s system 100% cpu 51.840 total
+%% f(A) :- head(A,C),tail(A,D),head(D,B),geq(B,C),f(D).
+%% python3 popper.py examples/sorted  35.38s user 1.58s system 100% cpu 36.861 total
 
 max_vars(5).
 max_body(5).

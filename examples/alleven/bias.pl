@@ -1,4 +1,3 @@
-%% time py popper.py examples/alleven/
 %% f(A) :- empty(A).
 %% f(A) :- head(A,C),even(C),tail(A,B),f(B).
 %% python3 popper.py examples/alleven/  0.62s user 0.03s system 99% cpu 0.648 total
