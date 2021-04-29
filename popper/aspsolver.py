@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import clingo
 import operator
 import numbers
@@ -40,12 +41,9 @@ class Clingo():
         self.seen_symbols = {}
         self.seen_assignments = {}
 
-        alan_path = os.path.abspath('popper/alan/')
-        prevwd = os.getcwd()
-        with open(alan_path + '/alan.pl') as alan:
-            os.chdir(alan_path)
+        alan_file = os.path.dirname(os.path.realpath(sys.argv[0])) + '/popper/alan.pl'
+        with open(alan_file) as alan:
             self.solver.add('alan', [], alan.read())
-            os.chdir(prevwd)
 
         # Load Mode file
         with open(experiment.args.kbpath + 'bias.pl') as biasfile:

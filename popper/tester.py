@@ -2,6 +2,7 @@ from pyswip import Prolog
 
 import re
 import os
+import sys
 from contextlib import contextmanager
 from . constrain import Outcome
 
@@ -17,7 +18,7 @@ class Tester():
     def load_basic(self, kbpath):
         # Consult background and test file
         self.prolog.consult(kbpath + 'bk.pl')
-        self.prolog.consult(os.path.abspath('popper') + '/test.pl')
+        self.prolog.consult(os.path.dirname(os.path.realpath(sys.argv[0])) + '/popper/test.pl')
 
         # Read example file
         with open(kbpath + 'exs.pl') as f:
