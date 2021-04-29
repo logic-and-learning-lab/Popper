@@ -6,7 +6,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Popper, an ILP engine based on learning from failures')
     parser.add_argument('kbpath', help = 'Path to the knowledge base one wants to learn on')
     parser.add_argument('--eval-timeout', type=float, default=0.1, help='Prolog evaluation timeout in seconds')
-    parser.add_argument('--timeout', type=float, default=60, help='Overall timeout (in seconds)')
+    parser.add_argument('--timeout', type=float, default=600, help='Overall timeout (in seconds)')
     parser.add_argument('--max-literals', type=int, default=100, help='Maximum number of literals allowed in program')
     parser.add_argument('--test-all', default=False, action='store_true', help='Test all examples')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
