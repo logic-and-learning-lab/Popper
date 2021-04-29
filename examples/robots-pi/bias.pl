@@ -1,6 +1,7 @@
-%% time py popper.py examples/robots/
-%% f(A,B) :- right(A,E),right(E,F),right(F,C),right(C,D),right(D,B).
-%% python3 popper.py examples/robots/  17.36s user 0.12s system 100% cpu 17.468 total
+%% f(A,B) :- inv1(A,C),inv2(C,B).
+%% inv1(A,B) :- inv2(C,B),inv2(A,C).
+%% inv2(A,B) :- right(C,B),right(A,C).
+%% python3 popper.py examples/robots-pi  11.38s user 0.24s system 100% cpu 11.616 total
 
 max_vars(3).
 max_body(2).
