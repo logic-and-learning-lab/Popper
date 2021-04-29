@@ -4,6 +4,7 @@ from popper.tester import Tester
 from popper.constrain import Constrain, Outcome
 from popper.generate import generate_program
 from popper.core import Clause, Literal
+import multiprocessing
 
 def ground_constraints(grounder, max_clauses, max_vars, constraints):
     for constraint in constraints:
@@ -34,7 +35,6 @@ def popper(experiment):
         if experiment.args.debug:
             print(f'{"*" * 20} MAX LITERALS: {size} {"*" * 20}')
         solver.update_number_of_literals(size)
-
         while True:
             experiment.total_programs += 1
 
@@ -63,7 +63,7 @@ def popper(experiment):
                 if experiment.args.stats:
                     experiment.stats(True)
                 pprint(program)
-                return
+                return True
 
             # 3. Build constraints
             constraints = list(constrainer.build_constraints([(program, outcome)]))
@@ -84,9 +84,17 @@ def popper(experiment):
 
     if experiment.args.stats:
         experiment.stats(False)
+        return True
     else:
         print('No program returned.')
+        return True
 
 if __name__ == '__main__':
     experiment = Experiment()
-    popper(experiment)
+    p = multiprocessing.Process(target = popper, args = (experiment,))
+    p.start()
+    p.join(experiment.args.timeout)
+    
+    if p.is_alive():
+        p.terminate()
+        print('Timedout.')
