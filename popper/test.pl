@@ -1,6 +1,6 @@
 do_test(TP,FN,TN,FP):-
-    do_test_pos(TP,FN),
-    do_test_neg(TN,FP).
+    do_test_pos(TP,FN),!,
+    do_test_neg(TN,FP),!.
 
 do_test_pos(0,0):-
     \+ current_predicate(pos/1),!.
@@ -18,7 +18,7 @@ do_test_neg(TN,FP):-
 
 test_ex(X):-
     timeout(T),
-    catch(call_with_time_limit(T, call(X)),time_limit_exceeded,false).
+    catch(call_with_time_limit(T, call(X)),time_limit_exceeded,false),!.
 
 %% MINIMAL TESTING
 %% we do not need to test all the examples
@@ -28,8 +28,8 @@ test_ex(X):-
 %% 3. whether a program is totally incomplete (whether no positive examples are entailed) TP > 0 FN > 0
 %% AC: TN IS UNSUSED WITH MINIMAL TESTING
 do_test_minimal(TP,FN,0,FP):-
-    minimal_test_pos(TP,FN),
-    minimal_test_neg(FP).
+    minimal_test_pos(TP,FN),!,
+    minimal_test_neg(FP),!.
 
 test_pos_ex_aux(X,Counter,_):-
     test_ex(X),!,
