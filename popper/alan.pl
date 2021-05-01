@@ -1,7 +1,6 @@
 %% ##################################################
 %% THIS FILE CONTAINS THE ASP PROGRAM GENERATOR
-%% IT IS CALLED ALAN
-%% THIS FILE IS ALAN VERSION 14
+%% IT IS CALLED ALAN (VERSION 14)
 %% ##################################################
 
 #defined functional/2.
@@ -31,11 +30,9 @@ body_aux(P,A):-
     body_pred(P,A).
 body_aux(P,A):-
     invented(P,A).
-
 body_aux(P,A):-
     head_aux(P,A),
     enable_recursion.
-
 
 %% GUESS HEAD LITERALS
 %% INDEX MINIMISES GROUNDING AS THE SYMBOL INV_K CANNOT APPEAR IN CLAUSE C < K
@@ -53,24 +50,17 @@ body_aux(P,A):-
     vars(A,Vars),
     clause(C).
 
-%% GUESS AT MOST ONE HEAD LITERAL PER CLAUSE
-:-
-    clause(C),
-    #count{P,A : head_literal(C,P,A,_)} > 1.
-
-%% GUESS AT LEAST 1 AND MOST MAX_N BODY LITERALS
-%% AC: THIS CONSTRAINT IS A BIT SNEAKY: WE SAY IT IS NOT POSSIBLE TO HAVE A CLAUSE WITHOUT A SIZE
-:-
-    clause(C),
-    not body_size(C,_).
-
 %% THERE IS A CLAUSE IF THERE IS A HEAD LITERAL
 clause(C):-
     head_literal(C,_,_,_).
 
-%% TODO: IMPROVE AS VERY EXPENSIVE
-clause_size(C,N):-
-    body_size(C,N).
+literal(C,P,Vars):-
+    head_literal(C,P,_,Vars).
+literal(C,P,Vars):-
+    body_literal(C,P,_,Vars).
+
+%% NUM BODY LITERALS OF A CLAUSE
+%% TODO: IMPROVE AS EXPENSIVE
 body_size(C,N):-
     clause(C),
     max_body(MaxN),
@@ -78,20 +68,16 @@ body_size(C,N):-
     N <= MaxN,
     #count{P,Vars : body_literal(C,P,_,Vars)} == N.
 
-%% NUM CLAUSES WITH P IN THE HEAD
-%% AC: CAN WE ADD N>0 ?
-num_clauses(P,N):-
-    head_literal(_,P,_,_),
-    #count{C : head_literal(C,P,_,_)} == N.
+%% GUESS AT MOST ONE HEAD LITERAL PER CLAUSE
+:-
+    clause(C),
+    #count{P,A : head_literal(C,P,A,_)} > 1.
 
-multiclause(P,A):-
-    head_literal(_,P,A,_),
-    not num_clauses(P,1).
-
-literal(C,P,Vars):-
-    head_literal(C,P,_,Vars).
-literal(C,P,Vars):-
-    body_literal(C,P,_,Vars).
+%% GUESS AT LEAST 1 AND MOST MAX_N BODY LITERALS PER CLAUSE
+%% AC: THIS CONSTRAINT IS A BIT SNEAKY: WE SAY IT IS NOT POSSIBLE TO HAVE A CLAUSE WITHOUT A SIZE
+:-
+    clause(C),
+    not body_size(C,_).
 
 %% ENSURE A CLAUSE
 :-
@@ -103,6 +89,7 @@ literal(C,P,Vars):-
     body_literal(C,P,_,Vars).
 
 %% USE CLAUSES IN ORDER
+%% AC: IS IT BETTER TO ADD MORE REDUNDANT CONSTRAINTS?
 :-
     clause(C),
     C > 1,
@@ -170,11 +157,6 @@ vars(A,@pyvars(A,MaxVars)):-
 var_pos(@pyvar_pos(Pos,Vars),Vars,Pos):-
     vars(A,Vars),
     Pos = 0..A-1.
-
-mode(P,A):-
-    head_pred(P,A).
-mode(P,A):-
-    body_pred(P,A).
 
 %% ##################################################
 %% REDUCE CONSTRAINT GROUNDING BY ORDERING CLAUSES
@@ -269,12 +251,12 @@ head_connected(C,Var1):-
 %% SUBSUMPTION
 %% ##################################################
 same_head(C1,C2):-
-    C1 < C2,
+    C1 != C2,
     head_literal(C1,P,A,Vars),
     head_literal(C2,P,A,Vars).
 
 body_subset(C1,C2):-
-    C1 < C2,
+    C1 != C2,
     clause(C1),
     clause(C2),
     body_literal(C2,P,_,Vars): body_literal(C1,P,_,Vars).
@@ -296,7 +278,7 @@ def pytype(pos, types):
 var_type(C,Var,@pytype(Pos,Types)):-
     var_in_literal(C,P,Vars,Var),
     var_pos(Var,Vars,Pos),
-    mode(P,A),
+    vars(A,Vars),
     type(P,Types).
 :-
     clause_var(C,Var),
@@ -305,37 +287,33 @@ var_type(C,Var,@pytype(Pos,Types)):-
 %% ##################################################
 %% CLAUSE ORDERING
 %% ##################################################
-
+%% AC: WHY DID I ADD THIS? ORDER SHOULD NOT MATTER
 %% ORDER BY CLAUSE SIZE
 %% p(A)<-q(A),r(A). (CLAUSE1)
 %% p(A)<-s(A). (CLAUSE2)
-%% AC: WHY DID I ADD THIS?
+%% TWO RECURSIVE CLAUSES
 :-
     C2 > C1,
-    not recursive_clause(C1,P,A),
-    not recursive_clause(C2,P,A),
+    not recursive_clause(C1,_,_),
+    not recursive_clause(C2,_,_),
     same_head(C1,C2),
-    head_aux(P,A),
-    clause_size(C1,N1),
-    clause_size(C2,N2),
+    body_size(C1,N1),
+    body_size(C2,N2),
     N1 > N2.
 
-%% AC: WHY DID I ADD THIS?
+%% TWO NON-RECURSIVE CLAUSES
 :-
     C2 > C1,
-    recursive_clause(C1,P,A),
-    recursive_clause(C2,P,A),
+    recursive_clause(C1,_,_),
+    recursive_clause(C2,_,_),
     same_head(C1,C2),
-    clause_size(C1,N1),
-    clause_size(C2,N2),
+    body_size(C1,N1),
+    body_size(C2,N2),
     N1 > N2.
 
 %% ########################################
 %% RECURSION
 %% ########################################
-num_recursive(N):-
-    #count{C : recursive_clause(C,_,_)} == N.
-
 num_recursive(P,N):-
     head_literal(_,P,_,_),
     #count{C : recursive_clause(C,P,_)} == N.
@@ -343,15 +321,13 @@ num_recursive(P,N):-
 recursive:-
     recursive_clause(_,_,_).
 
-recursive_clause(Clause,P,A):-
-    %% index(P,I),
-    %% C > I,
-    head_literal(Clause,P,A,_),
-    body_literal(Clause,P,A,_).
+recursive_clause(C,P,A):-
+    head_literal(C,P,A,_),
+    body_literal(C,P,A,_).
 
-base_clause(Clause,P,A):-
-    head_literal(Clause,P,A,_),
-    not body_literal(Clause,P,A,_).
+base_clause(C,P,A):-
+    head_literal(C,P,A,_),
+    not body_literal(C,P,A,_).
 
 %% NO RECURSION IN THE FIRST CLAUSE
 :-
@@ -360,14 +336,15 @@ base_clause(Clause,P,A):-
 %% A RECURSIVE CLAUSE MUST HAVE MORE THAN ONE BODY LITERAL
 :-
     recursive_clause(C,_,_),
-    clause_size(C,1).
+    body_size(C,1).
 
 %% STOP RECURSION BEFORE BASE CASES
 :-
-    Clause1 > 0,
-    recursive_clause(Clause1,P,A),
-    base_clause(Clause2,P,A),
-    Clause2 > Clause1.
+    C1 > 0,
+    C2 > C1,
+    recursive_clause(C1,_,_),
+    base_clause(C2,_,_),
+    same_head(C1,C2).
 
 %% CANNOT HAVE RECURSION WITHOUT A BASECASE
 :-
@@ -377,19 +354,16 @@ base_clause(Clause,P,A):-
 %% DISALLOW TWO RECURSIVE CALLS
 %% WHY DID WE ADD THIS??
 :-
-    Clause > 0,
-    recursive_clause(Clause,P,A),
-    body_literal(Clause,P,A,Vars1),
-    body_literal(Clause,P,A,Vars2),
-    Vars1 < Vars2.
+    recursive_clause(C,P,A),
+    #count{Vars : body_literal(C,P,A,Vars)} > 1.
 
 %% PREVENT LEFT RECURSION
 %% TODO: GENERALISE FOR ARITY > 3
 :-
-    Clause > 0,
+    C > 0,
     num_in_args(P,1),
-    head_literal(Clause,P,A,Vars1),
-    body_literal(Clause,P,A,Vars2),
+    head_literal(C,P,A,Vars1),
+    body_literal(C,P,A,Vars2),
     var_pos(Var,Vars1,Pos1),
     var_pos(Var,Vars2,Pos2),
     direction_(P,Pos1,in),
@@ -424,8 +398,13 @@ def pydirection(pos, directions):
     return directions.arguments[pos.number]
 #end.
 
+arity(P,A):-
+    head_aux(P,A).
+arity(P,A):-
+    body_aux(P,A).
+
 direction_(P,Pos,@pydirection(Pos,Directions)):-
-    mode(P,A),
+    arity(P,A),
     Pos=0..A-1,
     direction(P,Directions).
 
@@ -439,7 +418,7 @@ safe_var(Clause,Var):-
     var_pos(Var,Vars,Pos),
     direction_(P,Pos,in).
 
-%% %% VAR SAFE IF IN A LITERAL THAT ONLY HAS OUT VARS
+%% VAR SAFE IF IN A LITERAL THAT ONLY HAS OUT VARS
 safe_var(Clause,Var):-
     num_in_args(P,0),
     body_literal(Clause,P,_,Vars),
@@ -480,40 +459,54 @@ def py_gen_invsym(i):
     return Function(f'inv{i}')
 #end.
 
+%% P IS DEFNED BY AT LEAST TWO CLAUSES
+num_clauses(P,N):-
+    head_literal(_,P,_,_),
+    #count{C : head_literal(C,P,_,_)} == N.
 
+multiclause(P,A):-
+    head_literal(_,P,A,_),
+    not num_clauses(P,1).
 
+%% INDEX FOR INVENTED SYMBOLS
 index(P,0):-
     head_pred(P,_).
 index(@py_gen_invsym(I),I):-
     I=1..N,
     max_clauses(N).
 
-:-
-    not enable_recursion,
-    invented(P,A),
-    recursive_clause(_,P,A).
+inv_symbol(P):-
+    index(P,I),
+    I>0.
 
 %% GUESS INVENTED SYMBOLS
 %% AC: REMOVE HARDCODED ARITY
 {invented(P,2)}:-
     enable_pi,
-    index(P,I),
-    I > 0.
+    inv_symbol(P).
 
 inv_lower(P,Q):-
-    A > 0,
-    A < B,
-    index(P,A),
-    index(Q,B).
+    inv_symbol(P),
+    inv_symbol(Q),
+    I < J,
+    index(P,I),
+    index(Q,J).
 lower(P,Q):-
     head_pred(P,_),
     invented(Q,_).
 lower(P,Q):-
     inv_lower(P,Q).
-lower(A,B):-
-    lower(A,C),
-    lower(C,B).
+lower(P,Q):-
+    lower(P,R),
+    lower(R,Q).
 
+%% NO RECURSIVE INVENTED CLAUSE UNLESS RECURSION IS ENABLED
+:-
+    not enable_recursion,
+    invented(P,A),
+    recursive_clause(_,P,A).
+
+%% MUST LEARN PROGRAMS WITH ORDERED CLAUSES
 :-
     C2 > C1,
     head_literal(C1,P,_,_),
@@ -525,7 +518,7 @@ lower(A,B):-
     invented(P,A),
     not head_literal(_,P,A,_).
 
-%% AN INVENTED SYMBOL MUST APPEAR IN THE BODY OF A CLAUSE
+%% AN INVENTED SYMBOL MUST APPEAR IN THE BODY OF A CLAUSE DEFINED BEFORE THE INVENTED ONE
 appears_before(P,A):-
     invented(P,A),
     lower(Q,P),
@@ -546,7 +539,6 @@ appears_before(P,A):-
 %% FORCE ORDERING
 %% inv2(A):- inv1(A)
 :-
-    C > 0,
     head_literal(C,P,_,_),
     body_literal(C,Q,_,_),
     lower(Q,P).
@@ -651,8 +643,8 @@ var_type(C2,Var2,Type):-
 %% inv(A,B):-right(A,B).
 :-
     invented(P,A),
-    head_literal(Clause,P,A,_),
-    body_size(Clause,1),
+    head_literal(C,P,A,_),
+    body_size(C,1),
     not multiclause(P,A).
 
 %% PREVENTS SINGLE CLAUSE/LITERAL CALLS
