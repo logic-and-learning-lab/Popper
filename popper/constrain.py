@@ -156,7 +156,7 @@ class Constrain:
         for clause_number, clause in enumerate(program.clauses):
             clause_handle = self.make_clause_handle(clause)
             literals.append(Literal('included_clause', (clause_handle, vo_clause(clause_number))))
-            literals.append(Literal('clause_size', (vo_clause(clause_number), len(clause.body))))
+            literals.append(Literal('body_size', (vo_clause(clause_number), len(clause.body))))
 
         for clause_number1, clause_numbers in program.before.items():
             for clause_number2 in clause_numbers:
@@ -182,7 +182,7 @@ class Constrain:
         for clause_number, clause in enumerate(program):
             clause_handle = self.make_clause_handle(clause)
             literals.append(Literal('included_clause', (clause_handle, clause_number)))
-            literals.append(Literal('clause_size', (clause_number, len(clause.body))))
+            literals.append(Literal('body_size', (clause_number, len(clause.body))))
         literals.append(Literal('clause', (program.num_clauses,)))
 
         return Constraint(Con.BANISH, None, tuple(literals))

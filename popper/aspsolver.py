@@ -17,7 +17,7 @@ NUM_OF_LITERALS = (
 #external size_in_literals(n).
 :-
     size_in_literals(n),
-    #sum{K+1,Clause : clause_size(Clause,K)} != n.
+    #sum{K+1,Clause : body_size(Clause,K)} != n.
 """)
 
 def arg_to_symbol(arg):
