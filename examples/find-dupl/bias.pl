@@ -1,6 +1,7 @@
+%% python3 popper.py examples/find-dupl --eval-timeout=0.01
 %% f(A,B) :- head(A,B).
 %% f(A,B) :- tail(A,D),tail(D,C),element(C,B),f(D,B).
-%% python3 popper.py examples/find-dupl --eval-timeout=0.01  30.24s user 1.40s system 100% cpu 31.431 total
+%% 30.24s user 1.40s system 100% cpu 31.431 total
 
 max_vars(5).
 max_body(5).
@@ -24,7 +25,6 @@ type(f,(list,element)).
 type(head,(list,element)).
 type(tail,(list,list)).
 type(element,(list,element)).
-type(cons,(element,list,list)).
 type(increment,(element,element)).
 type(decrement,(element,element)).
 type(geq,(element,element)).
@@ -38,7 +38,6 @@ direction(f,(in,out)).
 direction(head,(in,out)).
 direction(tail,(in,out)).
 direction(element,(in,out)).
-direction(cons,(in,in,out)).
 direction(increment,(in,out)).
 direction(decrement,(in,out)).
 direction(geq,(in,in)).

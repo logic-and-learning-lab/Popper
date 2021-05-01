@@ -4,6 +4,9 @@ tail([_|T],T).
 head([H|_],H).
 empty([]).
 
+prepend(A,B,C):-
+    append([A],B,C).
+
 cons1(A,B,C):-
     cons(A,B,C).
 cons2(A,B,C):-

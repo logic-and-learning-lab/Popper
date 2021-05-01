@@ -6,7 +6,6 @@
 max_clauses(4).
 max_vars(3).
 max_body(2).
-
 enable_pi.
 
 head_pred(grandparent,2).

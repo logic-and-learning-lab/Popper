@@ -1,13 +1,14 @@
+%% python3 popper.py examples/robots-recursion
 %% f(A,B) :- move_up(A,B),at_top(B).
 %% f(A,B) :- move_up(A,C),f(C,B).
-%% python3 popper.py examples/robots-recursion  52.60s user 0.22s system 100% cpu 52.801 total
+%% 1.51s user 0.06s system 99% cpu 1.583 total
 
 max_vars(4).
 max_body(3).
 max_clauses(3).
+enable_recursion.
 
 head_pred(f,2).
-body_pred(f,2).
 body_pred(at_top,1).
 body_pred(at_bottom,1).
 body_pred(at_left,1).

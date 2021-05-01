@@ -16,9 +16,6 @@ my_length(A,B):-
     (nonvar(B) -> \+is_list(B); true),
     length(A,B).
 
-cons(A,B,C):-
-    append([A],B,C).
-comps([H|T],H,T).
 
 tail([_|T],T).
 head([H|_],H).
