@@ -62,25 +62,34 @@ def popper(experiment):
                     print()
                 if experiment.args.stats:
                     experiment.stats(True)
+                print('SOLUTION:')
                 pprint(program)
                 return True
 
             # 3. Build constraints
-            constraints = list(constrainer.build_constraints([(program, outcome)]))
+            cons = set()
+            # eliminate generalisations of clauses that contain logical redundancy
+            for clause in tester.check_redundant_literal(program):
+                cons.update(constrainer.redundant_literal_constraint(clause))
+            # eliminate generalisations of programs that contain logical redundancy
+            with experiment.duration('check_redundant_clause_tester'):
+                if tester.check_redundant_clause(program):
+                    cons.update(constrainer.generalisation_constraint(program))
+            cons.update(constrainer.build_constraints([(program, outcome)]))
 
             if experiment.args.debug:
                 print('Constraints:')
-                for index, constraint in enumerate(constraints, 1):
-                    print(f'{index}. {constraint}')
+                for constraint in cons:
+                    print(constraint)
                 print()
 
             # 4. Ground constraints
-            with experiment.duration('grounding'):
-                constraints = list(ground_constraints(grounder, solver.max_clauses, solver.max_vars, constraints))
+            with experiment.duration('ground'):
+                cons = set(ground_constraints(grounder, solver.max_clauses, solver.max_vars, cons))
 
             # 5. Add to the solver
-            with experiment.duration('adding'):
-                solver.add_ground_clauses(constraints)
+            with experiment.duration('add'):
+                solver.add_ground_clauses(cons)
 
     if experiment.args.stats:
         experiment.stats(False)
@@ -94,7 +103,7 @@ if __name__ == '__main__':
     p = multiprocessing.Process(target = popper, args = (experiment,))
     p.start()
     p.join(experiment.args.timeout)
-    
+
     if p.is_alive():
         p.terminate()
         print('Timedout.')

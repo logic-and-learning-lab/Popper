@@ -46,7 +46,10 @@ class Literal:
             return x
 
     def __hash__(self):
-      return hash((self.predicate, self.arguments))
+        return hash((self.predicate, self.arguments))
+
+    def my_hash(self):
+        return hash((self.predicate, self.arguments))
 
     def to_code(self):
         return f'{self.predicate}({",".join(self.arguments)})'
@@ -129,7 +132,7 @@ class Clause:
 
     def to_code(self):
         return (
-            f'{self.head.to_code()} :- '
+            f'{self.head.to_code()}:- '
             f'{",".join([blit.to_code() for blit in self.body])}'
         )
 
@@ -138,6 +141,13 @@ class Clause:
         if self.head:
             return Clause(self.head.ground(assignment), ground_body, self.min_num)
         return Clause(None, ground_body, self.min_num)
+
+    def my_hash(self):
+        if self.head:
+            xs = (self.head.my_hash(), ) + tuple(lit.my_hash() for lit in self.body)
+            return hash((self.head.my_hash(), ) + tuple(lit.my_hash() for lit in self.body))
+        else:
+            return hash(tuple(lit.my_hash for lit in self.body))
 
 class Program:
     def __init__(self, clauses, before = defaultdict(set)):
@@ -152,6 +162,9 @@ class Program:
     def to_code(self):
         for clause in self.clauses:
             yield clause.to_code() + '.'
+
+    def my_hash(self):
+        return hash(tuple(clause.my_hash() for clause in self.clauses))
 
 class Constraint:
     def __init__(self, ctype, head, body):
@@ -201,5 +214,5 @@ class Constraint:
 
         x = f':- {", ".join(constraint_literals)}.'
         if self.head:
-            return f'{self.head} :- {x}'
+            return f'{self.head} {x}'
         return x

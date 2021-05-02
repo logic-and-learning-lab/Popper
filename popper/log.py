@@ -40,23 +40,15 @@ class Experiment:
     def stats(self, program):
         total_exec_time = perf_counter() - self.exec_start
 
-        message = f'Total programs: {self.total_programs}\n\n'
+        message = f'Total programs: {self.total_programs}\n'
         total_op_time = 0
         for operation, durations in self.durations.items():
             called = len(durations)
             total = sum(durations)
             mean = sum(durations)/len(durations)
-            message += f'{operation.title()}\n'
-            message += f'Called: {called} times | Total: {total:0.5f}s | Mean: {mean:0.5f}s\n\n'
-
+            message += f'{operation.title()}: Called: {called} times | Total: {total:0.3f}s | Mean: {mean:0.4f}s\n'
             if operation != 'basic setup':
                 total_op_time += total
         message += f'Total operation time: {total_op_time:0.2f}s\n'
-        message += f'Total execution time: {total_exec_time:0.2f}s\n'
-
-        if program:
-            message += '\nProgram:'
-        else:
-            message += '\nNo program returned'
-
+        message += f'Total execution time: {total_exec_time:0.2f}s'
         print(message)
