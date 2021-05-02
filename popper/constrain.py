@@ -11,10 +11,8 @@ class Con:
     GENERALISATION = 'generalisation'
     SPECIALISATION = 'specialisation'
     REDUNDANCY = 'redundancy'
-    BANISH = 'banish'
 
 OUTCOME_TO_CONSTRAINTS = {
-    (Outcome.ALL, Outcome.NONE)  : (Con.BANISH,),
     (Outcome.ALL, Outcome.SOME)  : (Con.GENERALISATION,),
     (Outcome.SOME, Outcome.NONE) : (Con.SPECIALISATION,),
     (Outcome.SOME, Outcome.SOME) : (Con.SPECIALISATION, Con.GENERALISATION),
@@ -62,23 +60,19 @@ class Constrain:
     def make_program_handle(self, program):
         return f'prog_{"_".join(sorted(self.make_clause_handle(clause) for clause in program.clauses))}'
 
-
-    def build_constraints(self, program_outcomes):
-        for program, (positive_outcome, negative_outcome) in program_outcomes:
-            constraint_types = OUTCOME_TO_CONSTRAINTS[(positive_outcome, negative_outcome)]
-            for constraint_type in constraint_types:
-                if constraint_type == Con.SPECIALISATION:
-                    for x in self.specialisation_constraint(program):
-                        yield x
-                elif constraint_type == Con.GENERALISATION:
-                    for x in self.generalisation_constraint(program):
-                        yield x
-                elif constraint_type == Con.REDUNDANCY:
-                    for x in self.redundancy_constraint(program):
-                        yield x
-                elif constraint_type == Con.BANISH:
-                    for x in self.banish_constraint(program):
-                        yield x
+    def build_constraints(self, program, outcome):
+        (positive_outcome, negative_outcome) = outcome
+        constraint_types = OUTCOME_TO_CONSTRAINTS[(positive_outcome, negative_outcome)]
+        for constraint_type in constraint_types:
+            if constraint_type == Con.SPECIALISATION:
+                for x in self.specialisation_constraint(program):
+                    yield x
+            elif constraint_type == Con.GENERALISATION:
+                for x in self.generalisation_constraint(program):
+                    yield x
+            elif constraint_type == Con.REDUNDANCY:
+                for x in self.redundancy_constraint(program):
+                    yield x
 
     def make_clause_inclusion_rule(self, clause, clause_handle):
         clause_number = vo_clause('l')
@@ -149,21 +143,10 @@ class Constrain:
             for x in self.make_program_inclusion_rule(program, program_handle):
                 yield x
             self.added_programs.add(program_handle)
-        else:
-            print('MOO')
         yield Constraint(Con.SPECIALISATION, None, (
             Literal('included_program', (program_handle, )),
             Literal('clause', (program.num_clauses, ), positive = False))
         )
-
-    # def banish_constraint(self, program):
-    #     literals = []
-    #     for clause_number, clause in enumerate(program):
-    #         clause_handle = self.make_clause_handle(clause)
-    #         literals.append(Literal('included_clause', (clause_handle, clause_number)))
-    #         literals.append(Literal('body_size', (clause_number, len(clause.body))))
-    #     literals.append(Literal('clause', (program.num_clauses,)))
-    #     return Constraint(Con.BANISH, None, tuple(literals))
 
     # AC: THIS CONSTRAINT DUPLICATES THE GENERALISATION CONSTRAINT AND NEEDS REFACTORING
     def redundant_literal_constraint(self, clause):
@@ -176,12 +159,6 @@ class Constrain:
         literals.append(Literal('included_clause', (clause_handle, clause_variable)))
         literals.append(Literal('body_size', (clause_variable, len(clause.body))))
         yield Constraint(Con.GENERALISATION, None, tuple(literals))
-
-    # def redundant_clause_constraint(self, program):
-    #     for clause in program.clauses:
-    #         clause_handle = self.make_clause_handle(clause)
-    #         yield self.make_clause_inclusion_rule(clause, clause_handle)
-    #     yield self.generalisation_constraint(program)
 
     # Jk: AC, I cleaned this up a bit, but this reorg is for you. Godspeed!
     # AC: @JK, I made another pass through it. It was tough. I will try again once we have the whole codebase tidied.

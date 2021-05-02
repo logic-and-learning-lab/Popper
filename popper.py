@@ -68,14 +68,17 @@ def popper(experiment):
 
             # 3. Build constraints
             cons = set()
+
             # eliminate generalisations of clauses that contain logical redundancy
             for clause in tester.check_redundant_literal(program):
                 cons.update(constrainer.redundant_literal_constraint(clause))
+
             # eliminate generalisations of programs that contain logical redundancy
-            with experiment.duration('check_redundant_clause_tester'):
-                if tester.check_redundant_clause(program):
-                    cons.update(constrainer.generalisation_constraint(program))
-            cons.update(constrainer.build_constraints([(program, outcome)]))
+            if tester.check_redundant_clause(program):
+                cons.update(constrainer.generalisation_constraint(program))
+
+            # add other constraints
+            cons.update(constrainer.build_constraints(program, outcome))
 
             if experiment.args.debug:
                 print('Constraints:')
