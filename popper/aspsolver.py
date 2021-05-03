@@ -110,7 +110,7 @@ class Clingo():
         if len(constraint.all_vars) == 0:
             return [{}]
 
-        k = constraint.myhash()
+        k = constraint.grounding_hash()
         if k in self.seen_assignments:
             return self.seen_assignments[k]
 
