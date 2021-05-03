@@ -138,15 +138,26 @@ class Constrain:
         yield Constraint(Con.GENERALISATION, None, tuple(literals))
 
     def specialisation_constraint(self, program):
-        program_handle = self.make_program_handle(program)
-        if program_handle not in self.added_programs:
-            for x in self.make_program_inclusion_rule(program, program_handle):
-                yield x
-            self.added_programs.add(program_handle)
-        yield Constraint(Con.SPECIALISATION, None, (
-            Literal('included_program', (program_handle, )),
-            Literal('clause', (program.num_clauses, ), positive = False))
-        )
+        literals = []
+
+        for clause_number, clause in enumerate(program.clauses):
+            clause_handle = self.make_clause_handle(clause)
+            if clause_handle not in self.added_clauses:
+                yield self.make_clause_inclusion_rule(clause, clause_handle)
+                self.added_clauses.add(clause_handle)
+            clause_variable = vo_clause(clause_number)
+            literals.append(Literal('included_clause', (clause_handle, clause_variable)))
+
+        for clause_number1, clause_numbers in program.before.items():
+            for clause_number2 in clause_numbers:
+                literals.append(lt(vo_clause(clause_number1), vo_clause(clause_number2)))
+
+        # ensure that each clause_var is ground to a unique value
+        literals.append(alldiff(tuple(vo_clause(c) for c in range(program.num_clauses))))
+
+        literals.append(Literal('clause', (program.num_clauses, ), positive = False))
+
+        yield Constraint(Con.SPECIALISATION, None, tuple(literals))
 
     # AC: THIS CONSTRAINT DUPLICATES THE GENERALISATION CONSTRAINT AND NEEDS REFACTORING
     def redundant_literal_constraint(self, clause):
