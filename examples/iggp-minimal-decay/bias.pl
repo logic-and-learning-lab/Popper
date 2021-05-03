@@ -13,10 +13,10 @@ body_pred(my_true_value,2).
 body_pred(my_succ,2).
 body_pred(c_pressButton,1).
 body_pred(c_noop,1).
-%% body_pred(c_player,1). % comment to make unsat
+body_pred(c_player,1). % comment to make unsat
 %% body_pred(c1,1). % AC: I commented out to make the example faster
 %% body_pred(c2,1). % AC: I commented out to make the example faster
-body_pred(c3,1). % AC: I commented out to make the example faster
+%% body_pred(c3,1). % AC: I commented out to make the example faster
 body_pred(c4,1).
 body_pred(c5,1).
 
