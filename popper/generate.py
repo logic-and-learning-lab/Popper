@@ -4,18 +4,14 @@ from collections import defaultdict
 def gen_args(args):
     return tuple(chr(ord('A') + arg.number) for arg in args)
 
-def generate_program(solver):
-    clingo_model = solver.get_model()
-    if not clingo_model:
-        return None
-
+def generate_program(model):
     before     = defaultdict(set)
     min_clause = defaultdict(lambda: 0)
     directions = defaultdict(lambda: defaultdict(lambda: '?'))
     clause_id_to_body = defaultdict(set)
     clause_id_to_head = {}
 
-    for atom in clingo_model:
+    for atom in model:
 
         if atom.name == 'body_literal':
             clause_id = atom.arguments[0].number

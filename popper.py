@@ -40,9 +40,10 @@ def popper(experiment):
         while True:
             # 1. Generate
             with experiment.duration('generate'):
-                program = generate_program(solver)
-            if program == None:
-                break
+                model = solver.get_model()
+                if not model:
+                    break
+                program = generate_program(model)
 
             experiment.total_programs += 1
 
@@ -71,11 +72,12 @@ def popper(experiment):
             # 3. Build constraints
             cons = set()
 
-            # eliminate generalisations of clauses that contain logical redundancy
+            # eliminate generalisations of:
+            # clauses that contain logical redundancy
             for clause in tester.check_redundant_literal(program):
                 cons.update(constrainer.redundant_literal_constraint(clause))
 
-            # eliminate generalisations of programs that contain logical redundancy
+            # programs that contain logical redundancy
             if tester.check_redundant_clause(program):
                 cons.update(constrainer.generalisation_constraint(program))
 
