@@ -33,11 +33,9 @@ def gteq(a, b):
     return ConstOpt(operator.ge, (a, b), '>=')
 
 def vo_clause(variable):
-    """Returns variable over a clause"""
     return ConstVar(f'C{variable}', 'Clause')
 
 def vo_variable(variable):
-    """Returns variable over a variable"""
     return ConstVar(f'{variable}', 'Variable')
 
 class Constrain:
@@ -45,22 +43,8 @@ class Constrain:
         self.seen_clause_handle = {}
         self.added_clauses = set()
 
-    def literal_handle(self, literal):
-        return f'{literal.predicate}{"".join(literal.arguments)}'
-
-    def make_clause_handle(self, clause):
-        if clause in self.seen_clause_handle:
-            return self.seen_clause_handle[clause]
-        body_literals = sorted(clause.body, key = operator.attrgetter('predicate'))
-        clause_handle = ''.join(self.literal_handle(literal) for literal in [clause.head] + body_literals)
-        self.seen_clause_handle[clause] = clause_handle
-        return clause_handle
-
-
     def build_constraints(self, program, outcome):
-        (positive_outcome, negative_outcome) = outcome
-        constraint_types = OUTCOME_TO_CONSTRAINTS[(positive_outcome, negative_outcome)]
-        for constraint_type in constraint_types:
+        for constraint_type in OUTCOME_TO_CONSTRAINTS[outcome]:
             if constraint_type == Con.SPECIALISATION:
                 for x in self.specialisation_constraint(program):
                     yield x
@@ -70,6 +54,18 @@ class Constrain:
             elif constraint_type == Con.REDUNDANCY:
                 for x in self.redundancy_constraint(program):
                     yield x
+
+
+    def make_literal_handle(self, literal):
+        return f'{literal.predicate}{"".join(literal.arguments)}'
+
+    def make_clause_handle(self, clause):
+        if clause in self.seen_clause_handle:
+            return self.seen_clause_handle[clause]
+        body_literals = sorted(clause.body, key = operator.attrgetter('predicate'))
+        clause_handle = ''.join(self.make_literal_handle(literal) for literal in [clause.head] + body_literals)
+        self.seen_clause_handle[clause] = clause_handle
+        return clause_handle
 
     def make_clause_inclusion_rule(self, clause, clause_handle):
         clause_number = vo_clause('l')

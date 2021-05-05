@@ -49,13 +49,11 @@ def popper(experiment):
 
             # 2. Test
             with experiment.duration('test'):
-                (outcome, conf_matrix) = tester.test(program)
+                (outcome, (TP,FN,TN,FP)) = tester.test(program)
 
             if experiment.args.debug:
                 print(f'Program {experiment.total_programs}:')
-                for clause in program.to_code():
-                    print(clause)
-                (TP,FN,TN,FP) = conf_matrix
+                pprint(program)
                 approx_pos = '+' if TP + FN < tester.num_pos else ''
                 approx_neg = '+' if TN + FP < tester.num_neg else ''
                 print(f'TP: {TP}{approx_pos}, FN: {FN}{approx_pos}, TN: {TN}{approx_neg}, FP: {FP}{approx_neg}')
@@ -67,7 +65,7 @@ def popper(experiment):
                     experiment.stats(True)
                 print('SOLUTION:')
                 pprint(program)
-                return True
+                return
 
             # 3. Build constraints
             cons = set()
