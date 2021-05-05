@@ -4,21 +4,21 @@ ConstVar = namedtuple('ConstVar', ['name', 'type'])
 ConstOpt = namedtuple('ConstOpt', ['operator', 'arguments', 'operation'])
 
 class Literal:
-    def __init__(self, predicate, arguments, modes = [], positive = True):
+    def __init__(self, predicate, arguments, directions = [], positive = True):
         self.predicate = predicate
         self.arguments = arguments
         self.arity = len(arguments)
-        self.modes = modes
+        self.directions = directions
         self.positive = positive
 
-        self.inputs = set(arg for mode, arg in zip(self.modes, self.arguments) if mode == '+')
-        self.outputs = set(arg for mode, arg in zip(self.modes, self.arguments) if mode == '-')
+        self.inputs = set(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
+        self.outputs = set(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
 
     # AC: TODO - REFACTOR
     def __str__(self):
-        if self.modes:
-            vmodes = (varmode + var for var, varmode in zip(self.arguments, self.modes))
-            x = f'{self.predicate}({",".join(vmodes)})'
+        if self.directions:
+            vdirections = (var_dir + var for var, var_dir in zip(self.arguments, self.directions))
+            x = f'{self.predicate}({",".join(vdirections)})'
             if not self.positive:
                 x = 'not ' + x
             return x
@@ -46,7 +46,13 @@ class Literal:
             return x
 
     def __hash__(self):
-        return hash((self.predicate, self.arguments))
+        return self.my_hash()
+
+    def __eq__(self, other):
+        if other == None:
+            return False
+        # print(self, other)
+        return self.my_hash() == other.my_hash()
 
     def my_hash(self):
         return hash((self.predicate, self.arguments))
@@ -72,7 +78,7 @@ class Literal:
             else:
                 ground_args.append(arg)
 
-        return Literal(self.predicate, tuple(ground_args), self.modes, self.positive)
+        return Literal(self.predicate, tuple(ground_args), self.directions, self.positive)
 
 class Clause:
     def __init__(self, head, body, min_num = 0):
@@ -102,7 +108,6 @@ class Clause:
 
     # AC: nasty
     def to_ordered(self):
-
         ordered_body = []
         grounded_variables = self.head.inputs
         body_literals = set(self.body)
@@ -143,19 +148,13 @@ class Clause:
         return Clause(None, ground_body, self.min_num)
 
     def my_hash(self):
-        if self.head:
-            xs = (self.head.my_hash(), ) + tuple(lit.my_hash() for lit in self.body)
-            return hash((self.head.my_hash(), ) + tuple(lit.my_hash() for lit in self.body))
-        else:
-            return hash(tuple(lit.my_hash for lit in self.body))
+        return hash((self.head.my_hash, ) + tuple(lit.my_hash for lit in self.body))
 
 class Program:
     def __init__(self, clauses, before = defaultdict(set)):
         self.clauses = clauses
         self.before = before
         self.num_clauses = len(clauses)
-        # AC: this method changes the program!
-        # AC: no mutating please, it is the devils work!
         for clause in self.clauses:
             clause.to_ordered()
 
@@ -163,8 +162,8 @@ class Program:
         for clause in self.clauses:
             yield clause.to_code() + '.'
 
-    def my_hash(self):
-        return hash(tuple(clause.my_hash() for clause in self.clauses))
+    # def my_hash(self):
+        # return hash(tuple(clause.my_hash() for clause in self.clauses))
 
 class Constraint:
     def __init__(self, ctype, head, body):
@@ -183,7 +182,23 @@ class Constraint:
                         if isinstance(t_arg, ConstVar):
                             self.all_vars.add(t_arg)
 
-    def myhash(self):
+    def __hash__(self):
+        return self.first_order_hash()
+
+    def __eq__(self, other):
+        return self.first_order_hash() == other.first_order_hash()
+
+    # AC: when we hash a constraint, we only care about the constraint type, the head, and the body
+    def first_order_hash(self):
+        body = []
+        for lit in self.body:
+            if isinstance(lit, ConstOpt):
+                continue
+            body.append(lit.my_hash())
+        return hash((self.ctype, self.head, tuple(body)))
+
+    # AC: When comparing two constraints for grounding, we only care about the vars and the constraints, not the actual literals
+    def grounding_hash(self):
         cons = set()
         for lit in self.body:
             if not isinstance(lit, ConstOpt):

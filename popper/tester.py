@@ -53,7 +53,7 @@ class Tester():
 
     def check_redundant_literal(self, program):
         for clause in program.clauses:
-            k =  clause.my_hash()
+            k = clause.my_hash()
             if k in self.seen_clause:
                 continue
             self.seen_clause.add(k)
