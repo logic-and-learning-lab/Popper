@@ -32,7 +32,7 @@ class Tester():
         self.prolog.consult(test_pl_path)
 
         self.num_pos = sum(1 for _ in self.prolog.query('pos(_)'))
-        self.num_neg = sum(1 for _ in self.prolog.query('pos(_)'))
+        self.num_neg = sum(1 for _ in self.prolog.query('neg(_)'))
 
         self.prolog.assertz(f'timeout({self.eval_timeout})')
         # assert these statically instead of having a rule for deriving them each time
