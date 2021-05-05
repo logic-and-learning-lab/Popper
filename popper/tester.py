@@ -17,31 +17,27 @@ class Tester():
         self.seen_clause = set()
 
     def load_basic(self, kbpath):
-        # Consult background and test file
+        # Consult the background knowledge, the examples and the test file
         bk_pl_path = os.path.join(kbpath, 'bk.pl')
+        exs_pl_path = os.path.join(kbpath, 'exs.pl')
         test_pl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test.pl')
+
         if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
             bk_pl_path = bk_pl_path.replace('\\', '\\\\')
+            exs_pl_path = exs_pl_path.replace('\\', '\\\\')
             test_pl_path = test_pl_path.replace('\\', '\\\\')
+
         self.prolog.consult(bk_pl_path)
+        self.prolog.consult(exs_pl_path)
         self.prolog.consult(test_pl_path)
 
-        # Read example file
-        with open(kbpath + 'exs.pl') as f:
-            for line in f:
-                if line.startswith('%'):
-                    continue
-                # Assert negative and positive examples
-                for x in re.findall("pos\((.*)\)\.", line):
-                    self.prolog.assertz(f'pos({x})')
-                    self.num_pos += 1
-                for x in re.findall("neg\((.*)\)\.", line):
-                    self.prolog.assertz(f'neg({x})')
-                    self.num_neg += 1
+        self.num_pos = sum(1 for _ in self.prolog.query('pos(_)'))
+        self.num_neg = sum(1 for _ in self.prolog.query('pos(_)'))
 
+        self.prolog.assertz(f'timeout({self.eval_timeout})')
+        # assert these statically instead of having a rule for deriving them each time
         self.prolog.assertz(f'num_pos({self.num_pos})')
         self.prolog.assertz(f'num_neg({self.num_neg})')
-        self.prolog.assertz(f'timeout({self.eval_timeout})')
 
     @contextmanager
     def using(self, program):
