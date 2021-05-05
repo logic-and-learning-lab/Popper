@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from popper.log import Experiment
 from popper.aspsolver import Clingo
 from popper.tester import Tester
