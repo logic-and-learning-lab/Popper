@@ -44,7 +44,11 @@ class Constrain:
         self.added_clauses = set()
 
     def build_constraints(self, program, outcome):
-        for constraint_type in OUTCOME_TO_CONSTRAINTS[outcome]:
+        (positive_outcome, negative_outcome) = outcome
+        # RM: If you don't use these two lines you need another three entries in the OUTCOME_TO_CONSTRAINTS table (one for every positive outcome combined with negative outcome ALL).
+        if negative_outcome == Outcome.ALL:
+             negative_outcome = Outcome.SOME
+        for constraint_type in OUTCOME_TO_CONSTRAINTS[((positive_outcome, negative_outcome))]:
             if constraint_type == Con.SPECIALISATION:
                 yield from self.specialisation_constraint(program)
             elif constraint_type == Con.GENERALISATION:
