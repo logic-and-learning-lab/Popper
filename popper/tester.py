@@ -14,6 +14,7 @@ class Tester():
         self.num_pos = 0
         self.num_neg = 0
         self.load_basic(experiment.args.kbpath)
+        self.seen_clause = set()
 
     def load_basic(self, kbpath):
         # Consult background and test file
@@ -49,6 +50,28 @@ class Tester():
             for predicate, arity in current_clauses:
                 args = ','.join(['_'] * arity)
                 self.prolog.retractall(f'{predicate}({args})')
+
+    def check_redundant_literal(self, program):
+        for clause in program.clauses:
+            k =  clause.my_hash()
+            if k in self.seen_clause:
+                continue
+            self.seen_clause.add(k)
+            C = f"[{','.join(('not_'+ clause.head.to_code(),) + tuple(lit.to_code() for lit in clause.body))}]"
+            res = list(self.prolog.query(f'redundant_literal({C})'))
+            if res:
+                yield clause
+
+    # AC: THE OVERHEAD OF THIS CHECK IS MINIMAL
+    # AC: IF IT BECOMES TO HIGH, SUCH AS WHEN LEARNING PROGRAMS WITH LOTS OF CLAUSES, THEN WE CAN IMPROVE IT BY NOT COMPARING ALREADY COMPARED CLAUSES
+    def check_redundant_clause(self, program):
+        prog = []
+        for clause in program.clauses:
+            C = f"[{','.join(('not_'+ clause.head.to_code(),) + tuple(lit.to_code() for lit in clause.body))}]"
+            prog.append(C)
+        prog = f"[{','.join(prog)}]"
+        res = list(self.prolog.query(f'redundant_clause({prog})'))
+        return res
 
     def test(self, program):
         with self.using(program):
