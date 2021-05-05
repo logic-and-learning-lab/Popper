@@ -31,8 +31,10 @@ class Tester():
         self.prolog.consult(exs_pl_path)
         self.prolog.consult(test_pl_path)
 
-        self.num_pos = sum(1 for _ in self.prolog.query('pos(_)'))
-        self.num_neg = sum(1 for _ in self.prolog.query('neg(_)'))
+        self.num_pos = sum(1 for _ in self.prolog.query('current_predicate(pos/1),pos(_)'))
+        self.num_neg = sum(1 for _ in self.prolog.query('current_predicate(neg/1),neg(_)'))
+
+        assert self.num_pos + self.num_neg > 0, "need at least one example in 'exs.pl'"
 
         self.prolog.assertz(f'timeout({self.eval_timeout})')
         # assert these statically instead of having a rule for deriving them each time
