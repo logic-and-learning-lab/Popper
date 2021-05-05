@@ -46,15 +46,11 @@ class Constrain:
     def build_constraints(self, program, outcome):
         for constraint_type in OUTCOME_TO_CONSTRAINTS[outcome]:
             if constraint_type == Con.SPECIALISATION:
-                for x in self.specialisation_constraint(program):
-                    yield x
+                yield from self.specialisation_constraint(program)
             elif constraint_type == Con.GENERALISATION:
-                for x in self.generalisation_constraint(program):
-                    yield x
+                yield from self.generalisation_constraint(program)
             elif constraint_type == Con.REDUNDANCY:
-                for x in self.redundancy_constraint(program):
-                    yield x
-
+                yield from self.redundancy_constraint(program)
 
     def make_literal_handle(self, literal):
         return f'{literal.predicate}{"".join(literal.arguments)}'
@@ -68,6 +64,11 @@ class Constrain:
         return clause_handle
 
     def make_clause_inclusion_rule(self, clause, clause_handle):
+        if clause_handle in self.added_clauses:
+            return
+            yield
+
+        self.added_clauses.add(clause_handle)
         clause_number = vo_clause('l')
 
         literals = []
@@ -86,15 +87,13 @@ class Constrain:
         for idx, var in enumerate(clause.head.arguments):
             literals.append(eq(vo_variable(var), idx))
 
-        return Constraint('inclusion rule', Literal('included_clause', (clause_handle, clause_number)), tuple(literals))
+        yield Constraint('inclusion rule', Literal('included_clause', (clause_handle, clause_number)), tuple(literals))
 
     def generalisation_constraint(self, program):
         literals = []
         for clause_number, clause in enumerate(program.clauses):
             clause_handle = self.make_clause_handle(clause)
-            if clause_handle not in self.added_clauses:
-                yield self.make_clause_inclusion_rule(clause, clause_handle)
-                self.added_clauses.add(clause_handle)
+            yield from self.make_clause_inclusion_rule(clause, clause_handle)
 
             literals.append(Literal('included_clause', (clause_handle, vo_clause(clause_number))))
             literals.append(Literal('body_size', (vo_clause(clause_number), len(clause.body))))
@@ -116,9 +115,7 @@ class Constrain:
 
         for clause_number, clause in enumerate(program.clauses):
             clause_handle = self.make_clause_handle(clause)
-            if clause_handle not in self.added_clauses:
-                yield self.make_clause_inclusion_rule(clause, clause_handle)
-                self.added_clauses.add(clause_handle)
+            yield from self.make_clause_inclusion_rule(clause, clause_handle)
             clause_variable = vo_clause(clause_number)
             literals.append(Literal('included_clause', (clause_handle, clause_variable)))
 
@@ -136,9 +133,7 @@ class Constrain:
     # AC: THIS CONSTRAINT DUPLICATES THE GENERALISATION CONSTRAINT AND NEEDS REFACTORING
     def redundant_literal_constraint(self, clause):
         clause_handle = self.make_clause_handle(clause)
-        if clause_handle not in self.added_clauses:
-            yield self.make_clause_inclusion_rule(clause, clause_handle)
-            self.added_clauses.add(clause_handle)
+        yield from self.make_clause_inclusion_rule(clause, clause_handle)
         literals = []
         clause_variable = vo_clause(0)
         literals.append(Literal('included_clause', (clause_handle, clause_variable)))
@@ -176,9 +171,7 @@ class Constrain:
 
             for clause_number, clause in enumerate(program.clauses):
                 clause_handle = self.make_clause_handle(clause)
-                if clause_handle not in self.added_clauses:
-                    yield self.make_clause_inclusion_rule(clause, clause_handle)
-                    self.added_clauses.add(clause_handle)
+                yield from self.make_clause_inclusion_rule(clause, clause_handle)
                 clause_variable = vo_clause(clause_number)
                 literals.append(Literal('included_clause', (clause_handle, clause_variable)))
 

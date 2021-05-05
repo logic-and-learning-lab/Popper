@@ -21,9 +21,8 @@ def ground_constraints(grounder, max_clauses, max_vars, constraints):
             yield clause.ground(assignment)
 
 def pprint(program):
-    if program:
-        for clause in program.to_code():
-            print(clause)
+    for clause in program.to_code():
+        print(clause)
 
 def popper(experiment):
     if experiment.args.kbpath[-1] != '/':
@@ -85,7 +84,7 @@ def popper(experiment):
             if experiment.args.debug:
                 print('Constraints:')
                 for constraint in cons:
-                    print(constraint)
+                    print(constraint.ctype, constraint)
                 print()
 
             # 4. Ground constraints
