@@ -18,8 +18,13 @@ class Tester():
 
     def load_basic(self, kbpath):
         # Consult background and test file
-        self.prolog.consult(kbpath + 'bk.pl')
-        self.prolog.consult(os.path.dirname(os.path.realpath(sys.argv[0])) + '/popper/test.pl')
+        bk_pl_path = os.path.join(kbpath, 'bk.pl')
+        test_pl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test.pl')
+        if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
+            bk_pl_path = bk_pl_path.replace('\\', '\\\\')
+            test_pl_path = test_pl_path.replace('\\', '\\\\')
+        self.prolog.consult(bk_pl_path)
+        self.prolog.consult(test_pl_path)
 
         # Read example file
         with open(kbpath + 'exs.pl') as f:
