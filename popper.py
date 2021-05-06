@@ -99,10 +99,8 @@ def popper(experiment):
 
     if experiment.stats:
         experiment.show_stats(False)
-        return True
-    else:
-        print('No program returned.')
-        return True
+    print('NO SOLUTION')
+    return
 
 if __name__ == '__main__':
     experiment = Experiment()
