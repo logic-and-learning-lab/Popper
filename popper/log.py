@@ -11,6 +11,7 @@ def parse_args():
     parser.add_argument('--test-all', default=False, action='store_true', help='Test all examples')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--stats', default= False, action='store_true', help='Print statistics at end of execution')
+    parser.add_argument('--functional-test', default= False, action='store_true', help='Run custom functional test')
     return parser.parse_args()
 
 class Experiment:
@@ -19,6 +20,9 @@ class Experiment:
         self.total_programs = 0
         self.durations = {}
         self.exec_start = perf_counter()
+        self.debug = self.args.debug
+        self.stats = self.args.stats
+        self.functional_test = self.args.functional_test
 
     def __enter__(self):
         return self
@@ -37,7 +41,7 @@ class Experiment:
             else:
                 self.durations[operation].append(duration)
 
-    def stats(self, program):
+    def show_stats(self, program):
         total_exec_time = perf_counter() - self.exec_start
 
         message = f'Total programs: {self.total_programs}\n'

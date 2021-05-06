@@ -33,7 +33,7 @@ def popper(experiment):
     constrainer = Constrain(experiment)
 
     for size in range(1, experiment.args.max_literals + 1):
-        if experiment.args.debug:
+        if experiment.debug:
             print(f'{"*" * 20} MAX LITERALS: {size} {"*" * 20}')
         solver.update_number_of_literals(size)
         while True:
@@ -50,7 +50,7 @@ def popper(experiment):
             with experiment.duration('test'):
                 (outcome, (TP,FN,TN,FP)) = tester.test(program)
 
-            if experiment.args.debug:
+            if experiment.debug:
                 print(f'Program {experiment.total_programs}:')
                 pprint(program)
                 approx_pos = '+' if TP + FN < tester.num_pos else ''
@@ -58,10 +58,10 @@ def popper(experiment):
                 print(f'TP: {TP}{approx_pos}, FN: {FN}{approx_pos}, TN: {TN}{approx_neg}, FP: {FP}{approx_neg}')
 
             if outcome == (Outcome.ALL, Outcome.NONE):
-                if experiment.args.debug:
+                if experiment.debug:
                     print()
-                if experiment.args.stats:
-                    experiment.stats(True)
+                if experiment.stats:
+                    experiment.show_stats(True)
                 print('SOLUTION:')
                 pprint(program)
                 return
@@ -69,19 +69,21 @@ def popper(experiment):
             # 3. Build constraints
             cons = set()
 
-            # eliminate generalisations of:
-            # clauses that contain logical redundancy
+            if experiment.functional_test and tester.is_non_functional(program):
+                cons.update(constrainer.generalisation_constraint(program))
+
+            # eliminate generalisations of clauses that contain redundant literals
             for clause in tester.check_redundant_literal(program):
                 cons.update(constrainer.redundant_literal_constraint(clause))
 
-            # programs that contain logical redundancy
+            # eliminate generalisations of programs that contain redundant clauses
             if tester.check_redundant_clause(program):
                 cons.update(constrainer.generalisation_constraint(program))
 
             # add other constraints
             cons.update(constrainer.build_constraints(program, outcome))
 
-            if experiment.args.debug:
+            if experiment.debug:
                 print('Constraints:')
                 for constraint in cons:
                     print(constraint.ctype, constraint)
@@ -95,8 +97,8 @@ def popper(experiment):
             with experiment.duration('add'):
                 solver.add_ground_clauses(cons)
 
-    if experiment.args.stats:
-        experiment.stats(False)
+    if experiment.stats:
+        experiment.show_stats(False)
         return True
     else:
         print('No program returned.')

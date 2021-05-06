@@ -73,7 +73,12 @@ minimal_test_neg(1):-
 minimal_test_neg(0).
 
 
-%% ==========
+%% ========== FUNCTIONAL CHECKS ==========
+non_functional:-
+    pos(Atom),
+    non_functional(Atom),!.
+
+%% ========== REDUNDANCY CHECKS ==========
 
 subsumes(C,D) :- \+ \+ (copy_term(D,D2), numbervars(D2,0,_), subset(C,D2)).
 

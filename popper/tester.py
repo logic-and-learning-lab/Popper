@@ -69,6 +69,10 @@ class Tester():
         prog = f"[{','.join(prog)}]"
         return list(self.prolog.query(f'redundant_clause({prog})'))
 
+    def is_non_functional(self, program):
+        with self.using(program):
+            return list(self.prolog.query(f'non_functional.'))
+
     def test(self, program):
         with self.using(program):
             try:
