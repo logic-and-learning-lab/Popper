@@ -22,6 +22,7 @@ class Experiment:
         self.exec_start = perf_counter()
         self.debug = self.args.debug
         self.stats = self.args.stats
+        self.kbpath = self.args.kbpath
         self.functional_test = self.args.functional_test
 
     def __enter__(self):
