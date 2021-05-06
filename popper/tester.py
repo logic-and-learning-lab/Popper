@@ -16,26 +16,23 @@ class Tester():
         self.load_basic(experiment.args.kbpath)
         self.seen_clause = set()
 
+    def first_result(self, q):
+        return list(self.prolog.query(q))[0]
+
     def load_basic(self, kbpath):
-        # Consult the background knowledge, the examples and the test file
         bk_pl_path = os.path.join(kbpath, 'bk.pl')
         exs_pl_path = os.path.join(kbpath, 'exs.pl')
         test_pl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test.pl')
 
-        if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
-            bk_pl_path = bk_pl_path.replace('\\', '\\\\')
-            exs_pl_path = exs_pl_path.replace('\\', '\\\\')
-            test_pl_path = test_pl_path.replace('\\', '\\\\')
+        for x in [bk_pl_path, exs_pl_path, test_pl_path]:
+            if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
+                x = x.replace('\\', '\\\\')
+            self.prolog.consult(x)
 
-        self.prolog.consult(bk_pl_path)
-        self.prolog.consult(exs_pl_path)
-        self.prolog.consult(test_pl_path)
-
-        self.num_pos = sum(1 for _ in self.prolog.query('pos(_)'))
-        self.num_neg = sum(1 for _ in self.prolog.query('neg(_)'))
+        self.num_pos = int(self.first_result('count_pos(N)')['N'])
+        self.num_neg = int(self.first_result('count_neg(N)')['N'])
 
         self.prolog.assertz(f'timeout({self.eval_timeout})')
-        # assert these statically instead of having a rule for deriving them each time
         self.prolog.assertz(f'num_pos({self.num_pos})')
         self.prolog.assertz(f'num_neg({self.num_neg})')
 
@@ -63,50 +60,47 @@ class Tester():
             if res:
                 yield clause
 
-    # AC: THE OVERHEAD OF THIS CHECK IS MINIMAL
-    # AC: IF IT BECOMES TO HIGH, SUCH AS WHEN LEARNING PROGRAMS WITH LOTS OF CLAUSES, THEN WE CAN IMPROVE IT BY NOT COMPARING ALREADY COMPARED CLAUSES
     def check_redundant_clause(self, program):
+        # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
         prog = []
         for clause in program.clauses:
             C = f"[{','.join(('not_'+ clause.head.to_code(),) + tuple(lit.to_code() for lit in clause.body))}]"
             prog.append(C)
         prog = f"[{','.join(prog)}]"
-        res = list(self.prolog.query(f'redundant_clause({prog})'))
-        return res
+        return list(self.prolog.query(f'redundant_clause({prog})'))
 
     def test(self, program):
         with self.using(program):
             try:
                 if self.test_all:
-                    res = list(self.prolog.query('do_test(TP,FN,TN,FP)'))[0]
+                    res = self.first_result('do_test(TP,FN,TN,FP)')
                 else:
                     # AC: TN is not calculated when performing minmal testing
-                    res = list(self.prolog.query('do_test_minimal(TP,FN,TN,FP)'))[0]
+                    res = self.first_result('do_test_minimal(TP,FN,TN,FP)')
+                TP, FN, TN, FP = res['TP'], res['FN'], res['TN'], res['FP']
             except:
                 print("A Prolog error occurred when testing the program:")
                 for clause in program.clauses:
                     print('\t' + clause.to_code())
                 raise
-            TP, FN, TN, FP = res['TP'], res['FN'], res['TN'], res['FP']
 
-        # @NOTE: Andrew to clean up at some point.
-        # complete (FN=0)
+        # complete
         if TP == self.num_pos:
             positive_outcome = Outcome.ALL
-        # totally incomplete (use TP==0 rather than TP=|E+| because of minimal testing)
-        elif TP == 0 and FN > 0:
+        # totally incomplete
+        elif TP == 0 and FN > 0: # AC: we must use TP==0 rather than FN=|E+| because of minimal testing
             positive_outcome = Outcome.NONE
         # incomplete
         else:
             positive_outcome = Outcome.SOME
 
-        # consistent (FP=0)
+        # consistent
         if FP == 0:
             negative_outcome = Outcome.NONE
         # totally inconsistent
-        # AC: THIS LINE DOES NOT WORK WITH MINMAL TESTING
-        # elif TN == 0:
-            # negative_outcome = Outcome.All
+        # AC: this line may not work with minimal testing
+        # elif FP == self.num_neg:
+            # negative_outcome = Outcome.ALL
         # inconsistent
         else:
             negative_outcome = Outcome.SOME

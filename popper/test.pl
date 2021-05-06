@@ -20,7 +20,16 @@ test_ex(X):-
     timeout(T),
     catch(call_with_time_limit(T, call(X)),time_limit_exceeded,false),!.
 
-%% MINIMAL TESTING
+count_pos(0):-
+    \+ current_predicate(pos/1),!.
+count_pos(N):-
+    aggregate_all(count,pos(_),N),!.
+count_neg(0):-
+    \+ current_predicate(neg/1),!.
+count_neg(N):-
+    aggregate_all(count,neg(_),N),!.
+
+%%%%%%%%%% MINIMAL TESTING %%%%%%%%%%
 %% we do not need to test all the examples
 %% we want to know:
 %% 1. whether a program is incomplete (whether a positive example is not entailed) FN > 0
@@ -41,7 +50,6 @@ test_pos_ex_aux(_,_,Counter):-
     arg(1,Counter,C0),
     C1 is C0+1,
     nb_setarg(1,Counter,C1).
-
 
 minimal_test_pos(0,0):-
     \+ current_predicate(pos/1),!.
@@ -65,7 +73,6 @@ minimal_test_neg(1):-
 minimal_test_neg(0).
 
 
-
 %% ==========
 
 subsumes(C,D) :- \+ \+ (copy_term(D,D2), numbervars(D2,0,_), subset(C,D2)).
@@ -83,9 +90,3 @@ redundant_clause(P1):-
     select(C1,P1,P2),
     member(C2,P2),
     subsumes(C1,C2),!.
-
-%% reduce(C1,C2):-
-%%     select(_,C1,C3),
-%%     subsumes(C1,C3),!,
-%%     reduce(C3,C2).
-%% reduce(C,C).
