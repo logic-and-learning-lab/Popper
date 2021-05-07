@@ -189,7 +189,6 @@ min_clause(C,N):-
 %% ##################################################
 %% BIAS CONSTRAINTS
 %% ##################################################
-
 %% DATALOG
 %% AC: MAKE A USER OPTION
 :-
@@ -283,23 +282,20 @@ head_connected(C,Var1):-
 %%     tmpvars(P,_,InVars,_),
 %%     #count{OutVars : body_literal(C,P,_,Vars2),tmpvars(P,Vars2,InVars,OutVars)} > 1.
 
-
 %% ##################################################
 %% SUBSUMPTION
 %% ##################################################
 same_head(C1,C2):-
-    C1 != C2,
+    C1 < C2,
     head_literal(C1,P,A,Vars),
     head_literal(C2,P,A,Vars).
 
 body_subset(C1,C2):-
-    %% C1 < C2??
-    C1 != C2,
+    C1 < C2,
     clause(C1),
     clause(C2),
     body_literal(C2,P,_,Vars): body_literal(C1,P,_,Vars).
 
-%% SUBSUMPTION
 :-
     C1 < C2,
     same_head(C1,C2),
@@ -327,28 +323,30 @@ var_type(C,Var,@pytype(Pos,Types)):-
 %% ##################################################
 %% AC: WHY DID I ADD THIS? ORDER SHOULD NOT MATTER
 %% ORDER BY CLAUSE SIZE
-%% p(A)<-q(A),r(A). (CLAUSE1)
-%% p(A)<-s(A). (CLAUSE2)
-%% TWO NON-RECURSIVE CLAUSES
-:-
-    C2 > C1,
-    not recursive_clause(C1,_,_),
-    not recursive_clause(C2,_,_),
-    same_head(C1,C2),
+%% p(A)<-q(A),r(A). (C1)
+%% p(A)<-s(A). (C2)
+bigger(C1,C2):-
     body_size(C1,N1),
     body_size(C2,N2),
+    C1 < C2,
     N1 > N2.
 
 %% TWO NON-RECURSIVE CLAUSES
 :-
+    C1 < C2,
+    not recursive_clause(C1,_,_),
+    not recursive_clause(C2,_,_),
+    same_head(C1,C2),
+    bigger(C1,C2).
+
+%% TWO NON-RECURSIVE CLAUSES
+:-
     C1 > 0,
-    C2 > C1,
+    C1 < C2,
     recursive_clause(C1,_,_),
     recursive_clause(C2,_,_),
     same_head(C1,C2),
-    body_size(C1,N1),
-    body_size(C2,N2),
-    N1 > N2.
+    bigger(C1,C2).
 
 %% ########################################
 %% RECURSION
@@ -374,13 +372,14 @@ base_clause(C,P,A):-
 
 %% A RECURSIVE CLAUSE MUST HAVE MORE THAN ONE BODY LITERAL
 :-
+    C > 0,
     recursive_clause(C,_,_),
     body_size(C,1).
 
 %% STOP RECURSION BEFORE BASE CASES
 :-
     C1 > 0,
-    C2 > C1,
+    C1 < C2,
     recursive_clause(C1,_,_),
     base_clause(C2,_,_),
     same_head(C1,C2).
@@ -393,6 +392,7 @@ base_clause(C,P,A):-
 %% DISALLOW TWO RECURSIVE CALLS
 %% WHY DID WE ADD THIS??
 :-
+    C > 0,
     recursive_clause(C,P,A),
     #count{Vars : body_literal(C,P,A,Vars)} > 1.
 
@@ -547,7 +547,7 @@ lower(P,Q):-
 
 %% MUST LEARN PROGRAMS WITH ORDERED CLAUSES
 :-
-    C2 > C1,
+    C1 < C2,
     head_literal(C1,P,_,_),
     head_literal(C2,Q,_,_),
     lower(Q,P).
