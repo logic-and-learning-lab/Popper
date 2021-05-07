@@ -27,7 +27,7 @@ def pprint(program):
 def popper(experiment):
     if experiment.kbpath[-1] != '/':
         experiment.kbpath += '/'
-    solver = Clingo(experiment.kbpath)
+    solver = Clingo(experiment.kbpath, experiment.clingo_args)
     tester = Tester(experiment)
     grounder = solver
     constrainer = Constrain(experiment)

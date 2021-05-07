@@ -34,8 +34,8 @@ def atom_to_symbol(lit):
     return Function(name = lit.predicate, arguments = xs)
 
 class Clingo():
-    def __init__(self, kbpath):
-        self.solver = clingo.Control(['--rand-freq=0'])
+    def __init__(self, kbpath, clingo_args):
+        self.solver = clingo.Control(clingo_args)
         # AC: why an OrderedDict? We never remove from it
         self.assigned = OrderedDict()
         self.seen_symbols = {}

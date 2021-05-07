@@ -12,6 +12,7 @@ def parse_args():
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--stats', default= False, action='store_true', help='Print statistics at end of execution')
     parser.add_argument('--functional-test', default= False, action='store_true', help='Run custom functional test')
+    parser.add_argument('--clingo-args', type=str, default='', help='Arguments to pass to Clingo')
     return parser.parse_args()
 
 class Experiment:
@@ -24,6 +25,7 @@ class Experiment:
         self.stats = self.args.stats
         self.kbpath = self.args.kbpath
         self.functional_test = self.args.functional_test
+        self.clingo_args = [] if not self.args.clingo_args else self.args.clingo_args.split(' ')
 
     def __enter__(self):
         return self
