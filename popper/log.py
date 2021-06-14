@@ -8,6 +8,7 @@ def parse_args():
     parser.add_argument('--eval-timeout', type=float, default=0.1, help='Prolog evaluation timeout in seconds')
     parser.add_argument('--timeout', type=float, default=600, help='Overall timeout (in seconds)')
     parser.add_argument('--max-literals', type=int, default=100, help='Maximum number of literals allowed in program')
+    parser.add_argument('--max-solutions', type=int, default=1, help='Maximum number of solutions to print')
     parser.add_argument('--test-all', default=False, action='store_true', help='Test all examples')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--stats', default= False, action='store_true', help='Print statistics at end of execution')
@@ -24,6 +25,7 @@ class Experiment:
         self.debug = self.args.debug
         self.stats = self.args.stats
         self.kbpath = self.args.kbpath
+        self.max_solutions = self.args.max_solutions
         self.functional_test = self.args.functional_test
         self.clingo_args = [] if not self.args.clingo_args else self.args.clingo_args.split(' ')
 

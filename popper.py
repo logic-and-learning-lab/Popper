@@ -31,6 +31,7 @@ def popper(experiment):
     tester = Tester(experiment)
     grounder = solver
     constrainer = Constrain(experiment)
+    num_solutions = 0
 
     for size in range(1, experiment.args.max_literals + 1):
         if experiment.debug:
@@ -64,7 +65,9 @@ def popper(experiment):
                     experiment.show_stats(True)
                 print('SOLUTION:')
                 pprint(program)
-                return
+                num_solutions += 1
+                if num_solutions == experiment.max_solutions:
+                    return
 
             # 3. Build constraints
             cons = set()
@@ -99,7 +102,7 @@ def popper(experiment):
 
     if experiment.stats:
         experiment.show_stats(False)
-    print('NO SOLUTION')
+    print('NO MORE SOLUTIONS')
     return
 
 if __name__ == '__main__':
@@ -110,4 +113,4 @@ if __name__ == '__main__':
 
     if p.is_alive():
         p.terminate()
-        print('Timedout.')
+        print('Timed out.')

@@ -11,8 +11,10 @@ class Con:
     GENERALISATION = 'generalisation'
     SPECIALISATION = 'specialisation'
     REDUNDANCY = 'redundancy'
+    BANISH = 'banish'
 
 OUTCOME_TO_CONSTRAINTS = {
+    (Outcome.ALL, Outcome.NONE)  : (Con.BANISH,),
     (Outcome.ALL, Outcome.SOME)  : (Con.GENERALISATION,),
     (Outcome.SOME, Outcome.NONE) : (Con.SPECIALISATION,),
     (Outcome.SOME, Outcome.SOME) : (Con.SPECIALISATION, Con.GENERALISATION),
@@ -49,12 +51,14 @@ class Constrain:
         if negative_outcome == Outcome.ALL:
              negative_outcome = Outcome.SOME
         for constraint_type in OUTCOME_TO_CONSTRAINTS[((positive_outcome, negative_outcome))]:
-            if constraint_type == Con.SPECIALISATION:
-                yield from self.specialisation_constraint(program)
-            elif constraint_type == Con.GENERALISATION:
+            if constraint_type == Con.GENERALISATION:
                 yield from self.generalisation_constraint(program)
+            elif constraint_type == Con.SPECIALISATION:
+                yield from self.specialisation_constraint(program)
             elif constraint_type == Con.REDUNDANCY:
                 yield from self.redundancy_constraint(program)
+            elif constraint_type == Con.BANISH:
+                yield from self.banish_constraint(program)
 
     def make_literal_handle(self, literal):
         return f'{literal.predicate}{"".join(literal.arguments)}'
@@ -92,6 +96,30 @@ class Constrain:
             literals.append(eq(vo_variable(var), idx))
 
         yield Constraint('inclusion rule', Literal('included_clause', (clause_handle, clause_number)), tuple(literals))
+
+    def banish_constraint(self, program):
+        literals = []
+        for clause_number, clause in enumerate(program.clauses):
+            clause_handle = self.make_clause_handle(clause)
+            yield from self.make_clause_inclusion_rule(clause, clause_handle)
+
+            literals.append(Literal('included_clause', (clause_handle, vo_clause(clause_number))))
+            literals.append(Literal('body_size', (vo_clause(clause_number), len(clause.body))))
+
+        for clause_number1, clause_numbers in program.before.items():
+            for clause_number2 in clause_numbers:
+                literals.append(lt(vo_clause(clause_number1), vo_clause(clause_number2)))
+
+        for clause_number, clause in enumerate(program.clauses):
+            literals.append(gteq(vo_clause(clause_number), clause.min_num))
+
+        # ensure that each clause_var is ground to a unique value
+        literals.append(alldiff(tuple(vo_clause(c) for c in range(program.num_clauses))))
+
+        literals.append(Literal('clause', (program.num_clauses, ), positive = False))
+
+        yield Constraint(Con.BANISH, None, tuple(literals))
+
 
     def generalisation_constraint(self, program):
         literals = []
