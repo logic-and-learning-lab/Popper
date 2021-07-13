@@ -47,15 +47,17 @@ class Clingo():
 
         # Load Mode file
         with open(kbpath + 'bias.pl') as biasfile:
-            contents = '\n'.join(line for line in biasfile if not line.startswith('%'))
-            self.max_vars = int(re.search("max_vars\((\d+)\)\.", contents).group(1))
-            self.max_clauses = int(re.search("max_clauses\((\d+)\)\.", contents).group(1))
-            self.solver.add('bias', [], contents)
+            self.solver.add('bias', [], biasfile.read())
 
         # Reset number of literals and clauses because size_in_literals literal within Clingo is reset by loading Alan? (bottom two).
         self.solver.add('invented', ['predicate', 'arity'], '#external invented(pred,arity).')
         self.solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
         self.solver.ground([('alan', []), ('bias', [])])
+
+        max_vars_atoms = self.solver.symbolic_atoms.by_signature('max_vars', arity=1)
+        self.max_vars = next(max_vars_atoms).symbol.arguments[0].number
+        max_clauses_atoms = self.solver.symbolic_atoms.by_signature('max_clauses', arity=1)
+        self.max_clauses = next(max_clauses_atoms).symbol.arguments[0].number
 
     def get_model(self):
         with self.solver.solve(yield_ = True) as handle:
