@@ -34,8 +34,8 @@ def atom_to_symbol(lit):
     return Function(name = lit.predicate, arguments = xs)
 
 class Clingo():
-    def __init__(self, experiment):
-        self.solver = clingo.Control(['--rand-freq=0'])
+    def __init__(self, kbpath, clingo_args):
+        self.solver = clingo.Control(clingo_args)
         # AC: why an OrderedDict? We never remove from it
         self.assigned = OrderedDict()
         self.seen_symbols = {}
@@ -46,7 +46,7 @@ class Clingo():
             self.solver.add('alan', [], alan.read())
 
         # Load Mode file
-        with open(experiment.args.kbpath + 'bias.pl') as biasfile:
+        with open(kbpath + 'bias.pl') as biasfile:
             contents = '\n'.join(line for line in biasfile if not line.startswith('%'))
             self.max_vars = int(re.search("max_vars\((\d+)\)\.", contents).group(1))
             self.max_clauses = int(re.search("max_clauses\((\d+)\)\.", contents).group(1))

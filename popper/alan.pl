@@ -54,11 +54,6 @@ body_aux(P,A):-
 clause(C):-
     head_literal(C,_,_,_).
 
-literal(C,P,Vars):-
-    head_literal(C,P,_,Vars).
-literal(C,P,Vars):-
-    body_literal(C,P,_,Vars).
-
 %% NUM BODY LITERALS OF A CLAUSE
 %% TODO: IMPROVE AS EXPENSIVE
 body_size(C,N):-
@@ -68,20 +63,20 @@ body_size(C,N):-
     N <= MaxN,
     #count{P,Vars : body_literal(C,P,_,Vars)} == N.
 
-%% GUESS AT MOST ONE HEAD LITERAL PER CLAUSE
+%% AT LEAST ONE HEAD LITERAL
+:-
+    not clause(0).
+
+%% AT MOST ONE HEAD LITERAL PER CLAUSE
 :-
     clause(C),
     #count{P,A : head_literal(C,P,A,_)} > 1.
 
-%% GUESS AT LEAST 1 AND MOST MAX_N BODY LITERALS PER CLAUSE
+%% AT LEAST 1 AND MOST MAX_N BODY LITERALS PER CLAUSE
 %% AC: THIS CONSTRAINT IS A BIT SNEAKY: WE SAY IT IS NOT POSSIBLE TO HAVE A CLAUSE WITHOUT A SIZE
 :-
     clause(C),
     not body_size(C,_).
-
-%% ENSURE A CLAUSE
-:-
-    not clause(0).
 
 %% HEAD LITERAL CANNOT BE IN THE BODY
 :-
@@ -89,17 +84,18 @@ body_size(C,N):-
     body_literal(C,P,_,Vars).
 
 %% USE CLAUSES IN ORDER
-%% AC: IS IT BETTER TO ADD MORE REDUNDANT CONSTRAINTS?
 :-
-    clause(C),
-    C > 1,
-    not clause(C-1).
+    clause(C1),
+    C1 > 1,
+    C2 = 0..C1-1,
+    not clause(C2).
 
 %% USE VARS IN ORDER IN A CLAUSE
 :-
-    clause_var(C,Var),
-    Var > 1,
-    not clause_var(C,Var-1).
+    clause_var(C,Var1),
+    Var1 > 1,
+    Var2 = 0..Var1-1,
+    not clause_var(C,Var2).
 
 %% ##################################################
 %% VARS ABOUT VARS - META4LIFE
@@ -127,17 +123,20 @@ clause_var(C,Var):-
     body_var(C,Var).
 
 head_var(C,Var):-
-    head_literal(C,_P,_A,Vars),
+    head_literal(C,_,_,Vars),
     var_member(Var,Vars).
 body_var(C,Var):-
-    body_literal(C,_P,_A,Vars),
+    body_literal(C,_,_,Vars),
     var_member(Var,Vars).
 
 var_member(Var,Vars):-
     var_pos(Var,Vars,_).
 
 var_in_literal(C,P,Vars,Var):-
-    literal(C,P,Vars),
+    head_literal(C,P,_,Vars),
+    var_member(Var,Vars).
+var_in_literal(C,P,Vars,Var):-
+    body_literal(C,P,_,Vars),
     var_member(Var,Vars).
 
 %% HEAD VARS ARE ALWAYS 0,1,...,A-1
@@ -190,15 +189,14 @@ min_clause(C,N):-
 %% ##################################################
 %% BIAS CONSTRAINTS
 %% ##################################################
-
-%% AC: MAKE A USER OPTION
 %% DATALOG
+%% AC: MAKE A USER OPTION
 :-
     head_var(C,Var),
     not body_var(C,Var).
 
-%% AC: MAKE A USER OPTION
 %% ELIMINATE SINGLETONS
+%% AC: MAKE A USER OPTION
 :-
     clause_var(C,Var),
     #count{P,Vars : var_in_literal(C,P,Vars,Var)} == 1.
@@ -207,19 +205,21 @@ min_clause(C,N):-
 head_connected(C,Var):-
     head_var(C,Var).
 head_connected(C,Var1):-
-    Var1 > 0,
+    head_literal(C,_,A,_),
+    Var1 >= A,
     head_connected(C,Var2),
     body_literal(C,_,_,Vars),
     var_member(Var1,Vars),
     var_member(Var2,Vars),
     Var1 != Var2.
 :-
-    Var > 0,
+    head_literal(C,_,A,_),
+    Var >= A,
     body_var(C,Var),
     not head_connected(C,Var).
 
 %% IRREFLEXIVE
-%% prevents: p(A):-q(A,B),q(B,A)
+%% prevents: head:-q(A,B),q(B,A)
 :-
     irreflexive(P,2),
     body_literal(C,P,2,Vars1),
@@ -228,40 +228,74 @@ head_connected(C,Var1):-
     Vars2 = (Var2,Var1),
     Vars1 < Vars2.
 
-%% FUNCTIONAL
+%% AC TODO: GENERALISE THE BELOW
+%% DYADIC FUNCTIONAL
 %% CAN REPLICATE RECALL
-%% prevents: p(A):-q(A,B),q(A,C)
+%% prevents: head:- q(+A,-B),q(+A,-C)
 :-
     functional(P,2),
     body_literal(C,P,2,(V1,_)),
     #count{V2 : body_literal(C,P,2,(V1,V2))} > 1.
 
-%% FUNCTIONAL FOR 3
-%% AC TODO: GENERALISE AND REMOVE SYMMETRY
+%% TRIADIC FUNCTIONAL
+%% prevents: head:- q(+A,+B,-C),q(+A,+B,-D)
 :-
     functional(P,3),
     direction_(P,0,in),
     direction_(P,1,in),
     direction_(P,2,out),
-    literal(C,P,(Var1,Var2,Var3)),
-    literal(C,P,(Var1,Var2,Var4)),
-    Var3 != Var3.
+    body_literal(C,P,_,(V1,V2,_)),
+    #count{V3 : body_literal(C,P,_,(V1,V2,V3))} > 1.
+
+%% TETRADIC (fancy) FUNCTIONAL
+%% prevents: head:- q(+A,+B,-C,-D),q(+A,+B,-D,-E)
+:-
+    functional(P,4),
+    direction_(P,0,in),
+    direction_(P,1,in),
+    direction_(P,2,out),
+    direction_(P,3,out),
+    body_literal(C,P,_,(V1,V2,_,_)),
+    #count{(V3,V4) : body_literal(C,P,_,(V1,V2,V3,V4))} > 1.
+
+%% tmpvars(P,(V0,V1),(V0,),(V1,)):-
+%%     functional(P,2),
+%%     body_literal(_,P,_,(V0,V1)),
+%%     direction_(P,0,in),
+%%     direction_(P,1,out).
+%% tmpvars(P,(V0,V1,V2),(V0,V1),(V2,)):-
+%%     functional(P,3),
+%%     body_literal(_,P,_,(V0,V1,V2)),
+%%     direction_(P,0,in),
+%%     direction_(P,1,in),
+%%     direction_(P,2,out).
+%% tmpvars(P,(V0,V1,V2,V3),(V0,V1),(V2,V3)):-
+%%     functional(P,4),
+%%     body_literal(_,P,_,(V0,V1,V2,V3)),
+%%     direction_(P,0,in),
+%%     direction_(P,1,in),
+%%     direction_(P,2,out),
+%%     direction_(P,3,out).
+%% %% direction(part,(in,in,out,out)).
+%% x2:-
+%%     body_literal(C,P,A,_),
+%%     tmpvars(P,_,InVars,_),
+%%     #count{OutVars : body_literal(C,P,_,Vars2),tmpvars(P,Vars2,InVars,OutVars)} > 1.
 
 %% ##################################################
 %% SUBSUMPTION
 %% ##################################################
 same_head(C1,C2):-
-    C1 != C2,
+    C1 < C2,
     head_literal(C1,P,A,Vars),
     head_literal(C2,P,A,Vars).
 
 body_subset(C1,C2):-
-    C1 != C2,
+    C1 < C2,
     clause(C1),
     clause(C2),
     body_literal(C2,P,_,Vars): body_literal(C1,P,_,Vars).
 
-%% SUBSUMPTION
 :-
     C1 < C2,
     same_head(C1,C2),
@@ -289,27 +323,30 @@ var_type(C,Var,@pytype(Pos,Types)):-
 %% ##################################################
 %% AC: WHY DID I ADD THIS? ORDER SHOULD NOT MATTER
 %% ORDER BY CLAUSE SIZE
-%% p(A)<-q(A),r(A). (CLAUSE1)
-%% p(A)<-s(A). (CLAUSE2)
-%% TWO RECURSIVE CLAUSES
-:-
-    C2 > C1,
-    not recursive_clause(C1,_,_),
-    not recursive_clause(C2,_,_),
-    same_head(C1,C2),
+%% p(A)<-q(A),r(A). (C1)
+%% p(A)<-s(A). (C2)
+bigger(C1,C2):-
     body_size(C1,N1),
     body_size(C2,N2),
+    C1 < C2,
     N1 > N2.
 
 %% TWO NON-RECURSIVE CLAUSES
 :-
-    C2 > C1,
+    C1 < C2,
+    not recursive_clause(C1,_,_),
+    not recursive_clause(C2,_,_),
+    same_head(C1,C2),
+    bigger(C1,C2).
+
+%% TWO NON-RECURSIVE CLAUSES
+:-
+    C1 > 0,
+    C1 < C2,
     recursive_clause(C1,_,_),
     recursive_clause(C2,_,_),
     same_head(C1,C2),
-    body_size(C1,N1),
-    body_size(C2,N2),
-    N1 > N2.
+    bigger(C1,C2).
 
 %% ########################################
 %% RECURSION
@@ -335,13 +372,14 @@ base_clause(C,P,A):-
 
 %% A RECURSIVE CLAUSE MUST HAVE MORE THAN ONE BODY LITERAL
 :-
+    C > 0,
     recursive_clause(C,_,_),
     body_size(C,1).
 
 %% STOP RECURSION BEFORE BASE CASES
 :-
     C1 > 0,
-    C2 > C1,
+    C1 < C2,
     recursive_clause(C1,_,_),
     base_clause(C2,_,_),
     same_head(C1,C2).
@@ -354,6 +392,7 @@ base_clause(C,P,A):-
 %% DISALLOW TWO RECURSIVE CALLS
 %% WHY DID WE ADD THIS??
 :-
+    C > 0,
     recursive_clause(C,P,A),
     #count{Vars : body_literal(C,P,A,Vars)} > 1.
 
@@ -371,23 +410,23 @@ base_clause(C,P,A):-
 
 %% TODO: REFACTOR
 %% @RM - what is this??
-:-
-    Clause > 0,
-    num_in_args(P,2),
-    %% get the head input vars
-    head_literal(Clause,P,A,HeadVars),
-    var_pos(HeadVar1,HeadVars,Pos1),
-    var_pos(HeadVar1,HeadVars,Pos2),
-    HeadPos1 != HeadPos2,
-    direction_(P,HeadPos1,in),
-    direction_(P,HeadPos2,in),
-    %% get the body input vars
-    body_literal(Clause,P,A,BodyVars),
-    var_pos(HeadVar1,BodyVars,BodyPos1),
-    var_pos(HeadVar2,BodyVars,BodyPos2),
-    BodyPos1 != BodyPos2,
-    direction_(P,BodyPos1,in),
-    direction_(P,BodyPos2,in).
+%% :-
+%%     Clause > 0,
+%%     num_in_args(P,2),
+%%     %% get the head input vars
+%%     head_literal(Clause,P,A,HeadVars),
+%%     var_pos(HeadVar1,HeadVars,Pos1),
+%%     var_pos(HeadVar1,HeadVars,Pos2),
+%%     HeadPos1 != HeadPos2,
+%%     direction_(P,HeadPos1,in),
+%%     direction_(P,HeadPos2,in),
+%%     %% get the body input vars
+%%     body_literal(Clause,P,A,BodyVars),
+%%     var_pos(HeadVar1,BodyVars,BodyPos1),
+%%     var_pos(HeadVar2,BodyVars,BodyPos2),
+%%     BodyPos1 != BodyPos2,
+%%     direction_(P,BodyPos1,in),
+%%     direction_(P,BodyPos2,in).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -413,38 +452,38 @@ num_in_args(P,N):-
     #count{Pos : direction_(P,Pos,in)} == N.
 
 %% VAR SAFE IF HEAD INPUT VAR
-safe_var(Clause,Var):-
-    head_literal(Clause,P,_,Vars),
+safe_var(C,Var):-
+    head_literal(C,P,_,Vars),
     var_pos(Var,Vars,Pos),
     direction_(P,Pos,in).
 
 %% VAR SAFE IF IN A LITERAL THAT ONLY HAS OUT VARS
-safe_var(Clause,Var):-
+safe_var(C,Var):-
     num_in_args(P,0),
-    body_literal(Clause,P,_,Vars),
+    body_literal(C,P,_,Vars),
     var_member(Var,Vars).
 
 %% VAR SAFE IF IN SAFE LITERAL
-safe_var(Clause,Var):-
-    safe_literal(Clause,P,Vars),
+safe_var(C,Var):-
+    safe_literal(C,P,Vars),
     var_member(Var,Vars).
 
 %% LITERAL WITH N INPUT VARS IS SAFE IF N VARS ARE SAFE
-safe_literal(Clause,P,Vars):-
+safe_literal(C,P,Vars):-
     num_in_args(P,N),
     N > 0,
-    body_literal(Clause,P,_,Vars),
+    body_literal(C,P,_,Vars),
     #count{Pos :
         var_pos(Var,Vars,Pos),
         direction_(P,Pos,in),
-        safe_var(Clause,Var)
+        safe_var(C,Var)
     } == N.
 
 %% SAFE VARS
 :-
     direction_(_,_,_), % guard for when no direction_s are given
-    clause_var(Clause,Var),
-    not safe_var(Clause,Var).
+    clause_var(C,Var),
+    not safe_var(C,Var).
 
 %% ########################################
 %% CLAUSES SPECIFIC TO PREDICATE INVENTION
@@ -508,7 +547,7 @@ lower(P,Q):-
 
 %% MUST LEARN PROGRAMS WITH ORDERED CLAUSES
 :-
-    C2 > C1,
+    C1 < C2,
     head_literal(C1,P,_,_),
     head_literal(C2,Q,_,_),
     lower(Q,P).
