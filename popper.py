@@ -5,20 +5,21 @@ from popper.aspsolver import Clingo
 from popper.tester import Tester
 from popper.constrain import Constrain, Outcome
 from popper.generate import generate_program
-from popper.core import Clause, Literal
+from popper.core import Clause, Literal, Grounding
 import multiprocessing
 
-def ground_constraints(grounder, max_clauses, max_vars, constraints):
-    for constraint in constraints:
+def ground_constraints(grounder, max_clauses, max_vars, rules):
+    for rule in rules:
+        (head, body) = rule
         # find bindings for variables in the constraint
-        assignments = grounder.ground_program(constraint, max_clauses, max_vars)
+        assignments = grounder.ground_rule(rule, max_clauses, max_vars)
 
-        # build the clause
-        clause = Clause(constraint.head, tuple(lit for lit in constraint.body if isinstance(lit, Literal)))
+        # keep only standard literals
+        body = frozenset(literal for literal in body if isinstance(literal, Literal))
 
         # ground the clause for each variable assignment
         for assignment in assignments:
-            yield clause.ground(assignment)
+            yield Grounding.ground_rule(head, body, assignment)
 
 def pprint(program):
     for clause in program.to_code():
@@ -88,8 +89,8 @@ def popper(experiment):
 
             if experiment.debug:
                 print('Constraints:')
-                for constraint in cons:
-                    print(constraint.ctype, constraint)
+                for con in cons:
+                    Constrain.print_constraint(con)
                 print()
 
             # 4. Ground constraints

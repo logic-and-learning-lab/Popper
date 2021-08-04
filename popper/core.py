@@ -3,6 +3,59 @@ from collections import namedtuple, defaultdict
 ConstVar = namedtuple('ConstVar', ['name', 'type'])
 ConstOpt = namedtuple('ConstOpt', ['operator', 'arguments', 'operation'])
 
+class Grounding:
+    @staticmethod
+    def ground_literal(literal, assignment):
+        ground_args = []
+        for arg in literal.arguments:
+            if arg in assignment:
+                ground_args.append(assignment[arg])
+            # handles tuples of ConstVars
+            # TODO: AC: EXPLAIN BETTER
+            elif isinstance(arg, tuple):
+                ground_t_args = []
+                # AC: really messy
+                for t_arg in arg:
+                    if t_arg in assignment:
+                        ground_t_args.append(assignment[t_arg])
+                    else:
+                        ground_t_args.append(t_arg)
+                ground_args.append(tuple(ground_t_args))
+            else:
+                ground_args.append(arg)
+        return (literal.positive, literal.predicate, tuple(ground_args))
+
+    @staticmethod
+    def ground_rule(head, body, assignment):
+        ground_head = None
+        if head:
+            ground_head = Grounding.ground_literal(head, assignment)
+        ground_body = frozenset(Grounding.ground_literal(literal, assignment) for literal in body)
+        return (ground_head, ground_body)
+
+    # AC: When grounding constraint rules, we only care about the vars and the constraints, not the actual literals
+    @staticmethod
+    def grounding_hash(body, all_vars):
+        cons = set()
+        for lit in body:
+            if not isinstance(lit, ConstOpt):
+                continue
+            cons.add((lit.operation, lit.arguments))
+        return hash((frozenset(all_vars), frozenset(cons)))
+
+    @staticmethod
+    def find_all_vars(body):
+        all_vars = set()
+        for literal in body:
+            for arg in literal.arguments:
+                if isinstance(arg, ConstVar):
+                    all_vars.add(arg)
+                elif isinstance(arg, tuple):
+                    for t_arg in arg:
+                        if isinstance(t_arg, ConstVar):
+                            all_vars.add(t_arg)
+        return all_vars
+
 class Literal:
     def __init__(self, predicate, arguments, directions = [], positive = True):
         self.predicate = predicate
@@ -10,7 +63,6 @@ class Literal:
         self.arity = len(arguments)
         self.directions = directions
         self.positive = positive
-
         self.inputs = set(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
         self.outputs = set(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
 
@@ -51,7 +103,6 @@ class Literal:
     def __eq__(self, other):
         if other == None:
             return False
-        # print(self, other)
         return self.my_hash() == other.my_hash()
 
     def my_hash(self):
@@ -60,51 +111,36 @@ class Literal:
     def to_code(self):
         return f'{self.predicate}({",".join(self.arguments)})'
 
-    def ground(self, assignment):
-        ground_args = []
-        for arg in self.arguments:
-            if arg in assignment:
-                ground_args.append(assignment[arg])
-            # handles tuples of ConstVars
-            elif isinstance(arg, tuple):
-                ground_t_args = []
-                # AC: really messy
-                for t_arg in arg:
-                    if t_arg in assignment:
-                        ground_t_args.append(assignment[t_arg])
-                    else:
-                        ground_t_args.append(t_arg)
-                ground_args.append(tuple(ground_t_args))
-            else:
-                ground_args.append(arg)
-
-        return Literal(self.predicate, tuple(ground_args), self.directions, self.positive)
-
 class Clause:
     def __init__(self, head, body, min_num = 0):
         self.head = head
         self.body = body
         self.min_num = min_num
 
-        # compute all the 'vars' in the program
-        self.all_vars = set()
-        if head:
-            self.all_vars.update(head.arguments)
-        if body:
-            for blit in body:
-                self.all_vars.update(blit.arguments)
-
-        # AC: simplistic definition of recursive
-        if head and body:
-            self.recursive = head.predicate in set(blit.predicate for blit in body)
-        else:
-            self.recursive = False
-
     def __str__(self):
         x = f':- {", ".join(str(literal) for literal in self.body)}.'
         if self.head:
             return f'{str(self.head)}{x}'
         return x
+
+    def is_recursive(self):
+        if self.head:
+            return self.head.predicate in set(literal.predicate for literal in self.body if isinstance(literal, Literal))
+        return False
+
+    def all_vars(self):
+        xs = set()
+        if self.head:
+            xs.update(self.head.arguments)
+        for literal in self.body:
+            for arg in literal.arguments:
+                if isinstance(arg, ConstVar):
+                    xs.add(arg)
+                elif isinstance(arg, tuple):
+                    for t_arg in arg:
+                        if isinstance(t_arg, ConstVar):
+                            xs.add(t_arg)
+        return xs
 
     # AC: nasty
     def to_ordered(self):
@@ -141,14 +177,12 @@ class Clause:
             f'{",".join([blit.to_code() for blit in self.body])}'
         )
 
-    def ground(self, assignment):
-        ground_body = tuple(blit.ground(assignment) for blit in self.body)
-        if self.head:
-            return Clause(self.head.ground(assignment), ground_body, self.min_num)
-        return Clause(None, ground_body, self.min_num)
-
     def my_hash(self):
-        return hash((self.head.my_hash, ) + tuple(lit.my_hash for lit in self.body))
+        h = None
+        if self.head:
+            h = (self.head.my_hash(),)
+        b = frozenset(literal.my_hash() for literal in self.body)
+        return hash((h,b))
 
 class Program:
     def __init__(self, clauses, before = defaultdict(set)):
@@ -161,73 +195,3 @@ class Program:
     def to_code(self):
         for clause in self.clauses:
             yield clause.to_code() + '.'
-
-    # def my_hash(self):
-        # return hash(tuple(clause.my_hash() for clause in self.clauses))
-
-class Constraint:
-    def __init__(self, ctype, head, body):
-        self.ctype = ctype
-        self.head = head
-        self.body = body
-
-        # AC: also includes constants, so the name is incorrect
-        self.all_vars = set()
-        for lit in body:
-            for arg in lit.arguments:
-                if isinstance(arg, ConstVar):
-                    self.all_vars.add(arg)
-                if isinstance(arg, tuple):
-                    for t_arg in arg:
-                        if isinstance(t_arg, ConstVar):
-                            self.all_vars.add(t_arg)
-
-    def __hash__(self):
-        return self.first_order_hash()
-
-    def __eq__(self, other):
-        return self.first_order_hash() == other.first_order_hash()
-
-    # AC: when we hash a constraint, we only care about the constraint type, the head, and the body
-    def first_order_hash(self):
-        body = []
-        for lit in self.body:
-            if isinstance(lit, ConstOpt):
-                continue
-            body.append(lit.my_hash())
-        return hash((self.ctype, self.head, tuple(body)))
-
-    # AC: When comparing two constraints for grounding, we only care about the vars and the constraints, not the actual literals
-    def grounding_hash(self):
-        cons = set()
-        for lit in self.body:
-            if not isinstance(lit, ConstOpt):
-                continue
-            cons.add((lit.operation, lit.arguments))
-        return hash((frozenset(self.all_vars),frozenset(cons)))
-
-    def __str__(self):
-        constraint_literals = []
-        for constobj in self.body:
-            if isinstance(constobj, Literal):
-                constraint_literals.append(str(constobj))
-            elif isinstance(constobj, ConstOpt):
-                if constobj.operation == 'AllDifferent':
-                    # print(f'ALLDIFF:{constobj.arguments}')
-                    # AC: TODO!!!
-                    continue
-                arga, argb = constobj.arguments
-                if isinstance(arga, ConstVar):
-                    arga = arga.name
-                else:
-                    arga = str(arga)
-                if isinstance(argb, ConstVar):
-                    argb = argb.name
-                else:
-                    argb = str(argb)
-                constraint_literals.append(f'{arga}{constobj.operation}{argb}')
-
-        x = f':- {", ".join(constraint_literals)}.'
-        if self.head:
-            return f'{self.head} {x}'
-        return x

@@ -4,7 +4,7 @@ import sys
 import clingo
 import operator
 import numbers
-from . import core
+from . core import Grounding, ConstOpt, ConstVar
 from collections import OrderedDict
 from clingo import Function, Number, Tuple_
 import clingo.script
@@ -29,9 +29,9 @@ def arg_to_symbol(arg):
         return Function(arg)
     assert False, f'Unhandled argtype({type(arg)}) in aspsolver.py arg_to_symbol()'
 
-def atom_to_symbol(lit):
-    xs = tuple(arg_to_symbol(arg) for arg in lit.arguments)
-    return Function(name = lit.predicate, arguments = xs)
+def atom_to_symbol(pred, args):
+    xs = tuple(arg_to_symbol(arg) for arg in args)
+    return Function(name = pred, arguments = xs)
 
 class Clingo():
     def __init__(self, kbpath, clingo_args):
@@ -87,39 +87,45 @@ class Clingo():
 
     def add_ground_clauses(self, clauses):
         with self.solver.backend() as backend:
-            for clause in clauses:
+            for (head, body) in clauses:
                 head_lit = []
-                if clause.head:
-                    k = hash(clause.head)
+                if head:
+                    (sign, pred, args) = head
+                    k = hash(head)
                     if k in self.seen_symbols:
                         symbol = self.seen_symbols[k]
                     else:
-                        symbol = backend.add_atom(atom_to_symbol(clause.head))
+                        symbol = backend.add_atom(atom_to_symbol(pred, args))
                         self.seen_symbols[k] = symbol
                     head_lit = [symbol]
                 body_lits = []
-                for lit in clause.body:
+                for lit in body:
+                    (sign, pred, args) = lit
                     k = hash(lit)
                     if k in self.seen_symbols:
                         symbol = self.seen_symbols[k]
                     else:
-                        symbol = backend.add_atom(atom_to_symbol(lit))
+                        symbol = backend.add_atom(atom_to_symbol(pred, args))
                         self.seen_symbols[k] = symbol
-                    body_lits.append(symbol if lit.positive else -symbol)
+                    body_lits.append(symbol if sign else -symbol)
                 backend.add_rule(head_lit, body_lits)
 
-    def ground_program(self, constraint, max_clauses, max_vars):
-        if len(constraint.all_vars) == 0:
+
+    def ground_rule(self, rule, max_clauses, max_vars):
+        (head, body) = rule
+
+        all_vars = Grounding.find_all_vars(body)
+        if len(all_vars) == 0:
             return [{}]
 
-        k = constraint.grounding_hash()
+        k = Grounding.grounding_hash(body, all_vars)
         if k in self.seen_assignments:
             return self.seen_assignments[k]
 
         # map each clause_var and var_var in the program to an integer
         # AC: costly
-        c_vars = {v:i for i,v in enumerate(var for var in constraint.all_vars if var.type == 'Clause')}
-        v_vars = {v:i for i,v in enumerate(var for var in constraint.all_vars if var.type == 'Variable')}
+        c_vars = {v:i for i,v in enumerate(var for var in all_vars if var.type == 'Clause')}
+        v_vars = {v:i for i,v in enumerate(var for var in all_vars if var.type == 'Variable')}
 
         # transpose for return lookup
         c_vars_ = {v:k for k,v in c_vars.items()}
@@ -130,8 +136,7 @@ class Clingo():
         if c_var_count == 0 and v_var_count == 0:
             return [{}]
 
-        # solver = clingo.Control()
-        solver = clingo.Control(['--rand-freq=0'])
+        solver = clingo.Control()
 
         # ask for all models
         solver.configuration.solve.models = 0
@@ -155,18 +160,18 @@ class Clingo():
         """)
 
         # add constraints to the ASP program based on the AST thing
-        for lit in constraint.body:
-            if not isinstance(lit, core.ConstOpt):
+        for lit in body:
+            if not isinstance(lit, ConstOpt):
                 continue
             if lit.operation == '==':
                 var, val = lit.arguments
-                if isinstance(var, core.ConstVar) and var.type == 'Variable':
+                if isinstance(var, ConstVar) and var.type == 'Variable':
                     var = v_vars[var]
                     solver.add('base', [], f':- not v_var({var},{val}).')
 
             elif lit.operation == '>=':
                 var, val = lit.arguments
-                if isinstance(var, core.ConstVar) and var.type == 'Clause':
+                if isinstance(var, ConstVar) and var.type == 'Clause':
                     var = c_vars[var]
                     for i in range(val):
                         solver.add('base', [], f':- c_var({var},{i}).')
