@@ -8,14 +8,13 @@ from popper.generate import generate_program
 from popper.core import Clause, Literal, Grounding
 import multiprocessing
 
-def ground_constraints(grounder, max_clauses, max_vars, rules):
-    for rule in rules:
-        (head, body) = rule
+def ground_rules(grounder, max_clauses, max_vars, rules):
+    for (head, body) in rules:
         # find bindings for variables in the constraint
-        assignments = grounder.ground_rule(rule, max_clauses, max_vars)
+        assignments = grounder.find_bindings(head, body, max_clauses, max_vars)
 
         # keep only standard literals
-        body = frozenset(literal for literal in body if isinstance(literal, Literal))
+        body = [literal for literal in body if isinstance(literal, Literal)]
 
         # ground the clause for each variable assignment
         for assignment in assignments:
@@ -71,35 +70,35 @@ def popper(experiment):
                     return
 
             # 3. Build constraints
-            cons = set()
+            rules = set()
 
             if experiment.functional_test and tester.is_non_functional(program):
-                cons.update(constrainer.generalisation_constraint(program))
+                rules.update(constrainer.generalisation_constraint(program))
 
             # eliminate generalisations of clauses that contain redundant literals
-            for clause in tester.check_redundant_literal(program):
-                cons.update(constrainer.redundant_literal_constraint(clause))
+            for rule in tester.check_redundant_literal(program):
+                rules.update(constrainer.redundant_literal_constraint(rule))
 
             # eliminate generalisations of programs that contain redundant clauses
             if tester.check_redundant_clause(program):
-                cons.update(constrainer.generalisation_constraint(program))
+                rules.update(constrainer.generalisation_constraint(program))
 
             # add other constraints
-            cons.update(constrainer.build_constraints(program, outcome))
+            rules.update(constrainer.build_constraints(program, outcome))
 
             if experiment.debug:
-                print('Constraints:')
-                for con in cons:
-                    Constrain.print_constraint(con)
+                print('Rules:')
+                for rule in rules:
+                    Constrain.print_constraint(rule)
                 print()
 
             # 4. Ground constraints
             with experiment.duration('ground'):
-                cons = set(ground_constraints(grounder, solver.max_clauses, solver.max_vars, cons))
+                rules = set(ground_rules(grounder, solver.max_clauses, solver.max_vars, rules))
 
             # 5. Add to the solver
             with experiment.duration('add'):
-                solver.add_ground_clauses(cons)
+                solver.add_ground_clauses(rules)
 
     if experiment.stats:
         experiment.show_stats(False)

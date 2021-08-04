@@ -111,9 +111,7 @@ class Clingo():
                 backend.add_rule(head_lit, body_lits)
 
 
-    def ground_rule(self, rule, max_clauses, max_vars):
-        (head, body) = rule
-
+    def find_bindings(self, head, body, max_clauses, max_vars):
         all_vars = Grounding.find_all_vars(body)
         if len(all_vars) == 0:
             return [{}]

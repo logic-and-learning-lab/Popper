@@ -5,6 +5,7 @@ ConstOpt = namedtuple('ConstOpt', ['operator', 'arguments', 'operation'])
 
 class Grounding:
     @staticmethod
+    # IMPROVE/REFACTOR
     def ground_literal(literal, assignment):
         ground_args = []
         for arg in literal.arguments:
