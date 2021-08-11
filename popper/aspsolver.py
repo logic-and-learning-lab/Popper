@@ -95,9 +95,9 @@ class Clingo():
             self.seen_symbols[k] = symbol
         return symbol
 
-    def add_ground_clauses(self, rules):
+    def add_ground_clauses(self, clauses):
         with self.solver.backend() as backend:
-            for (head, body) in rules:
+            for (head, body) in clauses:
                 head_literal = []
                 if head:
                     head_literal = [self.gen_symbol(head, backend)]

@@ -1,4 +1,4 @@
-from . core import Literal, Clause, Program
+from . core import Literal
 from collections import defaultdict
 
 def gen_args(args):
@@ -56,17 +56,16 @@ def generate_program(model):
     clauses = []
     for clause_id in clause_id_to_head:
 
-        # head literal
         (head_pred, head_args, head_arity) = clause_id_to_head[clause_id]
         head_modes = tuple(directions[head_pred][i] for i in range(head_arity))
-        head_literal = Literal(head_pred, head_args, head_modes)
+        head = Literal(head_pred, head_args, head_modes)
 
-        # body literals
-        body_with_modes = set()
+        body = set()
         for (body_pred, body_args, body_arity) in clause_id_to_body[clause_id]:
             body_modes = tuple(directions[body_pred][i] for i in range(body_arity))
-            body_with_modes.add(Literal(body_pred, body_args, body_modes))
+            body.add(Literal(body_pred, body_args, body_modes))
+        body = frozenset(body)
 
-        clauses.append(Clause(head_literal, body_with_modes, min_clause[clause_id]))
-
-    return Program(clauses, before)
+        clauses.append((head, body))
+    clauses = tuple(clauses)
+    return (clauses, before, min_clause)
