@@ -85,31 +85,28 @@ class Clingo():
         symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
         self.solver.assign_external(symbol, True)
 
-    def add_ground_clauses(self, clauses):
-        with self.solver.backend() as backend:
-            for (head, body) in clauses:
-                head_lit = []
-                if head:
-                    (sign, pred, args) = head
-                    k = hash(head)
-                    if k in self.seen_symbols:
-                        symbol = self.seen_symbols[k]
-                    else:
-                        symbol = backend.add_atom(atom_to_symbol(pred, args))
-                        self.seen_symbols[k] = symbol
-                    head_lit = [symbol]
-                body_lits = []
-                for lit in body:
-                    (sign, pred, args) = lit
-                    k = hash(lit)
-                    if k in self.seen_symbols:
-                        symbol = self.seen_symbols[k]
-                    else:
-                        symbol = backend.add_atom(atom_to_symbol(pred, args))
-                        self.seen_symbols[k] = symbol
-                    body_lits.append(symbol if sign else -symbol)
-                backend.add_rule(head_lit, body_lits)
+    def gen_symbol(self, literal, backend):
+        (sign, pred, args) = literal
+        k = hash(literal)
+        if k in self.seen_symbols:
+            symbol = self.seen_symbols[k]
+        else:
+            symbol = backend.add_atom(atom_to_symbol(pred, args))
+            self.seen_symbols[k] = symbol
+        return symbol
 
+    def add_ground_clauses(self, rules):
+        with self.solver.backend() as backend:
+            for (head, body) in rules:
+                head_literal = []
+                if head:
+                    head_literal = [self.gen_symbol(head, backend)]
+                body_lits = []
+                for literal in body:
+                    (sign, _pred, _args) = literal
+                    symbol = self.gen_symbol(literal, backend)
+                    body_lits.append(symbol if sign else -symbol)
+                backend.add_rule(head_literal, body_lits)
 
     def find_bindings(self, head, body, max_clauses, max_vars):
         all_vars = Grounding.find_all_vars(body)
@@ -121,7 +118,6 @@ class Clingo():
             return self.seen_assignments[k]
 
         # map each clause_var and var_var in the program to an integer
-        # AC: costly
         c_vars = {v:i for i,v in enumerate(var for var in all_vars if var.type == 'Clause')}
         v_vars = {v:i for i,v in enumerate(var for var in all_vars if var.type == 'Variable')}
 
