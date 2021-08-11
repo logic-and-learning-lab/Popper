@@ -10,16 +10,6 @@ from clingo import Function, Number, Tuple_
 import clingo.script
 clingo.script.enable_python()
 
-# AC: rename file to ClingoSolver.
-NUM_OF_LITERALS = (
-"""
-%%% External atom for number of literals in the program %%%%%
-#external size_in_literals(n).
-:-
-    size_in_literals(n),
-    #sum{K+1,Clause : body_size(Clause,K)} != n.
-""")
-
 def arg_to_symbol(arg):
     if isinstance(arg, tuple):
         return Tuple_(tuple(arg_to_symbol(a) for a in arg))
@@ -143,6 +133,16 @@ class ClingoSolver():
 
         # Reset number of literals and clauses because size_in_literals literal within Clingo is reset by loading Alan? (bottom two).
         self.solver.add('invented', ['predicate', 'arity'], '#external invented(pred,arity).')
+
+        NUM_OF_LITERALS = (
+        """
+        %%% External atom for number of literals in the program %%%%%
+        #external size_in_literals(n).
+        :-
+            size_in_literals(n),
+            #sum{K+1,Clause : body_size(Clause,K)} != n.
+        """)
+
         self.solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
         self.solver.ground([('alan', []), ('bias', [])])
 
