@@ -49,28 +49,30 @@ def popper(experiment):
 
             # 2. Test
             with experiment.duration('test'):
-                (outcome, (TP,FN,TN,FP)) = tester.test(program)
+                (tp, fn, tn, fp) = tester.test(program)
 
             if experiment.debug:
                 print(f'Program {experiment.total_programs}:')
                 pprint(program)
-                approx_pos = '+' if TP + FN < tester.num_pos else ''
-                approx_neg = '+' if TN + FP < tester.num_neg else ''
-                print(f'TP: {TP}{approx_pos}, FN: {FN}{approx_pos}, TN: {TN}{approx_neg}, FP: {FP}{approx_neg}')
+                approx_pos = '+' if tp + fn < tester.num_pos else ''
+                approx_neg = '+' if tn + fp < tester.num_neg else ''
+                print(f'TP: {tp}{approx_pos}, FN: {fn}{approx_pos}, TN: {tn}{approx_neg}, FP: {fp}{approx_neg}')
 
+            outcome = Constrain.decide_outcome(tp, fn, tn, fp)
             if outcome == (Outcome.ALL, Outcome.NONE):
-                if experiment.debug:
-                    print()
-                if experiment.stats:
-                    experiment.show_stats(True)
                 print('SOLUTION:')
                 pprint(program)
                 num_solutions += 1
                 if num_solutions == experiment.max_solutions:
+                    if experiment.stats:
+                        experiment.show_stats(True)
                     return
 
             # 3. Build constraints
             rules = set()
+
+            # add standard constraints
+            rules.update(constrainer.build_constraints(program, outcome))
 
             if experiment.functional_test and tester.is_non_functional(program):
                 rules.update(constrainer.generalisation_constraint(program))
@@ -82,9 +84,6 @@ def popper(experiment):
             # eliminate generalisations of programs that contain redundant clauses
             if tester.check_redundant_clause(program):
                 rules.update(constrainer.generalisation_constraint(program))
-
-            # add other constraints
-            rules.update(constrainer.build_constraints(program, outcome))
 
             if experiment.debug:
                 print('Rules:')
@@ -100,9 +99,9 @@ def popper(experiment):
             with experiment.duration('add'):
                 solver.add_ground_clauses(rules)
 
-    if experiment.stats:
-        experiment.show_stats(False)
     print('NO MORE SOLUTIONS')
+    if experiment.stats:
+        experiment.show_stats(True)
     return
 
 if __name__ == '__main__':
@@ -114,3 +113,4 @@ if __name__ == '__main__':
     if p.is_alive():
         p.terminate()
         print('Timed out.')
+

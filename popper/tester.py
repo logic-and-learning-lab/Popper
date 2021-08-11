@@ -4,7 +4,6 @@ import re
 import os
 import sys
 from contextlib import contextmanager
-from . constrain import Outcome
 
 class Tester():
     def __init__(self, experiment):
@@ -80,32 +79,9 @@ class Tester():
                 else:
                     # AC: TN is not calculated when performing minmal testing
                     res = self.first_result('do_test_minimal(TP,FN,TN,FP)')
-                TP, FN, TN, FP = res['TP'], res['FN'], res['TN'], res['FP']
+                return (res['TP'], res['FN'], res['TN'], res['FP'])
             except:
                 print("A Prolog error occurred when testing the program:")
                 for clause in program.clauses:
                     print('\t' + clause.to_code())
                 raise
-
-        # complete
-        if TP == self.num_pos:
-            positive_outcome = Outcome.ALL
-        # totally incomplete
-        elif TP == 0 and FN > 0: # AC: we must use TP==0 rather than FN=|E+| because of minimal testing
-            positive_outcome = Outcome.NONE
-        # incomplete
-        else:
-            positive_outcome = Outcome.SOME
-
-        # consistent
-        if FP == 0:
-            negative_outcome = Outcome.NONE
-        # totally inconsistent
-        # AC: this line may not work with minimal testing
-        # elif FP == self.num_neg:
-            # negative_outcome = Outcome.ALL
-        # inconsistent
-        else:
-            negative_outcome = Outcome.SOME
-
-        return ((positive_outcome, negative_outcome), (TP,FN,TN,FP))

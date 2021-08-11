@@ -40,10 +40,39 @@ def vo_clause(variable):
 def vo_variable(variable):
     return ConstVar(f'{variable}', 'Variable')
 
+# restrict a clause id to have a specific body size
+def body_size_literal(clause_var, body_size):
+    return Literal('body_size', (clause_var, body_size))
+
 class Constrain:
     def __init__(self, experiment):
         self.seen_clause_handle = {}
         self.added_clauses = set()
+
+    @staticmethod
+    def decide_outcome(tp, fn, tn, fp):
+        # complete
+        if fn == 0:
+            positive_outcome = Outcome.ALL
+        # totally incomplete
+        elif tp == 0 and fn > 0: # AC: we must use TP==0 rather than FN=|E+| because of minimal testing
+            positive_outcome = Outcome.NONE
+        # incomplete
+        else:
+            positive_outcome = Outcome.SOME
+
+        # consistent
+        if fp == 0:
+            negative_outcome = Outcome.NONE
+        # totally inconsistent
+        # AC: this line may not work with minimal testing
+        # elif FP == self.num_neg:
+            # negative_outcome = Outcome.ALL
+        # inconsistent
+        else:
+            negative_outcome = Outcome.SOME
+
+        return (positive_outcome, negative_outcome)
 
     def build_constraints(self, program, outcome):
         (positive_outcome, negative_outcome) = outcome
@@ -104,7 +133,7 @@ class Constrain:
             yield from self.make_clause_inclusion_rule(clause, clause_handle)
 
             literals.append(Literal('included_clause', (clause_handle, vo_clause(clause_number))))
-            literals.append(Literal('body_size', (vo_clause(clause_number), len(clause.body))))
+            literals.append(body_size_literal(vo_clause(clause_number), len(clause.body)))
 
         for clause_number1, clause_numbers in program.before.items():
             for clause_number2 in clause_numbers:
@@ -127,7 +156,7 @@ class Constrain:
             yield from self.make_clause_inclusion_rule(clause, clause_handle)
 
             literals.append(Literal('included_clause', (clause_handle, vo_clause(clause_number))))
-            literals.append(Literal('body_size', (vo_clause(clause_number), len(clause.body))))
+            literals.append(body_size_literal(vo_clause(clause_number), len(clause.body)))
 
         for clause_number1, clause_numbers in program.before.items():
             for clause_number2 in clause_numbers:
@@ -168,7 +197,7 @@ class Constrain:
         literals = []
         clause_variable = vo_clause(0)
         literals.append(Literal('included_clause', (clause_handle, clause_variable)))
-        literals.append(Literal('body_size', (clause_variable, len(clause.body))))
+        literals.append(body_size_literal(clause_variable, len(clause.body)))
         yield (None, tuple(literals))
 
     # Jk: AC, I cleaned this up a bit, but this reorg is for you. Godspeed!
