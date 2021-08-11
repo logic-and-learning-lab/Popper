@@ -65,7 +65,6 @@ def generate_program(model):
             body_modes = tuple(directions[body_pred][i] for i in range(body_arity))
             body.add(Literal(body_pred, body_args, body_modes))
         body = frozenset(body)
-
         clauses.append((head, body))
     clauses = tuple(clauses)
     return (clauses, before, min_clause)

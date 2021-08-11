@@ -42,7 +42,6 @@ class Tester():
             for clause in program:
                 (head, body) = clause
                 self.prolog.assertz(Clause.to_code(Clause.to_ordered(clause)))
-                # Clause.to_code(clause))
                 current_clauses.add((head.predicate, head.arity))
             yield
         finally:

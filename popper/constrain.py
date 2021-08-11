@@ -2,26 +2,6 @@ import operator
 from collections import defaultdict
 from . core import ConstVar, ConstOpt, Literal, Clause
 
-class Outcome:
-    ALL = 'all'
-    SOME = 'some'
-    NONE = 'none'
-
-class Con:
-    GENERALISATION = 'generalisation'
-    SPECIALISATION = 'specialisation'
-    REDUNDANCY = 'redundancy'
-    BANISH = 'banish'
-
-OUTCOME_TO_CONSTRAINTS = {
-    (Outcome.ALL, Outcome.NONE)  : (Con.BANISH,),
-    (Outcome.ALL, Outcome.SOME)  : (Con.GENERALISATION,),
-    (Outcome.SOME, Outcome.NONE) : (Con.SPECIALISATION,),
-    (Outcome.SOME, Outcome.SOME) : (Con.SPECIALISATION, Con.GENERALISATION),
-    (Outcome.NONE, Outcome.NONE) : (Con.SPECIALISATION, Con.REDUNDANCY),
-    (Outcome.NONE, Outcome.SOME) : (Con.SPECIALISATION, Con.REDUNDANCY, Con.GENERALISATION)
-}
-
 def alldiff(vars):
     return ConstOpt(None, vars, 'AllDifferent')
 
@@ -48,46 +28,6 @@ class Constrain:
     def __init__(self, experiment):
         self.seen_clause_handle = {}
         self.added_clauses = set()
-
-    @staticmethod
-    def decide_outcome(tp, fn, tn, fp):
-        # complete
-        if fn == 0:
-            positive_outcome = Outcome.ALL
-        # totally incomplete
-        elif tp == 0 and fn > 0: # AC: we must use TP==0 rather than FN=|E+| because of minimal testing
-            positive_outcome = Outcome.NONE
-        # incomplete
-        else:
-            positive_outcome = Outcome.SOME
-
-        # consistent
-        if fp == 0:
-            negative_outcome = Outcome.NONE
-        # totally inconsistent
-        # AC: this line may not work with minimal testing
-        # elif FP == self.num_neg:
-            # negative_outcome = Outcome.ALL
-        # inconsistent
-        else:
-            negative_outcome = Outcome.SOME
-
-        return (positive_outcome, negative_outcome)
-
-    def build_constraints(self, program, before, min_clause, outcome):
-        (positive_outcome, negative_outcome) = outcome
-        # RM: If you don't use these two lines you need another three entries in the OUTCOME_TO_CONSTRAINTS table (one for every positive outcome combined with negative outcome ALL).
-        if negative_outcome == Outcome.ALL:
-             negative_outcome = Outcome.SOME
-        for constraint_type in OUTCOME_TO_CONSTRAINTS[(positive_outcome, negative_outcome)]:
-            if constraint_type == Con.GENERALISATION:
-                yield from self.generalisation_constraint(program, before, min_clause)
-            elif constraint_type == Con.SPECIALISATION:
-                yield from self.specialisation_constraint(program, before, min_clause)
-            elif constraint_type == Con.REDUNDANCY:
-                yield from self.redundancy_constraint(program, before, min_clause)
-            elif constraint_type == Con.BANISH:
-                yield from self.banish_constraint(program, before, min_clause)
 
     def make_literal_handle(self, literal):
         return f'{literal.predicate}{"".join(literal.arguments)}'
@@ -144,7 +84,6 @@ class Constrain:
         for clause_number, clause in enumerate(program):
             literals.append(gteq(vo_clause(clause_number), min_clause[clause]))
 
-
         num_clauses = len(program)
         # ensure that each clause_var is ground to a unique value
         literals.append(alldiff(tuple(vo_clause(c) for c in range(num_clauses))))
@@ -190,7 +129,6 @@ class Constrain:
         num_clauses = len(program)
         # ensure that each clause_var is ground to a unique value
         literals.append(alldiff(tuple(vo_clause(c) for c in range(num_clauses))))
-
         literals.append(Literal('clause', (num_clauses, ), positive = False))
 
         yield (None, tuple(literals))

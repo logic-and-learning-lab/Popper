@@ -27,7 +27,8 @@ class Grounding:
         return (literal.positive, literal.predicate, tuple(ground_args))
 
     @staticmethod
-    def ground_rule(head, body, assignment):
+    def ground_clause(clause, assignment):
+        (head, body) = clause
         ground_head = None
         if head:
             ground_head = Grounding.ground_literal(head, assignment)
