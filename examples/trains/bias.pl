@@ -24,7 +24,7 @@ body_pred(rectangle,1).
 
 type(f,(train,)).
 type(has_car,(train,car)).
-type(has_load,(train,load)).
+type(has_load,(car,load)).
 type(short,(car,)).
 type(long,(car,)).
 type(two_wheels,(car,)).

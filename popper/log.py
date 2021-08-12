@@ -46,7 +46,7 @@ class Experiment:
             else:
                 self.durations[operation].append(duration)
 
-    def show_stats(self, program):
+    def show_stats(self):
         total_exec_time = perf_counter() - self.exec_start
 
         message = f'Total programs: {self.total_programs}\n'

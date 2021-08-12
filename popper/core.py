@@ -27,7 +27,8 @@ class Grounding:
         return (literal.positive, literal.predicate, tuple(ground_args))
 
     @staticmethod
-    def ground_rule(head, body, assignment):
+    def ground_clause(clause, assignment):
+        (head, body) = clause
         ground_head = None
         if head:
             ground_head = Grounding.ground_literal(head, assignment)
@@ -64,8 +65,13 @@ class Literal:
         self.arity = len(arguments)
         self.directions = directions
         self.positive = positive
-        self.inputs = set(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
-        self.outputs = set(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
+        self.inputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
+        self.outputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
+
+    @staticmethod
+    def to_code(literal):
+        args = ','.join(literal.arguments)
+        return f'{literal.predicate}({args})'
 
     # AC: TODO - REFACTOR
     def __str__(self):
@@ -109,31 +115,39 @@ class Literal:
     def my_hash(self):
         return hash((self.predicate, self.arguments))
 
-    def to_code(self):
-        return f'{self.predicate}({",".join(self.arguments)})'
-
 class Clause:
-    def __init__(self, head, body, min_num = 0):
-        self.head = head
-        self.body = body
-        self.min_num = min_num
+    @staticmethod
+    def to_code(clause):
+        (head, body) = clause
+        head_str = ''
+        if head:
+            head_str = Literal.to_code(head)
+        body_str = ','.join(Literal.to_code(literal) for literal in body)
+        return head_str + ':-' + body_str
 
-    def __str__(self):
-        x = f':- {", ".join(str(literal) for literal in self.body)}.'
-        if self.head:
-            return f'{str(self.head)}{x}'
-        return x
+    @staticmethod
+    def clause_hash(clause):
+        (head, body) = clause
+        h = None
+        if head:
+            h = (head.my_hash(),)
+        b = frozenset(literal.my_hash() for literal in body)
+        return hash((h,b))
 
-    def is_recursive(self):
-        if self.head:
-            return self.head.predicate in set(literal.predicate for literal in self.body if isinstance(literal, Literal))
-        return False
+    @staticmethod
+    def is_recursive(clause):
+        (head, body) = clause
+        if not head:
+            return False
+        return head.predicate in set(literal.predicate for literal in body if isinstance(literal, Literal))
 
-    def all_vars(self):
+    @staticmethod
+    def all_vars(clause):
+        (head, body) = clause
         xs = set()
-        if self.head:
-            xs.update(self.head.arguments)
-        for literal in self.body:
+        if head:
+            xs.update(head.arguments)
+        for literal in body:
             for arg in literal.arguments:
                 if isinstance(arg, ConstVar):
                     xs.add(arg)
@@ -143,18 +157,22 @@ class Clause:
                             xs.add(t_arg)
         return xs
 
-    # AC: nasty
-    def to_ordered(self):
+    @staticmethod
+    def to_ordered(clause):
+        (head, body) = clause
         ordered_body = []
-        grounded_variables = self.head.inputs
-        body_literals = set(self.body)
+        grounded_variables = head.inputs
+        body_literals = set(body)
+
+        if head.inputs == []:
+            return clause
 
         while body_literals:
             selected_literal = None
             for literal in body_literals:
                 # AC: could cache for a micro-optimisation
                 if literal.inputs.issubset(grounded_variables):
-                    if literal.predicate != self.head.predicate:
+                    if literal.predicate != head.predicate:
                         # find the first ground non-recursive body literal and stop
                         selected_literal = literal
                         break
@@ -170,29 +188,4 @@ class Clause:
             grounded_variables = grounded_variables.union(selected_literal.outputs)
             body_literals = body_literals.difference({selected_literal})
 
-        self.body = tuple(ordered_body)
-
-    def to_code(self):
-        return (
-            f'{self.head.to_code()}:- '
-            f'{",".join([blit.to_code() for blit in self.body])}'
-        )
-
-    def my_hash(self):
-        h = None
-        if self.head:
-            h = (self.head.my_hash(),)
-        b = frozenset(literal.my_hash() for literal in self.body)
-        return hash((h,b))
-
-class Program:
-    def __init__(self, clauses, before = defaultdict(set)):
-        self.clauses = clauses
-        self.before = before
-        self.num_clauses = len(clauses)
-        for clause in self.clauses:
-            clause.to_ordered()
-
-    def to_code(self):
-        for clause in self.clauses:
-            yield clause.to_code() + '.'
+        return (head, tuple(ordered_body))

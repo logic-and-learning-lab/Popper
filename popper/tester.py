@@ -3,6 +3,7 @@ from pyswip import Prolog
 import re
 import os
 import sys
+from . core import Clause, Literal
 from contextlib import contextmanager
 
 class Tester():
@@ -38,9 +39,10 @@ class Tester():
     def using(self, program):
         current_clauses = set()
         try:
-            for clause in program.clauses:
-                self.prolog.assertz(clause.to_code())
-                current_clauses.add((clause.head.predicate, clause.head.arity))
+            for clause in program:
+                (head, body) = clause
+                self.prolog.assertz(Clause.to_code(Clause.to_ordered(clause)))
+                current_clauses.add((head.predicate, head.arity))
             yield
         finally:
             for predicate, arity in current_clauses:
@@ -48,12 +50,13 @@ class Tester():
                 self.prolog.retractall(f'{predicate}({args})')
 
     def check_redundant_literal(self, program):
-        for clause in program.clauses:
-            k = clause.my_hash()
+        for clause in program:
+            k = Clause.clause_hash(clause)
             if k in self.seen_clause:
                 continue
             self.seen_clause.add(k)
-            C = f"[{','.join(('not_'+ clause.head.to_code(),) + tuple(lit.to_code() for lit in clause.body))}]"
+            (head, body) = clause
+            C = f"[{','.join(('not_'+ Literal.to_code(head),) + tuple(Literal.to_code(lit) for lit in body))}]"
             res = list(self.prolog.query(f'redundant_literal({C})'))
             if res:
                 yield clause
@@ -61,8 +64,8 @@ class Tester():
     def check_redundant_clause(self, program):
         # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
         prog = []
-        for clause in program.clauses:
-            C = f"[{','.join(('not_'+ clause.head.to_code(),) + tuple(lit.to_code() for lit in clause.body))}]"
+        for (head, body) in program:
+            C = f"[{','.join(('not_'+ Literal.to_code(head),) + tuple(Literal.to_code(lit) for lit in body))}]"
             prog.append(C)
         prog = f"[{','.join(prog)}]"
         return list(self.prolog.query(f'redundant_clause({prog})'))
@@ -82,6 +85,6 @@ class Tester():
                 return (res['TP'], res['FN'], res['TN'], res['FP'])
             except:
                 print("A Prolog error occurred when testing the program:")
-                for clause in program.clauses:
-                    print('\t' + clause.to_code())
+                for clause in program:
+                    print('\t' + Clause.to_code(clause))
                 raise
