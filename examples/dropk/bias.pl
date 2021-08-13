@@ -3,8 +3,8 @@
 %% f(A,B,C) :- tail(A,D),decrement(B,E),f(D,E,C).
 %% 0.85s user 0.07s system 102% cpu 0.901 total
 
-max_vars(5).
-max_body(5).
+max_vars(6).
+max_body(6).
 max_clauses(2).
 enable_recursion.
 

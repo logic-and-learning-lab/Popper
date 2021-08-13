@@ -1,3 +1,4 @@
+import signal
 import argparse
 from time import perf_counter
 from contextlib import contextmanager
@@ -15,6 +16,25 @@ def parse_args():
     parser.add_argument('--functional-test', default= False, action='store_true', help='Run custom functional test')
     parser.add_argument('--clingo-args', type=str, default='', help='Arguments to pass to Clingo')
     return parser.parse_args()
+
+def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
+    class TimeoutError(Exception):
+        pass
+
+    def handler(signum, frame):
+        raise TimeoutError()
+
+    # set the timeout handler
+    signal.signal(signal.SIGALRM, handler)
+    signal.alarm(timeout_duration)
+    try:
+        result = func(*args, **kwargs)
+    except TimeoutError as exc:
+        result = default
+    finally:
+        signal.alarm(0)
+
+    return result
 
 class Experiment:
     def __init__(self):
@@ -56,7 +76,7 @@ class Experiment:
             total = sum(durations)
             mean = sum(durations)/len(durations)
             max_ = max(durations)
-            message += f'{operation.title()}:\n\tCalled: {called} times \t Total: {total:0.3f} \t Mean: {mean:0.3f} \t Max: {max_:0.3f}\n'
+            message += f'{operation.title()}:\n\tCalled: {called} times \t Total: {total:0.2f} \t Mean: {mean:0.3f} \t Max: {max_:0.3f}\n'
             if operation != 'basic setup':
                 total_op_time += total
         message += f'Total operation time: {total_op_time:0.2f}s\n'

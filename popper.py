@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from popper.log import Experiment
+from popper.log import Experiment, timeout
 from popper.asp import ClingoGrounder, ClingoSolver
 from popper.tester import Tester
 from popper.constrain import Constrain
@@ -18,6 +18,15 @@ class Con:
     SPECIALISATION = 'specialisation'
     REDUNDANCY = 'redundancy'
     BANISH = 'banish'
+
+OUTCOME_TO_CONSTRAINTS = {
+        (Outcome.ALL, Outcome.NONE)  : (Con.BANISH,),
+        (Outcome.ALL, Outcome.SOME)  : (Con.GENERALISATION,),
+        (Outcome.SOME, Outcome.NONE) : (Con.SPECIALISATION,),
+        (Outcome.SOME, Outcome.SOME) : (Con.SPECIALISATION, Con.GENERALISATION),
+        (Outcome.NONE, Outcome.NONE) : (Con.SPECIALISATION, Con.REDUNDANCY),
+        (Outcome.NONE, Outcome.SOME) : (Con.SPECIALISATION, Con.REDUNDANCY, Con.GENERALISATION)
+    }
 
 def ground_rules(grounder, max_clauses, max_vars, clauses):
     for clause in clauses:
@@ -54,15 +63,6 @@ def decide_outcome(tp, fn, tn, fp):
     return (positive_outcome, negative_outcome)
 
 def build_rules(experiment, constrainer, tester, program, before, min_clause, outcome):
-    OUTCOME_TO_CONSTRAINTS = {
-        (Outcome.ALL, Outcome.NONE)  : (Con.BANISH,),
-        (Outcome.ALL, Outcome.SOME)  : (Con.GENERALISATION,),
-        (Outcome.SOME, Outcome.NONE) : (Con.SPECIALISATION,),
-        (Outcome.SOME, Outcome.SOME) : (Con.SPECIALISATION, Con.GENERALISATION),
-        (Outcome.NONE, Outcome.NONE) : (Con.SPECIALISATION, Con.REDUNDANCY),
-        (Outcome.NONE, Outcome.SOME) : (Con.SPECIALISATION, Con.REDUNDANCY, Con.GENERALISATION)
-    }
-
     (positive_outcome, negative_outcome) = outcome
     # RM: If you don't use these two lines you need another three entries in the OUTCOME_TO_CONSTRAINTS table (one for every positive outcome combined with negative outcome ALL).
     if negative_outcome == Outcome.ALL:
@@ -141,8 +141,6 @@ def popper(experiment):
                 pprint(program)
                 num_solutions += 1
                 if num_solutions == experiment.max_solutions:
-                    if experiment.stats:
-                        experiment.show_stats()
                     return
 
             # 3. Build rules
@@ -158,19 +156,10 @@ def popper(experiment):
                 solver.add_ground_clauses(rules)
 
     print('NO MORE SOLUTIONS')
-    if experiment.stats:
-        experiment.show_stats()
     return
 
 if __name__ == '__main__':
     experiment = Experiment()
-    p = multiprocessing.Process(target = popper, args = (experiment,))
-    p.start()
-    p.join(experiment.args.timeout)
-    if p.is_alive():
-        p.terminate()
-        print('Timed out.')
-    # AC: @JK, this line never works correctly
+    timeout(popper, (experiment,), timeout_duration=int(experiment.args.timeout))
     if experiment.stats:
         experiment.show_stats()
-
