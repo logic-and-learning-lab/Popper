@@ -146,7 +146,8 @@ def popper(experiment):
                     return
 
             # 3. Build rules
-            rules = build_rules(experiment, constrainer, tester, program, before, min_clause, outcome)
+            with experiment.duration('build_rules'):
+                rules = build_rules(experiment, constrainer, tester, program, before, min_clause, outcome)
 
             # 4. Ground rules
             with experiment.duration('ground'):
@@ -166,8 +167,10 @@ if __name__ == '__main__':
     p = multiprocessing.Process(target = popper, args = (experiment,))
     p.start()
     p.join(experiment.args.timeout)
-
     if p.is_alive():
         p.terminate()
         print('Timed out.')
+    # AC: @JK, this line never works correctly
+    if experiment.stats:
+        experiment.show_stats()
 

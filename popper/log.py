@@ -55,7 +55,8 @@ class Experiment:
             called = len(durations)
             total = sum(durations)
             mean = sum(durations)/len(durations)
-            message += f'{operation.title()}: Called: {called} times | Total: {total:0.3f}s | Mean: {mean:0.4f}s\n'
+            max_ = max(durations)
+            message += f'{operation.title()}:\n\tCalled: {called} times \t Total: {total:0.3f} \t Mean: {mean:0.3f} \t Max: {max_:0.3f}\n'
             if operation != 'basic setup':
                 total_op_time += total
         message += f'Total operation time: {total_op_time:0.2f}s\n'
