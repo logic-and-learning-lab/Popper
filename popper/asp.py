@@ -4,7 +4,7 @@ import sys
 import clingo
 import operator
 import numbers
-from . core import Grounding, ConstOpt, ConstVar
+from . core import Grounding, ConstVar
 from collections import OrderedDict
 from clingo import Function, Number, Tuple_
 import clingo.script
@@ -75,22 +75,18 @@ class ClingoGrounder():
 
         # add constraints to the ASP program based on the AST thing
         for lit in body:
-            if not isinstance(lit, ConstOpt):
+            if not lit.meta:
                 continue
-            if lit.operation == '==':
+            if lit.predicate == '==':
                 var, val = lit.arguments
-                if isinstance(var, ConstVar) and var.type == 'Variable':
-                    var = v_vars[var]
-                    solver.add('base', [], f':- not v_var({var},{val}).')
-
-            elif lit.operation == '>=':
+                var = v_vars[var]
+                solver.add('base', [], f':- not v_var({var},{val}).')
+            elif lit.predicate == '>=':
                 var, val = lit.arguments
-                if isinstance(var, ConstVar) and var.type == 'Clause':
-                    var = c_vars[var]
-                    for i in range(val):
-                        solver.add('base', [], f':- c_var({var},{i}).')
-
-            elif lit.operation == '<':
+                var = c_vars[var]
+                for i in range(val):
+                    solver.add('base', [], f':- c_var({var},{i}).')
+            elif lit.predicate == '<':
                 var1 = c_vars[lit.arguments[0]]
                 var2 = c_vars[lit.arguments[1]]
                 solver.add('base', [], f':- c_var({var1},Val1), c_var({var2},Val2), Val1>=Val2.')

@@ -45,6 +45,8 @@ class Experiment:
         self.debug = self.args.debug
         self.stats = self.args.stats
         self.kbpath = self.args.kbpath
+        if self.kbpath[-1] != '/':
+            self.kbpath += '/'
         self.max_solutions = self.args.max_solutions
         self.functional_test = self.args.functional_test
         self.clingo_args = [] if not self.args.clingo_args else self.args.clingo_args.split(' ')

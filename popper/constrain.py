@@ -1,18 +1,18 @@
 import operator
 from collections import defaultdict
-from . core import ConstVar, ConstOpt, Literal, Clause
+from . core import ConstVar, Literal, Clause
 
-def alldiff(vars):
-    return ConstOpt(None, vars, 'AllDifferent')
+def alldiff(args):
+    return Literal('AllDifferent', args, meta=True)
 
 def lt(a, b):
-    return ConstOpt(operator.lt, (a, b), '<')
+    return Literal('<', (a,b), meta=True)
 
 def eq(a, b):
-    return ConstOpt(operator.eq, (a, b), '==')
+    return Literal('==', (a,b), meta=True)
 
 def gteq(a, b):
-    return ConstOpt(operator.ge, (a, b), '>=')
+    return Literal('>=', (a,b), meta=True)
 
 def vo_clause(variable):
     return ConstVar(f'C{variable}', 'Clause')
@@ -201,26 +201,24 @@ class Constrain:
         (head, body) = con
         constraint_literals = []
         for constobj in body:
-            if isinstance(constobj, Literal):
+            if not constobj.meta:
                 constraint_literals.append(str(constobj))
-            elif isinstance(constobj, ConstOpt):
-                if constobj.operation == 'AllDifferent':
-                    # print(f'ALLDIFF:{constobj.arguments}')
-                    # AC: TODO!!!
-                    continue
-                arga, argb = constobj.arguments
-                if isinstance(arga, ConstVar):
-                    arga = arga.name
-                else:
-                    arga = str(arga)
-                if isinstance(argb, ConstVar):
-                    argb = argb.name
-                else:
-                    argb = str(argb)
-                constraint_literals.append(f'{arga}{constobj.operation}{argb}')
+                continue
+            if constobj.predicate == 'AllDifferent':
+                # AC: TODO!!!
+                continue
+            arga, argb = constobj.arguments
+            if isinstance(arga, ConstVar):
+                arga = arga.name
+            else:
+                arga = str(arga)
+            if isinstance(argb, ConstVar):
+                argb = argb.name
+            else:
+                argb = str(argb)
+            constraint_literals.append(f'{arga}{constobj.predicate}{argb}')
 
         x = f':- {", ".join(constraint_literals)}.'
         if head:
             x = f'{head} {x}'
         print(x)
-

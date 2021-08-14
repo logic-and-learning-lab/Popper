@@ -29,23 +29,26 @@ OUTCOME_TO_CONSTRAINTS = {
     }
 
 def ground_rules(grounder, max_clauses, max_vars, clauses):
+    out = set()
     for clause in clauses:
         (head, body) = clause
         # find bindings for variables in the constraint
         assignments = grounder.find_bindings(clause, max_clauses, max_vars)
 
         # keep only standard literals
-        body = tuple(literal for literal in body if isinstance(literal, Literal))
+        body = tuple(literal for literal in body if not literal.meta)
 
         # ground the clause for each variable assignment
         for assignment in assignments:
-            yield Grounding.ground_clause((head, body), assignment)
+            out.add(Grounding.ground_clause((head, body), assignment))
+    return out
 
 def pprint(program):
     for clause in program:
         print(Clause.to_code(clause))
 
-def decide_outcome(tp, fn, tn, fp):
+def decide_outcome(conf_matrix):
+    (tp, fn, tn, fp) = conf_matrix
     if fn == 0:
         positive_outcome = Outcome.ALL # complete
     elif tp == 0 and fn > 0:
@@ -98,18 +101,18 @@ def build_rules(experiment, constrainer, tester, program, before, min_clause, ou
 
     return rules
 
-def show_conf_matrix(tester, tp, fn, tn, fp):
+def print_conf_matrix(tester, conf_matrix):
+    (tp, fn, tn, fp) = conf_matrix
     approx_pos = '+' if tp + fn < tester.num_pos else ''
     approx_neg = '+' if tn + fp < tester.num_neg else ''
     print(f'TP: {tp}{approx_pos}, FN: {fn}{approx_pos}, TN: {tn}{approx_neg}, FP: {fp}{approx_neg}')
 
 def popper(experiment):
-    if experiment.kbpath[-1] != '/':
-        experiment.kbpath += '/'
     solver = ClingoSolver(experiment.kbpath, experiment.clingo_args)
     tester = Tester(experiment)
     grounder = ClingoGrounder()
     constrainer = Constrain(experiment)
+
     num_solutions = 0
 
     for size in range(1, experiment.args.max_literals + 1):
@@ -128,14 +131,14 @@ def popper(experiment):
 
             # 2. Test
             with experiment.duration('test'):
-                (tp, fn, tn, fp) = tester.test(program)
+                conf_matrix = tester.test(program)
 
             if experiment.debug:
                 print(f'Program {experiment.total_programs}:')
                 pprint(program)
-                show_conf_matrix(tester, tp, fn, tn, fp)
+                print_conf_matrix(tester, conf_matrix)
 
-            outcome = decide_outcome(tp, fn, tn, fp)
+            outcome = decide_outcome(conf_matrix)
             if outcome == (Outcome.ALL, Outcome.NONE):
                 print('SOLUTION:')
                 pprint(program)
@@ -149,7 +152,7 @@ def popper(experiment):
 
             # 4. Ground rules
             with experiment.duration('ground'):
-                rules = set(ground_rules(grounder, solver.max_clauses, solver.max_vars, rules))
+                rules = ground_rules(grounder, solver.max_clauses, solver.max_vars, rules)
 
             # 5. Add rules to solver
             with experiment.duration('add'):

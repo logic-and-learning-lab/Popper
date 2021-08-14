@@ -1,7 +1,6 @@
 from collections import namedtuple, defaultdict
 
 ConstVar = namedtuple('ConstVar', ['name', 'type'])
-ConstOpt = namedtuple('ConstOpt', ['operator', 'arguments', 'operation'])
 
 class Grounding:
     @staticmethod
@@ -40,9 +39,8 @@ class Grounding:
     def grounding_hash(body, all_vars):
         cons = set()
         for lit in body:
-            if not isinstance(lit, ConstOpt):
-                continue
-            cons.add((lit.operation, lit.arguments))
+            if lit.meta:
+                cons.add((lit.predicate, lit.arguments))
         return hash((frozenset(all_vars), frozenset(cons)))
 
     @staticmethod
@@ -59,12 +57,13 @@ class Grounding:
         return all_vars
 
 class Literal:
-    def __init__(self, predicate, arguments, directions = [], positive = True):
+    def __init__(self, predicate, arguments, directions = [], positive = True, meta=False):
         self.predicate = predicate
         self.arguments = arguments
         self.arity = len(arguments)
         self.directions = directions
         self.positive = positive
+        self.meta = meta
         self.inputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
         self.outputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
 
