@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from popper.log import Experiment, timeout
+from popper.util import Settings, Stats, timeout
 from popper.asp import ClingoGrounder, ClingoSolver
 from popper.tester import Tester
 from popper.constrain import Constrain
@@ -65,7 +65,7 @@ def decide_outcome(conf_matrix):
 
     return (positive_outcome, negative_outcome)
 
-def build_rules(experiment, constrainer, tester, program, before, min_clause, outcome):
+def build_rules(settings, constrainer, tester, program, before, min_clause, outcome):
     (positive_outcome, negative_outcome) = outcome
     # RM: If you don't use these two lines you need another three entries in the OUTCOME_TO_CONSTRAINTS table (one for every positive outcome combined with negative outcome ALL).
     if negative_outcome == Outcome.ALL:
@@ -82,7 +82,7 @@ def build_rules(experiment, constrainer, tester, program, before, min_clause, ou
         elif constraint_type == Con.BANISH:
             rules.update(constrainer.banish_constraint(program, before, min_clause))
 
-    if experiment.functional_test and tester.is_non_functional(program):
+    if settings.functional_test and tester.is_non_functional(program):
         rules.update(constrainer.generalisation_constraint(program, before, min_clause))
 
     # eliminate generalisations of clauses that contain redundant literals
@@ -93,7 +93,7 @@ def build_rules(experiment, constrainer, tester, program, before, min_clause, ou
     if tester.check_redundant_clause(program):
         rules.update(constrainer.generalisation_constraint(program, before, min_clause))
 
-    if experiment.debug:
+    if settings.debug:
         print('Rules:')
         for rule in rules:
             Constrain.print_constraint(rule)
@@ -107,34 +107,34 @@ def print_conf_matrix(tester, conf_matrix):
     approx_neg = '+' if tn + fp < tester.num_neg else ''
     print(f'TP: {tp}{approx_pos}, FN: {fn}{approx_pos}, TN: {tn}{approx_neg}, FP: {fp}{approx_neg}')
 
-def popper(experiment):
-    solver = ClingoSolver(experiment.kbpath, experiment.clingo_args)
-    tester = Tester(experiment)
+def popper(settings, stats):
+    solver = ClingoSolver(settings)
+    tester = Tester(settings)
     grounder = ClingoGrounder()
-    constrainer = Constrain(experiment)
+    constrainer = Constrain()
 
     num_solutions = 0
 
-    for size in range(1, experiment.args.max_literals + 1):
-        if experiment.debug:
+    for size in range(1, settings.max_literals + 1):
+        if settings.debug:
             print(f'{"*" * 20} MAX LITERALS: {size} {"*" * 20}')
         solver.update_number_of_literals(size)
         while True:
             # 1. Generate
-            with experiment.duration('generate'):
+            with stats.duration('generate'):
                 model = solver.get_model()
                 if not model:
                     break
                 (program, before, min_clause) = generate_program(model)
 
-            experiment.total_programs += 1
+            stats.total_programs += 1
 
             # 2. Test
-            with experiment.duration('test'):
+            with stats.duration('test'):
                 conf_matrix = tester.test(program)
 
-            if experiment.debug:
-                print(f'Program {experiment.total_programs}:')
+            if settings.debug:
+                print(f'Program {stats.total_programs}:')
                 pprint(program)
                 print_conf_matrix(tester, conf_matrix)
 
@@ -143,26 +143,27 @@ def popper(experiment):
                 print('SOLUTION:')
                 pprint(program)
                 num_solutions += 1
-                if num_solutions == experiment.max_solutions:
+                if num_solutions == settings.max_solutions:
                     return
 
             # 3. Build rules
-            with experiment.duration('build_rules'):
-                rules = build_rules(experiment, constrainer, tester, program, before, min_clause, outcome)
+            with stats.duration('build_rules'):
+                rules = build_rules(settings, constrainer, tester, program, before, min_clause, outcome)
 
             # 4. Ground rules
-            with experiment.duration('ground'):
+            with stats.duration('ground'):
                 rules = ground_rules(grounder, solver.max_clauses, solver.max_vars, rules)
 
             # 5. Add rules to solver
-            with experiment.duration('add'):
+            with stats.duration('add'):
                 solver.add_ground_clauses(rules)
 
     print('NO MORE SOLUTIONS')
     return
 
 if __name__ == '__main__':
-    experiment = Experiment()
-    timeout(popper, (experiment,), timeout_duration=int(experiment.args.timeout))
-    if experiment.stats:
-        experiment.show_stats()
+    settings = Settings()
+    stats = Stats()
+    timeout(popper, (settings, stats), timeout_duration=int(settings.timeout))
+    if settings.stats:
+        stats.show()

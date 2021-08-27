@@ -7,21 +7,21 @@ from . core import Clause, Literal
 from contextlib import contextmanager
 
 class Tester():
-    def __init__(self, experiment):
+    def __init__(self, settings):
         self.prolog = Prolog()
-        self.eval_timeout = experiment.args.eval_timeout
-        self.test_all = experiment.args.test_all
+        self.eval_timeout = settings.eval_timeout
+        self.test_all = settings.test_all
         self.num_pos = 0
         self.num_neg = 0
-        self.load_basic(experiment.args.kbpath)
+        self.load_basic(settings)
         self.seen_clause = set()
 
     def first_result(self, q):
         return list(self.prolog.query(q))[0]
 
-    def load_basic(self, kbpath):
-        bk_pl_path = os.path.join(kbpath, 'bk.pl')
-        exs_pl_path = os.path.join(kbpath, 'exs.pl')
+    def load_basic(self, settings):
+        bk_pl_path = os.path.join(settings.bk_file)
+        exs_pl_path = os.path.join(settings.ex_file)
         test_pl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test.pl')
 
         for x in [bk_pl_path, exs_pl_path, test_pl_path]:

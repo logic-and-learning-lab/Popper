@@ -25,7 +25,7 @@ def body_size_literal(clause_var, body_size):
     return Literal('body_size', (clause_var, body_size))
 
 class Constrain:
-    def __init__(self, experiment):
+    def __init__(self):
         self.seen_clause_handle = {}
         self.added_clauses = set()
 

@@ -113,8 +113,8 @@ class ClingoGrounder():
         return out
 
 class ClingoSolver():
-    def __init__(self, kbpath, clingo_args):
-        self.solver = clingo.Control(clingo_args)
+    def __init__(self, settings):
+        self.solver = clingo.Control(settings.clingo_args)
         # AC: why an OrderedDict? We never remove from it
         self.assigned = OrderedDict()
         self.seen_symbols = {}
@@ -123,8 +123,8 @@ class ClingoSolver():
         with open(alan_file) as alan:
             self.solver.add('alan', [], alan.read())
 
-        # Load Mode file
-        with open(kbpath + 'bias.pl') as biasfile:
+        # load mode file
+        with open(settings.bias_file) as biasfile:
             self.solver.add('bias', [], biasfile.read())
 
         # Reset number of literals and clauses because size_in_literals literal within Clingo is reset by loading Alan? (bottom two).
