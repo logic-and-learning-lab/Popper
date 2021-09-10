@@ -7,6 +7,7 @@ from popper.constrain import Constrain
 from popper.generate import generate_program
 from popper.core import Literal, Grounding, Clause
 import multiprocessing
+import threading
 
 class Outcome:
     ALL = 'all'
@@ -101,60 +102,74 @@ def build_rules(settings, constrainer, tester, program, before, min_clause, outc
 
     return rules
 
-def print_conf_matrix(tester, conf_matrix):
+PROG_KEY = 'prog'
+
+def calc_score(conf_matrix):
     (tp, fn, tn, fp) = conf_matrix
-    approx_pos = '+' if tp + fn < tester.num_pos else ''
-    approx_neg = '+' if tn + fp < tester.num_neg else ''
+    return tp + tn
+
+def print_dbg(settings, stats, program, conf_matrix):
+    print(f'Program {stats.total_programs}:')
+    pprint(program)
+    print_conf_matrix(settings, conf_matrix)
+    print('')
+
+def print_conf_matrix(settings, conf_matrix):
+    (tp, fn, tn, fp) = conf_matrix
+    approx_pos = '+' if tp + fn < settings.num_pos else ''
+    approx_neg = '+' if tn + fp < settings.num_neg else ''
     print(f'TP: {tp}{approx_pos}, FN: {fn}{approx_pos}, TN: {tn}{approx_neg}, FP: {fp}{approx_neg}')
 
-def popper(settings, stats):
+def popper(settings, stats, args):
     solver = ClingoSolver(settings)
     tester = Tester(settings)
+    settings.num_pos, settings.num_neg = tester.num_pos, tester.num_neg
     grounder = ClingoGrounder()
     constrainer = Constrain()
-
-    num_solutions = 0
+    best_score = None
 
     for size in range(1, settings.max_literals + 1):
         if settings.debug:
             print(f'{"*" * 20} MAX LITERALS: {size} {"*" * 20}')
         solver.update_number_of_literals(size)
         while True:
-            # 1. Generate
+            # GENERATE HYPOTHESIS
             with stats.duration('generate'):
                 model = solver.get_model()
                 if not model:
                     break
                 (program, before, min_clause) = generate_program(model)
 
-            stats.total_programs += 1
+            stats.total_programs +=1
 
-            # 2. Test
+            # TEST HYPOTHESIS
             with stats.duration('test'):
                 conf_matrix = tester.test(program)
+                score = calc_score(conf_matrix)
 
-            if settings.debug:
-                print(f'Program {stats.total_programs}:')
-                pprint(program)
-                print_conf_matrix(tester, conf_matrix)
+            # UPDATE BEST PROGRAM
+            if best_score == None or score > best_score:
+                best_score = score
+                args[PROG_KEY] = (program, conf_matrix)
+                if settings.debug:
+                    print('NEW BEST PROG')
 
             outcome = decide_outcome(conf_matrix)
             if outcome == (Outcome.ALL, Outcome.NONE):
-                print('SOLUTION:')
-                pprint(program)
-                num_solutions += 1
-                if num_solutions == settings.max_solutions:
-                    return
+                return
 
-            # 3. Build rules
+            if settings.debug:
+                print_dbg(tester, stats, program, conf_matrix)
+
+            # BUILD RULES
             with stats.duration('build_rules'):
                 rules = build_rules(settings, constrainer, tester, program, before, min_clause, outcome)
 
-            # 4. Ground rules
+            # GROUND RULES
             with stats.duration('ground'):
                 rules = ground_rules(grounder, solver.max_clauses, solver.max_vars, rules)
 
-            # 5. Add rules to solver
+            # UPDATE SOLVER
             with stats.duration('add'):
                 solver.add_ground_clauses(rules)
 
@@ -164,6 +179,15 @@ def popper(settings, stats):
 if __name__ == '__main__':
     settings = Settings()
     stats = Stats()
-    timeout(popper, (settings, stats), timeout_duration=int(settings.timeout))
+    args = {}
+    timeout(popper, (settings, stats, args), timeout_duration=int(settings.timeout))
+
+    if PROG_KEY in args:
+        print('')
+        print('BEST PROGRAM:')
+        (program, conf_matrix) = args[PROG_KEY]
+        pprint(program)
+        print_conf_matrix(settings, conf_matrix)
+        print('')
     if settings.stats:
         stats.show()
