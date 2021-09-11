@@ -156,6 +156,8 @@ def popper(settings, stats, args):
 
             outcome = decide_outcome(conf_matrix)
             if outcome == (Outcome.ALL, Outcome.NONE):
+                # redundant but adding as there seems to be a bug
+                args[PROG_KEY] = (program, conf_matrix)
                 return
 
             if settings.debug:
