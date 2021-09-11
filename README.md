@@ -18,8 +18,8 @@ If you use Popper for research, please cite the paper [learning programs by lear
 # Usage
 
 You can run Popper like so:
-```
-python popper.py examples/dropk/
+
+`python popper.py examples/dropk/`
 
 which should print
 
@@ -54,7 +54,7 @@ f(A,B,C) :- tail(A,E),decrement(B,D),f(E,D,C).
 
 To run with a maximum learning time use the flag `--eval-timeout`.
 
-To run in debug mode use the flag `--debug'
+To run in debug mode use the flag `--debug`
 
 To run with statistics use the flag `--stats`
 
