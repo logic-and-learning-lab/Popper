@@ -1,7 +1,10 @@
 # Popper
 
-Popper is an inductive logic programming (ILP) system.
-If you use Popper for research, please cite the paper [learning programs by learning from failures](https://arxiv.org/abs/2005.02259).
+Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) (ILP) system.
+If you use Popper for research, please cite the paper:
+
+Andrew Cropper, Rolf Morel. [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259). Mach. Learn. 110(4): 801-856 (2021)
+
 Popper is still a major work-in-progress, so please notify us of bugs or usability issues.
 
 ## Requirements
