@@ -49,7 +49,7 @@ def pprint(program):
         print(Clause.to_code(clause))
 
 def decide_outcome(conf_matrix):
-    (tp, fn, tn, fp) = conf_matrix
+    tp, fn, tn, fp = conf_matrix
     if fn == 0:
         positive_outcome = Outcome.ALL # complete
     elif tp == 0 and fn > 0:
@@ -94,7 +94,6 @@ def build_rules(settings, constrainer, tester, program, before, min_clause, outc
     if tester.check_redundant_clause(program):
         rules.update(constrainer.generalisation_constraint(program, before, min_clause))
 
-
     if len(program) > 1:
         # evaluate inconsistent sub-clauses
         for rule in program:
@@ -109,8 +108,6 @@ def build_rules(settings, constrainer, tester, program, before, min_clause, outc
                     if tester.is_totally_incomplete(rule):
                         for x in constrainer.redundancy_constraint([rule], before, min_clause):
                             rules.add(x)
-    return rules
-
 
     if settings.debug:
         print('Rules:')
@@ -126,17 +123,12 @@ def calc_score(conf_matrix):
     (tp, fn, tn, fp) = conf_matrix
     return tp + tn
 
-def print_dbg(settings, stats, program, conf_matrix):
-    print(f'Program {stats.total_programs}:')
-    pprint(program)
-    # print_conf_matrix(settings, conf_matrix)
-    # print('')
+# def print_dbg(settings, stats, program):
+    # print(f'Program {stats.total_programs}:')
+    # pprint(program)
 
-def print_conf_matrix(settings, conf_matrix):
-    (tp, fn, tn, fp) = conf_matrix
-    # approx_pos = '+' if tp + fn < settings.num_pos else ''
-    # approx_neg = '+' if tn + fp < settings.num_neg else ''
-    # print(f'TP: {tp}{approx_pos}, FN: {fn}{approx_pos}, TN: {tn}{approx_neg}, FP: {fp}{approx_neg}')
+def print_conf_matrix(conf_matrix):
+    tp, fn, tn, fp = conf_matrix
     print(f'TP: {tp}, FN: {fn}, TN: {tn}, FP: {fp}')
 
 def popper(settings, stats, args):
@@ -168,23 +160,22 @@ def popper(settings, stats, args):
             # TEST HYPOTHESIS
             with stats.duration('test'):
                 conf_matrix = tester.test(program)
+                outcome = decide_outcome(conf_matrix)
                 score = calc_score(conf_matrix)
 
             # UPDATE BEST PROGRAM
             if best_score == None or score > best_score:
                 best_score = score
                 args[PROG_KEY] = (program, conf_matrix)
-                if settings.debug:
-                    print('NEW BEST PROG')
 
-            outcome = decide_outcome(conf_matrix)
-            if outcome == (Outcome.ALL, Outcome.NONE):
-                # redundant but adding as there seems to be a bug
-                args[PROG_KEY] = (program, conf_matrix)
-                return
+                if outcome == (Outcome.ALL, Outcome.NONE):
+                    return
 
-            # if settings.debug:
-                # print_dbg(tester, stats, program, conf_matrix)
+                if settings.info:
+                    print(f'NEW BEST PROG {stats.total_programs}:')
+                    pprint(program)
+                    print_conf_matrix(conf_matrix)
+                    print('')
 
             # BUILD RULES
             with stats.duration('build_rules'):
@@ -208,11 +199,10 @@ if __name__ == '__main__':
     timeout(popper, (settings, stats, args), timeout_duration=int(settings.timeout))
 
     if PROG_KEY in args:
-        print('')
-        print('BEST PROGRAM:')
+        print(f'BEST PROG {stats.total_programs}:')
         (program, conf_matrix) = args[PROG_KEY]
         pprint(program)
-        print_conf_matrix(settings, conf_matrix)
+        print_conf_matrix(conf_matrix)
         print('')
     if settings.stats:
         stats.show()
