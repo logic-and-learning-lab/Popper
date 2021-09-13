@@ -1,19 +1,23 @@
-%% SOLUTION:
-%% next_value(A,B):-does(A,C,D),c_pressButton(D),c5(B),c_player(C)
-%% next_value(A,B):-c_player(E),my_succ(B,C),my_true_value(A,C),does(A,E,D),c_noop(D)
-%% Total programs: 24104
+%% BEST PROGRAM:
+%% next_value(A,B):-c_player(C),c5(B),c_pressButton(D),does(A,C,D)
+%% next_value(A,B):-my_succ(B,D),my_true_value(A,D),c_player(C),c_noop(E),does(A,C,E)
+%% TP: 8, FN: 0, TN: 46, FP: 0
+
+%% Total programs: 2604
 %% Generate:
-%%     Called: 24114 times      Total: 29.08    Mean: 0.001     Max: 0.026
+%%     Called: 2614 times   Total: 2.31     Mean: 0.001     Max: 0.012
 %% Test:
-%%     Called: 24104 times      Total: 18.17    Mean: 0.001     Max: 0.031
+%%     Called: 2604 times   Total: 1.45     Mean: 0.001     Max: 0.040
 %% Build_Rules:
-%%     Called: 24103 times      Total: 4.01     Mean: 0.000     Max: 0.006
+%%     Called: 2603 times   Total: 1.37     Mean: 0.001     Max: 0.007
 %% Ground:
-%%     Called: 24103 times      Total: 0.84     Mean: 0.000     Max: 0.003
+%%     Called: 2603 times   Total: 0.20     Mean: 0.000     Max: 0.003
 %% Add:
-%%     Called: 24103 times      Total: 27.83    Mean: 0.001     Max: 0.006
-%% Total operation time: 79.93s
-%% Total execution time: 80.51s
+%%     Called: 2603 times   Total: 1.56     Mean: 0.001     Max: 0.002
+%% Test_Individual_Rules.Is_Totally_Incomplete:
+%%     Called: 1989 times   Total: 0.10     Mean: 0.000     Max: 0.000
+%% Total operation time: 7.00s
+%% Total execution time: 7.00s
 
 max_clauses(2).
 max_vars(5).
@@ -26,10 +30,10 @@ body_pred(my_succ,2).
 body_pred(c_pressButton,1).
 body_pred(c_noop,1).
 body_pred(c_player,1). % comment to make unsat
-body_pred(c1,1). % comment to make easier to solve
-body_pred(c2,1). % comment to make easier to solve
-body_pred(c3,1). % comment to make easier to solve
-body_pred(c4,1). % comment to make easier to solve
+body_pred(c1,1).
+body_pred(c2,1).
+body_pred(c3,1).
+body_pred(c4,1).
 body_pred(c5,1).
 
 type(next_value,(ex,int)).
@@ -44,10 +48,6 @@ type(c2,(int,)).
 type(c3,(int,)).
 type(c4,(int,)).
 type(c5,(int,)).
-
-functional(my_succ,2).
-irreflexive(my_succ,2).
-functional(my_true_value,2).
 
 %% HACK BECAUSE WE DO NOT LEARN FROM INTERPRETATIONS
 :-
