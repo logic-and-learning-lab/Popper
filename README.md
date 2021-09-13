@@ -17,18 +17,36 @@ If you use Popper for research, please cite the paper [learning programs by lear
 
 # Usage
 
-You can run Popper like so:
+You can run Popper `python popper.py <input dir>`.
 
-`python popper.py examples/dropk/`
-
-which should print
+For instance, running the command `python popper.py examples/dropk` produces the output:
 
 ```prolog
-f(A,B,C) :- one(B),tail(A,C).
-f(A,B,C) :- tail(A,E),decrement(B,D),f(E,D,C).
+BEST PROGRAM:
+f(A,B,C):-tail(A,C),one(B)
+f(A,B,C):-f(A,E,D),tail(D,C),decrement(B,E)
+TP: 10, FN: 0, TN: 0+, FP: 0+
+```
+
+Running the command `python popper.py examples/trains` produces the output:
+
+```prolog
+BEST PROGRAM:
+f(A):-three_wheels(B),long(C),roof_closed(C),has_car(A,B),has_car(A,C)
+TP: 5, FN: 0, TN: 0+, FP: 0+
 ```
 
 Take a look at the examples folder for examples.
+
+Note that in the above output, some of the outcomes are `N+`. The reason is that, by default, Popper does not test all the examples during the testing stage, and instead performs *minimal testing*. To test on all the examples, call Popper with the `--test-all` flag.
+
+For instance, running the command `python popper.py examples/trains --test-all` produces the output:
+
+```prolog
+BEST PROGRAM:
+f(A):-long(B),has_car(A,C),roof_closed(B),has_car(A,B),three_wheels(C)
+TP: 5, FN: 0, TN: 5, FP: 0
+```
 
 # Popper settings
 
@@ -44,18 +62,8 @@ To enable predicate invention add `enable_pi.` to the bias file.
 
 To enable recursion add `enable_recursion.` to the bias file.
 
-By default, Popper does not test all the examples during the testing stage. To do so, call Popper with the `--test-all` flag.
-
-
-```prolog
-f(A,B,C) :- one(B),tail(A,C).
-f(A,B,C) :- tail(A,E),decrement(B,D),f(E,D,C).
-```
+To run with statistics use the flag `--stats`
 
 To run with a maximum learning time use the flag `--eval-timeout`.
 
 To run in debug mode use the flag `--debug`
-
-To run with statistics use the flag `--stats`
-
-
