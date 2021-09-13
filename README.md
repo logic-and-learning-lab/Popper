@@ -39,31 +39,31 @@ Popper is an anytime algorithm. To see the intermediate solutions use the `--inf
 ```prolog
 NEW BEST PROG 1:
 f(A):-short(B),has_car(A,B)
-TP: 683, FN: 109, TN: 33, FP: 175
+Precision:0.80, Recall:0.86, TP:683, FN:109, TN:33, FP:175
 
 NEW BEST PROG 2:
-f(A):-roof_closed(B),has_car(A,B)
-TP: 745, FN: 47, TN: 36, FP: 172
+f(A):-has_car(A,B),roof_closed(B)
+Precision:0.81, Recall:0.94, TP:745, FN:47, TN:36, FP:172
 
 NEW BEST PROG 3:
 f(A):-roof_open(B),has_car(A,B)
-TP: 731, FN: 61, TN: 172, FP: 36
+Precision:0.95, Recall:0.92, TP:731, FN:61, TN:172, FP:36
 
-NEW BEST PROG 95:
-f(A):-roof_closed(C),roof_open(B),has_car(A,C),has_car(A,B)
-f(A):-has_load(C,B),has_car(A,C),three_load(B),roof_open(C)
-TP: 721, FN: 71, TN: 208, FP: 0
+NEW BEST PROG 68:
+f(A):-has_car(A,C),roof_closed(C),has_car(A,B),roof_open(B)
+f(A):-roof_open(C),has_car(A,C),three_load(B),has_load(C,B)
+Precision:1.00, Recall:0.91, TP:721, FN:71, TN:208, FP:0
 
-NEW BEST PROG 382:
-f(A):-has_car(A,C),roof_closed(B),has_car(A,B),roof_open(C)
-f(A):-rectangle(D),has_load(C,B),has_car(A,C),has_load(E,D),triangle(B),has_car(A,E)
-TP: 761, FN: 31, TN: 208, FP: 0
+NEW BEST PROG 346:
+f(A):-has_car(A,C),roof_closed(C),has_car(A,B),roof_open(B)
+f(A):-has_load(E,D),rectangle(B),has_car(A,E),triangle(D),has_car(A,C),has_load(C,B)
+Precision:1.00, Recall:0.96, TP:761, FN:31, TN:208, FP:0
 
-BEST PROG 1271:
-f(A):-roof_closed(C),roof_open(B),has_car(A,C),has_car(A,B)
-f(A):-has_car(A,B),three_load(C),roof_open(B),has_load(B,C)
-f(A):-rectangle(D),has_car(A,B),has_load(B,C),triangle(C),has_load(E,D),has_car(A,E)
-TP: 792, FN: 0, TN: 208, FP: 0
+BEST PROG 1252:
+f(A):-roof_open(C),has_car(A,C),three_load(B),has_load(C,B)
+f(A):-roof_open(C),has_car(A,C),has_car(A,B),roof_closed(B)
+f(A):-rectangle(B),has_load(E,B),has_car(A,E),has_car(A,D),has_load(D,C),triangle(C)
+Precision:1.00, Recall:1.00, TP:792, FN:0, TN:208, FP:0
 ```
 
 # Popper settings
