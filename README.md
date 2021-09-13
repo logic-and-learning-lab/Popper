@@ -76,7 +76,7 @@ Popper currently needs three parameters to restrict the language:
 
 `max_clauses(N).` sets the maximum number of rules/clause to be `N`
 
-To enable predicate invention add `enable_pi.` to the bias file.
+To enable predicate invention (which is very very expensive) add `enable_pi.` to the bias file.
 
 To enable recursion add `enable_recursion.` to the bias file.
 
@@ -86,4 +86,4 @@ To run with a maximum learning time use the flag `--eval-timeout`.
 
 To run in debug mode use the flag `--debug`
 
-To run in information mode use the flag `--debug`
+To run in information mode use the flag `--info`
