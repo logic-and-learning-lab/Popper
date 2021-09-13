@@ -9,6 +9,7 @@ MAX_LITERALS=100
 MAX_SOLUTIONS=1
 TEST_ALL=False
 DEBUG=False
+INFO=False
 STATS=False
 FUNCTIONAL_TEST=False
 CLINGO_ARGS=''
@@ -19,9 +20,10 @@ def parse_args():
     parser.add_argument('--eval-timeout', type=float, default=EVAL_TIMEOUT, help='Prolog evaluation timeout in seconds')
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help='Overall timeout (in seconds)')
     parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help='Maximum number of literals allowed in program')
-    parser.add_argument('--max-solutions', type=int, default=MAX_SOLUTIONS, help='Maximum number of solutions to print')
+    # parser.add_argument('--max-solutions', type=int, default=MAX_SOLUTIONS, help='Maximum number of solutions to print')
     parser.add_argument('--test-all', default=TEST_ALL, action='store_true', help='Test all examples')
     parser.add_argument('--debug', default=DEBUG, action='store_true', help='Print debugging information to stderr')
+    parser.add_argument('--info', default=INFO, action='store_true', help='Print useful info information to stderr')
     parser.add_argument('--stats', default= STATS, action='store_true', help='Print statistics at end of execution')
     parser.add_argument('--functional-test', default=FUNCTIONAL_TEST, action='store_true', help='Run custom functional test')
     parser.add_argument('--clingo-args', type=str, default=CLINGO_ARGS, help='Arguments to pass to Clingo')
@@ -90,6 +92,7 @@ class Settings:
         if cmd_line:
             args = parse_args()
             self.debug = args.debug
+            self.info = args.info
             self.stats = args.stats
             self.kbpath = args.kbpath
             if self.kbpath[-1] != '/':
@@ -102,6 +105,6 @@ class Settings:
             self.timeout = args.timeout
             self.max_literals = args.max_literals
             self.clingo_args = args.clingo_args
-            self.max_solutions = args.max_solutions
+            # self.max_solutions = args.max_solutions
             self.functional_test = args.functional_test
             self.clingo_args = [] if not args.clingo_args else args.clingo_args.split(' ')

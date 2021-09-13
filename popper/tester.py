@@ -3,45 +3,60 @@ from pyswip import Prolog
 import re
 import os
 import sys
-from . core import Clause, Literal
+import time
 from contextlib import contextmanager
+# from . constrain import Outcome
+from . core import Clause, Literal
+from datetime import datetime
 
 class Tester():
     def __init__(self, settings):
+        self.settings = settings
         self.prolog = Prolog()
         self.eval_timeout = settings.eval_timeout
-        self.test_all = settings.test_all
-        self.num_pos = 0
-        self.num_neg = 0
-        self.load_basic(settings)
-        self.seen_clause = set()
+        self.load_basic()
+        self.already_checked_redundant_literals = set()
+        self.seen_tests = {}
+        self.seen_prog = {}
 
     def first_result(self, q):
         return list(self.prolog.query(q))[0]
 
-    def load_basic(self, settings):
-        bk_pl_path = os.path.join(settings.bk_file)
-        exs_pl_path = os.path.join(settings.ex_file)
+    def load_examples(self):
+        self.pos = []
+        self.neg = []
+        with open(self.settings.ex_file) as f:
+            for line in f:
+                line = line.strip()
+                x = line[4:-2]
+                hash_x = hash(x)
+                if line.startswith('pos'):
+                    self.prolog.assertz(f'pos_index({hash_x},{x})')
+                    self.pos.append(hash_x)
+                elif line.startswith('neg'):
+                    self.prolog.assertz(f'neg_index({hash_x},{x})')
+                    self.neg.append(hash_x)
+
+    def load_basic(self):
+        bk_pl_path = self.settings.bk_file
+        exs_pl_path = self.settings.ex_file
         test_pl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test.pl')
 
-        for x in [bk_pl_path, exs_pl_path, test_pl_path]:
+        for x in [bk_pl_path, test_pl_path]:
             if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
                 x = x.replace('\\', '\\\\')
             self.prolog.consult(x)
 
-        self.num_pos = int(self.first_result('count_pos(N)')['N'])
-        self.num_neg = int(self.first_result('count_neg(N)')['N'])
+        self.load_examples()
         self.prolog.assertz(f'timeout({self.eval_timeout})')
-        self.prolog.assertz(f'num_pos({self.num_pos})')
-        self.prolog.assertz(f'num_neg({self.num_neg})')
 
     @contextmanager
-    def using(self, program):
+    def using(self, rules):
         current_clauses = set()
         try:
-            for clause in program:
-                (head, body) = clause
-                self.prolog.assertz(Clause.to_code(Clause.to_ordered(clause)))
+            for rule in rules:
+                (head, body) = rule
+                self.prolog.assertz(Clause.to_code(Clause.to_ordered(rule)))
                 current_clauses.add((head.predicate, head.arity))
             yield
         finally:
@@ -52,9 +67,9 @@ class Tester():
     def check_redundant_literal(self, program):
         for clause in program:
             k = Clause.clause_hash(clause)
-            if k in self.seen_clause:
+            if k in self.already_checked_redundant_literals:
                 continue
-            self.seen_clause.add(k)
+            self.already_checked_redundant_literals.add(k)
             (head, body) = clause
             C = f"[{','.join(('not_'+ Literal.to_code(head),) + tuple(Literal.to_code(lit) for lit in body))}]"
             res = list(self.prolog.query(f'redundant_literal({C})'))
@@ -74,17 +89,41 @@ class Tester():
         with self.using(program):
             return list(self.prolog.query(f'non_functional.'))
 
-    def test(self, program):
-        with self.using(program):
-            try:
-                if self.test_all:
-                    res = self.first_result('do_test(TP,FN,TN,FP)')
-                else:
-                    # AC: TN is not calculated when performing minmal testing
-                    res = self.first_result('do_test_minimal(TP,FN,TN,FP)')
-                return (res['TP'], res['FN'], res['TN'], res['FP'])
-            except:
-                print("A Prolog error occurred when testing the program:")
-                for clause in program:
-                    print('\t' + Clause.to_code(clause))
-                raise
+    def success_set(self, rules):
+        prog_hash = frozenset(rule for rule in rules)
+        if prog_hash not in self.seen_prog:
+            with self.using(rules):
+                self.seen_prog[prog_hash] = set(next(self.prolog.query('success_set(Xs)'))['Xs'])
+        return self.seen_prog[prog_hash]
+
+    def test(self, rules):
+        if all(Clause.is_separable(rule) for rule in rules):
+            covered = set()
+            for rule in rules:
+                covered.update(self.success_set([rule]))
+        else:
+            covered = self.success_set(rules)
+
+        tp, fn, tn, fp = 0, 0, 0, 0
+        for p in self.pos:
+            if p in covered:
+                tp +=1
+            else:
+                fn +=1
+        for n in self.neg:
+            if n in covered:
+                fp +=1
+            else:
+                tn +=1
+
+        return tp, fn, tn, fp
+
+    def is_totally_incomplete(self, rule):
+        if not Clause.is_separable(rule):
+            return False
+        return not any(x in self.success_set([rule]) for x in self.pos)
+
+    def is_inconsistent(self, rule):
+        if not Clause.is_separable(rule):
+            return False
+        return any(x in self.success_set([rule]) for x in self.neg)

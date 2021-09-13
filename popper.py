@@ -49,7 +49,7 @@ def pprint(program):
         print(Clause.to_code(clause))
 
 def decide_outcome(conf_matrix):
-    (tp, fn, tn, fp) = conf_matrix
+    tp, fn, tn, fp = conf_matrix
     if fn == 0:
         positive_outcome = Outcome.ALL # complete
     elif tp == 0 and fn > 0:
@@ -94,6 +94,21 @@ def build_rules(settings, constrainer, tester, program, before, min_clause, outc
     if tester.check_redundant_clause(program):
         rules.update(constrainer.generalisation_constraint(program, before, min_clause))
 
+    if len(program) > 1:
+        # evaluate inconsistent sub-clauses
+        for rule in program:
+            if Clause.is_separable(rule) and tester.is_inconsistent(rule):
+                for x in constrainer.generalisation_constraint([rule], before, min_clause):
+                    rules.add(x)
+
+        # eliminate totally incomplete rules
+        with stats.duration('test_individual_rules.is_totally_incomplete'):
+            if all(Clause.is_separable(rule) for rule in program):
+                for rule in program:
+                    if tester.is_totally_incomplete(rule):
+                        for x in constrainer.redundancy_constraint([rule], before, min_clause):
+                            rules.add(x)
+
     if settings.debug:
         print('Rules:')
         for rule in rules:
@@ -108,22 +123,16 @@ def calc_score(conf_matrix):
     (tp, fn, tn, fp) = conf_matrix
     return tp + tn
 
-def print_dbg(settings, stats, program, conf_matrix):
-    print(f'Program {stats.total_programs}:')
-    pprint(program)
-    print_conf_matrix(settings, conf_matrix)
-    print('')
-
-def print_conf_matrix(settings, conf_matrix):
-    (tp, fn, tn, fp) = conf_matrix
-    approx_pos = '+' if tp + fn < settings.num_pos else ''
-    approx_neg = '+' if tn + fp < settings.num_neg else ''
-    print(f'TP: {tp}{approx_pos}, FN: {fn}{approx_pos}, TN: {tn}{approx_neg}, FP: {fp}{approx_neg}')
+def print_conf_matrix(conf_matrix):
+    tp, fn, tn, fp = conf_matrix
+    precision = tp / (tp+fp)
+    recall = tp / (tp+fn)
+    print(f'Precision:{precision:0.2f}, Recall:{recall:0.2f}, TP:{tp}, FN:{fn}, TN:{tn}, FP:{fp}')
 
 def popper(settings, stats, args):
     solver = ClingoSolver(settings)
     tester = Tester(settings)
-    settings.num_pos, settings.num_neg = tester.num_pos, tester.num_neg
+    settings.num_pos, settings.num_neg = len(tester.pos), len(tester.neg)
     grounder = ClingoGrounder()
     constrainer = Constrain()
     best_score = None
@@ -140,28 +149,31 @@ def popper(settings, stats, args):
                     break
                 (program, before, min_clause) = generate_program(model)
 
+            if settings.debug:
+                print(f'Program {stats.total_programs}:')
+                pprint(program)
+
             stats.total_programs +=1
 
             # TEST HYPOTHESIS
             with stats.duration('test'):
                 conf_matrix = tester.test(program)
+                outcome = decide_outcome(conf_matrix)
                 score = calc_score(conf_matrix)
 
             # UPDATE BEST PROGRAM
             if best_score == None or score > best_score:
                 best_score = score
                 args[PROG_KEY] = (program, conf_matrix)
-                if settings.debug:
-                    print('NEW BEST PROG')
 
-            outcome = decide_outcome(conf_matrix)
-            if outcome == (Outcome.ALL, Outcome.NONE):
-                # redundant but adding as there seems to be a bug
-                args[PROG_KEY] = (program, conf_matrix)
-                return
+                if outcome == (Outcome.ALL, Outcome.NONE):
+                    return
 
-            if settings.debug:
-                print_dbg(tester, stats, program, conf_matrix)
+                if settings.info:
+                    print(f'NEW BEST PROG {stats.total_programs}:')
+                    pprint(program)
+                    print_conf_matrix(conf_matrix)
+                    print('')
 
             # BUILD RULES
             with stats.duration('build_rules'):
@@ -185,11 +197,10 @@ if __name__ == '__main__':
     timeout(popper, (settings, stats, args), timeout_duration=int(settings.timeout))
 
     if PROG_KEY in args:
-        print('')
-        print('BEST PROGRAM:')
+        print(f'BEST PROG {stats.total_programs}:')
         (program, conf_matrix) = args[PROG_KEY]
         pprint(program)
-        print_conf_matrix(settings, conf_matrix)
+        print_conf_matrix(conf_matrix)
         print('')
     if settings.stats:
         stats.show()

@@ -20,6 +20,15 @@ test_ex(X):-
     timeout(T),
     catch(call_with_time_limit(T, call(X)),time_limit_exceeded,false),!.
 
+ex_index(ID,Atom):-
+    pos_index(ID,Atom).
+ex_index(ID,Atom):-
+    current_predicate(neg_index/2),
+    neg_index(ID,Atom).
+
+success_set(Xs):-
+    findall(ID, (ex_index(ID,Atom),test_ex(Atom)), Xs).
+
 count_pos(0):-
     \+ current_predicate(pos/1),!.
 count_pos(N):-

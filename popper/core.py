@@ -141,6 +141,15 @@ class Clause:
         return head.predicate in set(literal.predicate for literal in body if isinstance(literal, Literal))
 
     @staticmethod
+    def is_separable(rule):
+        if Clause.is_recursive(rule):
+            return False
+        (head, body) = rule
+        if head.predicate.startswith('inv'):
+            return False
+        return True
+
+    @staticmethod
     def all_vars(clause):
         (head, body) = clause
         xs = set()
