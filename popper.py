@@ -125,9 +125,13 @@ def calc_score(conf_matrix):
 
 def print_conf_matrix(conf_matrix):
     tp, fn, tn, fp = conf_matrix
-    precision = tp / (tp+fp)
-    recall = tp / (tp+fn)
-    print(f'Precision:{precision:0.2f}, Recall:{recall:0.2f}, TP:{tp}, FN:{fn}, TN:{tn}, FP:{fp}')
+    precision = 'n/a'
+    if (tp+fp) > 0:
+        precision = f'{tp / (tp+fp):0.2f}'
+    recall = 'n/a'
+    if (tp+fn) > 0:
+        recall = f'{tp / (tp+fn):0.2f}'
+    print(f'Precision:{precision}, Recall:{recall}, TP:{tp}, FN:{fn}, TN:{tn}, FP:{fp}')
 
 def popper(settings, stats, args):
     solver = ClingoSolver(settings)
