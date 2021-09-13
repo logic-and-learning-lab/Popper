@@ -123,13 +123,11 @@ def calc_score(conf_matrix):
     (tp, fn, tn, fp) = conf_matrix
     return tp + tn
 
-# def print_dbg(settings, stats, program):
-    # print(f'Program {stats.total_programs}:')
-    # pprint(program)
-
 def print_conf_matrix(conf_matrix):
     tp, fn, tn, fp = conf_matrix
-    print(f'TP: {tp}, FN: {fn}, TN: {tn}, FP: {fp}')
+    precision = tp / (tp+fp)
+    recall = tp / (tp+fn)
+    print(f'Precision:{precision:0.2f}, Recall:{recall:0.2f}, TP:{tp}, FN:{fn}, TN:{tn}, FP:{fp}')
 
 def popper(settings, stats, args):
     solver = ClingoSolver(settings)
