@@ -94,6 +94,24 @@ def build_rules(settings, constrainer, tester, program, before, min_clause, outc
     if tester.check_redundant_clause(program):
         rules.update(constrainer.generalisation_constraint(program, before, min_clause))
 
+
+    if len(program) > 1:
+        # evaluate inconsistent sub-clauses
+        for rule in program:
+            if Clause.is_separable(rule) and tester.is_inconsistent(rule):
+                for x in constrainer.generalisation_constraint([rule], before, min_clause):
+                    rules.add(x)
+
+        # eliminate totally incomplete rules
+        with stats.duration('test_individual_rules.is_totally_incomplete'):
+            if all(Clause.is_separable(rule) for rule in program):
+                for rule in program:
+                    if tester.is_totally_incomplete(rule):
+                        for x in constrainer.redundancy_constraint([rule], before, min_clause):
+                            rules.add(x)
+    return rules
+
+
     if settings.debug:
         print('Rules:')
         for rule in rules:
@@ -111,19 +129,20 @@ def calc_score(conf_matrix):
 def print_dbg(settings, stats, program, conf_matrix):
     print(f'Program {stats.total_programs}:')
     pprint(program)
-    print_conf_matrix(settings, conf_matrix)
-    print('')
+    # print_conf_matrix(settings, conf_matrix)
+    # print('')
 
 def print_conf_matrix(settings, conf_matrix):
     (tp, fn, tn, fp) = conf_matrix
-    approx_pos = '+' if tp + fn < settings.num_pos else ''
-    approx_neg = '+' if tn + fp < settings.num_neg else ''
-    print(f'TP: {tp}{approx_pos}, FN: {fn}{approx_pos}, TN: {tn}{approx_neg}, FP: {fp}{approx_neg}')
+    # approx_pos = '+' if tp + fn < settings.num_pos else ''
+    # approx_neg = '+' if tn + fp < settings.num_neg else ''
+    # print(f'TP: {tp}{approx_pos}, FN: {fn}{approx_pos}, TN: {tn}{approx_neg}, FP: {fp}{approx_neg}')
+    print(f'TP: {tp}, FN: {fn}, TN: {tn}, FP: {fp}')
 
 def popper(settings, stats, args):
     solver = ClingoSolver(settings)
     tester = Tester(settings)
-    settings.num_pos, settings.num_neg = tester.num_pos, tester.num_neg
+    settings.num_pos, settings.num_neg = len(tester.pos), len(tester.neg)
     grounder = ClingoGrounder()
     constrainer = Constrain()
     best_score = None
@@ -139,6 +158,10 @@ def popper(settings, stats, args):
                 if not model:
                     break
                 (program, before, min_clause) = generate_program(model)
+
+            if settings.debug:
+                print(f'Program {stats.total_programs}:')
+                pprint(program)
 
             stats.total_programs +=1
 
@@ -160,8 +183,8 @@ def popper(settings, stats, args):
                 args[PROG_KEY] = (program, conf_matrix)
                 return
 
-            if settings.debug:
-                print_dbg(tester, stats, program, conf_matrix)
+            # if settings.debug:
+                # print_dbg(tester, stats, program, conf_matrix)
 
             # BUILD RULES
             with stats.duration('build_rules'):
