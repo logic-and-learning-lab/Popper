@@ -142,6 +142,10 @@ var_in_literal(C,P,Vars,Var):-
 %% HEAD VARS ARE ALWAYS 0,1,...,A-1
 head_vars(A,@pyhead_vars(A)):-
     head_pred(_,A).
+head_vars(A,@pyhead_vars(A)):-
+    invented(_,A).
+
+need_arity(1).
 
 need_arity(A):-
     head_pred(_,A).
@@ -435,6 +439,8 @@ base_clause(C,P,A):-
 #script (python)
 def pydirection(pos, directions):
     return directions.arguments[pos.number]
+def pylen(directions):
+    return Number(len(directions.arguments))
 #end.
 
 arity(P,A):-
@@ -442,10 +448,13 @@ arity(P,A):-
 arity(P,A):-
     body_aux(P,A).
 
+direction_aux(P, @pylen(Directions), Directions):-
+    direction(P,Directions).
+
 direction_(P,Pos,@pydirection(Pos,Directions)):-
     arity(P,A),
     Pos=0..A-1,
-    direction(P,Directions).
+    direction_aux(P,A,Directions).
 
 num_in_args(P,N):-
     direction_(P,_,_),
@@ -518,11 +527,20 @@ inv_symbol(P):-
     index(P,I),
     I>0.
 
+{invented(P,1)}:-
+    enable_pi,
+    inv_symbol(P).
+
 %% GUESS INVENTED SYMBOLS
 %% AC: REMOVE HARDCODED ARITY
 {invented(P,2)}:-
     enable_pi,
     inv_symbol(P).
+
+%% CANNOT INVENT A PREDICATE WITH MULTIPLE ARITIES
+:-
+    invented(P,_),
+    #count{A : invented(P,A)} != 1.
 
 inv_lower(P,Q):-
     inv_symbol(P),
@@ -701,6 +719,10 @@ only_once(P,A):-
     #count{C,Vars : body_literal(C,P,A,Vars)} == 1.
 
 :-
+    invented(P,_),
+    #count{A : invented(P,A)} != 1.
+
+:-
     invented(P,A),
     head_literal(C1,P,A,_),
     not multiclause(P,A),
@@ -711,3 +733,9 @@ only_once(P,A):-
     body_size(C2,N2),
     max_body(MaxN),
     N1 + N2 - 1 <= MaxN.
+
+a:-
+    invented(P,A),
+    head_literal(C1,P,A,_),
+    not multiclause(P,A),
+    only_once(P,A).
