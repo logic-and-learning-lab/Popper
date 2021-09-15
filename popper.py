@@ -153,9 +153,6 @@ def popper(settings, stats, args):
                     break
                 (program, before, min_clause) = generate_program(model)
 
-            if settings.debug:
-                print(f'Program {stats.total_programs}:')
-                pprint(program)
 
             stats.total_programs +=1
 
@@ -173,11 +170,16 @@ def popper(settings, stats, args):
                 if outcome == (Outcome.ALL, Outcome.NONE):
                     return
 
-                if settings.info:
-                    print(f'NEW BEST PROG {stats.total_programs}:')
+                if settings.info or settings.debug: # TODO: use debug "levels"
+                    print(f'NEW BEST PROGRAM {stats.total_programs}:')
                     pprint(program)
                     print_conf_matrix(conf_matrix)
-                    print('')
+                    print()
+            elif settings.debug:
+                print(f'Program {stats.total_programs}:')
+                pprint(program)
+                print_conf_matrix(conf_matrix)
+                print()
 
             # BUILD RULES
             with stats.duration('build_rules'):
