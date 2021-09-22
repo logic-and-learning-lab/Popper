@@ -197,7 +197,7 @@ class Constrain:
             yield (None, tuple(literals))
 
     @staticmethod
-    def print_constraint(con):
+    def format_constraint(con):
         (head, body) = con
         constraint_literals = []
         for constobj in body:
@@ -221,4 +221,4 @@ class Constrain:
         x = f':- {", ".join(constraint_literals)}.'
         if head:
             x = f'{head} {x}'
-        print(x)
+        return x
