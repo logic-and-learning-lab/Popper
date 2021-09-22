@@ -37,6 +37,96 @@ TP: 5, FN: 0, TN: 5, FP: 0
 
 Take a look at the examples folder for examples.
 
+
+# Example problem
+
+
+Popper requires three files: 
+
+- an examples file
+- a background knowledge (BK) file
+- a bias file
+
+An examples file simply contains positive and negative examples of the relation you wish to learn:
+
+```prolog
+pos(grandparent(ann,amelia)).
+pos(grandparent(steve,amelia)).
+pos(grandparent(ann,spongebob)).
+pos(grandparent(steve,spongebob)).
+pos(grandparent(linda,amelia)).
+neg(grandparent(amy,amelia)).
+```
+
+Likewise, a BK file contains helpful information about the relation you are trying to learn:
+
+```prolog
+mother(ann,amy).
+mother(ann,andy).
+mother(amy,amelia).
+mother(linda,gavin).
+father(steve,amy).
+father(steve,andy).
+father(gavin,amelia).
+father(andy,spongebob).
+```
+
+The bias file contains all the information necessary to restrict the search space of Popper. 
+
+There two main things to add to this file are predicate declarations. These simply inform Popper whether it can use a predicate symbol in the head or body of a rule in a solution, such as:
+
+```prolog
+head_pred(grandparent,2).
+body_pred(mother,2).
+body_pred(father,2).
+```
+
+In other words the above says each role in a program must have the symbol grandparent with arity two in the head and mother and/or father in the body, also with arity two.
+
+Unfortunately Popper currently needs three parameters to restrict the search space:
+
+- `max_vars(N).` sets the maximum number of variables allowed in a rule to be `N`
+- `max_body(N).` sets the maximum number of body literals in a rule to be `N`
+- `max_clauses(N).` sets the maximum number of rules/clause to be `N`
+
+These parameters are unfortunately very important as they greatly influence the search space. If are considerably too high then Popper will likely take a long time to learn a solution. On the other hand, if the settings are too low or too small then the search space might be too small to contain a good solution. We are currently working on techniques to automatically deduce these settings. But in the meantime finding the correct values can often be process of trial and error, sorry.
+
+
+In our running example, we will add these three lines to our bias file:
+```prolog
+max_clauses(4).
+max_vars(4).
+max_body(3).
+```
+
+If we call Popper with these three files, then it will produce the output:
+
+```prolog
+grandparent(A,B):-mother(A,C),father(C,B)
+grandparent(A,B):-father(A,C),mother(C,B)
+grandparent(A,B):-father(A,C),father(C,B)
+grandparent(A,B):-mother(A,C),mother(C,B)
+Precision:1.00, Recall:1.00, TP:5, FN:0, TN:1, FP:0
+```
+
+
+Popper also supports automatic predicate invention (PI). To enable PI, add the setting `enable_pi.` to the bias file.
+With PI enabled, Popper learns the following program for our running example:
+
+```prolog
+grandparent(A,B):-inv1(C,B),inv1(A,C)
+inv1(A,B):-mother(A,B)
+inv1(A,B):-father(A,B)
+Precision:1.00, Recall:1.00, TP:5, FN:0, TN:1, FP:0
+```
+
+
+
+# Anytime 
+
+
+
+
 Popper is an anytime algorithm. To see the intermediate solutions use the `--info` flag. For instance, running the command `python popper.py examples/trains2 --info` produces the output:
 
 ```prolog
@@ -69,19 +159,17 @@ f(A):-rectangle(B),has_load(E,B),has_car(A,E),has_car(A,D),has_load(D,C),triangl
 Precision:1.00, Recall:1.00, TP:792, FN:0, TN:208, FP:0
 ```
 
-# Popper settings
-
-Popper currently needs three parameters to restrict the language:
-
-`max_vars(N).` sets the maximum number of variables allowed in a rule to be `N`
-
-`max_body(N).` sets the maximum number of body literals in a rule to be `N`
-
-`max_clauses(N).` sets the maximum number of rules/clause to be `N`
-
-To enable predicate invention (which is very very expensive) add `enable_pi.` to the bias file.
-
+# Recursion
 To enable recursion add `enable_recursion.` to the bias file.
+TODO
+
+# Types
+TODO
+
+# Directions 
+TODO
+
+# Popper settings
 
 To run with statistics use the flag `--stats`
 
