@@ -121,7 +121,7 @@ class Settings:
         self.functional_test = functional_test
 
 def format_program(program):
-    return "\n".join(Clause.to_code(clause) for clause in program)
+    return "\n".join(Clause.to_code(Clause.to_ordered(clause)) + '.' for clause in program)
 
 def format_conf_matrix(conf_matrix):
     tp, fn, tn, fp = conf_matrix
@@ -131,7 +131,7 @@ def format_conf_matrix(conf_matrix):
     recall = 'n/a'
     if (tp+fn) > 0:
         recall = f'{tp / (tp+fn):0.2f}'
-    return f'Precision:{precision}, Recall:{recall}, TP:{tp}, FN:{fn}, TN:{tn}, FP:{fp}\n'
+    return f'% Precision:{precision}, Recall:{recall}, TP:{tp}, FN:{fn}, TN:{tn}, FP:{fp}\n'
 
 class Stats:
     def __init__(self,
@@ -187,7 +187,7 @@ class Stats:
         prog_stats = self.make_program_stats(program, conf_matrix)
         self.best_programs.append(prog_stats)
         if self.log_best_programs:
-            self.logger.info(f'NEW BEST PROG {self.total_programs}:')
+            self.logger.info(f'% NEW BEST PROG {self.total_programs}:')
             self.logger.info(prog_stats.code)
             self.logger.info(format_conf_matrix(conf_matrix))
 
@@ -200,7 +200,7 @@ class Stats:
             self.logger.info('NO PROGRAMS FOUND')
             return
 
-        self.logger.info(f'\nBEST PROG {self.total_programs}:')
+        self.logger.info(f'\n% BEST PROG {self.total_programs}:')
         self.logger.info(prog_stats.code)
         self.logger.info(format_conf_matrix(prog_stats.conf_matrix))
 
