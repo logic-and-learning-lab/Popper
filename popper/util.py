@@ -27,6 +27,7 @@ def parse_args():
     parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help='Maximum number of literals allowed in program')
     # parser.add_argument('--max-solutions', type=int, default=MAX_SOLUTIONS, help='Maximum number of solutions to print')
     parser.add_argument('--test-all', default=TEST_ALL, action='store_true', help='Test all examples')
+    parser.add_argument('--info', default=DEBUG, action='store_true', help='Print best programs so far to stderr')
     parser.add_argument('--debug', default=DEBUG, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--stats', default= STATS, action='store_true', help='Print statistics at end of execution')
     parser.add_argument('--functional-test', default=FUNCTIONAL_TEST, action='store_true', help='Run custom functional test')
@@ -77,6 +78,7 @@ def parse_settings():
         bias_string,
         args.ex_file if args.ex_file else ex_file,
         args.bk_file if args.bk_file else bk_file,
+        info = args.info,
         debug = args.debug,
         stats = args.stats,
         eval_timeout = args.eval_timeout,
@@ -93,6 +95,7 @@ class Settings:
             bias_string, 
             ex_file,
             bk_file,
+            info = False,
             debug = False,
             stats = False,
             eval_timeout = EVAL_TIMEOUT,
@@ -106,6 +109,7 @@ class Settings:
         self.bias_string = bias_string
         self.ex_file = ex_file
         self.bk_file = bk_file
+        self.info = info
         self.debug = debug
         self.stats = stats
         self.eval_timeout = eval_timeout
@@ -131,7 +135,7 @@ def format_conf_matrix(conf_matrix):
 
 class Stats:
     def __init__(self,
-                    log_level=logging.INFO,
+                    log_best_programs=False,
                     num_literals = 0,
                     total_programs = 0,
                     total_rules = 0,
@@ -144,6 +148,7 @@ class Stats:
         self.exec_start = perf_counter()
         self.logger = logging.getLogger("popper")
 
+        self.log_best_programs = log_best_programs
         self.num_literals = num_literals
         self.total_programs = total_programs
         self.total_rules = total_rules
@@ -181,9 +186,10 @@ class Stats:
     def register_best_program(self, program, conf_matrix):
         prog_stats = self.make_program_stats(program, conf_matrix)
         self.best_programs.append(prog_stats)
-        self.logger.info(f'NEW BEST PROG {self.total_programs}:')
-        self.logger.info(prog_stats.code)
-        self.logger.info(format_conf_matrix(conf_matrix))
+        if self.log_best_programs:
+            self.logger.info(f'NEW BEST PROG {self.total_programs}:')
+            self.logger.info(prog_stats.code)
+            self.logger.info(format_conf_matrix(conf_matrix))
 
     def log_final_result(self):
         if self.solution:

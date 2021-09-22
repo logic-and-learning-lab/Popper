@@ -177,7 +177,7 @@ if __name__ == '__main__':
         level=logging.DEBUG if settings.debug else logging.INFO,
         stream=sys.stderr,
         format='%(message)s')
-    stats = Stats()
+    stats = Stats(log_best_programs=settings.info)
     timeout(popper, (settings, stats), timeout_duration=int(settings.timeout))
 
     stats.log_final_result()
