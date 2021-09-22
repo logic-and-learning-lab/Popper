@@ -124,8 +124,7 @@ class ClingoSolver():
             self.solver.add('alan', [], alan.read())
 
         # load mode file
-        with open(settings.bias_file) as biasfile:
-            self.solver.add('bias', [], biasfile.read())
+        self.solver.add('bias', [], settings.bias_string)
 
         # Reset number of literals and clauses because size_in_literals literal within Clingo is reset by loading Alan? (bottom two).
         self.solver.add('invented', ['predicate', 'arity'], '#external invented(pred,arity).')

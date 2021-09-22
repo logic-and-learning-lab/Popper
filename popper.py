@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-from popper.util import Settings, Stats, timeout
+import logging
+import sys
+from popper.util import Settings, Stats, timeout, parse_settings
 from popper.asp import ClingoGrounder, ClingoSolver
 from popper.tester import Tester
 from popper.constrain import Constrain
 from popper.generate import generate_program
-from popper.core import Literal, Grounding, Clause
-import multiprocessing
-import threading
+from popper.core import Grounding, Clause
 
 class Outcome:
     ALL = 'all'
@@ -29,7 +29,7 @@ OUTCOME_TO_CONSTRAINTS = {
         (Outcome.NONE, Outcome.SOME) : (Con.SPECIALISATION, Con.REDUNDANCY, Con.GENERALISATION)
     }
 
-def ground_rules(grounder, max_clauses, max_vars, clauses):
+def ground_rules(stats, grounder, max_clauses, max_vars, clauses):
     out = set()
     for clause in clauses:
         (head, body) = clause
@@ -42,11 +42,10 @@ def ground_rules(grounder, max_clauses, max_vars, clauses):
         # ground the clause for each variable assignment
         for assignment in assignments:
             out.add(Grounding.ground_clause((head, body), assignment))
-    return out
+    
+    stats.register_ground_rules(out)
 
-def pprint(program):
-    for clause in program:
-        print(Clause.to_code(clause))
+    return out
 
 def decide_outcome(conf_matrix):
     tp, fn, tn, fp = conf_matrix
@@ -66,7 +65,7 @@ def decide_outcome(conf_matrix):
 
     return (positive_outcome, negative_outcome)
 
-def build_rules(settings, constrainer, tester, program, before, min_clause, outcome):
+def build_rules(settings, stats, constrainer, tester, program, before, min_clause, outcome):
     (positive_outcome, negative_outcome) = outcome
     # RM: If you don't use these two lines you need another three entries in the OUTCOME_TO_CONSTRAINTS table (one for every positive outcome combined with negative outcome ALL).
     if negative_outcome == Outcome.ALL:
@@ -109,11 +108,7 @@ def build_rules(settings, constrainer, tester, program, before, min_clause, outc
                         for x in constrainer.redundancy_constraint([rule], before, min_clause):
                             rules.add(x)
 
-    if settings.debug:
-        print('Rules:')
-        for rule in rules:
-            Constrain.print_constraint(rule)
-        print()
+    stats.register_rules(rules)
 
     return rules
 
@@ -123,17 +118,7 @@ def calc_score(conf_matrix):
     (tp, fn, tn, fp) = conf_matrix
     return tp + tn
 
-def print_conf_matrix(conf_matrix):
-    tp, fn, tn, fp = conf_matrix
-    precision = 'n/a'
-    if (tp+fp) > 0:
-        precision = f'{tp / (tp+fp):0.2f}'
-    recall = 'n/a'
-    if (tp+fn) > 0:
-        recall = f'{tp / (tp+fn):0.2f}'
-    print(f'Precision:{precision}, Recall:{recall}, TP:{tp}, FN:{fn}, TN:{tn}, FP:{fp}')
-
-def popper(settings, stats, args):
+def popper(settings, stats):
     solver = ClingoSolver(settings)
     tester = Tester(settings)
     settings.num_pos, settings.num_neg = len(tester.pos), len(tester.neg)
@@ -142,9 +127,9 @@ def popper(settings, stats, args):
     best_score = None
 
     for size in range(1, settings.max_literals + 1):
-        if settings.debug:
-            print(f'{"*" * 20} MAX LITERALS: {size} {"*" * 20}')
+        stats.update_num_literals(size)
         solver.update_number_of_literals(size)
+
         while True:
             # GENERATE HYPOTHESIS
             with stats.duration('generate'):
@@ -153,11 +138,7 @@ def popper(settings, stats, args):
                     break
                 (program, before, min_clause) = generate_program(model)
 
-            if settings.debug:
-                print(f'Program {stats.total_programs}:')
-                pprint(program)
-
-            stats.total_programs +=1
+            stats.register_program(program)
 
             # TEST HYPOTHESIS
             with stats.duration('test'):
@@ -168,43 +149,38 @@ def popper(settings, stats, args):
             # UPDATE BEST PROGRAM
             if best_score == None or score > best_score:
                 best_score = score
-                args[PROG_KEY] = (program, conf_matrix)
 
                 if outcome == (Outcome.ALL, Outcome.NONE):
-                    return
+                    stats.register_solution(program, conf_matrix)
+                    return stats.solution.code
 
-                if settings.info:
-                    print(f'NEW BEST PROG {stats.total_programs}:')
-                    pprint(program)
-                    print_conf_matrix(conf_matrix)
-                    print('')
+                stats.register_best_program(program, conf_matrix)
 
             # BUILD RULES
             with stats.duration('build_rules'):
-                rules = build_rules(settings, constrainer, tester, program, before, min_clause, outcome)
+                rules = build_rules(settings, stats, constrainer, tester, program, before, min_clause, outcome)
 
             # GROUND RULES
             with stats.duration('ground'):
-                rules = ground_rules(grounder, solver.max_clauses, solver.max_vars, rules)
+                rules = ground_rules(stats, grounder, solver.max_clauses, solver.max_vars, rules)
 
             # UPDATE SOLVER
             with stats.duration('add'):
                 solver.add_ground_clauses(rules)
 
-    print('NO MORE SOLUTIONS')
-    return
+    stats.register_completion()
+    return stats.best_program.code if stats.best_program else None
 
 if __name__ == '__main__':
-    settings = Settings()
-    stats = Stats()
-    args = {}
-    timeout(popper, (settings, stats, args), timeout_duration=int(settings.timeout))
+    settings = parse_settings()
+    logging.basicConfig(
+        level=logging.DEBUG if settings.debug else logging.INFO,
+        stream=sys.stderr,
+        format='%(message)s')
+    stats = Stats(log_best_programs=settings.info)
+    timeout(popper, (settings, stats), timeout_duration=int(settings.timeout))
 
-    if PROG_KEY in args:
-        print(f'BEST PROG {stats.total_programs}:')
-        (program, conf_matrix) = args[PROG_KEY]
-        pprint(program)
-        print_conf_matrix(conf_matrix)
-        print('')
+    stats.log_final_result()
+
     if settings.stats:
         stats.show()
