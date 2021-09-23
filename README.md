@@ -109,7 +109,7 @@ grandparent(A,B):-mother(A,C),mother(C,B).
 
 # Predicate invention
 
-Popper supports automatic predicate invention (PI). To enable PI, add the setting `enable_pi.` to the bias file.
+Popper supports [automatic predicate invention](https://arxiv.org/pdf/2104.14426.pdf) (PI). To enable PI, add the setting `enable_pi.` to the bias file.
 With PI enabled, Popper learns the following program for our running example:
 
 ```prolog
@@ -205,6 +205,12 @@ direction(length,(in,out)).
 direction(prepend,(in,int,out)).
 direction(geq,(in,in)).
 ```
+
+# Parallelisation
+[Coming soon](https://arxiv.org/pdf/2109.07132.pdf)
+
+# Failure explanation
+[Coming soon](https://arxiv.org/pdf/2102.12551.pdf)
 
 # Popper settings
 
