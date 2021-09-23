@@ -25,17 +25,19 @@ class Tester():
     def load_examples(self):
         self.pos = []
         self.neg = []
-        with open(self.settings.ex_file) as f:
-            for line in f:
-                line = line.strip()
-                x = line[4:-2]
-                hash_x = hash(x)
-                if line.startswith('pos'):
-                    self.prolog.assertz(f'pos_index({hash_x},{x})')
-                    self.pos.append(hash_x)
-                elif line.startswith('neg'):
-                    self.prolog.assertz(f'neg_index({hash_x},{x})')
-                    self.neg.append(hash_x)
+
+        self.prolog.consult(self.settings.ex_file)
+
+        pos = [res['X'] for res in self.prolog.query('pos(X)')]
+        neg = [res['X'] for res in self.prolog.query('neg(X)')]
+
+        for i, x in enumerate(pos, start=1):
+            self.pos.append(i)
+            self.prolog.assertz(f'pos_index({i},{x})')
+        for i, x in enumerate(neg, start=1):
+            self.neg.append(-i)
+            self.prolog.assertz(f'neg_index({-i},{x})')
+
 
     def load_basic(self):
         bk_pl_path = self.settings.bk_file
