@@ -101,12 +101,11 @@ def build_rules(settings, stats, constrainer, tester, program, before, min_claus
                     rules.add(x)
 
         # eliminate totally incomplete rules
-        with stats.duration('test_individual_rules.is_totally_incomplete'):
-            if all(Clause.is_separable(rule) for rule in program):
-                for rule in program:
-                    if tester.is_totally_incomplete(rule):
-                        for x in constrainer.redundancy_constraint([rule], before, min_clause):
-                            rules.add(x)
+        if all(Clause.is_separable(rule) for rule in program):
+            for rule in program:
+                if tester.is_totally_incomplete(rule):
+                    for x in constrainer.redundancy_constraint([rule], before, min_clause):
+                        rules.add(x)
 
     stats.register_rules(rules)
 
@@ -157,7 +156,7 @@ def popper(settings, stats):
                 stats.register_best_program(program, conf_matrix)
 
             # BUILD RULES
-            with stats.duration('build_rules'):
+            with stats.duration('build'):
                 rules = build_rules(settings, stats, constrainer, tester, program, before, min_clause, outcome)
 
             # GROUND RULES
