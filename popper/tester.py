@@ -28,8 +28,8 @@ class Tester():
 
         self.prolog.consult(self.settings.ex_file)
 
-        pos = [res['X'] for res in self.prolog.query('pos(X)')]
-        neg = [res['X'] for res in self.prolog.query('neg(X)')]
+        pos = [res['X'] for res in self.prolog.query('current_predicate(pos/1),pos(X)')]
+        neg = [res['X'] for res in self.prolog.query('current_predicate(neg/1),neg(X)')]
 
         for i, x in enumerate(pos, start=1):
             self.pos.append(i)
