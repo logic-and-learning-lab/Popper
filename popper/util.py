@@ -177,11 +177,12 @@ class Stats:
 
         self.num_literals = size
     
-    def register_program(self, program):
+    def register_program(self, program, conf_matrix):
         self.total_programs +=1
         
         self.logger.debug(f'Program {self.total_programs}:')
         self.logger.debug(format_program(program))
+        self.logger.debug(format_conf_matrix(conf_matrix))
     
     def register_best_program(self, program, conf_matrix):
         prog_stats = self.make_program_stats(program, conf_matrix)

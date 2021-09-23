@@ -137,13 +137,13 @@ def popper(settings, stats):
                     break
                 (program, before, min_clause) = generate_program(model)
 
-            stats.register_program(program)
-
             # TEST HYPOTHESIS
             with stats.duration('test'):
                 conf_matrix = tester.test(program)
                 outcome = decide_outcome(conf_matrix)
                 score = calc_score(conf_matrix)
+
+            stats.register_program(program, conf_matrix)
 
             # UPDATE BEST PROGRAM
             if best_score == None or score > best_score:
