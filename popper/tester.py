@@ -22,34 +22,22 @@ class Tester():
     def first_result(self, q):
         return list(self.prolog.query(q))[0]
 
-    def load_examples(self):
-        self.pos = []
-        self.neg = []
-
-        self.prolog.consult(self.settings.ex_file)
-
-        pos = [res['X'] for res in self.prolog.query('current_predicate(pos/1),pos(X)')]
-        neg = [res['X'] for res in self.prolog.query('current_predicate(neg/1),neg(X)')]
-
-        for i, x in enumerate(pos, start=1):
-            self.pos.append(i)
-            self.prolog.assertz(f'pos_index({i},{x})')
-        for i, x in enumerate(neg, start=1):
-            self.neg.append(-i)
-            self.prolog.assertz(f'neg_index({-i},{x})')
-
-
     def load_basic(self):
         bk_pl_path = self.settings.bk_file
         exs_pl_path = self.settings.ex_file
         test_pl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test.pl')
 
-        for x in [bk_pl_path, test_pl_path]:
+        for x in [exs_pl_path, bk_pl_path, test_pl_path]:
             if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
                 x = x.replace('\\', '\\\\')
             self.prolog.consult(x)
 
-        self.load_examples()
+        # examples must be loaded first
+        list(self.prolog.query('load_examples'))
+
+        self.pos = [x['I'] for x in self.prolog.query('current_predicate(pos_index/2),pos_index(I,_)')]
+        self.neg = [x['I'] for x in self.prolog.query('current_predicate(neg_index/2),neg_index(I,_)')]
+
         self.prolog.assertz(f'timeout({self.eval_timeout})')
 
     @contextmanager
