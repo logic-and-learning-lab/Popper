@@ -180,14 +180,44 @@ type(prepend,(element,list,list)).
 
 
 # Directions 
-TODO
+Prolog often require arguments to be ground.
+For instance, when asking Prolog to answer the query:
+```prolog
+X is 3+K.
+```
+It throws an error:
+```prolog
+ERROR: Arguments are not sufficiently instantiated
+```
+Moreover, there are often cases where we want to reduce the number of answers from a query.
+For instance, calling the `length` predicate with only variables leads to an infinite set of answers.
+
+To make things easier, Popper supports optional direction annotations
+A direction annotation is of the form `direction(p,(d1,d2,...,dk)` for a predicate symbol `p` with arity `k`, where each `di` is either `in` or `out`.
+An `in` variable must be ground when calling the relation.
+By contrast, an `out` variable need not be ground.
+Here are example directions:
+
+```prolog
+direction(head,(in,out)).
+direction(tail,(in,out)).
+direction(length,(in,out)).
+direction(prepend,(in,int,out)).
+direction(geq,(in,in)).
+```
 
 # Popper settings
 
 To run with statistics use the flag `--stats`
 
-To run with a maximum learning time use the flag `--eval-timeout`.
-
 To run in debug mode use the flag `--debug`
 
 To run in information mode use the flag `--info`
+
+To run with a maximum learning time use the flag `--timeout`.
+
+To run with a maximum example testing time use the flag `--eval-timeout`.
+
+To allow non-Datalog clauses, where a variable in the head need not appear in the body, add ``non_datalog.` to your bias file.
+
+To allow singleton variables (variables that only appear once in a clause), add `allow_singletons.` to your bias file.
