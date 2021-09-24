@@ -110,7 +110,7 @@ grandparent(A,B):-mother(A,C),mother(C,B).
 # Predicate invention
 
 Popper supports [automatic predicate invention](https://arxiv.org/pdf/2104.14426.pdf) (PI). To enable PI, add the setting `enable_pi.` to the bias file.
-With PI enabled, Popper learns the following program for our running example:
+With PI enabled, Popper (`python popper.py examples/kinship-pi`) learns the following program:
 
 ```prolog
 grandparent(A,B):-inv1(C,B),inv1(A,C).
@@ -118,6 +118,12 @@ inv1(A,B):-mother(A,B).
 inv1(A,B):-father(A,B).
 % Precision:1.00, Recall:1.00, TP:5, FN:0, TN:1, FP:0
 ```
+
+<!-- Popper can invent multiple levels of predicates. For instance, running `python popper.py examples/robots-pi` produces the output:
+
+```prolog
+
+``` -->
 
 Predicate invention is currently very expensive so it is best to avoid it if possible.
 
@@ -157,14 +163,14 @@ f(A):-rectangle(B),has_load(E,B),has_car(A,E),has_car(A,D),has_load(D,C),triangl
 
 # Recursion
 To enable recursion add `enable_recursion.` to the bias file.
-This allows Popper to learn programs where a predicate symbol appears both in the head and body of a rule, such as to find a duplicate element in a list:
+This allows Popper to learn programs where a predicate symbol appears both in the head and body of a rule, such as to find a duplicate element (`python popper.py examples/find-dupl`) in a list:
 
 ```prolog
 f(A,B):-head(A,B),tail(A,C),element(C,B).
 f(A,B):-tail(A,C),f(C,B).
 ```
 
-Or to filter even elements from a list:
+Or to filter (`python popper.py examples/filter`) even elements from a list:
 
 ```prolog
 f(A,B):-empty(A),empty(B).
