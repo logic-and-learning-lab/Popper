@@ -2,7 +2,7 @@
 
 import logging
 import sys
-from popper.util import Settings, Stats, timeout, parse_settings
+from popper.util import Settings, Stats, timeout, parse_settings, format_program
 from popper.asp import ClingoGrounder, ClingoSolver
 from popper.tester import Tester
 from popper.constrain import Constrain
@@ -32,7 +32,7 @@ OUTCOME_TO_CONSTRAINTS = {
 def ground_rules(stats, grounder, max_clauses, max_vars, clauses):
     out = set()
     for clause in clauses:
-        (head, body) = clause
+        head, body = clause
         # find bindings for variables in the constraint
         assignments = grounder.find_bindings(clause, max_clauses, max_vars)
 
@@ -114,7 +114,7 @@ def build_rules(settings, stats, constrainer, tester, program, before, min_claus
 PROG_KEY = 'prog'
 
 def calc_score(conf_matrix):
-    (tp, fn, tn, fp) = conf_matrix
+    tp, fn, tn, fp = conf_matrix
     return tp + tn
 
 def popper(settings, stats):
@@ -170,16 +170,22 @@ def popper(settings, stats):
     stats.register_completion()
     return stats.best_program.code if stats.best_program else None
 
-if __name__ == '__main__':
-    settings = parse_settings()
-    logging.basicConfig(
-        level=logging.DEBUG if settings.debug else logging.INFO,
-        stream=sys.stderr,
-        format='%(message)s')
+def show_hspace(settings):
+    f = lambda i, m: print(f'% program {i}\n{format_program(generate_program(m)[0])}')
+    ClingoSolver.get_hspace(settings, f)
+
+def learn_solution(settings):
+    log_level = logging.DEBUG if settings.debug else logging.INFO
+    logging.basicConfig(level=log_level, stream=sys.stderr, format='%(message)s')
     stats = Stats(log_best_programs=settings.info)
     timeout(popper, (settings, stats), timeout_duration=int(settings.timeout))
-
     stats.log_final_result()
-
     if settings.stats:
         stats.show()
+
+if __name__ == '__main__':
+    settings = parse_settings()
+    if settings.hspace:
+        show_hspace(settings)
+    else:
+        learn_solution(settings)

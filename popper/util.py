@@ -12,11 +12,6 @@ TIMEOUT=600
 EVAL_TIMEOUT=0.001
 MAX_LITERALS=100
 MAX_SOLUTIONS=1
-TEST_ALL=False
-DEBUG=False
-INFO=False
-STATS=False
-FUNCTIONAL_TEST=False
 CLINGO_ARGS=''
 
 def parse_args():
@@ -26,11 +21,12 @@ def parse_args():
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help='Overall timeout (in seconds)')
     parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help='Maximum number of literals allowed in program')
     # parser.add_argument('--max-solutions', type=int, default=MAX_SOLUTIONS, help='Maximum number of solutions to print')
-    parser.add_argument('--test-all', default=TEST_ALL, action='store_true', help='Test all examples')
-    parser.add_argument('--info', default=DEBUG, action='store_true', help='Print best programs so far to stderr')
-    parser.add_argument('--debug', default=DEBUG, action='store_true', help='Print debugging information to stderr')
-    parser.add_argument('--stats', default= STATS, action='store_true', help='Print statistics at end of execution')
-    parser.add_argument('--functional-test', default=FUNCTIONAL_TEST, action='store_true', help='Run custom functional test')
+    parser.add_argument('--test-all', default=False, action='store_true', help='Test all examples')
+    parser.add_argument('--info', default=False, action='store_true', help='Print best programs so far to stderr')
+    parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
+    parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
+    parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')
+    parser.add_argument('--functional-test', default=False, action='store_true', help='Run custom functional test')
     parser.add_argument('--clingo-args', type=str, default=CLINGO_ARGS, help='Arguments to pass to Clingo')
     parser.add_argument('--ex-file', type=str, default='', help='Filename for the examples')
     parser.add_argument('--bk-file', type=str, default='', help='Filename for the background knowledge')
@@ -86,8 +82,9 @@ def parse_settings():
         timeout = args.timeout,
         max_literals = args.max_literals,
         clingo_args= [] if not args.clingo_args else args.clingo_args.split(' '),
-        max_solutions = MAX_SOLUTIONS, #args.max_solutions,
-        functional_test = args.functional_test
+        max_solutions = MAX_SOLUTIONS,
+        functional_test = args.functional_test,
+        hspace = False if args.hspace == -1 else args.hspace
     )
 
 class Settings:
@@ -104,7 +101,8 @@ class Settings:
             max_literals = MAX_LITERALS,
             clingo_args = CLINGO_ARGS,
             max_solutions = MAX_SOLUTIONS,
-            functional_test = False):
+            functional_test = False,
+            hspace=False):
             
         self.bias_string = bias_string
         self.ex_file = ex_file
@@ -119,6 +117,7 @@ class Settings:
         self.clingo_args = clingo_args
         self.max_solutions = max_solutions
         self.functional_test = functional_test
+        self.hspace = hspace
 
 def format_program(program):
     return "\n".join(Clause.to_code(Clause.to_ordered(clause)) + '.' for clause in program)
