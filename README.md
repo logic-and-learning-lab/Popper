@@ -119,7 +119,7 @@ inv1(A,B):-father(A,B).
 % Precision:1.00, Recall:1.00, TP:5, FN:0, TN:1, FP:0
 ```
 
-
+Predicate invention is currently very expensive so it is best to avoid it if possible.
 
 # Anytime 
 
@@ -164,6 +164,15 @@ f(A,B):-head(A,B),tail(A,C),element(C,B).
 f(A,B):-tail(A,C),f(C,B).
 ```
 
+Or to filter even elements from a list:
+
+```prolog
+f(A,B):-empty(A),empty(B).
+f(A,B):-tail(A,D),head(A,C),odd(C),f(D,B).
+f(A,B):-head(A,E),even(E),tail(A,C),f(C,D),prepend(E,D,B).
+
+```
+
 # Types
 Popper supports optional type annotations, which can be added to a bias file.
 A type annotation is of the form `type(p,(t1,t2,...,tk)` for a predicate symbol `p` with arity `k`, such as:
@@ -177,7 +186,6 @@ type(odd,(element,)).
 type(even,(element,)).
 type(prepend,(element,list,list)).
 ```
-
 
 # Directions 
 Prolog often require arguments to be ground.
