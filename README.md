@@ -214,11 +214,13 @@ direction(geq,(in,in)).
 
 # Popper settings
 
-To run with statistics use the flag `--stats`
+To run with statistics use the flag `--stats`.
 
-To run in debug mode use the flag `--debug`
+To run in debug mode use the flag `--debug`.
 
-To run in information mode use the flag `--info`
+To run in information mode use the flag `--info`.
+
+To show the full hypothesis space (bounded by `N`) use the flag `--hspace N`.
 
 To run with a maximum learning time use the flag `--timeout`.
 
