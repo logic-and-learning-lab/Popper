@@ -1,6 +1,6 @@
 # Popper
 
-Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) (ILP) system. 
+Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) (ILP) system.
 Popper is still a **major** work-in-progress, so please notify us of bugs or usability issues.
 
 If you use Popper for research, please cite the paper: Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259). Mach. Learn. 110(4): 801-856 (2021)
@@ -14,6 +14,7 @@ If you use Popper for research, please cite the paper: Andrew Cropper and Rolf M
 
 [pyswip](https://pypi.org/project/pyswip/)
 
+[eventlet](https://pypi.org/project/eventlet/)
 
 # Usage
 
@@ -39,7 +40,7 @@ Take a look at the examples folder for examples.
 # Example problem
 
 
-Popper requires three files: 
+Popper requires three files:
 
 - an examples file
 - a background knowledge (BK) file
@@ -69,7 +70,7 @@ father(gavin,amelia).
 father(andy,spongebob).
 ```
 
-The bias file contains all the information necessary to restrict the search space of Popper. 
+The bias file contains all the information necessary to restrict the search space of Popper.
 
 There two main things to add to this file are predicate declarations. These simply inform Popper whether it can use a predicate symbol in the head or body of a rule in a solution, such as:
 
@@ -127,7 +128,7 @@ inv1(A,B):-father(A,B).
 
 Predicate invention is currently very expensive so it is best to avoid it if possible.
 
-# Anytime 
+# Anytime
 
 Popper is an anytime algorithm. To see the intermediate solutions use the `--info` flag. For instance, running the command `python popper.py examples/trains2 --info` produces the output:
 
@@ -193,7 +194,7 @@ type(even,(element,)).
 type(prepend,(element,list,list)).
 ```
 
-# Directions 
+# Directions
 Prolog often require arguments to be ground.
 For instance, when asking Prolog to answer the query:
 ```prolog

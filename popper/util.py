@@ -3,6 +3,7 @@ import argparse
 import os
 import logging
 import copy
+from eventlet.timeout import Timeout
 from time import perf_counter
 from contextlib import contextmanager
 from .core import Clause
@@ -40,15 +41,13 @@ def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
     def handler(signum, frame):
         raise TimeoutError()
 
-    # set the timeout handler
-    signal.signal(signal.SIGALRM, handler)
-    signal.alarm(timeout_duration)
+    timeout = Timeout(timeout_duration, handler)
     try:
         result = func(*args, **kwargs)
     except TimeoutError as exc:
         result = default
     finally:
-        signal.alarm(0)
+        timeout.cancel()
 
     return result
 
@@ -60,14 +59,14 @@ def load_kbpath(kbpath, bias_filename):
         bias_string = bias_file.read()
 
     return (fix_path(kbpath, "bk.pl"), fix_path(kbpath, "exs.pl"), bias_string)
-    
+
 def fix_path(kbpath, filename):
     full_filename = os.path.join(kbpath, filename)
     return full_filename.replace('\\', '\\\\') if os.name == 'nt' else full_filename
 
 def parse_settings():
     args = parse_args()
-    
+
     (bk_file, ex_file, bias_string) = load_kbpath(args.kbpath, args.bias_file)
 
     return Settings(
@@ -89,7 +88,7 @@ def parse_settings():
 
 class Settings:
     def __init__(self,
-            bias_string, 
+            bias_string,
             ex_file,
             bk_file,
             info = False,
@@ -103,7 +102,7 @@ class Settings:
             max_solutions = MAX_SOLUTIONS,
             functional_test = False,
             hspace=False):
-            
+
         self.bias_string = bias_string
         self.ex_file = ex_file
         self.bk_file = bk_file
@@ -167,7 +166,7 @@ class Stats:
 
         total_exec_time = self.total_exec_time()
         exec_time = total_exec_time - prev_stage.total_exec_time if prev_stage else 0
-        
+
         self.stages.append(Stage(size, self.total_programs, programs_tried, total_exec_time, exec_time))
 
         self.logger.debug(f'Programs tried: {programs_tried} Exec Time: {exec_time:0.3f}s Total Exec Time: {total_exec_time:0.3f}s\n')
@@ -175,14 +174,14 @@ class Stats:
         self.logger.debug(f'{"*" * 20} MAX LITERALS: {size} {"*" * 20}')
 
         self.num_literals = size
-    
+
     def register_program(self, program, conf_matrix):
         self.total_programs +=1
-        
+
         self.logger.debug(f'Program {self.total_programs}:')
         self.logger.debug(format_program(program))
         self.logger.debug(format_conf_matrix(conf_matrix))
-    
+
     def register_best_program(self, program, conf_matrix):
         prog_stats = self.make_program_stats(program, conf_matrix)
         self.best_programs.append(prog_stats)
@@ -223,7 +222,7 @@ class Stats:
         self.logger.debug('\n')
 
         self.total_rules += len(rules)
-    
+
     def register_ground_rules(self, rules):
         self.total_ground_rules += len(rules)
 
@@ -291,7 +290,7 @@ class ProgramStats:
         self.durations = durations
 
         _, fn, _, fp = conf_matrix
-        
+
         self.is_solution = fn == fp == 0
 
 class DurationSummary:
