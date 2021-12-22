@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="Popper",
+    name="popper-ilp",
     version="1.1.0",                        # Update this for every new version
     author="Andrew Cropper",
     author_email="andrew.cropper@cs.ox.ac.uk",
@@ -14,9 +14,10 @@ setuptools.setup(
     include_package_data=True,
     long_description=long_description,
     long_description_content_type="text/markdown",
+    py_modules=['popper'],
     install_requires=[
         'clingo',
-        "PySwip>=0.2.10"
+        'pyswip'
     ],                                             
     url="https://github.com/logic-and-learning-lab/Popper",
     packages=setuptools.find_packages()
