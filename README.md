@@ -3,7 +3,7 @@
 Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) (ILP) system. 
 Popper is still a **major** work-in-progress, so please notify us of bugs or usability issues.
 
-If you use Popper for research, please cite the paper: Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259). Mach. Learn. 110(4): 801-856 (2021)
+If you use Popper, please cite the paper: Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259). Mach. Learn. 110(4): 801-856 (2021)
 
 
 ## Requirements
@@ -15,9 +15,9 @@ If you use Popper for research, please cite the paper: Andrew Cropper and Rolf M
 [pyswip](https://pypi.org/project/pyswip/)
 
 
-# Usage
+# Command line usage
 
-You can run Popper with the command `python popper.py <input dir>`
+You can run Popper with the command `python popper.py <input dir>`.
 For instance, running the command `python popper.py examples/dropk` produces the output:
 
 ```prolog
@@ -35,9 +35,18 @@ f(A):-long(B),roof_closed(B),has_car(A,B),three_wheels(C),has_car(A,C).
 
 Take a look at the examples folder for examples.
 
+# Library usage
+
+You can import Popper and use it in your Python code like so:
+
+```python
+from popper.util import Settings
+from popper.loop import learn_solution
+prog, stats_ = learn_solution(Settings('bias.pl', 'exs.pl', 'bk.pl'))
+print(prog)
+```
 
 # Example problem
-
 
 Popper requires three files: 
 
@@ -45,7 +54,7 @@ Popper requires three files:
 - a background knowledge (BK) file
 - a bias file
 
-An examples file simply contains positive and negative examples of the relation you wish to learn:
+An examples file contains positive and negative examples of the relation you want to learn:
 
 ```prolog
 pos(grandparent(ann,amelia)).
@@ -56,7 +65,7 @@ pos(grandparent(linda,amelia)).
 neg(grandparent(amy,amelia)).
 ```
 
-Likewise, a BK file contains helpful information about the relation you are trying to learn:
+A BK file contains other information about the problem:
 
 ```prolog
 mother(ann,amy).
@@ -69,9 +78,9 @@ father(gavin,amelia).
 father(andy,spongebob).
 ```
 
-The bias file contains all the information necessary to restrict the search space of Popper. 
-
-There two main things to add to this file are predicate declarations. These simply inform Popper whether it can use a predicate symbol in the head or body of a rule in a solution, such as:
+A bias file contains information necessary to restrict the search space of Popper.
+The first key thing thing to add to this file are *predicate declarations*.
+These tell Popper which predicate symbols it can use in the head or body of a rule, such as:
 
 ```prolog
 head_pred(grandparent,2).
@@ -79,16 +88,15 @@ body_pred(mother,2).
 body_pred(father,2).
 ```
 
-In other words, the above says each role in a program must have the symbol grandparent with arity two in the head and mother and/or father in the body, also with arity two.
+These declarations say that each rule in a program must have the symbol *grandparent* with arity two in the head and *mother* and/or *father* in the body, also with arity two.
 
-Popper needs three parameters to restrict the search space:
+Popper also needs three parameters to restrict the search space:
 
-- `max_vars(N).` sets the maximum number of variables allowed in a rule to be `N`
-- `max_body(N).` sets the maximum number of body literals in a rule to be `N`
-- `max_clauses(N).` sets the maximum number of rules/clause to be `N`
+- `max_vars(N).` sets the maximum number of variables in a rule to `N`
+- `max_body(N).` sets the maximum number of body literals in a rule to `N`
+- `max_clauses(N).` sets the maximum number of rules/clauses to `N`
 
-These parameters are important as they greatly influence the search space. If they are way too high then Popper will likely take a long time to learn a solution. If the settings are way too low then the search space might be too small to contain a good solution. We are currently working on techniques to automatically deduce these settings. But in the meantime finding the correct values can often be process of trial and error.
-
+These parameters are very important as they greatly influence the search space. If the values are too high then Popper will might struggle to learn a solution. If the settings are too low then the search space might be too small to contain a good solution. We are currently working on method to automatically set these settings, but in the meantime finding the correct values can often be a process of trial and error.
 
 In our running example, we will add these three lines to our bias file:
 ```prolog
@@ -97,7 +105,7 @@ max_vars(4).
 max_body(3).
 ```
 
-If we call Popper with these three files, then it will produce the output:
+If we call Popper with these three files it will produce the output:
 
 ```prolog
 grandparent(A,B):-mother(A,C),father(C,B).
@@ -107,29 +115,9 @@ grandparent(A,B):-mother(A,C),mother(C,B).
 % Precision:1.00, Recall:1.00, TP:5, FN:0, TN:1, FP:0
 ```
 
-# Predicate invention
+# Anytime
 
-Popper supports [automatic predicate invention](https://arxiv.org/pdf/2104.14426.pdf) (PI). To enable PI, add the setting `enable_pi.` to the bias file.
-With PI enabled, Popper (`python popper.py examples/kinship-pi`) learns the following program:
-
-```prolog
-grandparent(A,B):-inv1(C,B),inv1(A,C).
-inv1(A,B):-mother(A,B).
-inv1(A,B):-father(A,B).
-% Precision:1.00, Recall:1.00, TP:5, FN:0, TN:1, FP:0
-```
-
-<!-- Popper can invent multiple levels of predicates. For instance, running `python popper.py examples/robots-pi` produces the output:
-
-```prolog
-
-``` -->
-
-Predicate invention is currently very expensive so it is best to avoid it if possible.
-
-# Anytime 
-
-Popper is an anytime algorithm. To see the intermediate solutions use the `--info` flag. For instance, running the command `python popper.py examples/trains2 --info` produces the output:
+Popper is an anytime algorithm. To see intermediate solutions use the `--info` flag (or `settings.info = True`). For instance, running the command `python popper.py examples/trains2 --info` produces the output:
 
 ```prolog
 % NEW BEST PROG 1:
@@ -163,7 +151,7 @@ f(A):-rectangle(B),has_load(E,B),has_car(A,E),has_car(A,D),has_load(D,C),triangl
 
 # Recursion
 To enable recursion add `enable_recursion.` to the bias file.
-This allows Popper to learn programs where a predicate symbol appears both in the head and body of a rule, such as to find a duplicate element (`python popper.py examples/find-dupl`) in a list:
+This flag allows Popper to learn programs where a predicate symbol appears in both the head and body of a rule, such as to find a duplicate element (`python popper.py examples/find-dupl`) in a list:
 
 ```prolog
 f(A,B):-head(A,B),tail(A,C),element(C,B).
@@ -194,7 +182,7 @@ type(prepend,(element,list,list)).
 ```
 
 # Directions 
-Prolog often require arguments to be ground.
+Prolog often requires arguments to be ground.
 For instance, when asking Prolog to answer the query:
 ```prolog
 X is 3+K.
@@ -219,6 +207,32 @@ direction(length,(in,out)).
 direction(prepend,(in,int,out)).
 direction(geq,(in,in)).
 ```
+
+# Predicate invention
+
+Popper supports [automatic predicate invention](https://arxiv.org/pdf/2104.14426.pdf) (PI). To enable PI, add the setting `enable_pi.` to the bias file.
+With PI enabled, Popper (`python popper.py examples/kinship-pi`) learns the following program:
+
+```prolog
+grandparent(A,B):-inv1(C,B),inv1(A,C).
+inv1(A,B):-mother(A,B).
+inv1(A,B):-father(A,B).
+% Precision:1.00, Recall:1.00, TP:5, FN:0, TN:1, FP:0
+```
+
+<!-- Popper can invent multiple levels of predicates. For instance, running `python popper.py examples/robots-pi` produces the output:
+
+```prolog
+
+``` -->
+
+Predicate invention is currently very expensive so it is best to avoid it if possible.
+
+
+# Non-observational predicate learning
+
+Popper supports non-observational predicate learning, where it must learn definitions for relations not given as examples.
+See the example 'non-OPL'.
 
 # Parallelisation
 [Coming soon](https://arxiv.org/pdf/2109.07132.pdf)
