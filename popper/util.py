@@ -52,14 +52,8 @@ def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
 
     return result
 
-def load_kbpath(kbpath, bias_filename):
-    if not bias_filename:
-        bias_filename = fix_path(kbpath, 'bias.pl')
-
-    with open(bias_filename, "r") as bias_file:
-        bias_string = bias_file.read()
-
-    return (fix_path(kbpath, "bk.pl"), fix_path(kbpath, "exs.pl"), bias_string)
+def load_kbpath(kbpath):
+    return fix_path(kbpath, "bk.pl"), fix_path(kbpath, "exs.pl"), fix_path(kbpath, "bias.pl")
     
 def fix_path(kbpath, filename):
     full_filename = os.path.join(kbpath, filename)
@@ -68,10 +62,10 @@ def fix_path(kbpath, filename):
 def parse_settings():
     args = parse_args()
     
-    (bk_file, ex_file, bias_string) = load_kbpath(args.kbpath, args.bias_file)
+    (bk_file, ex_file, bias_file) = load_kbpath(args.kbpath)
 
     return Settings(
-        bias_string,
+        bias_file,
         args.ex_file if args.ex_file else ex_file,
         args.bk_file if args.bk_file else bk_file,
         info = args.info,
@@ -89,7 +83,7 @@ def parse_settings():
 
 class Settings:
     def __init__(self,
-            bias_string, 
+            bias_file,
             ex_file,
             bk_file,
             info = False,
@@ -104,7 +98,7 @@ class Settings:
             functional_test = False,
             hspace=False):
             
-        self.bias_string = bias_string
+        self.bias_file = bias_file
         self.ex_file = ex_file
         self.bk_file = bk_file
         self.info = info

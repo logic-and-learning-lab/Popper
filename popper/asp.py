@@ -4,6 +4,7 @@ import sys
 import clingo
 import operator
 import numbers
+import pkg_resources
 from . core import Grounding, ConstVar
 from collections import OrderedDict
 from clingo import Function, Number, Tuple_
@@ -116,10 +117,10 @@ class ClingoSolver():
 
     @staticmethod
     def load_alan(settings, ctrl):
-        alan_file = os.path.dirname(os.path.realpath(sys.argv[0])) + '/popper/alan.pl'
-        with open(alan_file) as alan:
-            ctrl.add('alan', [], alan.read())
-        ctrl.add('bias', [], settings.bias_string)
+        alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
+        ctrl.add('alan', [], alan)
+        with open(settings.bias_file) as f:
+            ctrl.add('bias', [], f.read())
         ctrl.ground([('alan', []), ('bias', [])])
 
     @staticmethod
