@@ -245,17 +245,17 @@ See the example 'non-OPL'.
 
 # Popper settings
 
-To run with statistics use the flag `--stats`.
+To run with statistics use the flag `--stats` (`settings.stats = True`).
 
-To run in debug mode use the flag `--debug`.
+To run in debug mode use the flag `--debug` (`settings.debug = True`).
 
-To run in information mode use the flag `--info`.
+To run in information mode use the flag `--info` (`settings.info = True`).
 
 To show the full hypothesis space (bounded by `N`) use the flag `--hspace N`.
 
-To run with a maximum learning time use the flag `--timeout`.
+To run with a maximum learning time use the flag `--timeout` (`settings.timeout = N`).
 
-To run with a maximum example testing time use the flag `--eval-timeout`.
+To run with a maximum example testing time use the flag `--eval-timeout` (`settings.eval_timeout = True`).
 
 To allow non-Datalog clauses, where a variable in the head need not appear in the body, add ``non_datalog.` to your bias file.
 
