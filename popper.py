@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-
-from popper.util import Settings, parse_settings
-from popper.loop import learn_solution, show_hspace
+from popper.loop import show_hspace, learn_solution
+from popper.util import parse_settings
 
 if __name__ == '__main__':
     settings = parse_settings()

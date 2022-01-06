@@ -16,6 +16,18 @@ If you use Popper, please cite the paper: Andrew Cropper and Rolf Morel. [Learni
 
 [pyswip](https://pypi.org/project/pyswip/)
 
+The following will install all requirements on Ubuntu:
+
+```bash
+sudo apt-add-repository ppa:swi-prolog/stable
+sudo add-apt-repository ppa:potassco/stable
+sudo apt-get update
+sudo apt-get install swi-prolog
+sudo apt-get install clingo
+sudo apt-get install python3-pip
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+```
 
 # Command line usage
 
@@ -262,3 +274,4 @@ To run with a maximum example testing time use the flag `--eval-timeout` (`setti
 To allow non-Datalog clauses, where a variable in the head need not appear in the body, add ``non_datalog.` to your bias file.
 
 To allow singleton variables (variables that only appear once in a clause), add `allow_singletons.` to your bias file.
+

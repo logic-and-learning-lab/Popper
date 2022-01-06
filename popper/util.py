@@ -2,7 +2,8 @@ import signal
 import argparse
 import os
 import logging
-import copy
+import json
+import inspect
 from time import perf_counter
 from contextlib import contextmanager
 from .core import Clause
@@ -31,6 +32,7 @@ def parse_args():
     parser.add_argument('--ex-file', type=str, default='', help='Filename for the examples')
     parser.add_argument('--bk-file', type=str, default='', help='Filename for the background knowledge')
     parser.add_argument('--bias-file', type=str, default='', help='Filename for the bias')
+    parser.add_argument('--stats-file', type=str, default='', help='Filename for outputting execution statistics as json')
     return parser.parse_args()
 
 def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
@@ -65,9 +67,10 @@ def parse_settings():
     (bk_file, ex_file, bias_file) = load_kbpath(args.kbpath)
 
     return Settings(
-        bias_file,
+        args.bias_file if args.bias_file else bias_file,
         args.ex_file if args.ex_file else ex_file,
         args.bk_file if args.bk_file else bk_file,
+        stats_file = args.stats_file if args.stats_file else None,
         info = args.info,
         debug = args.debug,
         stats = args.stats,
@@ -86,6 +89,7 @@ class Settings:
             bias_file,
             ex_file,
             bk_file,
+            stats_file = None,
             info = False,
             debug = False,
             stats = False,
@@ -101,6 +105,7 @@ class Settings:
         self.bias_file = bias_file
         self.ex_file = ex_file
         self.bk_file = bk_file
+        self.stats_file = stats_file
         self.info = info
         self.debug = debug
         self.stats = stats
@@ -137,7 +142,8 @@ class Stats:
                     final_exec_time = 0,
                     stages = None,
                     best_programs = None,
-                    solution = None):
+                    solution = None,
+                    stats_file = None):
         self.exec_start = perf_counter()
         self.logger = logging.getLogger("popper")
 
@@ -151,6 +157,7 @@ class Stats:
         self.stages = [] if not stages else stages
         self.best_programs = [] if not best_programs else best_programs
         self.solution = solution
+        self.stats_file = stats_file
 
     def __enter__(self):
         return self
@@ -186,6 +193,9 @@ class Stats:
             self.logger.info(format_conf_matrix(conf_matrix))
 
     def log_final_result(self):
+        if self.stats_file:
+            write_stats(self, self.stats_file)
+
         if self.solution:
             prog_stats = self.solution
         elif self.best_programs:
@@ -200,7 +210,10 @@ class Stats:
 
     def make_program_stats(self, program, conf_matrix):
         code = format_program(program)
-        return ProgramStats(code, conf_matrix, self.total_exec_time(), self.duration_summary())
+        _, fn, _, fp = conf_matrix
+        
+        is_solution = fn == fp == 0
+        return ProgramStats(code, is_solution, conf_matrix, self.total_exec_time(), self.duration_summary())
 
     def register_solution(self, program, conf_matrix):
         prog_stats = self.make_program_stats(program, conf_matrix)
@@ -278,16 +291,13 @@ class Stage:
         self.exec_time = exec_time
 
 class ProgramStats:
-    def __init__(self, code, conf_matrix, total_exec_time, durations):
+    def __init__(self, code, is_solution, conf_matrix, total_exec_time, durations):
         self.code = code
+        self.is_solution = is_solution
         self.conf_matrix = conf_matrix
         self.total_exec_time = total_exec_time
         self.durations = durations
-
-        _, fn, _, fp = conf_matrix
         
-        self.is_solution = fn == fp == 0
-
 class DurationSummary:
     def __init__(self, operation, called, total, mean, maximum):
         self.operation = operation
@@ -295,3 +305,32 @@ class DurationSummary:
         self.total = total
         self.mean = mean
         self.maximum = maximum
+
+TYPE = '__type__'
+WRITABLE_CLASSES = {Stats, Stage, ProgramStats, DurationSummary}
+NAME_TO_CLASS = {clz.__name__:clz for clz in WRITABLE_CLASSES}
+
+# TODO (Brad): Let's improve this and use real json encoding.
+class StatsEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if obj.__class__ in WRITABLE_CLASSES:
+            init_vars = inspect.getfullargspec(obj.__init__)[0]
+            all_vars = vars(obj)
+            final_dict = {key:all_vars[key] for key in init_vars if key in all_vars}
+            final_dict[TYPE] = obj.__class__.__name__
+            return final_dict
+        else:
+            return super().default(obj)
+
+def write_stats(stats, stats_file):
+    with open(stats_file, "w") as f:
+        f.write(json.dumps(stats, cls=StatsEncoder))    
+
+# To use: stats = json.loads(s, object_hook=decode_stats)
+def decode_stats(dct):
+    if TYPE in dct:
+        clazz = NAME_TO_CLASS[dct[TYPE]]
+        init_vars = inspect.getfullargspec(clazz.__init__)[0]
+        final_dict = {key:dct[key] for key in init_vars if key in dct}
+        return clazz(**final_dict)
+    return dct
