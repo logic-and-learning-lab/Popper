@@ -1,11 +1,10 @@
 from pyswip import Prolog
 
-import re
 import os
 import sys
 import time
+import pkg_resources
 from contextlib import contextmanager
-# from . constrain import Outcome
 from . core import Clause, Literal
 from datetime import datetime
 
@@ -14,41 +13,29 @@ class Tester():
         self.settings = settings
         self.prolog = Prolog()
         self.eval_timeout = settings.eval_timeout
-        self.load_basic()
         self.already_checked_redundant_literals = set()
         self.seen_tests = {}
         self.seen_prog = {}
 
-    def first_result(self, q):
-        return list(self.prolog.query(q))[0]
-
-    def load_examples(self):
-        self.pos = []
-        self.neg = []
-        with open(self.settings.ex_file) as f:
-            for line in f:
-                line = line.strip()
-                x = line[4:-2]
-                hash_x = hash(x)
-                if line.startswith('pos'):
-                    self.prolog.assertz(f'pos_index({hash_x},{x})')
-                    self.pos.append(hash_x)
-                elif line.startswith('neg'):
-                    self.prolog.assertz(f'neg_index({hash_x},{x})')
-                    self.neg.append(hash_x)
-
-    def load_basic(self):
         bk_pl_path = self.settings.bk_file
         exs_pl_path = self.settings.ex_file
-        test_pl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test.pl')
+        test_pl_path = pkg_resources.resource_filename(__name__, "lp/test.pl")
 
-        for x in [bk_pl_path, test_pl_path]:
+        for x in [exs_pl_path, bk_pl_path, test_pl_path]:
             if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
                 x = x.replace('\\', '\\\\')
             self.prolog.consult(x)
 
-        self.load_examples()
+        # load examples
+        list(self.prolog.query('load_examples'))
+
+        self.pos = [x['I'] for x in self.prolog.query('current_predicate(pos_index/2),pos_index(I,_)')]
+        self.neg = [x['I'] for x in self.prolog.query('current_predicate(neg_index/2),neg_index(I,_)')]
+
         self.prolog.assertz(f'timeout({self.eval_timeout})')
+
+    def first_result(self, q):
+        return list(self.prolog.query(q))[0]
 
     @contextmanager
     def using(self, rules):

@@ -1,0 +1,10 @@
+pos(droplast([1,2,3,4],[1,2,3])).
+pos(droplast([1,2,3,4,1],[1,2,3,4])).
+pos(droplast([a,b,c],[a,b])).
+pos(droplast([a,b,c,d,e,f],[a,b,c,d,e])).
+neg(droplast([a,b,c],[a,b,c])).
+neg(droplast([a,b,c],[])).
+neg(droplast([a,b],[b])).
+neg(droplast([a,b,c],[b,c])).
+neg(droplast([1,2,3,4],[1,4,3,2])).
+neg(droplast([1,2,3,4],1)).

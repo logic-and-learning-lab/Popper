@@ -1,6 +1,7 @@
 %% ##################################################
 %% THIS FILE CONTAINS THE ASP PROGRAM GENERATOR
-%% IT IS CALLED ALAN (VERSION 14)
+%% IT IS CALLED ALAN
+%% VERSION 15
 %% ##################################################
 
 #defined functional/2.
@@ -10,8 +11,11 @@
 #defined size/1.
 #defined invented/2.
 #defined lower/2.
+
 #defined enable_pi/0.
 #defined enable_recursion/0.
+#defined non_datalog/0.
+#defined allow_singletons/0.
 
 #show head_literal/4.
 #show body_literal/4.
@@ -19,13 +23,13 @@
 #show min_clause/2.
 #show direction_/3.
 
-%% HEAD PRED SYMBOL IF GIVEN BY THE USER OR INVENTED
+%% HEAD PRED SYMBOL IF GIVEN BY USER OR INVENTED
 head_aux(P,A):-
     head_pred(P,A).
 head_aux(P,A):-
     invented(P,A).
 
-%% BODY PRED SYMBOL IF GIVEN BY THE USER OR INVENTED
+%% BODY PRED SYMBOL IF GIVEN BY USER OR INVENTED
 body_aux(P,A):-
     body_pred(P,A).
 body_aux(P,A):-
@@ -35,7 +39,7 @@ body_aux(P,A):-
     enable_recursion.
 
 %% GUESS HEAD LITERALS
-%% INDEX MINIMISES GROUNDING AS THE SYMBOL INV_K CANNOT APPEAR IN CLAUSE C < K
+%% THE SYMBOL INV_K CANNOT APPEAR IN THE HEAD OF CLAUSE C < K
 {head_literal(C,P,A,Vars)}:-
     head_vars(A,Vars),
     head_aux(P,A),
@@ -56,6 +60,7 @@ clause(C):-
 
 %% NUM BODY LITERALS OF A CLAUSE
 %% TODO: IMPROVE AS EXPENSIVE
+%% grounding is > c * (n choose k), where n = |Herbrand base| and k = MaxN
 body_size(C,N):-
     clause(C),
     max_body(MaxN),
@@ -73,7 +78,7 @@ body_size(C,N):-
     #count{P,A : head_literal(C,P,A,_)} > 1.
 
 %% AT LEAST 1 AND MOST MAX_N BODY LITERALS PER CLAUSE
-%% AC: THIS CONSTRAINT IS A BIT SNEAKY: WE SAY IT IS NOT POSSIBLE TO HAVE A CLAUSE WITHOUT A SIZE
+%% THIS CONSTRAINT IS A BIT SNEAKY: WE SAY IT IS IMPOSSIBLE TO HAVE A CLAUSE WITHOUT A SIZE
 :-
     clause(C),
     not body_size(C,_).
@@ -114,24 +119,30 @@ def pyvar_pos(pos, vars):
     return vars.arguments[pos.number]
 #end.
 
+%% POSSIBLE VAR
 var(0..N-1):-
     max_vars(N).
 
+%% CLAUSE VAR
 clause_var(C,Var):-
     head_var(C,Var).
 clause_var(C,Var):-
     body_var(C,Var).
 
+%% HEAD VAR
 head_var(C,Var):-
     head_literal(C,_,_,Vars),
     var_member(Var,Vars).
+%% BODY VAR
 body_var(C,Var):-
     body_literal(C,_,_,Vars),
     var_member(Var,Vars).
 
+%% VAR IN A TUPLE OF VARS
 var_member(Var,Vars):-
     var_pos(Var,Vars,_).
 
+%% VAR IN A LITERAL
 var_in_literal(C,P,Vars,Var):-
     head_literal(C,P,_,Vars),
     var_member(Var,Vars).
@@ -145,18 +156,21 @@ head_vars(A,@pyhead_vars(A)):-
 head_vars(A,@pyhead_vars(A)):-
     invented(_,A).
 
-need_arity(1).
-
-need_arity(A):-
+%% NEED TO KNOW LITERAL ARITIES
+seen_arity(A):-
     head_pred(_,A).
-need_arity(A):-
+seen_arity(A):-
     body_pred(_,A).
+max_arity(K):-
+    #max{A : seen_arity(A)} == K.
 
-%% POSSIBLE VARIABLE COMBINATIONS
+%% POSSIBLE VARIABLE PERMUTATIONS FROM 1..MAX_ARITY
 vars(A,@pyvars(A,MaxVars)):-
     max_vars(MaxVars),
-    need_arity(A).
+    max_arity(K),
+    A=1..K.
 
+%% POSITION OF VAR IN TUPLE
 var_pos(@pyvar_pos(Pos,Vars),Vars,Pos):-
     vars(A,Vars),
     Pos = 0..A-1.
@@ -194,14 +208,14 @@ min_clause(C,N):-
 %% BIAS CONSTRAINTS
 %% ##################################################
 %% DATALOG
-%% AC: MAKE A USER OPTION
 :-
+    not non_datalog,
     head_var(C,Var),
     not body_var(C,Var).
 
 %% ELIMINATE SINGLETONS
-%% AC: MAKE A USER OPTION
 :-
+    not allow_singletons,
     clause_var(C,Var),
     #count{P,Vars : var_in_literal(C,P,Vars,Var)} == 1.
 
@@ -262,30 +276,6 @@ head_connected(C,Var1):-
     body_literal(C,P,_,(V1,V2,_,_)),
     #count{(V3,V4) : body_literal(C,P,_,(V1,V2,V3,V4))} > 1.
 
-%% tmpvars(P,(V0,V1),(V0,),(V1,)):-
-%%     functional(P,2),
-%%     body_literal(_,P,_,(V0,V1)),
-%%     direction_(P,0,in),
-%%     direction_(P,1,out).
-%% tmpvars(P,(V0,V1,V2),(V0,V1),(V2,)):-
-%%     functional(P,3),
-%%     body_literal(_,P,_,(V0,V1,V2)),
-%%     direction_(P,0,in),
-%%     direction_(P,1,in),
-%%     direction_(P,2,out).
-%% tmpvars(P,(V0,V1,V2,V3),(V0,V1),(V2,V3)):-
-%%     functional(P,4),
-%%     body_literal(_,P,_,(V0,V1,V2,V3)),
-%%     direction_(P,0,in),
-%%     direction_(P,1,in),
-%%     direction_(P,2,out),
-%%     direction_(P,3,out).
-%% %% direction(part,(in,in,out,out)).
-%% x2:-
-%%     body_literal(C,P,A,_),
-%%     tmpvars(P,_,InVars,_),
-%%     #count{OutVars : body_literal(C,P,_,Vars2),tmpvars(P,Vars2,InVars,OutVars)} > 1.
-
 %% ##################################################
 %% SUBSUMPTION
 %% ##################################################
@@ -294,11 +284,20 @@ same_head(C1,C2):-
     head_literal(C1,P,A,Vars),
     head_literal(C2,P,A,Vars).
 
-body_subset(C1,C2):-
-    C1 < C2,
+not_body_subset(C1,C2):-
     clause(C1),
     clause(C2),
-    body_literal(C2,P,_,Vars): body_literal(C1,P,_,Vars).
+    C1 < C2,
+    body_literal(C1,P,A,Vars),
+    not body_literal(C2,P,A,Vars).
+
+body_subset(C1,C2):-
+    clause(C1),
+    clause(C2),
+    C1 < C2,
+    not not_body_subset(C1,C2),
+    body_literal(C1,P,A,Vars),
+    body_literal(C2,P,A,Vars).
 
 :-
     C1 < C2,
@@ -527,15 +526,11 @@ inv_symbol(P):-
     index(P,I),
     I>0.
 
-{invented(P,1)}:-
+{invented(P,A)}:-
     enable_pi,
-    inv_symbol(P).
-
-%% GUESS INVENTED SYMBOLS
-%% AC: REMOVE HARDCODED ARITY
-{invented(P,2)}:-
-    enable_pi,
-    inv_symbol(P).
+    inv_symbol(P),
+    max_arity(MaxA),
+    A = 1..MaxA.
 
 %% CANNOT INVENT A PREDICATE WITH MULTIPLE ARITIES
 :-
@@ -734,8 +729,9 @@ only_once(P,A):-
     max_body(MaxN),
     N1 + N2 - 1 <= MaxN.
 
-a:-
-    invented(P,A),
-    head_literal(C1,P,A,_),
-    not multiclause(P,A),
-    only_once(P,A).
+%% a:-
+%%     invented(P,A),
+%%     head_literal(C1,P,A,_),
+%%     not multiclause(P,A),
+%%     only_once(P,A).
+

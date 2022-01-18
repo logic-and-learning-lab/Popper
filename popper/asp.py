@@ -4,6 +4,7 @@ import sys
 import clingo
 import operator
 import numbers
+import pkg_resources
 from . core import Grounding, ConstVar
 from collections import OrderedDict
 from clingo import Function, Number, Tuple_
@@ -113,22 +114,34 @@ class ClingoGrounder():
         return out
 
 class ClingoSolver():
+
+    @staticmethod
+    def load_alan(settings, ctrl):
+        alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
+        ctrl.add('alan', [], alan)
+        with open(settings.bias_file) as f:
+            ctrl.add('bias', [], f.read())
+        ctrl.ground([('alan', []), ('bias', [])])
+
+    @staticmethod
+    def get_hspace(settings, formatting):
+        solver = clingo.Control(settings.clingo_args)
+        ClingoSolver.load_alan(settings, solver)
+        solver.configuration.solve.models = settings.hspace
+        num_models=0
+        def on_model(m):
+            nonlocal num_models
+            num_models+=1
+            formatting(num_models, m.symbols(shown = True))
+        solver.solve(on_model=on_model)
+
     def __init__(self, settings):
         self.solver = clingo.Control(settings.clingo_args)
         # AC: why an OrderedDict? We never remove from it
         self.assigned = OrderedDict()
         self.seen_symbols = {}
 
-        alan_file = os.path.dirname(os.path.realpath(sys.argv[0])) + '/popper/alan.pl'
-        with open(alan_file) as alan:
-            self.solver.add('alan', [], alan.read())
-
-        # load mode file
-        with open(settings.bias_file) as biasfile:
-            self.solver.add('bias', [], biasfile.read())
-
-        # Reset number of literals and clauses because size_in_literals literal within Clingo is reset by loading Alan? (bottom two).
-        self.solver.add('invented', ['predicate', 'arity'], '#external invented(pred,arity).')
+        ClingoSolver.load_alan(settings, self.solver)
 
         NUM_OF_LITERALS = (
         """
@@ -140,7 +153,6 @@ class ClingoSolver():
         """)
 
         self.solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
-        self.solver.ground([('alan', []), ('bias', [])])
 
         max_vars_atoms = self.solver.symbolic_atoms.by_signature('max_vars', arity=1)
         self.max_vars = next(max_vars_atoms).symbol.arguments[0].number
