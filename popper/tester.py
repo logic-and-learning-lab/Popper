@@ -13,7 +13,7 @@ class Tester():
         self.settings = settings
         self.prolog = Prolog()
         self.eval_timeout = settings.eval_timeout
-        self.already_checked_redundant_literals = set()
+        self.checked_redundant_literals = {}
         self.seen_tests = {}
         self.seen_prog = {}
 
@@ -51,17 +51,27 @@ class Tester():
                 args = ','.join(['_'] * arity)
                 self.prolog.retractall(f'{predicate}({args})')
 
-    def check_redundant_literal(self, program):
-        for clause in program:
-            k = Clause.clause_hash(clause)
-            if k in self.already_checked_redundant_literals:
-                continue
-            self.already_checked_redundant_literals.add(k)
-            (head, body) = clause
-            C = f"[{','.join(('not_'+ Literal.to_code(head),) + tuple(Literal.to_code(lit) for lit in body))}]"
-            res = list(self.prolog.query(f'redundant_literal({C})'))
-            if res:
-                yield clause
+    # def check_redundant_literal(self, program):
+    #     for clause in program:
+    #         k = Clause.clause_hash(clause)
+    #         if k in self.checked_redundant_literals:
+    #             continue
+    #         self.checked_redundant_literals.add(k)
+    #         (head, body) = clause
+    #         C = f"[{','.join(('not_'+ Literal.to_code(head),) + tuple(Literal.to_code(lit) for lit in body))}]"
+    #         res = list(self.prolog.query(f'redundant_literal({C})'))
+    #         if res:
+    #             yield clause
+
+    def rule_has_redundant_literal(self, rule):
+        k = Clause.clause_hash(rule)
+        if k in self.checked_redundant_literals:
+            return self.checked_redundant_literals[k]
+        (head, body) = rule
+        C = f"[{','.join(('not_'+ Literal.to_code(head),) + tuple(Literal.to_code(lit) for lit in body))}]"
+        has_redundant_literal = len(list(self.prolog.query(f'redundant_literal({C})'))) > 0
+        self.checked_redundant_literals[k] = has_redundant_literal
+        return has_redundant_literal
 
     def check_redundant_clause(self, program):
         # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
@@ -82,6 +92,20 @@ class Tester():
             with self.using(rules):
                 self.seen_prog[prog_hash] = set(next(self.prolog.query('success_set(Xs)'))['Xs'])
         return self.seen_prog[prog_hash]
+
+    def find_redundant_clauses(self, rules):
+        prog = []
+        for i, (head, body) in enumerate(rules):
+            C = f"[{','.join(('not_'+ Literal.to_code(head),) + tuple(Literal.to_code(lit) for lit in body))}]"
+            C = f'{i}-{C}'
+            prog.append(C)
+        prog = f"[{','.join(prog)}]"
+        res = self.prolog.query(f'find_redundant_clauses({prog},R0,R1)')
+
+        for dic in res:
+            r0 = dic['R0']
+            r1 = dic['R1']
+            yield rules[r0], rules[r1]
 
     def test(self, rules):
         if all(Clause.is_separable(rule) for rule in rules):

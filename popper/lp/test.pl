@@ -68,3 +68,11 @@ redundant_clause(P1):-
     select(C1,P1,P2),
     member(C2,P2),
     subsumes(C1,C2),!.
+
+
+
+%% TODO: ADD MEANINGFUL COMMENT
+find_redundant_clauses(P1,K1,K2):-
+    select(K1-C1,P1,P2),
+    member(K2-C2,P2),
+    subsumes(C1,C2).

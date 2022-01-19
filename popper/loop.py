@@ -71,45 +71,50 @@ def build_rules(settings, stats, constrainer, tester, program, before, min_claus
     if negative_outcome == Outcome.ALL:
          negative_outcome = Outcome.SOME
 
-    rules = set()
+    cons = set()
+
+    # NEW
+    # for rule in program:
+        # cons.update(constrainer.subsumption_constraint(rule, min_clause))
+
     for constraint_type in OUTCOME_TO_CONSTRAINTS[(positive_outcome, negative_outcome)]:
         if constraint_type == Con.GENERALISATION:
-            rules.update(constrainer.generalisation_constraint(program, before, min_clause))
+            cons.update(constrainer.generalisation_constraint(program, before, min_clause))
         elif constraint_type == Con.SPECIALISATION:
-            rules.update(constrainer.specialisation_constraint(program, before, min_clause))
+            cons.update(constrainer.specialisation_constraint(program, before, min_clause))
         elif constraint_type == Con.REDUNDANCY:
-            rules.update(constrainer.redundancy_constraint(program, before, min_clause))
+            cons.update(constrainer.redundancy_constraint(program, before, min_clause))
         elif constraint_type == Con.BANISH:
-            rules.update(constrainer.banish_constraint(program, before, min_clause))
+            cons.update(constrainer.banish_constraint(program, before, min_clause))
 
     if settings.functional_test and tester.is_non_functional(program):
-        rules.update(constrainer.generalisation_constraint(program, before, min_clause))
+        cons.update(constrainer.generalisation_constraint(program, before, min_clause))
 
     # eliminate generalisations of clauses that contain redundant literals
-    for rule in tester.check_redundant_literal(program):
-        rules.update(constrainer.redundant_literal_constraint(rule, before, min_clause))
-
-    # eliminate generalisations of programs that contain redundant clauses
-    if tester.check_redundant_clause(program):
-        rules.update(constrainer.generalisation_constraint(program, before, min_clause))
+    for rule in program:
+        if tester.rule_has_redundant_literal(rule):
+            cons.update(constrainer.redundant_literal_constraint(rule, before, min_clause))
 
     if len(program) > 1:
+
+        # detect subsumption redundant rules
+        for r1, r2 in tester.find_redundant_clauses(program):
+            cons.update(constrainer.subsumption_constraint_pairs(r1, r2, min_clause))
+
         # evaluate inconsistent sub-clauses
         for rule in program:
             if Clause.is_separable(rule) and tester.is_inconsistent(rule):
-                for x in constrainer.generalisation_constraint([rule], before, min_clause):
-                    rules.add(x)
+                cons.update(constrainer.generalisation_constraint([rule], before, min_clause))
 
         # eliminate totally incomplete rules
         if all(Clause.is_separable(rule) for rule in program):
             for rule in program:
                 if tester.is_totally_incomplete(rule):
-                    for x in constrainer.redundancy_constraint([rule], before, min_clause):
-                        rules.add(x)
+                    cons.update(constrainer.redundancy_constraint([rule], before, min_clause))
 
-    stats.register_rules(rules)
+    stats.register_rules(cons)
 
-    return rules
+    return cons
 
 PROG_KEY = 'prog'
 
@@ -124,6 +129,9 @@ def popper(settings, stats):
     grounder = ClingoGrounder()
     constrainer = Constrain()
     best_score = None
+
+    all_ground_rules = set()
+    all_fo_rules = set()
 
     for size in range(1, settings.max_literals + 1):
         stats.update_num_literals(size)
@@ -158,10 +166,14 @@ def popper(settings, stats):
             # BUILD RULES
             with stats.duration('build'):
                 rules = build_rules(settings, stats, constrainer, tester, program, before, min_clause, outcome)
+                rules = set(rule for rule in rules if rule not in all_fo_rules)
+                all_fo_rules.update(rules)
 
             # GROUND RULES
             with stats.duration('ground'):
                 rules = ground_rules(stats, grounder, solver.max_clauses, solver.max_vars, rules)
+                rules = set(rule for rule in rules if rule not in all_ground_rules)
+                all_ground_rules.update(rules)
 
             # UPDATE SOLVER
             with stats.duration('add'):

@@ -77,9 +77,9 @@ class Constrain:
             literals.append(Literal('included_clause', (clause_handle, vo_clause(clause_number))))
             literals.append(body_size_literal(vo_clause(clause_number), len(body)))
 
-        for clause_number1, clause_numbers in before.items():
-            for clause_number2 in clause_numbers:
-                literals.append(lt(vo_clause(clause_number1), vo_clause(clause_number2)))
+        for clause_numberule1, clause_numbers in before.items():
+            for clause_numberule2 in clause_numbers:
+                literals.append(lt(vo_clause(clause_numberule1), vo_clause(clause_numberule2)))
 
         for clause_number, clause in enumerate(program):
             literals.append(gteq(vo_clause(clause_number), min_clause[clause]))
@@ -101,9 +101,9 @@ class Constrain:
             literals.append(Literal('included_clause', (clause_handle, vo_clause(clause_number))))
             literals.append(body_size_literal(vo_clause(clause_number), len(body)))
 
-        for clause_number1, clause_numbers in before.items():
-            for clause_number2 in clause_numbers:
-                literals.append(lt(vo_clause(clause_number1), vo_clause(clause_number2)))
+        for clause_numberule1, clause_numbers in before.items():
+            for clause_numberule2 in clause_numbers:
+                literals.append(lt(vo_clause(clause_numberule1), vo_clause(clause_numberule2)))
 
         for clause_number, clause in enumerate(program):
             literals.append(gteq(vo_clause(clause_number), min_clause[clause]))
@@ -122,9 +122,9 @@ class Constrain:
             clause_variable = vo_clause(clause_number)
             literals.append(Literal('included_clause', (clause_handle, clause_variable)))
 
-        for clause_number1, clause_numbers in before.items():
-            for clause_number2 in clause_numbers:
-                literals.append(lt(vo_clause(clause_number1), vo_clause(clause_number2)))
+        for clause_numberule1, clause_numbers in before.items():
+            for clause_numberule2 in clause_numbers:
+                literals.append(lt(vo_clause(clause_numberule1), vo_clause(clause_numberule2)))
 
         num_clauses = len(program)
         # ensure that each clause_var is ground to a unique value
@@ -132,6 +132,39 @@ class Constrain:
         literals.append(Literal('clause', (num_clauses, ), positive = False))
 
         yield (None, tuple(literals))
+
+    def subsumption_constraint(self, rule1, min_clause):
+        # for each rule rule1, rule prune all other rules that rule1 subsumes
+        # :- seen(rule1,C0), seen(rule1,C1), C0 != C1, body_size(C0,k)
+        _head1, body1 = rule1
+        rule1_handle = self.make_clause_handle(rule1)
+        yield from self.make_clause_inclusion_rule(rule1, min_clause[rule1], rule1_handle)
+        v1 = vo_clause(0)
+        v2 = vo_clause(1)
+        literals = []
+        literals.append(body_size_literal(v1, len(body1)))
+        literals.append(Literal('included_clause', (rule1_handle, v1)))
+        literals.append(Literal('included_clause', (rule1_handle, v2)))
+        literals.append(alldiff((v1, v2)))
+        yield None, tuple(literals)
+
+    def subsumption_constraint_pairs(self, rule1, rule2, min_clause):
+        # if rule1 subsumes rule2 then build the following constraint where k is the body size of rule1
+        # :- seen(rule1,C0), seen(rule2,C1), C0 != C1, body_size(C0,k)
+        _head1, body1 = rule1
+        literals = []
+        rule1_handle = self.make_clause_handle(rule1)
+        rule2_handle = self.make_clause_handle(rule2)
+        yield from self.make_clause_inclusion_rule(rule1, min_clause[rule1], rule1_handle)
+        yield from self.make_clause_inclusion_rule(rule2, min_clause[rule2], rule2_handle)
+        v1 = vo_clause(0)
+        v2 = vo_clause(1)
+        literals = []
+        literals.append(body_size_literal(v1, len(body1)))
+        literals.append(Literal('included_clause', (rule1_handle, v1)))
+        literals.append(Literal('included_clause', (rule2_handle, v2)))
+        literals.append(alldiff((v1, v2)))
+        yield None, tuple(literals)
 
     # AC: THIS CONSTRAINT DUPLICATES THE GENERALISATION CONSTRAINT AND NEEDS REFACTORING
     def redundant_literal_constraint(self, clause, before, min_clause):
@@ -179,9 +212,9 @@ class Constrain:
                 clause_variable = vo_clause(clause_number)
                 literals.append(Literal('included_clause', (clause_handle, clause_variable)))
 
-            for clause_number1, clause_numbers in before.items():
-                for clause_number2 in clause_numbers:
-                    literals.append(lt(vo_clause(clause_number1), vo_clause(clause_number2)))
+            for clause_numberule1, clause_numbers in before.items():
+                for clause_numberule2 in clause_numbers:
+                    literals.append(lt(vo_clause(clause_numberule1), vo_clause(clause_numberule2)))
 
             # ensure that each clause_var is ground to a unique value
             literals.append(alldiff(tuple(vo_clause(c) for c in range(len(program)))))
