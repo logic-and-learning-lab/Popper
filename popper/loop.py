@@ -73,9 +73,9 @@ def build_rules(settings, stats, constrainer, tester, program, before, min_claus
 
     cons = set()
 
-    # NEW
-    # for rule in program:
-        # cons.update(constrainer.subsumption_constraint(rule, min_clause))
+    for rule in program:
+        # eliminate building rules subsumed by this one
+        cons.update(constrainer.subsumption_constraint(rule, min_clause))
 
     for constraint_type in OUTCOME_TO_CONSTRAINTS[(positive_outcome, negative_outcome)]:
         if constraint_type == Con.GENERALISATION:
