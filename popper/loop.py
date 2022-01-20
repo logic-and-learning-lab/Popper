@@ -36,10 +36,13 @@ def build_rules(settings, stats, constrainer, tester, program, before, min_claus
         # eliminate building rules subsumed by this one
         cons.update(constrainer.subsumption_constraint(rule, min_clause))
 
+    # inconsistent
     if fp > 0:
         cons.update(constrainer.generalisation_constraint(program, before, min_clause))
+    # totally incomplete
     if tp == 0:
         cons.update(constrainer.redundancy_constraint(program, before, min_clause))
+    # incomplete
     if fn > 0:
         cons.update(constrainer.specialisation_constraint(program, before, min_clause))
 
