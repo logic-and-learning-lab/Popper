@@ -9,10 +9,11 @@ from . constrain import Constrain
 from . generate import generate_program
 from . core import Grounding, Clause
 
-def ground_rules(stats, grounder, max_clauses, max_vars, clauses):
-    out = set()
+def bind_vars_in_cons(stats, grounder, max_clauses, max_vars, clauses):
+    ground_cons = set()
     for clause in clauses:
         head, body = clause
+
         # find bindings for variables in the constraint
         assignments = grounder.find_bindings(clause, max_clauses, max_vars)
 
@@ -21,38 +22,35 @@ def ground_rules(stats, grounder, max_clauses, max_vars, clauses):
 
         # ground the clause for each variable assignment
         for assignment in assignments:
-            out.add(Grounding.ground_clause((head, body), assignment))
+            ground_cons.add(Grounding.ground_clause((head, body), assignment))
     
-    stats.register_ground_rules(out)
+    stats.register_ground_rules(ground_cons)
 
-    return out
+    return ground_cons
 
-def build_rules(settings, stats, constrainer, tester, program, before, min_clause, conf_matrix):
-    tp, fn, tn, fp = conf_matrix
-
+def build_constraints(settings, stats, constrainer, tester, program, before, min_clause):
     cons = set()
 
-    for rule in program:
-        # eliminate building rules subsumed by this one
-        cons.update(constrainer.subsumption_constraint(rule, min_clause))
-
-    # inconsistent
-    if fp > 0:
+    if tester.is_inconsistent(program):
         cons.update(constrainer.generalisation_constraint(program, before, min_clause))
-    # totally incomplete
-    if tp == 0:
+
+    if tester.is_totally_incomplete(program):
         cons.update(constrainer.redundancy_constraint(program, before, min_clause))
-    # incomplete
-    if fn > 0:
+
+    if tester.is_incomplete(program):
         cons.update(constrainer.specialisation_constraint(program, before, min_clause))
+
+    # eliminate building rules subsumed by this one
+    for rule in program:
+        cons.update(constrainer.subsumption_constraint(rule, min_clause))
 
     if settings.functional_test and tester.is_non_functional(program):
         cons.update(constrainer.generalisation_constraint(program, before, min_clause))
 
     # eliminate generalisations of clauses that contain redundant literals
-    for rule in program:
-        if tester.rule_has_redundant_literal(rule):
-            cons.update(constrainer.redundant_literal_constraint(rule, before, min_clause))
+        for rule in program:
+            if tester.rule_has_redundant_literal(rule):
+                cons.update(constrainer.redundant_literal_constraint(rule, before, min_clause))
 
     if len(program) > 1:
 
@@ -60,15 +58,16 @@ def build_rules(settings, stats, constrainer, tester, program, before, min_claus
         for r1, r2 in tester.find_redundant_clauses(program):
             cons.update(constrainer.subsumption_constraint_pairs(r1, r2, min_clause))
 
-        # evaluate inconsistent sub-clauses
-        for rule in program:
-            if Clause.is_separable(rule) and tester.is_inconsistent(rule):
-                cons.update(constrainer.generalisation_constraint([rule], before, min_clause))
+        # eliminate inconsistent rules
+        if tester.is_inconsistent(program):
+            for rule in program:
+                if tester.is_inconsistent([rule]):
+                    cons.update(constrainer.generalisation_constraint([rule], before, min_clause))
 
         # eliminate totally incomplete rules
         if all(Clause.is_separable(rule) for rule in program):
             for rule in program:
-                if tester.is_totally_incomplete(rule):
+                if tester.is_totally_incomplete([rule]):
                     cons.update(constrainer.redundancy_constraint([rule], before, min_clause))
 
     stats.register_rules(cons)
@@ -89,53 +88,52 @@ def popper(settings, stats):
     constrainer = Constrain()
     best_score = None
 
-    all_ground_rules = set()
-    all_fo_rules = set()
+    all_ground_cons = set()
+    all_fo_cons = set()
 
     for size in range(1, settings.max_literals + 1):
         stats.update_num_literals(size)
         solver.update_number_of_literals(size)
 
         while True:
+
             # GENERATE HYPOTHESIS
             with stats.duration('generate'):
                 model = solver.get_model()
                 if not model:
                     break
-                (program, before, min_clause) = generate_program(model)
+                program, before, min_clause = generate_program(model)
 
-            # TEST HYPOTHESIS
+            # TEST HYPOTHESIS AND UPDATE BEST PROGRAM
             with stats.duration('test'):
                 conf_matrix = tester.test(program)
                 score = calc_score(conf_matrix)
+                stats.register_program(program, conf_matrix)
 
-            stats.register_program(program, conf_matrix)
+                if best_score == None or score > best_score:
+                    best_score = score
 
-            # UPDATE BEST PROGRAM
-            if best_score == None or score > best_score:
-                best_score = score
-                tp, fn, tn, fp = conf_matrix
-                if fn == 0 and fp == 0:
-                    stats.register_solution(program, conf_matrix)
-                    return stats.solution.code
+                    if tester.is_complete(program) and tester.is_consistent(program):
+                        stats.register_solution(program, conf_matrix)
+                        return stats.solution.code
 
-                stats.register_best_program(program, conf_matrix)
+                    stats.register_best_program(program, conf_matrix)
 
-            # BUILD RULES
+            # BUILD CONSTRAINTS
             with stats.duration('build'):
-                rules = build_rules(settings, stats, constrainer, tester, program, before, min_clause, conf_matrix)
-                rules = set(rule for rule in rules if rule not in all_fo_rules)
-                all_fo_rules.update(rules)
+                cons = build_constraints(settings, stats, constrainer, tester, program, before, min_clause)
+                cons = cons - all_fo_cons
+                all_fo_cons.update(cons)
 
-            # GROUND RULES
+            # GROUND CONSTRAINTS
             with stats.duration('ground'):
-                rules = ground_rules(stats, grounder, solver.max_clauses, solver.max_vars, rules)
-                rules = set(rule for rule in rules if rule not in all_ground_rules)
-                all_ground_rules.update(rules)
+                ground_cons = bind_vars_in_cons(stats, grounder, solver.max_clauses, solver.max_vars, cons)
+                ground_cons = ground_cons - all_ground_cons
+                all_ground_cons.update(ground_cons)
 
-            # UPDATE SOLVER
+            # ADD CONSTRAINTS TO SOLVER
             with stats.duration('add'):
-                solver.add_ground_clauses(rules)
+                solver.add_ground_clauses(ground_cons)
 
     stats.register_completion()
     return stats.best_program.code if stats.best_program else None

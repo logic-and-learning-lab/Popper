@@ -13,7 +13,7 @@ class Tester():
         self.settings = settings
         self.prolog = Prolog()
         self.eval_timeout = settings.eval_timeout
-        self.checked_redundant_literals = {}
+        self.cached_redundant_literals = {}
         self.seen_tests = {}
         self.seen_prog = {}
 
@@ -54,9 +54,9 @@ class Tester():
     # def check_redundant_literal(self, program):
     #     for clause in program:
     #         k = Clause.clause_hash(clause)
-    #         if k in self.checked_redundant_literals:
+    #         if k in self.cached_redundant_literals:
     #             continue
-    #         self.checked_redundant_literals.add(k)
+    #         self.cached_redundant_literals.add(k)
     #         (head, body) = clause
     #         C = f"[{','.join(('not_'+ Literal.to_code(head),) + tuple(Literal.to_code(lit) for lit in body))}]"
     #         res = list(self.prolog.query(f'redundant_literal({C})'))
@@ -64,34 +64,46 @@ class Tester():
     #             yield clause
 
     def rule_has_redundant_literal(self, rule):
-        k = Clause.clause_hash(rule)
-        if k in self.checked_redundant_literals:
-            return self.checked_redundant_literals[k]
-        (head, body) = rule
+        k = hash(rule)
+        if k in self.cached_redundant_literals:
+            return self.cached_redundant_literals[k]
+
+        head, body = rule
         C = f"[{','.join(('not_'+ Literal.to_code(head),) + tuple(Literal.to_code(lit) for lit in body))}]"
         has_redundant_literal = len(list(self.prolog.query(f'redundant_literal({C})'))) > 0
-        self.checked_redundant_literals[k] = has_redundant_literal
+        self.cached_redundant_literals[k] = has_redundant_literal
         return has_redundant_literal
 
-    def check_redundant_clause(self, program):
-        # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
-        prog = []
-        for (head, body) in program:
-            C = f"[{','.join(('not_'+ Literal.to_code(head),) + tuple(Literal.to_code(lit) for lit in body))}]"
-            prog.append(C)
-        prog = f"[{','.join(prog)}]"
-        return list(self.prolog.query(f'redundant_clause({prog})'))
+    # def check_redundant_clause(self, program):
+    #     # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
+    #     prog = []
+    #     for (head, body) in program:
+    #         C = f"[{','.join(('not_'+ Literal.to_code(head),) + tuple(Literal.to_code(lit) for lit in body))}]"
+    #         prog.append(C)
+    #     prog = f"[{','.join(prog)}]"
+    #     return list(self.prolog.query(f'redundant_clause({prog})'))
 
     def is_non_functional(self, program):
         with self.using(program):
             return list(self.prolog.query(f'non_functional.'))
 
     def success_set(self, rules):
-        prog_hash = frozenset(rule for rule in rules)
-        if prog_hash not in self.seen_prog:
+        k = hash(frozenset(rules))
+
+        if k in self.seen_prog:
+            return self.seen_prog[k]
+
+        if len(rules) == 1 or not all(Clause.is_separable(rule) for rule in rules):
             with self.using(rules):
-                self.seen_prog[prog_hash] = set(next(self.prolog.query('success_set(Xs)'))['Xs'])
-        return self.seen_prog[prog_hash]
+                xs = set(next(self.prolog.query('success_set(Xs)'))['Xs'])
+                self.seen_prog[k] = xs
+                return xs
+
+        xs = set()
+        for rule in rules:
+            xs.update(self.success_set([rule]))
+        self.seen_prog[k] = xs
+        return xs
 
     def find_redundant_clauses(self, rules):
         prog = []
@@ -108,14 +120,10 @@ class Tester():
             yield rules[r0], rules[r1]
 
     def test(self, rules):
-        if all(Clause.is_separable(rule) for rule in rules):
-            covered = set()
-            for rule in rules:
-                covered.update(self.success_set([rule]))
-        else:
-            covered = self.success_set(rules)
+        covered = self.success_set(rules)
 
         tp, fn, tn, fp = 0, 0, 0, 0
+
         for p in self.pos:
             if p in covered:
                 tp +=1
@@ -129,12 +137,17 @@ class Tester():
 
         return tp, fn, tn, fp
 
-    def is_totally_incomplete(self, rule):
-        if not Clause.is_separable(rule):
-            return False
-        return not any(x in self.success_set([rule]) for x in self.pos)
+    def is_complete(self, rules):
+        return all(x in self.success_set(rules) for x in self.pos)
 
-    def is_inconsistent(self, rule):
-        if not Clause.is_separable(rule):
-            return False
-        return any(x in self.success_set([rule]) for x in self.neg)
+    def is_consistent(self, rules):
+        return all(x not in self.success_set(rules) for x in self.neg)
+
+    def is_incomplete(self, rules):
+        return any(x not in self.success_set(rules) for x in self.pos)
+
+    def is_totally_incomplete(self, rules):
+        return all(x not in self.success_set(rules) for x in self.pos)
+
+    def is_inconsistent(self, rules):
+        return any(x in self.success_set(rules) for x in self.neg)
