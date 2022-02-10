@@ -6,6 +6,7 @@ import time
 import pkg_resources
 from contextlib import contextmanager
 from . core import Clause, Literal
+from . util import format_program
 from datetime import datetime
 
 class Tester():
@@ -84,8 +85,17 @@ class Tester():
     #     return list(self.prolog.query(f'redundant_clause({prog})'))
 
     def is_non_functional(self, program):
+        try:
+            with self.using(program):
+                return len(list(self.prolog.query(f'non_functional.'))) > 0
+        except:
+            print('ERROR!!!!!!!!!')
+            print(format_program(program))
+            return True
+
+    def is_functional(self, program):
         with self.using(program):
-            return list(self.prolog.query(f'non_functional.'))
+            return len(list(self.prolog.query(f'functional.'))) > 0
 
     def success_set(self, rules):
         k = hash(frozenset(rules))

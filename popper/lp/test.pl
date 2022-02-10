@@ -51,6 +51,10 @@ non_functional:-
     pos(Atom),
     non_functional(Atom),!.
 
+functional:-
+    \+ non_functional.
+
+
 %% ========== REDUNDANCY CHECKS ==========
 
 subsumes(C,D) :- \+ \+ (copy_term(D,D2), numbervars(D2,0,_), subset(C,D2)).

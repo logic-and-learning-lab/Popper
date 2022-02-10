@@ -40,29 +40,35 @@ def build_constraints(settings, stats, constrainer, tester, program, before, min
     if tester.is_incomplete(program):
         cons.update(constrainer.specialisation_constraint(program, before, min_clause))
 
+    if tester.is_complete(program):
+        cons.update(constrainer.generalisation_constraint(program, before, min_clause))
+
     # eliminate building rules subsumed by this one
     for rule in program:
         cons.update(constrainer.subsumption_constraint(rule, min_clause))
 
     if settings.functional_test and tester.is_non_functional(program):
         cons.update(constrainer.generalisation_constraint(program, before, min_clause))
+        cons.update(constrainer.banish_constraint(program, before, min_clause))
 
     # eliminate generalisations of clauses that contain redundant literals
-        for rule in program:
-            if tester.rule_has_redundant_literal(rule):
-                cons.update(constrainer.redundant_literal_constraint(rule, before, min_clause))
+    for rule in program:
+        if tester.rule_has_redundant_literal(rule):
+            cons.update(constrainer.redundant_literal_constraint(rule, before, min_clause))
 
     if len(program) > 1:
+        pass
 
         # detect subsumption redundant rules
         for r1, r2 in tester.find_redundant_clauses(program):
             cons.update(constrainer.subsumption_constraint_pairs(r1, r2, min_clause))
 
-        # eliminate inconsistent rules
-        if tester.is_inconsistent(program):
-            for rule in program:
-                if tester.is_inconsistent([rule]):
-                    cons.update(constrainer.generalisation_constraint([rule], before, min_clause))
+        # # eliminate inconsistent rules
+        if all(Clause.is_separable(rule) for rule in program):
+            if tester.is_inconsistent(program):
+                for rule in program:
+                    if tester.is_inconsistent([rule]):
+                        cons.update(constrainer.generalisation_constraint([rule], before, min_clause))
 
         # eliminate totally incomplete rules
         if all(Clause.is_separable(rule) for rule in program):
@@ -94,6 +100,7 @@ def popper(settings, stats):
     for size in range(1, settings.max_literals + 1):
         stats.update_num_literals(size)
         solver.update_number_of_literals(size)
+        print(f'% size:{size}')
 
         while True:
 
@@ -110,10 +117,8 @@ def popper(settings, stats):
                 score = calc_score(conf_matrix)
                 stats.register_program(program, conf_matrix)
 
-                if best_score == None or score > best_score:
-                    best_score = score
-
-                    if tester.is_complete(program) and tester.is_consistent(program):
+                if tester.is_complete(program) and tester.is_consistent(program):
+                    if not settings.functional_test or tester.is_functional(program):
                         stats.register_solution(program, conf_matrix)
                         return stats.solution.code
 
