@@ -118,7 +118,7 @@ class Constrain:
 
         for clause_number, clause in enumerate(program):
             clause_handle = self.make_clause_handle(clause)
-            yield from self.make_clause_inclusion_rule(clause, min_clause[clause], clause_handle)
+            yield from self.make_clause_inclusion_rule(clause, 0, clause_handle)
             clause_variable = vo_clause(clause_number)
             literals.append(Literal('included_clause', (clause_handle, clause_variable)))
 
@@ -133,20 +133,20 @@ class Constrain:
 
         yield (None, tuple(literals))
 
-    def subsumption_constraint(self, rule1, min_clause):
-        # prune all rules that rule1 subsumes, where k is the number of literals in the body of rule1
-        # :- seen(rule1,C0), seen(rule1,C1), C0 != C1, body_size(C0,k)
-        _head1, body1 = rule1
-        rule1_handle = self.make_clause_handle(rule1)
-        yield from self.make_clause_inclusion_rule(rule1, min_clause[rule1], rule1_handle)
-        v1 = vo_clause(0)
-        v2 = vo_clause(1)
-        literals = []
-        literals.append(body_size_literal(v1, len(body1)))
-        literals.append(Literal('included_clause', (rule1_handle, v1)))
-        literals.append(Literal('included_clause', (rule1_handle, v2)))
-        literals.append(alldiff((v1, v2)))
-        yield None, tuple(literals)
+    # def subsumption_constraint(self, rule1, min_clause):
+    #     # prune all rules that rule1 subsumes, where k is the number of literals in the body of rule1
+    #     # :- seen(rule1,C0), seen(rule1,C1), C0 != C1, body_size(C0,k)
+    #     _head1, body1 = rule1
+    #     rule1_handle = self.make_clause_handle(rule1)
+    #     yield from self.make_clause_inclusion_rule(rule1, min_clause[rule1], rule1_handle)
+    #     v1 = vo_clause(0)
+    #     v2 = vo_clause(1)
+    #     literals = []
+    #     literals.append(body_size_literal(v1, len(body1)))
+    #     literals.append(Literal('included_clause', (rule1_handle, v1)))
+    #     literals.append(Literal('included_clause', (rule1_handle, v2)))
+    #     literals.append(alldiff((v1, v2)))
+    #     yield None, tuple(literals)
 
     def subsumption_constraint_pairs(self, rule1, rule2, min_clause):
         # if rule1 subsumes rule2 then build the following constraint where k is the body size of rule1

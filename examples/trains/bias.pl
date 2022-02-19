@@ -2,7 +2,7 @@
 %% f(A) :- has_car(A,C),long(C),roof_closed(C),has_car(A,B),three_wheels(B).
 %% 0.83s user 0.03s system 99% cpu 0.860 total
 
-max_clauses(3).
+max_clauses(1).
 max_vars(5).
 max_body(6).
 

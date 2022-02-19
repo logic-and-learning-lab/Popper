@@ -113,97 +113,222 @@ class ClingoGrounder():
         self.seen_assignments[k] = out
         return out
 
-class ClingoSolver():
+# class ClingoSolver():
 
-    @staticmethod
-    def load_alan(settings, ctrl):
-        alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
-        ctrl.add('alan', [], alan)
-        with open(settings.bias_file) as f:
-            ctrl.add('bias', [], f.read())
-        ctrl.ground([('alan', []), ('bias', [])])
+#     @staticmethod
+#     def load_alan(settings, ctrl):
+#         alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
+#         ctrl.add('alan', [], alan)
+#         with open(settings.bias_file) as f:
+#             ctrl.add('bias', [], f.read())
+#         ctrl.ground([('alan', []), ('bias', [])])
 
-    @staticmethod
-    def get_hspace(settings, formatting):
-        solver = clingo.Control(settings.clingo_args)
-        ClingoSolver.load_alan(settings, solver)
-        solver.configuration.solve.models = settings.hspace
-        num_models=0
-        def on_model(m):
-            nonlocal num_models
-            num_models+=1
-            formatting(num_models, m.symbols(shown = True))
-        solver.solve(on_model=on_model)
+#     @staticmethod
+#     def get_hspace(settings, formatting):
+#         solver = clingo.Control(settings.clingo_args)
+#         ClingoSolver.load_alan(settings, solver)
+#         solver.configuration.solve.models = settings.hspace
+#         num_models=0
+#         def on_model(m):
+#             nonlocal num_models
+#             num_models+=1
+#             formatting(num_models, m.symbols(shown = True))
+#         solver.solve(on_model=on_model)
 
-    def __init__(self, settings):
+#     def __init__(self, settings):
+#         self.solver = clingo.Control(settings.clingo_args)
+#         # AC: why an OrderedDict? We never remove from it
+#         self.assigned = OrderedDict()
+#         self.seen_symbols = {}
+
+#         ClingoSolver.load_alan(settings, self.solver)
+
+#         NUM_OF_LITERALS = (
+#         """
+#         %%% External atom for number of literals in the program %%%%%
+#         #external size_in_literals(n).
+#         :-
+#             size_in_literals(n),
+#             #sum{K+1,Clause : body_size(Clause,K)} != n.
+#         """)
+
+#         self.solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
+
+#         max_vars_atoms = self.solver.symbolic_atoms.by_signature('max_vars', arity=1)
+#         self.max_vars = next(max_vars_atoms).symbol.arguments[0].number
+#         max_clauses_atoms = self.solver.symbolic_atoms.by_signature('max_clauses', arity=1)
+#         self.max_clauses = next(max_clauses_atoms).symbol.arguments[0].number
+
+#     def get_model(self):
+
+#         out = []
+
+#         def on_model(m):
+#             xs = m.symbols(shown = True)
+#             print('loop',xs)
+#             # map a variable to a program variable
+#             # assignment = {}
+#             # for x in xs:
+#             #     var = x.arguments[0].number
+#             #     val = x.arguments[1].number
+#             #     if x.name == 'c_var':
+#             #         assignment[c_vars_[var]] = val
+#             #     elif x.name == 'v_var':
+#             #         assignment[v_vars_[var]] = val
+#             out.append(xs)
+
+#         self.solver.configuration.solve.models = 0
+#         solver.solve(on_model=on_model)
+#         return out
+
+#         # with self.solver.solve(yield_ = True) as handle:
+#         #     m = handle.model()
+#         #     if m:
+#         #         return m.symbols(shown = True)
+#         #     return m
+
+#     def update_number_of_literals(self, size):
+#         # 1. Release those that have already been assigned
+#         for atom, truth_value in self.assigned.items():
+#             if atom[0] == 'size_in_literals' and truth_value:
+#                 self.assigned[atom] = False
+#                 symbol = clingo.Function('size_in_literals', [clingo.Number(atom[1])])
+#                 self.solver.release_external(symbol)
+
+#         # 2. Ground the new size
+#         self.solver.ground([('number_of_literals', [clingo.Number(size)])])
+
+#         # 3. Assign the new size
+#         self.assigned[('size_in_literals', size)] = True
+
+#         # @NOTE: Everything passed to Clingo must be Symbol. Refactor after
+#         # Clingo updates their cffi API
+#         symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
+#         self.solver.assign_external(symbol, True)
+
+#     def gen_symbol(self, literal, backend):
+#         (sign, pred, args) = literal
+#         k = hash(literal)
+#         if k in self.seen_symbols:
+#             symbol = self.seen_symbols[k]
+#         else:
+#             symbol = backend.add_atom(atom_to_symbol(pred, args))
+#             self.seen_symbols[k] = symbol
+#         return symbol
+
+#     def add_ground_clauses(self, clauses):
+#         with self.solver.backend() as backend:
+#             for (head, body) in clauses:
+#                 head_literal = []
+#                 if head:
+#                     head_literal = [self.gen_symbol(head, backend)]
+#                 body_lits = []
+#                 for literal in body:
+#                     (sign, _pred, _args) = literal
+#                     symbol = self.gen_symbol(literal, backend)
+#                     body_lits.append(symbol if sign else -symbol)
+#                 backend.add_rule(head_literal, body_lits)
+
+class ClingoSolver2():
+
+
+    def __init__(self, settings, size, cons):
         self.solver = clingo.Control(settings.clingo_args)
-        # AC: why an OrderedDict? We never remove from it
-        self.assigned = OrderedDict()
-        self.seen_symbols = {}
 
-        ClingoSolver.load_alan(settings, self.solver)
+        alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
 
-        NUM_OF_LITERALS = (
-        """
-        %%% External atom for number of literals in the program %%%%%
-        #external size_in_literals(n).
-        :-
-            size_in_literals(n),
-            #sum{K+1,Clause : body_size(Clause,K)} != n.
-        """)
+        self.solver.add('alan', [], alan)
 
-        self.solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
+        with open(settings.bias_file) as f:
+            self.solver.add('bias', [], f.read())
+        self.solver.add('bias', [], f':- not body_size(0,{size}).\n')
+        self.solver.add('bias', [], '\n'.join(cons))
 
-        max_vars_atoms = self.solver.symbolic_atoms.by_signature('max_vars', arity=1)
-        self.max_vars = next(max_vars_atoms).symbol.arguments[0].number
-        max_clauses_atoms = self.solver.symbolic_atoms.by_signature('max_clauses', arity=1)
-        self.max_clauses = next(max_clauses_atoms).symbol.arguments[0].number
+        self.solver.ground([('alan', []), ('bias', [])])
 
     def get_model(self):
-        with self.solver.solve(yield_ = True) as handle:
-            m = handle.model()
-            if m:
-                return m.symbols(shown = True)
-            return m
+        out = []
+        def on_model(m):
+            xs = m.symbols(shown = True)
+            out.append(xs)
+        self.solver.configuration.solve.models = 0
 
-    def update_number_of_literals(self, size):
-        # 1. Release those that have already been assigned
-        for atom, truth_value in self.assigned.items():
-            if atom[0] == 'size_in_literals' and truth_value:
-                self.assigned[atom] = False
-                symbol = clingo.Function('size_in_literals', [clingo.Number(atom[1])])
-                self.solver.release_external(symbol)
+        with self.solver.solve(yield_=True) as handle:
+            for m in handle:
+                yield m.symbols(shown = True)
 
-        # 2. Ground the new size
-        self.solver.ground([('number_of_literals', [clingo.Number(size)])])
+        # out = []
+        # with self.solver.solve(yield_=True) as handle:
+        #     for m in handle:
+        #         out.append(m.symbols(shown = True))
+        # return out
 
-        # 3. Assign the new size
-        self.assigned[('size_in_literals', size)] = True
+    # def update_number_of_literals(self, size):
+    #     # 1. Release those that have already been assigned
+    #     for atom, truth_value in self.assigned.items():
+    #         if atom[0] == 'size_in_literals' and truth_value:
+    #             self.assigned[atom] = False
+    #             symbol = clingo.Function('size_in_literals', [clingo.Number(atom[1])])
+    #             self.solver.release_external(symbol)
 
-        # @NOTE: Everything passed to Clingo must be Symbol. Refactor after
-        # Clingo updates their cffi API
-        symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
-        self.solver.assign_external(symbol, True)
+    #     # 2. Ground the new size
+    #     self.solver.ground([('number_of_literals', [clingo.Number(size)])])
 
-    def gen_symbol(self, literal, backend):
-        (sign, pred, args) = literal
-        k = hash(literal)
-        if k in self.seen_symbols:
-            symbol = self.seen_symbols[k]
-        else:
-            symbol = backend.add_atom(atom_to_symbol(pred, args))
-            self.seen_symbols[k] = symbol
-        return symbol
+    #     # 3. Assign the new size
+    #     self.assigned[('size_in_literals', size)] = True
 
-    def add_ground_clauses(self, clauses):
-        with self.solver.backend() as backend:
-            for (head, body) in clauses:
-                head_literal = []
-                if head:
-                    head_literal = [self.gen_symbol(head, backend)]
-                body_lits = []
-                for literal in body:
-                    (sign, _pred, _args) = literal
-                    symbol = self.gen_symbol(literal, backend)
-                    body_lits.append(symbol if sign else -symbol)
-                backend.add_rule(head_literal, body_lits)
+    #     # @NOTE: Everything passed to Clingo must be Symbol. Refactor after
+    #     # Clingo updates their cffi API
+    #     symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
+    #     self.solver.assign_external(symbol, True)
+
+    # def gen_symbol(self, literal, backend):
+    #     (sign, pred, args) = literal
+    #     k = hash(literal)
+    #     if k in self.seen_symbols:
+    #         symbol = self.seen_symbols[k]
+    #     else:
+    #         symbol = backend.add_atom(atom_to_symbol(pred, args))
+    #         self.seen_symbols[k] = symbol
+    #     return symbol
+
+    # def add_ground_clauses(self, clauses):
+    #     with self.solver.backend() as backend:
+    #         for (head, body) in clauses:
+    #             head_literal = []
+    #             if head:
+    #                 head_literal = [self.gen_symbol(head, backend)]
+    #             body_lits = []
+    #             for literal in body:
+    #                 (sign, _pred, _args) = literal
+    #                 symbol = self.gen_symbol(literal, backend)
+    #                 body_lits.append(symbol if sign else -symbol)
+    #             backend.add_rule(head_literal, body_lits)
+
+
+def asda(prog):
+    solver = clingo.Control()
+
+    prog += """
+    covered(E):- covers(R,E), rule(R).
+    :- example(E), not covered(E).
+    #show rule/1.
+    #show size/1.
+    size(N):-
+        #sum{K,R : rule(R), size(R,K)} == N.
+    #minimize{X : size(X)}.
+    """
+
+    with open('sat-prob.pl', 'w') as f:
+        f.write(prog)
+
+    solver.add('base', [], prog)
+    solver.ground([('base', [])])
+
+    def on_model(m):
+        print('model found')
+        xs = m.symbols(shown = True)
+        print(xs)
+
+    solver.solve(on_model=on_model)
+

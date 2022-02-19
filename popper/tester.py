@@ -30,8 +30,21 @@ class Tester():
         # load examples
         list(self.prolog.query('load_examples'))
 
-        self.pos = [x['I'] for x in self.prolog.query('current_predicate(pos_index/2),pos_index(I,_)')]
-        self.neg = [x['I'] for x in self.prolog.query('current_predicate(neg_index/2),neg_index(I,_)')]
+        # self.pos = [x['I'] for x in self.prolog.query('current_predicate(pos_index/2),pos_index(I,_)')]
+        # self.neg = [x['I'] for x in self.prolog.query('current_predicate(neg_index/2),neg_index(I,_)')]
+
+        self.pos = []
+        self.neg = []
+        self.pos_atoms = []
+        self.neg_atoms = []
+
+        for x in self.prolog.query('current_predicate(pos_index/2),pos_index(I,Atom)'):
+            self.pos.append(x['I'])
+            self.pos_atoms.append(x['Atom'])
+
+        for x in self.prolog.query('current_predicate(neg_index/2),neg_index(I,Atom)'):
+            self.neg.append(x['I'])
+            self.neg_atoms.append(x['Atom'])
 
         self.prolog.assertz(f'timeout({self.eval_timeout})')
 
@@ -115,6 +128,38 @@ class Tester():
         self.seen_prog[k] = xs
         return xs
 
+    def pos_covered(self, rules):
+        k = hash(frozenset(rules))
+
+        if k in self.seen_prog:
+            return self.seen_prog[k]
+
+        if len(rules) == 1 or not all(Clause.is_separable(rule) for rule in rules):
+            with self.using(rules):
+                xs = set(next(self.prolog.query('pos_covered(Xs)'))['Xs'])
+                self.seen_prog[k] = xs
+                return xs
+
+        xs = set()
+        for rule in rules:
+            xs.update(self.success_set([rule]))
+        self.seen_prog[k] = xs
+        return xs
+
+    def is_inconsistent(self, rules):
+        with self.using(rules):
+            return len(list(self.prolog.query('inconsistent'))) > 0
+
+    def my_test(self, stats, rules):
+        with self.using(rules):
+            with stats.duration('pos_covered'):
+                coverage = set(next(self.prolog.query('pos_covered(Xs)'))['Xs'])
+            if len(coverage) == 0:
+                return None, coverage
+            with stats.duration('inconsistent'):
+                inconsistent = len(list(self.prolog.query('inconsistent'))) > 0
+            return inconsistent, coverage
+
     def find_redundant_clauses(self, rules):
         prog = []
         for i, (head, body) in enumerate(rules):
@@ -159,5 +204,3 @@ class Tester():
     def is_totally_incomplete(self, rules):
         return all(x not in self.success_set(rules) for x in self.pos)
 
-    def is_inconsistent(self, rules):
-        return any(x in self.success_set(rules) for x in self.neg)

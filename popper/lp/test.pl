@@ -43,8 +43,16 @@ test_ex(Atom):-
     timeout(T),
     catch(call_with_time_limit(T, call(Atom)),time_limit_exceeded,false),!.
 
-success_set(Xs):-
-    findall(ID, (ex_index(ID,Atom),test_ex(Atom)), Xs).
+%% success_set(Xs):-
+    %% findall(ID, (ex_index(ID,Atom),test_ex(Atom)), Xs).
+
+pos_covered(Xs):-
+    findall(ID, (pos_index(ID,Atom),call(Atom)), Xs).
+
+inconsistent:-
+    neg_index(_,Atom),
+    call(Atom).
+    %% findall(ID, (ex_index(ID,Atom),test_ex(Atom)), Xs).
 
 %% ========== FUNCTIONAL CHECKS ==========
 non_functional:-

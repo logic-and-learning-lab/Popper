@@ -19,7 +19,7 @@
 %% Total operation time: 7.00s
 %% Total execution time: 7.00s
 
-max_clauses(2).
+max_clauses(1).
 max_vars(5).
 max_body(5).
 

@@ -1,5 +1,5 @@
 from popper.util import Settings, parse_settings
-from popper.loop import learn_solution, show_hspace
+from popper.loop import learn_solution
 
 if __name__ == '__main__':
     settings = parse_settings()

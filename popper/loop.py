@@ -3,149 +3,309 @@
 import logging
 import sys
 from . util import Settings, Stats, timeout, parse_settings, format_program
-from . asp import ClingoGrounder, ClingoSolver
 from . tester import Tester
 from . constrain import Constrain
-from . generate import generate_program
-from . core import Grounding, Clause
+from collections import defaultdict
+from . core import Clause, Literal
+import clingo
+import clingo.script
+clingo.script.enable_python()
 
-def bind_vars_in_cons(stats, grounder, max_clauses, max_vars, clauses):
-    ground_cons = set()
-    for clause in clauses:
-        head, body = clause
+def gen_prog(examples, covers, sizes):
+    prog = []
+    for x in examples:
+        prog.append(f'example({x}).')
+    for r, xs in covers.items():
+        prog.append('{rule(' + str(r) + ')}.')
+        for x in xs:
+            prog.append(f'covers({r},{x}).')
+    for r, size in sizes.items():
+        prog.append(f'size({r},{size}).')
 
-        # find bindings for variables in the constraint
-        assignments = grounder.find_bindings(clause, max_clauses, max_vars)
+    prog = '\n'.join(prog)
+    return prog
 
-        # keep only standard literals
-        body = tuple(literal for literal in body if not literal.meta)
+def gen_args(args):
+    return tuple(chr(ord('A') + arg.number) for arg in args)
 
-        # ground the clause for each variable assignment
-        for assignment in assignments:
-            ground_cons.add(Grounding.ground_clause((head, body), assignment))
-    
-    stats.register_ground_rules(ground_cons)
+def parse_model(model):
+    directions = defaultdict(lambda: defaultdict(lambda: '?'))
+    body_atoms = []
+    for atom in model:
+        pred = atom.arguments[1].name
+        args = gen_args(atom.arguments[3].arguments)
+        arity = len(args)
+        modes = tuple(directions[pred][i] for i in range(arity))
+        literal = Literal(pred, args, modes)
+        if atom.name == 'body_literal':
+            body_atoms.append(literal)
+        elif atom.name == 'head_literal':
+            head = literal
 
-    return ground_cons
+    return head, frozenset(body_atoms)
 
-def build_constraints(settings, stats, constrainer, tester, program, before, min_clause):
-    cons = set()
+def get_rules(settings, stats, size, cons):
+    with stats.duration('gen.ground'):
+        solver = clingo.Control(["--single-shot"])
+        solver.configuration.solve.models = 0
+        with open('popper/lp/alan.pl') as f:
+            solver.add('alan', [], f.read())
+        with open(settings.bias_file) as f:
+            solver.add('bias', [], f.read())
+        solver.add('bias', [], f':- not body_size(0,{size}).\n')
+        solver.add('bias', [], '\n'.join(cons))
+        solver.ground([('alan', []), ('bias', [])])
 
-    if tester.is_inconsistent(program):
-        cons.update(constrainer.generalisation_constraint(program, before, min_clause))
+    with stats.duration('gen.solve'):
+        models = []
+        with solver.solve(yield_=True) as handle:
+            for m in handle:
+                models.append(m.symbols(shown = True))
 
-    if tester.is_totally_incomplete(program):
-        cons.update(constrainer.redundancy_constraint(program, before, min_clause))
+    with stats.duration('gen.build'):
+        for model in models:
+            yield parse_model(model)
 
-    if tester.is_incomplete(program):
-        cons.update(constrainer.specialisation_constraint(program, before, min_clause))
+def test_prolog(tester, stats, rules):
+    for rule in rules:
+        inconsistent, pos_covered = tester.my_test(stats, rule)
+        yield rule, inconsistent, pos_covered
 
-    if tester.is_complete(program):
-        cons.update(constrainer.generalisation_constraint(program, before, min_clause))
+def test_rules_clingo(tester, stats, bk, rules):
+    if len(rules) == 0:
+        return []
 
-    # eliminate building rules subsumed by this one
-    for rule in program:
-        cons.update(constrainer.subsumption_constraint(rule, min_clause))
+    with stats.duration('test.build'):
+        prog = """
+        #show pos_covers/2.
+        #show inconsistent/1.
 
-    if settings.functional_test and tester.is_non_functional(program):
-        cons.update(constrainer.generalisation_constraint(program, before, min_clause))
-        cons.update(constrainer.banish_constraint(program, before, min_clause))
+        pos_covers(R,E):-
+            pos(E,Atom),
+            holds(R,Atom).
 
-    # eliminate generalisations of clauses that contain redundant literals
-    for rule in program:
-        if tester.rule_has_redundant_literal(rule):
-            cons.update(constrainer.redundant_literal_constraint(rule, before, min_clause))
+        inconsistent(R):-
+            neg(E,Atom),
+            holds(R,Atom).
+        """
 
-    if len(program) > 1:
-        pass
+        prog += '\n'
+        prog += '\n'.join(f'pos({i},{atom}).' for i, atom in zip(tester.pos, tester.pos_atoms))
+        prog += '\n'
+        prog += '\n'.join(f'neg({i},{atom}).' for i, atom in zip(tester.neg, tester.neg_atoms))
+        prog += '\n'
 
-        # detect subsumption redundant rules
-        for r1, r2 in tester.find_redundant_clauses(program):
-            cons.update(constrainer.subsumption_constraint_pairs(r1, r2, min_clause))
+        for i, rule in enumerate(rules):
+            rule = format_program(rule)
+            rule = rule.replace('next_value(A,B)', f'holds({i},next_value(A,B))')
+            rule = rule.replace('f(A)', f'holds({i},f(A))')
+            rule = rule.replace('next_score(A,B,C)', f'holds({i},next_score(A,B,C))')
+            rule = rule.replace('next(A,B)', f'holds({i},next(A,B))')
+            prog += rule + '\n'
 
-        # # eliminate inconsistent rules
-        if all(Clause.is_separable(rule) for rule in program):
-            if tester.is_inconsistent(program):
-                for rule in program:
-                    if tester.is_inconsistent([rule]):
-                        cons.update(constrainer.generalisation_constraint([rule], before, min_clause))
+    # print(prog)
+    solver = clingo.Control(["--single-shot"])
+    solver.add('bk', [], bk)
+    solver.add('rules', [], prog)
 
-        # eliminate totally incomplete rules
-        if all(Clause.is_separable(rule) for rule in program):
-            for rule in program:
-                if tester.is_totally_incomplete([rule]):
-                    cons.update(constrainer.redundancy_constraint([rule], before, min_clause))
+    with stats.duration('test.ground.bk'):
+        solver.ground([('bk', [])])
+    with stats.duration('test.ground.rules'):
+        solver.ground([('rules', [])])
 
-    stats.register_rules(cons)
+    atoms = []
+    with stats.duration('test.solve'):
+        with solver.solve(yield_=True) as handle:
+            for m in handle:
+                atoms.extend(m.symbols(shown = True))
 
-    return cons
+    with stats.duration('test.parse'):
+        inconsistent = {i:False for i in range(len(rules))}
+        covers = {i:set() for i in range(len(rules))}
 
-PROG_KEY = 'prog'
+        for atom in atoms:
+            if atom.name == 'pos_covers':
+                i = atom.arguments[0].number
+                example = atom.arguments[1].number
+                covers[i].add(example)
+            elif atom.name == 'inconsistent':
+                i = atom.arguments[0].number
+                inconsistent[i] = True
 
-def calc_score(conf_matrix):
-    tp, fn, tn, fp = conf_matrix
-    return tp + tn
+    for i, rule in enumerate(rules):
+        yield rule, inconsistent[i], covers[i]
+
+# def test_rules_clingo1(tester, stats, bk, rules):
+#     if len(rules) == 0:
+#         return []
+
+#     with stats.duration('test.build'):
+#         prog = """
+#         #show pos_covers/2.
+#         #show inconsistent/1.
+
+#         pos_covers(R,E):-
+#             pos(E,Atom),
+#             holds(R,Atom).
+
+#         inconsistent(R):-
+#             neg(E,Atom),
+#             holds(R,Atom).
+#         """
+
+#         prog += '\n'
+#         prog += '\n'.join(f'pos({i},{atom}).' for i, atom in zip(tester.pos, tester.pos_atoms))
+#         prog += '\n'
+#         prog += '\n'.join(f'neg({i},{atom}).' for i, atom in zip(tester.neg, tester.neg_atoms))
+#         prog += '\n'
+
+#         for i, rule in enumerate(rules):
+#             print(rule)
+#             rule = format_program(rule)
+#             print(rule)
+#             exit()
+#             # rule = rule.replace('next_value(A,B)', f'holds({i},next_value(A,B))')
+#             # rule = rule.replace('f(A)', f'holds({i},f(A))')
+#             # rule = rule.replace('next_score(A,B,C)', f'holds({i},next_score(A,B,C))')
+#             # :- neg(E,Atom), holds(R,Atom).
+#             h = f'inconsistent({i})'
+#             Literal.to_code(head)
+#             b = 'neg(E,next_score(A,B,C))'
+#             # )
+
+#             # rule = rule.replace('next(A,B)', f'holds({i},next(A,B))')
+#             prog += rule + '\n'
+
+#     solver = clingo.Control(["--single-shot"])
+#     solver.add('bk', [], bk)
+#     solver.add('rules', [], prog)
+
+    # with stats.duration('test.ground.bk'):
+    #     solver.ground([('bk', [])])
+    # with stats.duration('test.ground.rules'):
+    #     solver.ground([('rules', [])])
+
+    # atoms = []
+    # with stats.duration('test.solve'):
+    #     with solver.solve(yield_=True) as handle:
+    #         for m in handle:
+    #             atoms.extend(m.symbols(shown = True))
+
+    # with stats.duration('test.parse'):
+    #     inconsistent = {i:False for i in range(len(rules))}
+    #     covers = {i:set() for i in range(len(rules))}
+
+    #     for atom in atoms:
+    #         if atom.name == 'pos_covers':
+    #             i = atom.arguments[0].number
+    #             example = atom.arguments[1].number
+    #             covers[i].add(example)
+    #         elif atom.name == 'inconsistent':
+    #             i = atom.arguments[0].number
+    #             inconsistent[i] = True
+
+
+    # for i, rule in enumerate(rules):
+    #     yield rule, inconsistent[i], covers[i]
+
+def find_subset(prog):
+    prog += """
+    covered(E):- covers(R,E), rule(R).
+    :- example(E), not covered(E).
+    #show rule/1.
+    size(N):- #sum{K,R : rule(R), size(R,K)} == N.
+    #minimize{X : size(X)}.
+    """
+    with open('sat-prob.pl', 'w') as f:
+        f.write(prog)
+
+    solver = clingo.Control(["--single-shot"])
+    solver.add('base', [], prog)
+    solver.ground([('base', [])])
+
+    def on_model(m):
+        xs = m.symbols(shown = True)
+        print(xs)
+
+    solver.solve(on_model=on_model)
+
+# def format_program(program):
+#     return "\n".join(Clause.to_code(Clause.to_ordered(clause)) + '.' for clause in program)
+def format_program(rule):
+    return Clause.to_code(rule) + '.\n'
 
 def popper(settings, stats):
-    solver = ClingoSolver(settings)
     tester = Tester(settings)
-    settings.num_pos, settings.num_neg = len(tester.pos), len(tester.neg)
-    grounder = ClingoGrounder()
+    with open(settings.bk_file, 'r') as f:
+        bk = f.read()
+    pos = tester.pos
+    neg = tester.neg
     constrainer = Constrain()
-    best_score = None
 
-    all_ground_cons = set()
-    all_fo_cons = set()
+    cons = set()
+    covers = {}
+    sizes = {}
+    index = {}
 
-    for size in range(1, settings.max_literals + 1):
-        stats.update_num_literals(size)
-        solver.update_number_of_literals(size)
-        print(f'% size:{size}')
+    count = 0
+    crap_count = 0
+    for size in [2,3,4,5,6]:
+        print('--')
+        print(f'size:{size}')
 
-        while True:
+        print('generating')
+        rules = list(get_rules(settings, stats, size, cons))
+        # rules = list(get_rules(settings, stats, size, []))
 
-            # GENERATE HYPOTHESIS
-            with stats.duration('generate'):
-                model = solver.get_model()
-                if not model:
-                    break
-                program, before, min_clause = generate_program(model)
+        print(f'testing {len(rules)} rules')
+        # rules = list(test_prolog(tester, stats, rules))
+        rules = list(test_rules_clingo(tester, stats, bk, rules))
 
-            # TEST HYPOTHESIS AND UPDATE BEST PROGRAM
-            with stats.duration('test'):
-                conf_matrix = tester.test(program)
-                score = calc_score(conf_matrix)
-                stats.register_program(program, conf_matrix)
+        new_rules = False
+        for rule, inconsistent, coverage in rules:
 
-                if tester.is_complete(program) and tester.is_consistent(program):
-                    if not settings.functional_test or tester.is_functional(program):
-                        stats.register_solution(program, conf_matrix)
-                        return stats.solution.code
+            if len(coverage) == 0:
+                for con in constrainer.specialisation_constraint([rule], {}, {}):
+                    cons.add(constrainer.format_constraint(con))
+                continue
 
-                    stats.register_best_program(program, conf_matrix)
+            if inconsistent:
+                continue
 
-            # BUILD CONSTRAINTS
-            with stats.duration('build'):
-                cons = build_constraints(settings, stats, constrainer, tester, program, before, min_clause)
-                cons = cons - all_fo_cons
-                all_fo_cons.update(cons)
+            # if here, then the rule is consistent and covers at least one example
+            for con in constrainer.specialisation_constraint([rule], {}, {}):
+                cons.add(constrainer.format_constraint(con))
 
-            # GROUND CONSTRAINTS
-            with stats.duration('ground'):
-                ground_cons = bind_vars_in_cons(stats, grounder, solver.max_clauses, solver.max_vars, cons)
-                ground_cons = ground_cons - all_ground_cons
-                all_ground_cons.update(ground_cons)
+            with stats.duration('check_crap'):
+                is_crap = False
+                for i, xs in covers.items():
+                    if coverage.issubset(xs):
+                        is_crap = True
+                        crap_count +=1
+                        break
+                if is_crap:
+                    continue
 
-            # ADD CONSTRAINTS TO SOLVER
-            with stats.duration('add'):
-                solver.add_ground_clauses(ground_cons)
+            if tester.rule_has_redundant_literal(rule):
+                print('MOOOO3')
+                continue
 
-    stats.register_completion()
-    return stats.best_program.code if stats.best_program else None
+            covers[count] = coverage
+            sizes[count] = size
+            index[count] = format_program(rule)
+            count += 1
+            new_rules = True
 
-def show_hspace(settings):
-    f = lambda i, m: print(f'% program {i}\n{format_program(generate_program(m)[0])}')
-    ClingoSolver.get_hspace(settings, f)
+        if not new_rules:
+            continue
+
+        with stats.duration('gen-prob'):
+            prog = gen_prog(tester.pos, covers, sizes)
+
+        with stats.duration('subset'):
+            print(f'subset problem:{len(index)}')
+            print(f'crap_count', crap_count)
+            find_subset(prog)
 
 def learn_solution(settings):
     stats = Stats(log_best_programs=settings.info)

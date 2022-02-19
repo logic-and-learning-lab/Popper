@@ -304,22 +304,10 @@ action(paper).
 action(scissors).
 action(stone).
 
-draws(E,A):-
-    does(E,A,B),
-    does(E,C,B),
-    A \= C.
-
-wins(E,A):-
-    does(E,A,B),
-    does(E,C,D),
-    beats(B,D),
-    player(C).
-
-loses(E,A):-
-    does(E,A,B),
-    does(E,C,D),
-    beats(D,B),
-    player(C).
+%% draws(E,A):- does(E,A,B),does(E,C,B),A \= C.
+%% draws(E,A):- does(E,A,B), does(E,C,B), A != C.
+wins(E,A):- does(E,A,B), does(E,C,D), beats(B,D), player(C).
+loses(E,A):- does(E,A,B), does(E,C,D), beats(D,B), player(C).
 
 
 %% ========== SUPER EASY ==========
