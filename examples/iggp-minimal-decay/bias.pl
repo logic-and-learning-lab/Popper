@@ -1,3 +1,8 @@
+%% next_value(A,5):-does(A,player,pressButton).
+%% next_value(A,B):-my_succ(B,D),does(A,player,noop),my_true_value(A,D).
+
+
+
 %% BEST PROGRAM:
 %% next_value(A,B):-c_player(C),c5(B),c_pressButton(D),does(A,C,D)
 %% next_value(A,B):-my_succ(B,D),my_true_value(A,D),c_player(C),c_noop(E),does(A,C,E)
@@ -20,8 +25,8 @@
 %% Total execution time: 7.00s
 
 max_clauses(1).
-max_vars(5).
-max_body(7).
+max_vars(6).
+max_body(10).
 
 head_pred(next_value,2).
 body_pred(does,3).
@@ -30,10 +35,10 @@ body_pred(my_succ,2).
 body_pred(c_pressButton,1).
 body_pred(c_noop,1).
 body_pred(c_player,1). % comment to make unsat
-body_pred(c1,1).
-body_pred(c2,1).
-body_pred(c3,1).
-body_pred(c4,1).
+%% body_pred(c1,1).
+%% body_pred(c2,1).
+%% body_pred(c3,1).
+%% body_pred(c4,1).
 body_pred(c5,1).
 
 type(next_value,(ex,int)).

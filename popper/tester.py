@@ -22,7 +22,7 @@ class Tester():
         exs_pl_path = self.settings.ex_file
         test_pl_path = pkg_resources.resource_filename(__name__, "lp/test.pl")
 
-        for x in [exs_pl_path, bk_pl_path, test_pl_path]:
+        for x in [exs_pl_path, test_pl_path]:
             if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
                 x = x.replace('\\', '\\\\')
             self.prolog.consult(x)

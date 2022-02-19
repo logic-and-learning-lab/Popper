@@ -43,17 +43,39 @@ def parse_model(model):
             head = literal
     return head, frozenset(body_atoms)
 
-def get_rules(settings, stats, size, cons):
-    with stats.duration('gen.ground'):
-        solver = clingo.Control(["--single-shot"])
-        solver.configuration.solve.models = 0
-        with open('popper/lp/alan.pl') as f:
-            solver.add('alan', [], f.read())
-        with open(settings.bias_file) as f:
-            solver.add('bias', [], f.read())
-        solver.add('bias', [], f':- not body_size(0,{size}).\n')
-        solver.add('bias', [], '\n'.join(cons))
-        solver.ground([('alan', []), ('bias', [])])
+# def get_rules(settings, stats, size, cons):
+#     with stats.duration('gen.ground.alan'):
+#         solver = clingo.Control(["--single-shot"])
+#         solver.configuration.solve.models = 0
+#         with open('popper/lp/alan.pl') as f:
+#             solver.add('alan', [], f.read())
+#         with open(settings.bias_file) as f:
+#             solver.add('bias', [], f.read())
+#         solver.add('bias', [], f':- not body_size(0,{size}).\n')
+#         # solver.add('bias', [], '\n'.join(cons))
+#         solver.ground([('alan', []), ('bias', [])])
+
+#     with stats.duration('gen.ground.cons'):
+#         solver.add('cons', [], '\n'.join(cons))
+#         solver.ground([('cons', [])])
+
+#     with stats.duration('gen.solve'):
+#         models = []
+#         with solver.solve(yield_=True) as handle:
+#             for m in handle:
+#                 models.append(m.symbols(shown = True))
+
+#     with stats.duration('gen.build'):
+#         for model in models:
+#             yield parse_model(model)
+
+
+def get_rules(settings, stats, size, cons, solver):
+
+    with stats.duration('gen.ground.cons'):
+        k = f'cons_{size}'
+        solver.add(k, [], '\n'.join(cons))
+        solver.ground([(k, [])])
 
     with stats.duration('gen.solve'):
         models = []
@@ -98,19 +120,23 @@ def test_rules_clingo(tester, stats, bk, rules):
 
         for i, rule in enumerate(rules):
             rule = format_program(rule)
+            # print(rule)
             rule = rule.replace('next_value(A,B)', f'holds({i},next_value(A,B))')
             rule = rule.replace('f(A)', f'holds({i},f(A))')
             rule = rule.replace('next_score(A,B,C)', f'holds({i},next_score(A,B,C))')
             rule = rule.replace('next(A,B)', f'holds({i},next(A,B))')
+            rule = rule.replace('next_cell(A,B,C)', f'holds({i},next_cell(A,B,C))')
             prog += rule + '\n'
 
     solver = clingo.Control(["--single-shot"])
     solver.add('bk', [], bk)
     solver.add('rules', [], prog)
 
-    with open('v1.pl', 'w') as f:
-        f.write(bk)
-        f.write(prog)
+    # # with open('v1.pl', 'w') as f:
+    # #     f.write(bk)
+    # #     f.write(prog)
+
+    # print(prog)
 
     with stats.duration('test.ground.bk'):
         solver.ground([('bk', [])])
@@ -154,16 +180,53 @@ def find_subset(prog):
     solver.add('base', [], prog)
     solver.ground([('base', [])])
 
-    def on_model(m):
-        xs = m.symbols(shown = True)
-        print(xs)
+    out = []
+    with solver.solve(yield_=True) as handle:
+        for m in handle:
+            xs = m.symbols(shown = True)
+            out = [atom.arguments[0].number for atom in xs]
+    return out
 
-    solver.solve(on_model=on_model)
-
-# def format_program(program):
-#     return "\n".join(Clause.to_code(Clause.to_ordered(clause)) + '.' for clause in program)
 def format_program(rule):
     return Clause.to_code(rule) + '.\n'
+
+def get_solver(stats, settings):
+    with stats.duration('gen.ground.alan'):
+        # solver = clingo.Control(["--single-shot"])
+        solver = clingo.Control()
+        solver.configuration.solve.models = 0
+        with open('popper/lp/alan.pl') as f:
+            solver.add('alan', [], f.read())
+        with open(settings.bias_file) as f:
+            solver.add('bias', [], f.read())
+        # solver.add('bias', [], f':- not body_size(0,{size}).\n')
+        # solver.add('bias', [], '\n'.join(cons))
+        solver.ground([('alan', []), ('bias', [])])
+
+        NUM_OF_LITERALS = (
+        """
+        %%% External atom for number of literals in the program %%%%%
+        #external size_in_literals(n).
+        :-
+            size_in_literals(n),
+            not body_size(0,n).
+        """)
+
+        solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
+
+    return solver
+
+def update_number_of_literals(solver, tracker, size):
+    # 1. Release those that have already been assigned
+    for atom, truth_value in tracker.items():
+        if atom[0] == 'size_in_literals' and truth_value:
+            tracker[atom] = False
+            symbol = clingo.Function('size_in_literals', [clingo.Number(atom[1])])
+            solver.release_external(symbol)
+    solver.ground([('number_of_literals', [clingo.Number(size)])])
+    tracker[('size_in_literals', size)] = True
+    symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
+    solver.assign_external(symbol, True)
 
 def popper(settings, stats):
     tester = Tester(settings)
@@ -180,12 +243,24 @@ def popper(settings, stats):
 
     count = 0
     crap_count = 0
-    for size in [2,3,4,5,6]:
-        print('--')
-        print(f'size:{size}')
+    size = 0
+    max_size = 100
+    tracker = {}
+    best_prog = []
 
-        print('generating')
-        rules = list(get_rules(settings, stats, size, cons))
+    solver = get_solver(stats, settings)
+
+    while size < max_size:
+        size += 1
+        body_size = size-1
+
+        update_number_of_literals(solver, tracker, body_size)
+
+        print('--')
+        print(f'generating size:{size} with cons:{len(cons)}')
+        rules = list(get_rules(settings, stats, body_size, cons, solver))
+        # reset cons
+        cons = set()
         # rules = list(get_rules(settings, stats, size, []))
 
         print(f'testing {len(rules)} rules')
@@ -223,7 +298,7 @@ def popper(settings, stats):
                 continue
 
             covers[count] = coverage
-            sizes[count] = size
+            sizes[count] = size + 1
             index[count] = format_program(rule)
             count += 1
             new_rules = True
@@ -236,7 +311,17 @@ def popper(settings, stats):
 
         with stats.duration('subset'):
             print(f'subset problem:{len(index)}')
-            find_subset(prog)
+            xs = list(find_subset(prog))
+            if xs != []:
+                new_bound = 0
+                print('new_prog')
+                best_prog = xs
+                for i in xs:
+                    new_bound += sizes[i]
+                    print(index[i].strip())
+                max_size = new_bound -1
+                print('NEW BOUND', max_size)
+                return
 
 def learn_solution(settings):
     stats = Stats(log_best_programs=settings.info)
