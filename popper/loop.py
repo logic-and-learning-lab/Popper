@@ -41,7 +41,6 @@ def parse_model(model):
             body_atoms.append(literal)
         elif atom.name == 'head_literal':
             head = literal
-
     return head, frozenset(body_atoms)
 
 def get_rules(settings, stats, size, cons):
@@ -77,6 +76,8 @@ def test_rules_clingo(tester, stats, bk, rules):
 
     with stats.duration('test.build'):
         prog = """
+        #defined pos_covers/2.
+        #defined inconsistent/1.
         #show pos_covers/2.
         #show inconsistent/1.
 
@@ -103,10 +104,13 @@ def test_rules_clingo(tester, stats, bk, rules):
             rule = rule.replace('next(A,B)', f'holds({i},next(A,B))')
             prog += rule + '\n'
 
-    # print(prog)
     solver = clingo.Control(["--single-shot"])
     solver.add('bk', [], bk)
     solver.add('rules', [], prog)
+
+    with open('v1.pl', 'w') as f:
+        f.write(bk)
+        f.write(prog)
 
     with stats.duration('test.ground.bk'):
         solver.ground([('bk', [])])
@@ -134,79 +138,6 @@ def test_rules_clingo(tester, stats, bk, rules):
 
     for i, rule in enumerate(rules):
         yield rule, inconsistent[i], covers[i]
-
-# def test_rules_clingo1(tester, stats, bk, rules):
-#     if len(rules) == 0:
-#         return []
-
-#     with stats.duration('test.build'):
-#         prog = """
-#         #show pos_covers/2.
-#         #show inconsistent/1.
-
-#         pos_covers(R,E):-
-#             pos(E,Atom),
-#             holds(R,Atom).
-
-#         inconsistent(R):-
-#             neg(E,Atom),
-#             holds(R,Atom).
-#         """
-
-#         prog += '\n'
-#         prog += '\n'.join(f'pos({i},{atom}).' for i, atom in zip(tester.pos, tester.pos_atoms))
-#         prog += '\n'
-#         prog += '\n'.join(f'neg({i},{atom}).' for i, atom in zip(tester.neg, tester.neg_atoms))
-#         prog += '\n'
-
-#         for i, rule in enumerate(rules):
-#             print(rule)
-#             rule = format_program(rule)
-#             print(rule)
-#             exit()
-#             # rule = rule.replace('next_value(A,B)', f'holds({i},next_value(A,B))')
-#             # rule = rule.replace('f(A)', f'holds({i},f(A))')
-#             # rule = rule.replace('next_score(A,B,C)', f'holds({i},next_score(A,B,C))')
-#             # :- neg(E,Atom), holds(R,Atom).
-#             h = f'inconsistent({i})'
-#             Literal.to_code(head)
-#             b = 'neg(E,next_score(A,B,C))'
-#             # )
-
-#             # rule = rule.replace('next(A,B)', f'holds({i},next(A,B))')
-#             prog += rule + '\n'
-
-#     solver = clingo.Control(["--single-shot"])
-#     solver.add('bk', [], bk)
-#     solver.add('rules', [], prog)
-
-    # with stats.duration('test.ground.bk'):
-    #     solver.ground([('bk', [])])
-    # with stats.duration('test.ground.rules'):
-    #     solver.ground([('rules', [])])
-
-    # atoms = []
-    # with stats.duration('test.solve'):
-    #     with solver.solve(yield_=True) as handle:
-    #         for m in handle:
-    #             atoms.extend(m.symbols(shown = True))
-
-    # with stats.duration('test.parse'):
-    #     inconsistent = {i:False for i in range(len(rules))}
-    #     covers = {i:set() for i in range(len(rules))}
-
-    #     for atom in atoms:
-    #         if atom.name == 'pos_covers':
-    #             i = atom.arguments[0].number
-    #             example = atom.arguments[1].number
-    #             covers[i].add(example)
-    #         elif atom.name == 'inconsistent':
-    #             i = atom.arguments[0].number
-    #             inconsistent[i] = True
-
-
-    # for i, rule in enumerate(rules):
-    #     yield rule, inconsistent[i], covers[i]
 
 def find_subset(prog):
     prog += """
@@ -259,6 +190,7 @@ def popper(settings, stats):
 
         print(f'testing {len(rules)} rules')
         # rules = list(test_prolog(tester, stats, rules))
+        # list(test_rules_clingo1(tester, stats, bk, rules))
         rules = list(test_rules_clingo(tester, stats, bk, rules))
 
         new_rules = False
@@ -269,22 +201,22 @@ def popper(settings, stats):
                     cons.add(constrainer.format_constraint(con))
                 continue
 
+            with stats.duration('check_crap'):
+                is_crap = False
+                for i, xs in covers.items():
+                    if coverage.issubset(xs):
+                        is_crap = True
+                        for con in constrainer.specialisation_constraint([rule], {}, {}):
+                            cons.add(constrainer.format_constraint(con))
+                if is_crap:
+                    continue
+
             if inconsistent:
                 continue
 
             # if here, then the rule is consistent and covers at least one example
             for con in constrainer.specialisation_constraint([rule], {}, {}):
                 cons.add(constrainer.format_constraint(con))
-
-            with stats.duration('check_crap'):
-                is_crap = False
-                for i, xs in covers.items():
-                    if coverage.issubset(xs):
-                        is_crap = True
-                        crap_count +=1
-                        break
-                if is_crap:
-                    continue
 
             if tester.rule_has_redundant_literal(rule):
                 print('MOOOO3')
@@ -304,7 +236,6 @@ def popper(settings, stats):
 
         with stats.duration('subset'):
             print(f'subset problem:{len(index)}')
-            print(f'crap_count', crap_count)
             find_subset(prog)
 
 def learn_solution(settings):
