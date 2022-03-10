@@ -26,7 +26,7 @@
 
 max_clauses(1).
 max_vars(6).
-max_body(10).
+max_body(6).
 
 head_pred(next_value,2).
 body_pred(does,3).
@@ -35,10 +35,10 @@ body_pred(my_succ,2).
 body_pred(c_pressButton,1).
 body_pred(c_noop,1).
 body_pred(c_player,1). % comment to make unsat
-%% body_pred(c1,1).
-%% body_pred(c2,1).
-%% body_pred(c3,1).
-%% body_pred(c4,1).
+body_pred(c1,1).
+body_pred(c2,1).
+body_pred(c3,1).
+body_pred(c4,1).
 body_pred(c5,1).
 
 type(next_value,(ex,int)).
@@ -56,5 +56,5 @@ type(c5,(int,)).
 
 %% HACK BECAUSE WE DO NOT LEARN FROM INTERPRETATIONS
 :-
-    clause(C),
-    #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
+    #count{V : clause_var(V),var_type(V,ex)} != 1.
+

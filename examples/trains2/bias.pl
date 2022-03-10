@@ -1,28 +1,5 @@
-%% BEST PROGRAM:
-%% f(A):-has_car(A,B),roof_open(C),roof_closed(B),has_car(A,C)
-%% f(A):-three_load(B),roof_open(C),has_car(A,C),has_load(C,B)
-%% f(A):-has_load(C,B),triangle(D),has_car(A,E),rectangle(B),has_load(E,D),has_car(A,C)
-%% TP: 792, FN: 0, TN: 208, FP: 0
-
-%% Total programs: 1274
-%% Generate:
-%%     Called: 1290 times   Total: 11.54    Mean: 0.009     Max: 0.249
-%% Test:
-%%     Called: 1274 times   Total: 14.05    Mean: 0.011     Max: 0.053
-%% Build_Rules:
-%%     Called: 1273 times   Total: 2.29     Mean: 0.002     Max: 0.017
-%% Ground:
-%%     Called: 1273 times   Total: 0.69     Mean: 0.001     Max: 0.006
-%% Add:
-%%     Called: 1273 times   Total: 2.26     Mean: 0.002     Max: 0.004
-%% Test_Individual_Rules.Is_Totally_Incomplete:
-%%     Called: 1259 times   Total: 0.06     Mean: 0.000     Max: 0.002
-%% Total operation time: 30.89s
-%% Total execution time: 31.55s
-
-
 max_clauses(1).
-max_vars(5).
+max_vars(6).
 max_body(6).
 
 head_pred(f,1).

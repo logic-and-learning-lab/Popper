@@ -133,6 +133,38 @@ class Constrain:
 
         yield (None, tuple(literals))
 
+    def specialisation_constraint1(self, rules, before, min_clause):
+        literals = []
+
+        # clause_number = 0
+
+        rule = rules[0]
+        head, body = rule
+
+        literals.append(Literal('head_literal', (head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
+
+        for body_literal in body:
+            literals.append(Literal('body_literal', (body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+
+        # literals.append(gteq(clause_number, min_num))
+
+        # ensure that each var_var is ground to a unique value
+        literals.append(alldiff(tuple(vo_variable(v) for v in Clause.all_vars(rule))))
+
+        for idx, var in enumerate(head.arguments):
+            literals.append(eq(vo_variable(var), idx))
+
+        # for clause_id1, clause_numbers in before.items():
+        #     for clause_id2 in clause_numbers:
+        #         literals.append(lt(vo_clause(clause_id1), vo_clause(clause_id2)))
+
+        # num_clauses = len(program)
+        # ensure that each clause_var is ground to a unique value
+        # literals.append(alldiff(tuple(vo_clause(c) for c in range(num_clauses))))
+        # literals.append(Literal('clause', (num_clauses, ), positive = False))
+
+        yield (None, tuple(literals))
+
     # def subsumption_constraint(self, rule1, min_clause):
     #     # prune all rules that rule1 subsumes, where k is the number of literals in the body of rule1
     #     # :- seen(rule1,C0), seen(rule1,C1), C0 != C1, body_size(C0,k)

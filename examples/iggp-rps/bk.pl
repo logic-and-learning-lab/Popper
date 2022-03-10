@@ -408,3 +408,5 @@ loses(E,A):- does(E,A,B), does(E,C,D), beats(D,B), player(C).
 %%     true_score(A,C),
 %%     succ(C,B),
 %%     wins(A).
+
+
