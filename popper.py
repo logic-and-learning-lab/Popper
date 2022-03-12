@@ -7,6 +7,6 @@ if __name__ == '__main__':
         show_hspace(settings)
     else:
         _prog, stats = learn_solution(settings)
-        stats.log_final_result()
+        # stats.log_final_result()
         if settings.stats:
             stats.show()

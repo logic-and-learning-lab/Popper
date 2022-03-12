@@ -30,8 +30,6 @@ pruned:-var_first_lit(V,(P,PArgs)),var_first_lit(W,(Q,QArgs)),bfr((P,PArgs),(Q,Q
 #show head_literal/3.
 #show body_literal/3.
 
-%% %% GUESS HEAD LITERALS
-%% %% THE SYMBOL INV_K CANNOT APPEAR IN THE HEAD OF CLAUSE C < K
 head_literal(P,A,Vars):-
     head_vars(A,Vars),
     head_pred(P,A).
@@ -39,15 +37,6 @@ head_literal(P,A,Vars):-
 %% GUESS BODY LITERALS
 1 {body_literal(P,A,Vars): body_pred(P,A), vars(A,Vars)} N:-
     max_body(N).
-
-%% %% NUM BODY LITERALS OF A CLAUSE
-%% %% TODO: IMPROVE AS EXPENSIVE
-%% %% grounding is > c * (n choose k), where n = |Herbrand base| and k = MaxN
-%% body_size(N):-
-%%     max_body(MaxN),
-%%     N > 0,
-%%     N <= MaxN,
-%%     #count{P,Vars : body_literal(P,_,Vars)} == N.
 
 %% USE VARS IN ORDER IN A CLAUSE
 :-
@@ -77,7 +66,6 @@ def pyvar_pos(pos, vars):
 var(0..N-1):-
     max_vars(N).
 
-%% CLAUSE VAR
 clause_var(Var):-
     head_var(Var).
 clause_var(Var):-
@@ -150,7 +138,7 @@ head_connected(Var1):-
     var_member(Var1,Vars),
     var_member(Var2,Vars),
     Var1 != Var2.
-:-
+a:-
     head_literal(_,A,_),
     Var >= A,
     body_var(Var),
@@ -233,9 +221,6 @@ safe_literal(P,Vars):-
     direction_(_,_,_), % guard for when no direction_s are given
     clause_var(Var),
     not safe_var(Var).
-
-
-
 
 %% ==========================================================================================
 %% BK BIAS CONSTRAINTS

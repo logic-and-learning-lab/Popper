@@ -3,9 +3,9 @@ import sys
 from datetime import datetime
 from . util import Settings, Stats, timeout, parse_settings
 from . tester import Tester
-from . constrain import Constrain
+# from . constrain import Constrain
 from collections import defaultdict
-from . core import Clause, Literal
+from . core import Clause, Literal, ConstVar
 import clingo
 import clingo.script
 import multiprocessing
@@ -42,13 +42,16 @@ def deduce_bk_cons(settings, bk):
                     print(atom)
     exit()
 
+# def get_bk()
 def gen_args(args):
     return tuple(chr(ord('A') + arg.number) for arg in args)
 
 def parse_model(model):
     directions = defaultdict(lambda: defaultdict(lambda: '?'))
     body_atoms = []
+    # print('--')
     for atom in model:
+        # print(atom)
         pred = atom.arguments[0].name
         args = gen_args(atom.arguments[2].arguments)
         arity = len(args)
@@ -58,279 +61,263 @@ def parse_model(model):
             body_atoms.append(literal)
         elif atom.name == 'head_literal':
             head = literal
+
     return head, frozenset(body_atoms)
 
-def test_prolog(tester, stats, rules):
+# def split(a, n):
+#     k, m = divmod(len(a), n)
+#     return (a[i*k+min(i, m):(i+1)*k+min(i+1, m)] for i in range(n))
+
+def test_rules_clingo(stats, bk, pos, neg, rules):
+    # print(f'test_rules_clingo pos:{pos}')
+    result_inconsistent = {}
+    result_covers = {}
+
+    for task, task_bk in bk.items():
+        task_pos = []
+        for ex_task, ex in pos:
+            if ex_task == task:
+                task_pos.append(ex)
+
+        if len(task_pos) == 0:
+            continue
+
+        # print(f'testing task:{task} with pos:{task_pos}')
+
+        # print(task_bk)
+
+        with stats.duration('tmp1'):
+            # TODO: ADD NEG HERE
+            for rule, inconsistent, covers in test_rules_clingo_aux(stats, task_bk, task_pos, [], rules):
+                covers = set((task, ex) for ex in covers)
+                # print('tmp1', format_rule(rule), inconsistent, covers)
+                if rule not in result_covers:
+                    result_covers[rule] = set()
+                result_covers[rule].update(covers)
+
+    to_check_rules = set()
     for rule in rules:
-        inconsistent, pos_covered = tester.my_test(stats, rule)
-        yield rule, inconsistent, pos_covered
+        # print(format_rule(rule), len(pos), len(result_covers[rule]), len(result_covers[rule]) == len(pos))
+        if len(result_covers[rule]) == len(pos):
+            to_check_rules.add(rule)
 
-def split(a, n):
-    k, m = divmod(len(a), n)
-    return (a[i*k+min(i, m):(i+1)*k+min(i+1, m)] for i in range(n))
+    # print('to_check_rules')
+    # for rule in to_check_rules:
+        # print('CHECK', format_rule(rule))
 
-def test_rules_clingo(tester, stats, rules, pos):
-    k = 16
-    splits = list(split(rules, k))
-    # print('testing clingo')
-    jobs = [(tester, splits[i], pos) for i in range(k)]
-    # pool = multiprocessing.Pool()
-    with stats.duration('testing'):
-        # res = list(pool.map(test_rules_clingo_, jobs))
-        res = list(map(test_rules_clingo_, jobs))
-    return [x for xs in res for x in xs]
+    for task, task_bk in bk.items():
+        task_neg = []
+        for ex_task, ex in neg:
+            if ex_task == task:
+                task_neg.append(ex)
 
-# def test_rules_clingo(tester, stats, rules, pos):
-def test_rules_clingo_(job):
-    tester, rules, pos = job
+        with stats.duration('tmp2'):
+            for rule, inconsistent, covers in test_rules_clingo_aux(stats, task_bk, [], task_neg, to_check_rules):
+                # print('tmp2', format_rule(rule), inconsistent)
+                # assert(rule not in result_inconsistent)
+                result_inconsistent[rule] = inconsistent
+                if inconsistent:
+                    to_check_rules.remove(rule)
+
+    for rule in rules:
+        x = 'unknown'
+        if rule in result_inconsistent:
+            x  = result_inconsistent[rule]
+        yield rule, x, result_covers[rule]
+
+TEST_PROG = """
+#defined pos_covers/2.
+#defined inconsistent/1.
+#defined pos/2.
+#defined neg/2.
+#show pos_covers/2.
+#show inconsistent/1.
+pos_covers(R,E):- pos(E,Atom), holds(R,Atom).
+inconsistent(R):- neg(E,Atom), holds(R,Atom).
+"""
+
+def test_rules_clingo_aux(stats, bk, pos, neg, rules):
     if len(rules) == 0:
         return []
 
-    # with stats.duration('test.build'):
-    prog = []
-    prog.append("""
-    #defined pos_covers/2.
-    #defined inconsistent/1.
+    hash_to_rule = {}
+    hash_to_ex = {}
 
-    #show pos_covers/2.
-    #show inconsistent/1.
-    pos_covers(R,E):- pos(E,Atom), holds(R,Atom).
-    inconsistent(R):- neg(E,Atom), holds(R,Atom).
-    """)
+    with stats.duration('test.build'):
+        prog = []
+        prog.append(TEST_PROG)
 
-    for i in pos:
-        prog.append(f'pos({i},{tester.pos_index[i]}).')
-    for i, atom in zip(tester.neg, tester.neg_atoms):
-        prog.append(f'neg({i},{atom}).')
+        for ex in pos:
+            k = f'"{hash(ex)}"'
+            hash_to_ex[k] = ex
+            prog.append(f'pos({k},{ex}).')
+        for ex in neg:
+            k = f'"{hash(ex)}"'
+            hash_to_ex[k] = ex
+            prog.append(f'neg({k},{ex}).')
 
-    for i, rule in enumerate(rules):
-        rule = format_rule(rule)
-        rule = rule.replace('next_value(A,B)', f'holds({i},next_value(A,B))')
-        rule = rule.replace('f(A)', f'holds({i},f(A))')
-        rule = rule.replace('f(A,B)', f'holds({i},f(A,B))')
-        rule = rule.replace('out(A,B,C)', f'holds({i},out(A,B,C))')
-        rule = rule.replace('output(A,B,C)', f'holds({i},output(A,B,C))')
-        rule = rule.replace('out(A,B,C,D)', f'holds({i},out(A,B,C,D))')
-        rule = rule.replace('next_score(A,B,C)', f'holds({i},next_score(A,B,C))')
-        rule = rule.replace('next(A,B)', f'holds({i},next(A,B))')
-        rule = rule.replace('next_cell(A,B,C)', f'holds({i},next_cell(A,B,C))')
-        rule = rule.replace('next_color(A,B,C)', f'holds({i},next_color(A,B,C))')
-        prog.append(rule)
+        for rule in rules:
+            i = f'"{hash(rule)}"'
+            hash_to_rule[i] = rule
+            rule = format_rule(rule)
+            rule = rule.replace('next_value(A)', f'holds({i},next_value(A))')
+            rule = rule.replace('next_value(A,B)', f'holds({i},next_value(A,B))')
+            rule = rule.replace('f(A)', f'holds({i},f(A))')
+            rule = rule.replace('f(A,B)', f'holds({i},f(A,B))')
+            rule = rule.replace('out(A,B,C)', f'holds({i},out(A,B,C))')
+            rule = rule.replace('output(A,B,C)', f'holds({i},output(A,B,C))')
+            rule = rule.replace('out(A,B,C,D)', f'holds({i},out(A,B,C,D))')
+            rule = rule.replace('next_score(A,B,C)', f'holds({i},next_score(A,B,C))')
+            rule = rule.replace('next_score(A,B)', f'holds({i},next_score(A,B))')
+            rule = rule.replace('next(A,B)', f'holds({i},next(A,B))')
+            rule = rule.replace('next_cell(A,B,C)', f'holds({i},next_cell(A,B,C))')
+            rule = rule.replace('next_color(A,B,C)', f'holds({i},next_color(A,B,C))')
+            prog.append(rule)
 
-    prog = '\n'.join(prog)
+        prog = '\n'.join(prog)
+        # print(prog + '\n' + bk)
 
-    # print('HELLO WORLD!!!!!!!')
-    # print(prog + tester.bk)
-
-    solver = clingo.Control(["--single-shot", "-t16"])
-    solver.add('bk', [], tester.bk)
-    solver.add('rules', [], prog)
-
-    # with stats.duration('test.ground.bk'):
-    # print('test.ground.bk')
-    solver.ground([('bk', [])])
-    # with stats.duration('test.ground.rules'):
-    # print('test.ground.rules')
-    solver.ground([('rules', [])])
-
-    # with open(f'test-prob-{len(rules)}.pl', 'w') as f:
-        # f.write(prog_rules)
-        # f.write('\n')
-        # f.write(bk)
-
-    atoms = []
-    # with stats.duration('test.solve'):
-    # print('test.solve')
-    with solver.solve(yield_=True) as handle:
-        for m in handle:
-            atoms.extend(m.symbols(shown = True))
-
-    # with stats.duration('test.parse'):
-    # print('test.parse')
-    inconsistent = {i:False for i in range(len(rules))}
-    covers = {i:set() for i in range(len(rules))}
-
-    for atom in atoms:
-        if atom.name == 'pos_covers':
-            i = atom.arguments[0].number
-            example = atom.arguments[1].number
-            covers[i].add(example)
-        elif atom.name == 'inconsistent':
-            i = atom.arguments[0].number
-            inconsistent[i] = True
-
-    return [(rule, inconsistent[i], covers[i]) for i, rule in enumerate(rules)]
-        # yield
-
-def test_coverage(tester, stats, rules, pos):
-    assert(len(rules) > 0)
-    prog = []
-    prog.append("#show covers/2.")
-    prog.append("covers(R,E):- example(E,Atom), holds(R,Atom).")
-    for i in pos:
-        prog.append(f'example({i},{tester.pos_index[i]}).')
-    for i, atom in zip(tester.neg, tester.neg_atoms):
-        prog.append(f'example({i},{atom}).')
-
-    rule_to_index = {}
-    index_to_rule = {}
-    i = 0
-    # for rule, size in rules:
-        # print('C',format_rule(rule), size)
-    for rule, size in rules:
-        i += 1
-        rule_to_index[rule] = i
-        index_to_rule[i] = rule
-        rule = format_rule(rule)
-        rule = rule.replace('next_value(A,B)', f'holds({i},next_value(A,B))')
-        rule = rule.replace('f(A)', f'holds({i},f(A))')
-        rule = rule.replace('f(A,B)', f'holds({i},f(A,B))')
-        rule = rule.replace('out(A,B,C)', f'holds({i},out(A,B,C))')
-        rule = rule.replace('output(A,B,C)', f'holds({i},output(A,B,C))')
-        rule = rule.replace('out(A,B,C,D)', f'holds({i},out(A,B,C,D))')
-        rule = rule.replace('next_score(A,B,C)', f'holds({i},next_score(A,B,C))')
-        rule = rule.replace('next(A,B)', f'holds({i},next(A,B))')
-        rule = rule.replace('next_cell(A,B,C)', f'holds({i},next_cell(A,B,C))')
-        rule = rule.replace('next_color(A,B,C)', f'holds({i},next_color(A,B,C))')
-        prog.append(rule)
-
-    # for rule, size in rules:
-        # print('D',format_rule(rule), size)
-
-    # print('RULE_TO_INDEX', rule_to_index)
-    # print('INDEX_TO_RULE', index_to_rule)
-
-    assert(i > 0)
-
-    # print('\n'.join(prog))
-    prog = '\n'.join(prog)
-
-    solver = clingo.Control(["--single-shot", "-t16"])
-    solver.add('base', [], tester.bk)
+    # solver = clingo.Control(["--single-shot", "-t16"])
+    solver = clingo.Control(["--single-shot"])
+    solver.add('base', [], bk)
     solver.add('base', [], prog)
 
-    # print(prog + '\n' + tester.bk)
-
-    # exit()
-
     with stats.duration('test.ground'):
-        # print('test.ground.bk')
         solver.ground([('base', [])])
 
     atoms = []
     with stats.duration('test.solve'):
-        # print('test.solve')
         with solver.solve(yield_=True) as handle:
             for m in handle:
                 atoms.extend(m.symbols(shown = True))
 
-    # out = {rule:set() for rule, size in rules}
-    # out = [set()]*len(rules)
-
-    # print('ATOMS',atoms)
-
-    covers = {i:set() for i in index_to_rule.keys()}
-    # print('COVERS',covers)
+    inconsistent = {rule:False for rule in rules}
+    covers = {rule:set() for rule in rules}
 
     with stats.duration('test.parse'):
         for atom in atoms:
-            if atom.name == 'covers':
-                i = atom.arguments[0].number
-                example = atom.arguments[1].number
-                covers[i].add(example)
+            if atom.name == 'pos_covers':
+                rule_hash = str(atom.arguments[0])
+                example_hash = str(atom.arguments[1])
+                rule = hash_to_rule[rule_hash]
+                example = hash_to_ex[example_hash]
+                covers[rule].add(example)
+            elif atom.name == 'inconsistent':
+                rule_hash = str(atom.arguments[0])
+                rule = hash_to_rule[rule_hash]
+                inconsistent[rule] = True
 
-    out = {index_to_rule[i]:xs for i, xs in covers.items()}
-    # print('OUT', out)
+    # print('inconsistent',inconsistent)
+    # print('covers',covers)
+    # for rule in rules:
+        # print('a',format_rule(rule), covers[rule])
+    return [(rule, inconsistent[rule], covers[rule]) for rule in rules]
 
+        # yield
+
+def test_coverage(stats, bk, pos, rules):
+    out = {}
+    for task, task_bk in bk.items():
+        task_pos = []
+        for ex_task, ex in pos:
+            if ex_task == task:
+                task_pos.append(ex)
+        if len(task_pos) == 0:
+            continue
+        # print('<BK2>')
+        # print(task_bk)
+        # print('</BK2>')
+        # print('<task_pos>')
+        # print(task_pos)
+        # print('</task_pos>')
+        # for rule in rules:
+            # print('X', format_rule(rule))
+        res = test_coverage_aux(stats, task_bk, task_pos, rules)
+        for rule, covers in res.items():
+            covers = set((task, ex) for ex in covers)
+            if rule not in out:
+                out[rule] = set()
+            out[rule].update(covers)
     return out
 
+def test_coverage_aux(stats, bk, pos, rules):
+    assert(len(rules) > 0)
 
-# def test_rules_clingo(tester, stats, rules, pos):
-#     # print(pos)
-# # def test_rules_clingo(job):
-#     # tester, stats, rules, pos = job
-#     if len(rules) == 0:
-#         return []
+    with stats.duration('test.build'):
+        prog = []
+        prog.append("#show covers/2.")
+        prog.append("covers(R,E):- example(E,Atom), holds(R,Atom).")
+        hash_to_rule = {}
+        hash_to_ex = {}
 
-#     # with stats.duration('test.build'):
-#     prog = """
-#     #defined pos_covers/2.
-#     #defined inconsistent/1.
-#     #show pos_covers/2.
-#     #show inconsistent/1.
-#     pos_covers(R,E):- pos(E,Atom), holds(R,Atom).
-#     inconsistent(R):- neg(E,Atom), holds(R,Atom).
-#     """
-#     prog += '\n'
-#     prog += '\n'.join(f'pos({i},{tester.pos_index[i]}).' for i in pos)
-#     prog += '\n'
-#     prog += '\n'.join(f'neg({i},{atom}).' for i, atom in zip(tester.neg, tester.neg_atoms))
-#     prog += '\n'
+        for ex in pos:
+            k = f'"{hash(ex)}"'
+            hash_to_ex[k] = ex
+            prog.append(f'example({k},{ex}).')
 
-#     prog_rules = ''
+        for rule in rules:
+            i = f'"{hash(rule)}"'
+            hash_to_rule[i] = rule
+            rule = format_rule(rule)
 
-#     for i, rule in enumerate(rules):
-#         rule = format_rule(rule)
-#         # print(rule)
-#         rule = rule.replace('next_value(A,B)', f'holds({i},next_value(A,B))')
-#         rule = rule.replace('f(A)', f'holds({i},f(A))')
-#         rule = rule.replace('f(A,B)', f'holds({i},f(A,B))')
-#         rule = rule.replace('out(A,B,C)', f'holds({i},out(A,B,C))')
-#         rule = rule.replace('output(A,B,C)', f'holds({i},output(A,B,C))')
-#         rule = rule.replace('out(A,B,C,D)', f'holds({i},out(A,B,C,D))')
-#         rule = rule.replace('next_score(A,B,C)', f'holds({i},next_score(A,B,C))')
-#         rule = rule.replace('next(A,B)', f'holds({i},next(A,B))')
-#         rule = rule.replace('next_cell(A,B,C)', f'holds({i},next_cell(A,B,C))')
-#         rule = rule.replace('next_color(A,B,C)', f'holds({i},next_color(A,B,C))')
-#         # print(rule)
-#         prog_rules += rule + '\n'
+            rule = rule.replace('next_value(A)', f'holds({i},next_value(A))')
+            rule = rule.replace('next_value(A,B)', f'holds({i},next_value(A,B))')
+            rule = rule.replace('f(A)', f'holds({i},f(A))')
+            rule = rule.replace('f(A,B)', f'holds({i},f(A,B))')
+            rule = rule.replace('out(A,B,C)', f'holds({i},out(A,B,C))')
+            rule = rule.replace('output(A,B,C)', f'holds({i},output(A,B,C))')
+            rule = rule.replace('out(A,B,C,D)', f'holds({i},out(A,B,C,D))')
+            rule = rule.replace('next_score(A,B,C)', f'holds({i},next_score(A,B,C))')
+            rule = rule.replace('next_score(A,B)', f'holds({i},next_score(A,B))')
+            rule = rule.replace('next(A,B)', f'holds({i},next(A,B))')
+            rule = rule.replace('next_cell(A,B,C)', f'holds({i},next_cell(A,B,C))')
+            rule = rule.replace('next_color(A,B,C)', f'holds({i},next_color(A,B,C))')
+            prog.append(rule)
 
-#     solver = clingo.Control(["--single-shot", "-t16"])
-#     # solver = clingo.Control(["--single-shot"])
-#     solver.add('bk', [], tester.bk)
-#     solver.add('rules', [], prog)
-#     solver.add('rules', [], prog_rules)
+        prog = '\n'.join(prog)
+    # print(prog)
 
-#     with stats.duration('test.ground.bk'):
-#         # print('test.ground.bk')
-#         solver.ground([('bk', [])])
-#     with stats.duration('test.ground.rules'):
-#         # print('test.ground.rules')
-#         solver.ground([('rules', [])])
+    # solver = clingo.Control(["--single-shot", "-t16"])
+    solver = clingo.Control(["--single-shot"])
+    solver.add('base', [], bk)
+    solver.add('base', [], prog)
 
-#     # with open(f'test-prob-{len(rules)}.pl', 'w') as f:
-#         # f.write(prog_rules)
-#         # f.write('\n')
-#         # f.write(bk)
+    with stats.duration('test.ground'):
+        solver.ground([('base', [])])
 
-#     atoms = []
-#     with stats.duration('test.solve'):
-#         # print('test.solve')
-#         with solver.solve(yield_=True) as handle:
-#             for m in handle:
-#                 atoms.extend(m.symbols(shown = True))
+    atoms = []
+    with stats.duration('test.solve'):
+        with solver.solve(yield_=True) as handle:
+            for m in handle:
+                atoms.extend(m.symbols(shown = True))
 
-#     with stats.duration('test.parse'):
-#         # print('test.parse')
-#         inconsistent = {i:False for i in range(len(rules))}
-#         covers = {i:set() for i in range(len(rules))}
+    out = {}
+    with stats.duration('test.parse'):
+        for atom in atoms:
+            # print(atom)
+            rule_hash = str(atom.arguments[0])
+            rule = hash_to_rule[rule_hash]
 
-#         for atom in atoms:
-#             if atom.name == 'pos_covers':
-#                 i = atom.arguments[0].number
-#                 example = atom.arguments[1].number
-#                 covers[i].add(example)
-#             elif atom.name == 'inconsistent':
-#                 i = atom.arguments[0].number
-#                 inconsistent[i] = True
+            example_hash = str(atom.arguments[1])
+            example = hash_to_ex[example_hash]
 
-#     return [(rule, inconsistent[i], covers[i]) for i, rule in enumerate(rules)]
-#         # yield
+            if rule not in out:
+                out[rule] = set()
+            out[rule].add(example)
+    return out
 
-def find_subset(examples, all_rules, covers):
+def find_subset(examples, all_rules, sizes, covers):
     prog = []
+
+    example_to_hash = {}
     for x in examples:
-        prog.append(f'example({x}).')
+        k = f'"{hash(x)}"'
+        example_to_hash[x] = k
+
+    for x in examples:
+        k = example_to_hash[x]
+        prog.append(f'example({k}).')
+
     i = 0
     rule_to_index = {}
     index_to_rule = {}
@@ -340,15 +327,19 @@ def find_subset(examples, all_rules, covers):
         index_to_rule[i] = rule
         rule_to_index[rule] = i
         for x in xs:
-            prog.append(f'covers({i},{x}).')
+            k = example_to_hash[x]
+            prog.append(f'covers({i},{k}).')
         i +=1
-    for rule, size in all_rules:
+    for rule in all_rules:
+        size = sizes[rule]
         if rule not in rule_to_index:
             continue
         i = rule_to_index[rule]
         prog.append(f'size({i},{size}).')
 
     prog = '\n'.join(prog)
+
+    # print(prog)
 
     prog += """
     covered(E):- covers(R,E), rule(R).
@@ -357,11 +348,11 @@ def find_subset(examples, all_rules, covers):
     size(N):- #sum{K,R : rule(R), size(R,K)} == N.
     #minimize{X : size(X)}.
     """
-    with open('sat-prob.pl', 'w') as f:
-        f.write(prog)
+    # with open('sat-prob.pl', 'w') as f:
+        # f.write(prog)
 
-    # solver = clingo.Control(["--single-shot"])
-    solver = clingo.Control(["--single-shot", "-t16"])
+    # solver = clingo.Control(["--single-shot", "-t16"])
+    solver = clingo.Control(["--single-shot"])
     solver.add('base', [], prog)
     solver.ground([('base', [])])
 
@@ -378,11 +369,20 @@ def format_rule(rule):
     # return Clause.to_code(rule) + '.\n'
     return Clause.to_code(rule) + '.'
 
+NUM_LITERALS = """
+%%% External atom for number of literals in the program %%%%%
+#external size_in_literals(n).
+:-
+    size_in_literals(n),
+    #count{P,Vars : body_literal(P,_,Vars)} != n.
+"""
+
 def get_solver(stats, settings, cons = set()):
 
     check_cons(cons)
 
-    solver = clingo.Control(["-t16"])
+    solver = clingo.Control()
+    # solver = clingo.Control(["-t16"])
     solver.configuration.solve.models = 0
     with open('popper/lp/alan.pl') as f:
         solver.add('base', [], f.read())
@@ -393,28 +393,11 @@ def get_solver(stats, settings, cons = set()):
 
     solver.ground([('base', [])])
 
-    # NUM_OF_LITERALS = (
-    # """
-    # %%% External atom for number of literals in the program %%%%%
-    # #external size_in_literals(n).
-    # :- size_in_literals(n), not body_size(n).
-    # """)
-
-    NUM_OF_LITERALS = (
-    """
-    %%% External atom for number of literals in the program %%%%%
-    #external size_in_literals(n).
-    :-
-        size_in_literals(n),
-        #count{P,Vars : body_literal(P,_,Vars)} != n.
-    """)
-
-
-    solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
+    solver.add('number_of_literals', ['n'], NUM_LITERALS)
 
     return solver
 
-def update_number_of_literals(solver, tracker, size):
+def update_num_literals(solver, tracker, size):
     # 1. Release those that have already been assigned
     for atom, truth_value in tracker.items():
         if atom[0] == 'size_in_literals' and truth_value:
@@ -452,25 +435,20 @@ def load_settings(settings):
         settings.body_preds.add((symbol, arity))
 
 def gen_rules(settings, stats, size, cons, solver):
-
-    if len(cons) > 0:
-        with stats.duration('gen.ground.cons'):
+    with stats.duration('gen.ground.cons'):
+        if len(cons) > 0:
             k = f'cons_{size}'
             dbg(f'gen.ground.cons {k} {len(cons)}')
             solver.add(k, [], '\n'.join(cons))
             solver.ground([(k, [])])
 
     with stats.duration('gen.solve'):
-        # dbg('gen.solve')
         models = []
         with solver.solve(yield_=True) as handle:
             for m in handle:
                 models.append(m.symbols(shown = True))
 
     with stats.duration('gen.build'):
-        # dbg(f'gen.build:{len(models)}')
-        # pool = multiprocessing.Pool()
-        # return list(pool.map(parse_model, models))
         return [parse_model(model) for model in models]
 
 def check_cons(cons):
@@ -496,12 +474,46 @@ def check_cons(cons):
             continue
         seen.append(r1)
 
-    print('ASDA',len(cons), len(seen))
+    # print('ASDA',len(cons), len(seen))
 
-def find_rules(settings, stats, tester, pos, boostrap_cons, min_size=1, max_size=6):
+
+def vo_variable(variable):
+    return ConstVar(f'{variable}', 'Variable')
+
+def format_constraint(con):
+    head, body = con
+    constraint_literals = []
+    for constobj in body:
+        if not constobj.meta:
+            constraint_literals.append(str(constobj))
+            continue
+        arga, argb = constobj.arguments
+        if isinstance(arga, ConstVar):
+            arga = arga.name
+        else:
+            arga = str(arga)
+        if isinstance(argb, ConstVar):
+            argb = argb.name
+        else:
+            argb = str(argb)
+        constraint_literals.append(f'{arga}{constobj.predicate}{argb}')
+
+    x = f':- {", ".join(constraint_literals)}.'
+    if head:
+        x = f'{head} {x}'
+    # print(x)
+    return x
+
+def specialisation_constraint(rule):
+    literals = []
+    head, body = rule
+    literals.append(Literal('head_literal', (head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
+    for body_literal in body:
+        literals.append(Literal('body_literal', (body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+    return format_constraint((None, tuple(literals)))
+
+def find_rules(settings, stats, bk, pos, neg, boostrap_cons, max_size):
     assert(len(pos) > 0)
-
-    constrainer = Constrain()
 
     with stats.duration('get_solver'):
         solver = get_solver(stats, settings, boostrap_cons)
@@ -512,66 +524,64 @@ def find_rules(settings, stats, tester, pos, boostrap_cons, min_size=1, max_size
     # complete rules found
     complete_rules = set()
 
-    # with open('TMP-cons.pl', 'w') as f:
-    #     f.write('\n'.join(boostrap_cons))
-
     # all news
     cons = set()
 
-    # new sons
+    # new cons
     new_cons = set()
 
     seen_ss = {}
 
-    size = min_size
+    max_size=8
+
+    size = 1
     while size < max_size:
         size += 1
         body_size = size-1
 
         # increase program size constraint
-        update_number_of_literals(solver, tracker, body_size)
+        update_num_literals(solver, tracker, body_size)
 
         dbg(f'size:{size} cons:{len(cons)} pos:{len(pos)}')
 
         # generate all rules of size body_size + 1 that satisfy the constraints
         rules = list(gen_rules(settings, stats, body_size, cons, solver))
 
+        # print("HELLO")
         dbg(f'num_rules:{len(rules)}')
+        # for rule in rules:
+        #     print(format_rule(rule))
 
         # reset cons
         cons = set()
 
-        # remove rules that contain redundant literals
-        with stats.duration('check_redundant'):
-            good_rules = []
-            for rule in rules:
-                if tester.rule_has_redundant_literal(rule):
-                    # TODO: RULE OUT GENERALISATIONS
-                    # gen_cons.add
-                    pass
-                else:
-                    good_rules.append(rule)
-            rules = good_rules
-
-        # print(f'testing {len(rules)} rules')
-        # for rule in rules:
-            # print('A',format_rule(rule))
+        # # remove rules that contain redundant literals
+        # with stats.duration('check_redundant'):
+        #     good_rules = []
+        #     for rule in rules:
+        #         if tester.rule_has_redundant_literal(rule):
+        #             # TODO: RULE OUT GENERALISATIONS
+        #             # gen_cons.add
+        #             pass
+        #         else:
+        #             good_rules.append(rule)
+        #     rules = good_rules
 
         # rules = ptest_rules_clingo(tester, stats, rules, pos)
         # print('ASDA')
 
         # test rules on the subset of examples
-        rules = test_rules_clingo(tester, stats, rules, pos)
+        rules = test_rules_clingo(stats, bk, pos, neg, rules)
 
         for rule, inconsistent, coverage in rules:
-            # if not inconsistent:
-            # print('E', format_rule(rule), inconsistent, coverage)
+            # if not inconsistent and len(coverage) > 0:
+                # print('E', format_rule(rule), coverage)
 
             # if the rule does not cover the examples, eliminate specialisations
             if len(coverage) != len(pos):
-                for con in constrainer.specialisation_constraint1([rule], {}, {}):
-                    cons.add(constrainer.format_constraint(con))
-                    new_cons.add(constrainer.format_constraint(con))
+                con = specialisation_constraint(rule)
+                cons.add(con)
+                new_cons.add(con)
                 continue
 
             assert(len(coverage) > 0)
@@ -595,14 +605,18 @@ def find_rules(settings, stats, tester, pos, boostrap_cons, min_size=1, max_size
                 # continue
 
             # rule must be complete and consistent, so we can prune specialisations
-            for con in constrainer.specialisation_constraint1([rule], {}, {}):
-                cons.add(constrainer.format_constraint(con))
-                new_cons.add(constrainer.format_constraint(con))
+            con = specialisation_constraint(rule)
+            cons.add(con)
+            new_cons.add(con)
 
+            # print('complete_rules.add(rule)',format_rule(rule))
             complete_rules.add((rule, size))
 
+        # print('HERE?????', len(complete_rules))
         if len(complete_rules) > 0:
+            # print('COMPLETE RULES RULEZ!')
             return complete_rules, new_cons
+
 
     return [], new_cons
 
@@ -613,25 +627,85 @@ def chunk_list(xs, size):
 def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
-def popper(settings, stats):
-    tester = Tester(settings)
-    tester.pos_index = {k:v for k,v in zip(tester.pos, tester.pos_atoms)}
-    tester.neg_index = {k:v for k,v in zip(tester.neg, tester.neg_atoms)}
+def parse_exs(task, exs_txt):
+    solver = clingo.Control()
+    solver.add('base', [], exs_txt)
+    solver.ground([('base', [])])
+    with solver.solve(yield_=True) as handle:
+        for m in handle:
+            for atom in m.symbols(shown = True):
+                yield atom.name, task, str(atom.arguments[0])
+
+def parse_input(settings):
+    with open(settings.bk_file.replace('bk','bk-all'), 'r') as f:
+        all_bk = f.read()
+        # print(all_bk)
+
+    bk = {}
 
     with open(settings.bk_file, 'r') as f:
-        tester.bk = f.read()
+        x = f.read()
+    txt = ''
+    for line in x.split('\n'):
+        if line.startswith('#T'):
+            if txt != '':
+                bk[task] = txt
+                txt = ''
+            task = int(line.strip()[2:])
+        else:
+            txt += line + '\n'
+    if txt != '':
+        bk[task] = txt
+
+    for task in bk:
+        bk[task] += '\n' + all_bk
+
+    examples = {}
+    with open(settings.ex_file, 'r') as f:
+        x = f.read()
+        if '#T' not in x:
+            pass
+            # parse file
+        else:
+            tasks = set()
+            txt = ''
+            for line in x.split('\n'):
+                if line.startswith('#T'):
+                    if txt != '':
+                        examples[task] = txt
+                        txt = ''
+                    task = int(line.strip()[2:])
+                else:
+                    txt += line + '\n'
+    if txt != '':
+        examples[task] = txt
+
+    pos = set()
+    neg = set()
+    for k, v in examples.items():
+        for label, task, ex in parse_exs(k, v):
+            if label == 'pos':
+                pos.add((task, ex))
+            elif label == 'neg':
+                neg.add((task, ex))
+    return bk, pos, neg
+
+def popper(settings, stats):
+    bk, all_pos, all_neg = parse_input(settings)
+
+    # print(bk.keys())
 
     load_settings(settings)
+    # exit()
     # deduce_bk_cons(settings, tester.bk)
 
-    all_pos = set(tester.pos)
     print(f'num_examples:{len(all_pos)}')
 
     # maintain specialisation constraints
     spec_cons = {x: set() for x in all_pos}
 
-    pos = set(tester.pos)
-    neg = set(tester.neg)
+    pos = set(all_pos)
+    # pos = set((task, ex) for task, ex in pos if task == 10)
 
     # starting program size
     size = 0
@@ -679,7 +753,12 @@ def popper(settings, stats):
                 boostrap_cons.update(spec_cons[x])
 
             # find new (i) complete and consistent rules, and (ii) cons (currently only specialisations)
-            new_rules, new_cons = find_rules(settings, stats, tester, chunk_pos, boostrap_cons, max_size=max_size)
+            new_rules, new_cons = find_rules(settings, stats, bk, chunk_pos, all_neg, boostrap_cons, max_size=max_size)
+            # exit()
+
+            for rule, size in new_rules:
+                sizes[rule] = size
+            new_rules = [rule for rule, size in new_rules]
 
             # keep track of all rules
             all_new_rules.update(new_rules)
@@ -691,22 +770,40 @@ def popper(settings, stats):
             # no generalisation
             # TODO: update min rules
             if len(new_rules) == 0:
-                # exit()
                 return
                 continue
 
+            # print('NEW RULES')
+            # for rule in new_rules:
+            #     print(format_rule(rule))
+
+            # print('CHECK COVERAGE')
             with stats.duration('coverage'):
+                # print('CHECK COVERAGE')
+                # print('CHUNK_POS',chunk_pos)
                 # calculate example coverage of the new rules
-                covers = test_coverage(tester, stats, new_rules, all_pos)
+                covers = test_coverage(stats, bk, all_pos, new_rules)
                 for rule, covered_examples in covers.items():
+                    # print('COVERED_EXAMPLES',covered_examples)
+
+                    assert(set(chunk_pos).issubset(covered_examples))
+
                     # update rule example coverage
+                    if rule in rule_example_coverage:
+                        # print('xs', rule_example_coverage[rule])
+                        # print('ys', covered_examples)
+                        assert(rule_example_coverage[rule] == covered_examples)
                     rule_example_coverage[rule] = covered_examples
 
-                    # print(format_rule(rule), covered_examples)
+
+                    # print(format_rule(rule))
+                    # for x in sorted(covered_examples):
+                        # print(x)
 
                     # update covered examples
                     covered.update(covered_examples)
 
+        # exit()
         # after passing through all chunks, double chunk size
         chunk_size += chunk_size
         all_rules.update(all_new_rules)
@@ -718,17 +815,15 @@ def popper(settings, stats):
             continue
 
 
-        if all(len(rule_example_coverage[rule]) == 0 for rule, _size in new_rules):
+        if all(len(rule_example_coverage[rule]) == 0 for rule in new_rules):
             assert(False)
             continue
 
         with stats.duration('find_subset'):
             print(f'subset problem:{len(all_rules)}')
-            # for rule, size in all_rules:
-                # print(format_rule(rule))
 
             # find the minimal subset of rules that covers all the examples
-            rules = list(find_subset(all_pos, all_rules, rule_example_coverage))
+            rules = list(find_subset(all_pos, all_rules, sizes, rule_example_coverage))
 
             # if there is no set, then continue to search
             if len(rules) == 0:
@@ -737,6 +832,9 @@ def popper(settings, stats):
             print('Solution:')
             for rule in rules:
                 print(format_rule(rule))
+            # exit()
+            return
+        return
 
         # return
 
