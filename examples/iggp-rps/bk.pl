@@ -1,412 +1,398 @@
-does(1,p1,scissors).
-does(1,p2,stone).
-does(10,p1,stone).
-does(10,p2,stone).
-does(11,p1,stone).
-does(11,p2,paper).
-does(12,p1,scissors).
-does(12,p2,paper).
-does(13,p1,scissors).
-does(13,p2,paper).
-does(15,p1,scissors).
-does(15,p2,paper).
-does(16,p1,scissors).
-does(16,p2,stone).
-does(17,p1,scissors).
-does(17,p2,scissors).
-does(18,p1,scissors).
-does(18,p2,paper).
-does(19,p1,stone).
-does(19,p2,stone).
-does(20,p1,scissors).
-does(20,p2,paper).
-does(21,p1,paper).
-does(21,p2,stone).
-does(22,p1,paper).
-does(22,p2,paper).
-does(23,p1,stone).
-does(23,p2,scissors).
-does(24,p1,paper).
-does(24,p2,scissors).
-does(25,p1,paper).
-does(25,p2,stone).
-does(26,p1,stone).
-does(26,p2,stone).
-does(27,p1,stone).
-does(27,p2,stone).
-does(28,p1,stone).
-does(28,p2,paper).
-does(29,p1,stone).
-does(29,p2,paper).
-does(3,p1,paper).
-does(3,p2,stone).
-does(30,p1,paper).
-does(30,p2,scissors).
-does(31,p1,scissors).
-does(31,p2,stone).
-does(32,p1,paper).
-does(32,p2,scissors).
-does(33,p1,paper).
-does(33,p2,scissors).
-does(34,p1,paper).
-does(34,p2,stone).
-does(35,p1,paper).
-does(35,p2,paper).
-does(36,p1,stone).
-does(36,p2,paper).
-does(37,p1,paper).
-does(37,p2,paper).
-does(38,p1,stone).
-does(38,p2,paper).
-does(39,p1,paper).
-does(39,p2,scissors).
-does(4,p1,scissors).
-does(4,p2,paper).
-does(40,p1,scissors).
-does(40,p2,scissors).
-does(41,p1,scissors).
-does(41,p2,scissors).
-does(42,p1,paper).
-does(42,p2,scissors).
-does(43,p1,stone).
-does(43,p2,paper).
-does(44,p1,paper).
-does(44,p2,paper).
-does(45,p1,scissors).
-does(45,p2,paper).
-does(46,p1,stone).
-does(46,p2,paper).
-does(47,p1,stone).
-does(47,p2,stone).
-does(48,p1,stone).
-does(48,p2,paper).
-does(49,p1,scissors).
-does(49,p2,stone).
-does(50,p1,stone).
-does(50,p2,scissors).
-does(51,p1,paper).
-does(51,p2,stone).
-does(52,p1,stone).
-does(52,p2,scissors).
-does(53,p1,scissors).
-does(53,p2,scissors).
-does(54,p1,scissors).
-does(54,p2,stone).
-does(55,p1,paper).
-does(55,p2,paper).
-does(56,p1,scissors).
-does(56,p2,scissors).
-does(57,p1,scissors).
-does(57,p2,scissors).
-does(58,p1,stone).
-does(58,p2,scissors).
-does(6,p1,stone).
-does(6,p2,stone).
-does(7,p1,stone).
-does(7,p2,stone).
-does(9,p1,scissors).
-does(9,p2,scissors).
+#T1
+my_true_step(1).
+does(p2,stone).
+my_true_score(p1,0).
+my_true_score(p2,0).
+does(p1,scissors).
 
+#T10
+my_true_step(1).
+does(p2,stone).
+my_true_score(p1,1).
+my_true_score(p2,0).
+does(p1,stone).
 
-my_succ(0,1).
-my_succ(1,2).
-my_succ(2,3).
+#T11
+my_true_score(p1,0).
+my_true_step(0).
+my_true_score(p2,0).
+does(p2,paper).
+does(p1,stone).
 
-my_true_score(1,p1,0).
-my_true_score(1,p2,0).
-my_true_score(10,p1,1).
-my_true_score(10,p2,0).
-my_true_score(11,p1,0).
-my_true_score(11,p2,0).
-my_true_score(12,p1,1).
-my_true_score(12,p2,1).
-my_true_score(13,p1,1).
-my_true_score(13,p2,0).
-my_true_score(14,p1,0).
-my_true_score(14,p2,0).
-my_true_score(15,p1,0).
-my_true_score(15,p2,0).
-my_true_score(16,p1,0).
-my_true_score(16,p2,0).
-my_true_score(17,p1,0).
-my_true_score(17,p2,0).
-my_true_score(18,p1,0).
-my_true_score(18,p2,2).
-my_true_score(19,p1,0).
-my_true_score(19,p2,0).
-my_true_score(2,p1,1).
-my_true_score(2,p2,2).
-my_true_score(20,p1,0).
-my_true_score(20,p2,0).
-my_true_score(21,p1,0).
-my_true_score(21,p2,0).
-my_true_score(22,p1,1).
-my_true_score(22,p2,1).
-my_true_score(23,p1,0).
-my_true_score(23,p2,1).
-my_true_score(24,p1,1).
-my_true_score(24,p2,0).
-my_true_score(25,p1,0).
-my_true_score(25,p2,0).
-my_true_score(26,p1,0).
-my_true_score(26,p2,1).
-my_true_score(27,p1,0).
-my_true_score(27,p2,0).
-my_true_score(28,p1,1).
-my_true_score(28,p2,1).
-my_true_score(29,p1,0).
-my_true_score(29,p2,0).
-my_true_score(3,p1,1).
-my_true_score(3,p2,0).
-my_true_score(30,p1,0).
-my_true_score(30,p2,1).
-my_true_score(31,p1,1).
-my_true_score(31,p2,1).
-my_true_score(32,p1,0).
-my_true_score(32,p2,0).
-my_true_score(33,p1,0).
-my_true_score(33,p2,0).
-my_true_score(34,p1,0).
-my_true_score(34,p2,1).
-my_true_score(35,p1,2).
-my_true_score(35,p2,0).
-my_true_score(36,p1,1).
-my_true_score(36,p2,0).
-my_true_score(37,p1,0).
-my_true_score(37,p2,0).
-my_true_score(38,p1,2).
-my_true_score(38,p2,0).
-my_true_score(39,p1,1).
-my_true_score(39,p2,0).
-my_true_score(4,p1,2).
-my_true_score(4,p2,0).
-my_true_score(40,p1,0).
-my_true_score(40,p2,0).
-my_true_score(41,p1,0).
-my_true_score(41,p2,1).
-my_true_score(42,p1,2).
-my_true_score(42,p2,0).
-my_true_score(43,p1,0).
-my_true_score(43,p2,1).
-my_true_score(44,p1,1).
-my_true_score(44,p2,0).
-my_true_score(45,p1,1).
-my_true_score(45,p2,0).
-my_true_score(46,p1,0).
-my_true_score(46,p2,2).
-my_true_score(47,p1,1).
-my_true_score(47,p2,1).
-my_true_score(48,p1,0).
-my_true_score(48,p2,0).
-my_true_score(49,p1,0).
-my_true_score(49,p2,2).
-my_true_score(5,p1,0).
-my_true_score(5,p2,2).
-my_true_score(50,p1,0).
-my_true_score(50,p2,0).
-my_true_score(51,p1,0).
-my_true_score(51,p2,0).
-my_true_score(52,p1,1).
-my_true_score(52,p2,0).
-my_true_score(53,p1,1).
-my_true_score(53,p2,0).
-my_true_score(54,p1,0).
-my_true_score(54,p2,1).
-my_true_score(55,p1,1).
-my_true_score(55,p2,0).
-my_true_score(56,p1,2).
-my_true_score(56,p2,0).
-my_true_score(57,p1,1).
-my_true_score(57,p2,0).
-my_true_score(58,p1,0).
-my_true_score(58,p2,2).
-my_true_score(6,p1,0).
-my_true_score(6,p2,0).
-my_true_score(7,p1,1).
-my_true_score(7,p2,0).
-my_true_score(8,p1,1).
-my_true_score(8,p2,1).
-my_true_score(9,p1,0).
-my_true_score(9,p2,2).
-my_true_step(1,1).
-my_true_step(10,1).
-my_true_step(11,0).
-my_true_step(12,2).
-my_true_step(13,2).
-my_true_step(14,3).
-my_true_step(15,2).
-my_true_step(16,0).
-my_true_step(17,1).
-my_true_step(18,2).
-my_true_step(19,2).
-my_true_step(2,3).
-my_true_step(20,0).
-my_true_step(21,1).
-my_true_step(22,2).
-my_true_step(23,1).
-my_true_step(24,2).
-my_true_step(25,0).
-my_true_step(26,1).
-my_true_step(27,0).
-my_true_step(28,2).
-my_true_step(29,1).
-my_true_step(3,2).
-my_true_step(30,1).
-my_true_step(31,2).
-my_true_step(32,2).
-my_true_step(33,0).
-my_true_step(34,1).
-my_true_step(35,2).
-my_true_step(36,1).
-my_true_step(37,1).
-my_true_step(38,2).
-my_true_step(39,1).
-my_true_step(4,2).
-my_true_step(40,0).
-my_true_step(41,2).
-my_true_step(42,2).
-my_true_step(43,2).
-my_true_step(44,1).
-my_true_step(45,1).
-my_true_step(46,2).
-my_true_step(47,2).
-my_true_step(48,2).
-my_true_step(49,2).
-my_true_step(5,3).
-my_true_step(50,0).
-my_true_step(51,2).
-my_true_step(52,2).
-my_true_step(53,2).
-my_true_step(54,1).
-my_true_step(55,2).
-my_true_step(56,2).
-my_true_step(57,1).
-my_true_step(58,2).
-my_true_step(6,1).
-my_true_step(7,2).
-my_true_step(8,3).
-my_true_step(9,2).
+#T12
+my_true_score(p1,1).
+does(p1,scissors).
+my_true_score(p2,1).
+my_true_step(2).
+does(p2,paper).
 
-beats(paper,stone).
-beats(scissors,paper).
-beats(stone,scissors).
+#T13
+my_true_score(p1,1).
+does(p1,scissors).
+my_true_score(p2,0).
+my_true_step(2).
+does(p2,paper).
 
-different(p1,p2).
-different(p2,p1).
+#T15
+does(p1,scissors).
+my_true_score(p1,0).
+my_true_score(p2,0).
+my_true_step(2).
+does(p2,paper).
 
-c_p1(p1).
-c_p2(p2).
+#T16
+does(p2,stone).
+my_true_score(p1,0).
+my_true_step(0).
+my_true_score(p2,0).
+does(p1,scissors).
 
-player(p1).
-player(p2).
+#T17
+my_true_step(1).
+my_true_score(p1,0).
+does(p2,scissors).
+my_true_score(p2,0).
+does(p1,scissors).
 
-action(paper).
-action(scissors).
-action(stone).
+#T18
+does(p1,scissors).
+my_true_step(2).
+my_true_score(p1,0).
+my_true_score(p2,2).
+does(p2,paper).
 
-%% draws(E,A):- does(E,A,B),does(E,C,B),A \= C.
-%% draws(E,A):- does(E,A,B), does(E,C,B), A != C.
-wins(E,A):- does(E,A,B), does(E,C,D), beats(B,D), player(C).
-loses(E,A):- does(E,A,B), does(E,C,D), beats(D,B), player(C).
+#T19
+does(p2,stone).
+my_true_score(p1,0).
+my_true_score(p2,0).
+my_true_step(2).
+does(p1,stone).
 
+#T20
+does(p1,scissors).
+my_true_score(p1,0).
+my_true_step(0).
+my_true_score(p2,0).
+does(p2,paper).
 
-%% ========== SUPER EASY ==========
-%% 10 LITERALS
-%% 3 BODY LITERALS
-%% 3 VARS
+#T21
+my_true_step(1).
+does(p2,stone).
+my_true_score(p1,0).
+does(p1,paper).
+my_true_score(p2,0).
 
-%% next_score(A,B):-
-%%     true_score(A,B),
-%%     draws(A).
+#T22
+my_true_score(p1,1).
+my_true_score(p2,1).
+does(p1,paper).
+my_true_step(2).
+does(p2,paper).
 
-%% next_score(A,B):-
-%%     true_score(A,B),
-%%     looses(A).
+#T23
+my_true_step(1).
+does(p2,scissors).
+my_true_score(p2,1).
+my_true_score(p1,0).
+does(p1,stone).
 
-%% next_score(A,B):-
-%%     true_score(A,C),
-%%     succ(C,B),
-%%     wins(A).
+#T24
+does(p2,scissors).
+does(p1,paper).
+my_true_score(p2,0).
+my_true_step(2).
+my_true_score(p1,1).
 
-%% ========== MEDIUM ==========
-%% 13 LITERALS
-%% 4 BODY LITERALS
-%% 4 VARS
+#T25
+does(p2,stone).
+my_true_score(p1,0).
+my_true_step(0).
+does(p1,paper).
+my_true_score(p2,0).
 
-%% next_score(A,B):-
-%%     true_score(A,B),
-%%     does(A,C),
-%%     does(D,C),
-%%     different(A,D).
+#T26
+my_true_step(1).
+does(p2,stone).
+my_true_score(p2,1).
+my_true_score(p1,0).
+does(p1,stone).
 
-%% next_score(A,B):-
-%%     true_score(A,B),
-%%     wins(C),
-%%     different(A,C).
+#T27
+does(p2,stone).
+my_true_score(p1,0).
+my_true_step(0).
+my_true_score(p2,0).
+does(p1,stone).
 
-%% next_score(A,B):-
-%%     true_score(A,C),
-%%     succ(C,B),
-%%     wins(A).
+#T28
+my_true_score(p1,1).
+my_true_score(p2,1).
+my_true_step(2).
+does(p2,paper).
+does(p1,stone).
 
+#T29
+my_true_step(1).
+my_true_score(p1,0).
+my_true_score(p2,0).
+does(p2,paper).
+does(p1,stone).
 
-%% ==================================================
+#T3
+does(p2,stone).
+does(p1,paper).
+my_true_score(p2,0).
+my_true_step(2).
+my_true_score(p1,1).
 
-%% HARD
-%% 18 LITERALS
-%% 6 BODY LITERALS
-%% 7 VARS
-%% DRAWS
-%% next_score(A,B):-
-%%     true_score(A,B),
-%%     does(A,C),
-%%     does(D,C),
-%%     different(A,D).
+#T30
+my_true_step(1).
+does(p2,scissors).
+my_true_score(p2,1).
+does(p1,paper).
+my_true_score(p1,0).
 
-%% LOSES
-%% next_score(A,B):-
-%%     true_score(A,B),
-%%     does(A,C),
-%%     beats(D,C),
-%%     does(E,D),
-%%     different(A,E).
+#T31
+does(p2,stone).
+my_true_score(p1,1).
+my_true_score(p2,1).
+my_true_step(2).
+does(p1,scissors).
 
-%% WINS
-%% next_score(A,B):-
-%%     true_score(A,C),
-%%     succ(C,B),
-%%     does(A,D),
-%%     does(E,F),
-%%     beats(D,F),
-%%     different(A,E).
+#T32
+my_true_score(p1,0).
+does(p2,scissors).
+does(p1,paper).
+my_true_score(p2,0).
+my_true_step(2).
 
-%% ==================================================
-%% %% WITH PI
-%% 18 LITERALS
-%% 4 BODY LITERALS
-%% 5 VARS
+#T33
+my_true_score(p1,0).
+does(p2,scissors).
+my_true_step(0).
+does(p1,paper).
+my_true_score(p2,0).
 
-%% %% DRAWS
-%% wins(A):-
-%%     does(A,B),
-%%     does(C,D),
-%%     beats(B,D),
-%%     player(C).
+#T34
+my_true_step(1).
+does(p2,stone).
+my_true_score(p2,1).
+does(p1,paper).
+my_true_score(p1,0).
 
-%% next_score(A,B):-
-%%     true_score(A,B),
-%%     does(A,B),
-%%     does(C,B),
-%%     different(A,C).
+#T35
+my_true_score(p1,2).
+does(p1,paper).
+my_true_score(p2,0).
+my_true_step(2).
+does(p2,paper).
 
-%% next_score(A,B):-
-%%     true_score(A,B),
-%%     wins(C),
-%%     different(A,C).
+#T36
+my_true_step(1).
+my_true_score(p1,1).
+my_true_score(p2,0).
+does(p2,paper).
+does(p1,stone).
 
-%% next_score(A,B):-
-%%     true_score(A,C),
-%%     succ(C,B),
-%%     wins(A).
+#T37
+my_true_step(1).
+my_true_score(p1,0).
+does(p1,paper).
+my_true_score(p2,0).
+does(p2,paper).
 
+#T38
+my_true_score(p1,2).
+my_true_score(p2,0).
+my_true_step(2).
+does(p2,paper).
+does(p1,stone).
+
+#T39
+my_true_step(1).
+does(p2,scissors).
+does(p1,paper).
+my_true_score(p2,0).
+my_true_score(p1,1).
+
+#T4
+does(p1,scissors).
+my_true_score(p1,2).
+my_true_score(p2,0).
+my_true_step(2).
+does(p2,paper).
+
+#T40
+my_true_score(p1,0).
+does(p2,scissors).
+my_true_step(0).
+my_true_score(p2,0).
+does(p1,scissors).
+
+#T41
+does(p2,scissors).
+my_true_score(p2,1).
+my_true_score(p1,0).
+my_true_step(2).
+does(p1,scissors).
+
+#T42
+my_true_score(p1,2).
+does(p2,scissors).
+does(p1,paper).
+my_true_score(p2,0).
+my_true_step(2).
+
+#T43
+my_true_score(p2,1).
+my_true_score(p1,0).
+my_true_step(2).
+does(p2,paper).
+does(p1,stone).
+
+#T44
+my_true_step(1).
+my_true_score(p1,1).
+does(p1,paper).
+my_true_score(p2,0).
+does(p2,paper).
+
+#T45
+my_true_step(1).
+my_true_score(p1,1).
+does(p1,scissors).
+my_true_score(p2,0).
+does(p2,paper).
+
+#T46
+my_true_step(2).
+my_true_score(p1,0).
+my_true_score(p2,2).
+does(p2,paper).
+does(p1,stone).
+
+#T47
+does(p2,stone).
+my_true_score(p1,1).
+my_true_score(p2,1).
+my_true_step(2).
+does(p1,stone).
+
+#T48
+my_true_score(p1,0).
+my_true_score(p2,0).
+my_true_step(2).
+does(p2,paper).
+does(p1,stone).
+
+#T49
+does(p2,stone).
+my_true_score(p2,2).
+my_true_score(p1,0).
+my_true_step(2).
+does(p1,scissors).
+
+#T50
+my_true_score(p1,0).
+does(p2,scissors).
+my_true_step(0).
+my_true_score(p2,0).
+does(p1,stone).
+
+#T51
+does(p2,stone).
+my_true_score(p1,0).
+does(p1,paper).
+my_true_score(p2,0).
+my_true_step(2).
+
+#T52
+my_true_score(p1,1).
+does(p2,scissors).
+my_true_score(p2,0).
+my_true_step(2).
+does(p1,stone).
+
+#T53
+my_true_score(p1,1).
+does(p2,scissors).
+my_true_score(p2,0).
+my_true_step(2).
+does(p1,scissors).
+
+#T54
+my_true_step(1).
+does(p2,stone).
+my_true_score(p2,1).
+my_true_score(p1,0).
+does(p1,scissors).
+
+#T55
+my_true_score(p1,1).
+does(p1,paper).
+my_true_score(p2,0).
+my_true_step(2).
+does(p2,paper).
+
+#T56
+my_true_score(p1,2).
+does(p2,scissors).
+my_true_score(p2,0).
+my_true_step(2).
+does(p1,scissors).
+
+#T57
+my_true_step(1).
+my_true_score(p1,1).
+does(p2,scissors).
+my_true_score(p2,0).
+does(p1,scissors).
+
+#T58
+does(p2,scissors).
+my_true_score(p2,2).
+my_true_score(p1,0).
+my_true_step(2).
+does(p1,stone).
+
+#T6
+my_true_step(1).
+does(p2,stone).
+my_true_score(p1,0).
+my_true_score(p2,0).
+does(p1,stone).
+
+#T7
+does(p2,stone).
+my_true_score(p1,1).
+my_true_score(p2,0).
+my_true_step(2).
+does(p1,stone).
+
+#T9
+does(p2,scissors).
+my_true_score(p2,2).
+my_true_score(p1,0).
+my_true_step(2).
+does(p1,scissors).
+
+#T14
+my_true_step(3).
+my_true_score(p2,0).
+my_true_score(p1,0).
+
+#T2
+my_true_step(3).
+my_true_score(p2,2).
+my_true_score(p1,1).
+
+#T5
+my_true_step(3).
+my_true_score(p2,2).
+my_true_score(p1,0).
+
+#T8
+my_true_step(3).
+my_true_score(p1,1).
+my_true_score(p2,1).
 
