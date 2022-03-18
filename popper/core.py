@@ -2,70 +2,70 @@ from collections import namedtuple, defaultdict
 
 ConstVar = namedtuple('ConstVar', ['name', 'type'])
 
-class Grounding:
-    @staticmethod
-    # IMPROVE/REFACTOR
-    def ground_literal(literal, assignment):
-        ground_args = []
-        for arg in literal.arguments:
-            if arg in assignment:
-                ground_args.append(assignment[arg])
-            # handles tuples of ConstVars
-            # TODO: AC: EXPLAIN BETTER
-            elif isinstance(arg, tuple):
-                ground_t_args = []
-                # AC: really messy
-                for t_arg in arg:
-                    if t_arg in assignment:
-                        ground_t_args.append(assignment[t_arg])
-                    else:
-                        ground_t_args.append(t_arg)
-                ground_args.append(tuple(ground_t_args))
-            else:
-                ground_args.append(arg)
-        return (literal.positive, literal.predicate, tuple(ground_args))
+# class Grounding:
+#     @staticmethod
+#     # IMPROVE/REFACTOR
+#     def ground_literal(literal, assignment):
+#         ground_args = []
+#         for arg in literal.arguments:
+#             if arg in assignment:
+#                 ground_args.append(assignment[arg])
+#             # handles tuples of ConstVars
+#             # TODO: AC: EXPLAIN BETTER
+#             elif isinstance(arg, tuple):
+#                 ground_t_args = []
+#                 # AC: really messy
+#                 for t_arg in arg:
+#                     if t_arg in assignment:
+#                         ground_t_args.append(assignment[t_arg])
+#                     else:
+#                         ground_t_args.append(t_arg)
+#                 ground_args.append(tuple(ground_t_args))
+#             else:
+#                 ground_args.append(arg)
+#         return (literal.positive, literal.predicate, tuple(ground_args))
 
-    @staticmethod
-    def ground_clause(clause, assignment):
-        (head, body) = clause
-        ground_head = None
-        if head:
-            ground_head = Grounding.ground_literal(head, assignment)
-        ground_body = frozenset(Grounding.ground_literal(literal, assignment) for literal in body)
-        return (ground_head, ground_body)
+#     @staticmethod
+#     def ground_clause(clause, assignment):
+#         (head, body) = clause
+#         ground_head = None
+#         if head:
+#             ground_head = Grounding.ground_literal(head, assignment)
+#         ground_body = frozenset(Grounding.ground_literal(literal, assignment) for literal in body)
+#         return (ground_head, ground_body)
 
-    # AC: When grounding constraint rules, we only care about the vars and the constraints, not the actual literals
-    @staticmethod
-    def grounding_hash(body, all_vars):
-        cons = set()
-        for lit in body:
-            if lit.meta:
-                cons.add((lit.predicate, lit.arguments))
-        return hash((frozenset(all_vars), frozenset(cons)))
+#     # AC: When grounding constraint rules, we only care about the vars and the constraints, not the actual literals
+#     @staticmethod
+#     def grounding_hash(body, all_vars):
+#         cons = set()
+#         for lit in body:
+#             if lit.meta:
+#                 cons.add((lit.predicate, lit.arguments))
+#         return hash((frozenset(all_vars), frozenset(cons)))
 
-    @staticmethod
-    def find_all_vars(body):
-        all_vars = set()
-        for literal in body:
-            for arg in literal.arguments:
-                if isinstance(arg, ConstVar):
-                    all_vars.add(arg)
-                elif isinstance(arg, tuple):
-                    for t_arg in arg:
-                        if isinstance(t_arg, ConstVar):
-                            all_vars.add(t_arg)
-        return all_vars
+#     @staticmethod
+#     def find_all_vars(body):
+#         all_vars = set()
+#         for literal in body:
+#             for arg in literal.arguments:
+#                 if isinstance(arg, ConstVar):
+#                     all_vars.add(arg)
+#                 elif isinstance(arg, tuple):
+#                     for t_arg in arg:
+#                         if isinstance(t_arg, ConstVar):
+#                             all_vars.add(t_arg)
+#         return all_vars
 
 class Literal:
     def __init__(self, predicate, arguments, directions = [], positive = True, meta=False):
         self.predicate = predicate
         self.arguments = arguments
         self.arity = len(arguments)
-        self.directions = directions
+        self.directions = None
         self.positive = positive
         self.meta = meta
-        self.inputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
-        self.outputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
+        # self.inputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
+        # self.outputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
 
     @staticmethod
     def to_code(literal):

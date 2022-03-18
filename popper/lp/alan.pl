@@ -1,3 +1,10 @@
+%% ##################################################
+%% THIS FILE CONTAINS THE ASP PROGRAM GENERATOR
+%% IT IS CALLED BABY ALAN
+%% VERSION 1
+%% ##################################################
+
+
 bfr((P,PArgs),(Q,QArgs)) :- head_literal(P,_,PArgs),body_literal(Q,_,QArgs).
 bfr((P,PArgs),(Q,QArgs)) :- body_literal(P,_,PArgs),body_literal(Q,_,QArgs),P<Q.
 bfr((P,PArgs1),(P,PArgs2)) :- body_literal(P,PA,PArgs1),body_literal(P,PA,PArgs2),PArgs1<PArgs2.
@@ -8,26 +15,15 @@ pruned:-var_first_lit(V,(P,PArgs)),var_first_lit(W,(Q,QArgs)),bfr((P,PArgs),(Q,Q
 :-pruned.
 
 
-%% ##################################################
-%% THIS FILE CONTAINS THE ASP PROGRAM GENERATOR
-%% IT IS CALLED ALAN
-%% VERSION 15
-%% ##################################################
-
-#defined functional/2.
-#defined irreflexive/2.
-#defined direction/2.
 #defined type/2.
 #defined size/1.
-#defined invented/2.
-#defined lower/2.
 
 #defined enable_pi/0.
 #defined enable_recursion/0.
 #defined non_datalog/0.
 #defined allow_singletons/0.
 
-#show head_literal/3.
+%% #show head_literal/3.
 #show body_literal/3.
 
 head_literal(P,A,Vars):-
@@ -95,8 +91,6 @@ var_in_literal(P,Vars,Var):-
 %% HEAD VARS ARE ALWAYS 0,1,...,A-1
 head_vars(A,@pyhead_vars(A)):-
     head_pred(_,A).
-head_vars(A,@pyhead_vars(A)):-
-    invented(_,A).
 
 %% NEED TO KNOW LITERAL ARITIES
 seen_arity(A):-
@@ -161,66 +155,21 @@ var_type(Var,@pytype(Pos,Types)):-
     clause_var(Var),
     #count{Type : var_type(Var,Type)} > 1.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% ENSURES INPUT VARS ARE GROUND
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#script (python)
-def pydirection(pos, directions):
-    return directions.arguments[pos.number]
-def pylen(directions):
-    return Number(len(directions.arguments))
-#end.
+%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% %% ENSURES INPUT VARS ARE GROUND
+%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% #script (python)
+%% def pydirection(pos, directions):
+%%     return directions.arguments[pos.number]
+%% def pylen(directions):
+%%     return Number(len(directions.arguments))
+%% #end.
 
 arity(P,A):-
     head_pred(P,A).
 arity(P,A):-
     body_pred(P,A).
 
-direction_aux(P, @pylen(Directions), Directions):-
-    direction(P,Directions).
-
-direction_(P,Pos,@pydirection(Pos,Directions)):-
-    arity(P,A),
-    Pos=0..A-1,
-    direction_aux(P,A,Directions).
-
-num_in_args(P,N):-
-    direction_(P,_,_),
-    #count{Pos : direction_(P,Pos,in)} == N.
-
-%% VAR SAFE IF HEAD INPUT VAR
-safe_var(Var):-
-    head_literal(P,_,Vars),
-    var_pos(Var,Vars,Pos),
-    direction_(P,Pos,in).
-
-%% VAR SAFE IF IN A LITERAL THAT ONLY HAS OUT VARS
-safe_var(Var):-
-    num_in_args(P,0),
-    body_literal(P,_,Vars),
-    var_member(Var,Vars).
-
-%% VAR SAFE IF IN SAFE LITERAL
-safe_var(Var):-
-    safe_literal(P,Vars),
-    var_member(Var,Vars).
-
-%% LITERAL WITH N INPUT VARS IS SAFE IF N VARS ARE SAFE
-safe_literal(P,Vars):-
-    num_in_args(P,N),
-    N > 0,
-    body_literal(P,_,Vars),
-    #count{Pos :
-        var_pos(Var,Vars,Pos),
-        direction_(P,Pos,in),
-        safe_var(Var)
-    } == N.
-
-%% SAFE VARS
-:-
-    direction_(_,_,_), % guard for when no direction_s are given
-    clause_var(Var),
-    not safe_var(Var).
 
 %% ==========================================================================================
 %% BK BIAS CONSTRAINTS
@@ -230,13 +179,7 @@ safe_literal(P,Vars):-
 #defined prop/3.
 %% #defined prop/4.
 
-%% :-
-%%     unique_pA(P),
-%%     body_literal(R,P,_,_),
-%%     #count{A : body_literal(R,P,_,(A,))} > 1.
-
-
-%% :- prop(singleton,P), body_literal(P,1,_), #count{A : body_literal(P,A,(A,))} > 1.
+:- prop(max_count,P,K), #count{Args : body_literal(P,_,Args)} > K.
 :- prop(singleton,P), body_literal(P,_,_), #count{Vars : body_literal(P,A,Vars)} > 1.
 
 :- prop(asymmetric_ab_ba,P), body_literal(P,_,(A,B)), body_literal(P,_,(B,A)).
@@ -298,5 +241,22 @@ safe_literal(P,Vars):-
 
 :- prop(unsat_pair,P,Q), body_literal(P,_,Vars), body_literal(Q,_,Vars).
 
-:- prop(precon,P,Q), body_literal(P,_,(A,)), body_literal(Q,_,(A,B)).
-:- prop(postcon,P,Q), body_literal(P,_,(A,B)), body_literal(Q,_,(B,)).
+%% :- prop(precon,P,Q), body_literal(P,_,(A,)), body_literal(Q,_,(A,_)).
+%% :- prop(postcon,P,Q), body_literal(P,_,(_,B)), body_literal(Q,_,(B,)).
+
+:- prop(symmetric_ab,P), body_literal(P,_,(A,B)), A>B.
+:- prop(countk,P,K), #count{Args : body_literal(P,_,Args)} > K.
+
+:-
+    prop(pre_postcon,(P,Q,R)),
+    body_literal(P,_,(A,)),
+    body_literal(Q,_,(A,B)),
+    body_literal(R,_,(B,)).
+:-
+    prop(precon,(P,Q)),
+    body_literal(P,_,(A,)),
+    body_literal(Q,_,(A,_)).
+:-
+    prop(postcon,(P,Q)),
+    body_literal(P,_,(_,B)),
+    body_literal(Q,_,(B,)).

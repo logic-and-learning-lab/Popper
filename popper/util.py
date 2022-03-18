@@ -8,7 +8,8 @@ from contextlib import contextmanager
 from .core import Clause
 from .constrain import Constrain
 
-TIMEOUT=600
+# TIMEOUT=600
+TIMEOUT=1200
 EVAL_TIMEOUT=0.001
 MAX_LITERALS=100
 MAX_SOLUTIONS=1
@@ -31,6 +32,7 @@ def parse_args():
     parser.add_argument('--ex-file', type=str, default='', help='Filename for the examples')
     parser.add_argument('--bk-file', type=str, default='', help='Filename for the background knowledge')
     parser.add_argument('--bias-file', type=str, default='', help='Filename for the bias')
+    parser.add_argument('--bkcons', default=False, action='store_true', help='do bk cons')
     return parser.parse_args()
 
 def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
@@ -69,6 +71,8 @@ def parse_settings():
         args.ex_file if args.ex_file else ex_file,
         args.bk_file if args.bk_file else bk_file,
         info = args.info,
+        bkcons = args.bkcons,
+        kbpath = args.kbpath,
         debug = args.debug,
         stats = args.stats,
         eval_timeout = args.eval_timeout,
@@ -87,8 +91,10 @@ class Settings:
             ex_file,
             bk_file,
             info = False,
+            bkcons = False,
             debug = False,
             stats = False,
+            kbpath = None,
             eval_timeout = EVAL_TIMEOUT,
             test_all = False,
             timeout = TIMEOUT,
@@ -96,22 +102,26 @@ class Settings:
             clingo_args = CLINGO_ARGS,
             max_solutions = MAX_SOLUTIONS,
             functional_test = False,
+            task = '',
             hspace=False):
             
         self.bias_file = bias_file
         self.ex_file = ex_file
         self.bk_file = bk_file
         self.info = info
+        self.bkcons = bkcons
         self.debug = debug
         self.stats = stats
         self.eval_timeout = eval_timeout
         self.test_all = test_all
         self.timeout = timeout
+        self.kbpath = kbpath
         self.max_literals = max_literals
         self.clingo_args = clingo_args
         self.max_solutions = max_solutions
         self.functional_test = functional_test
         self.hspace = hspace
+        self.task = task
 
 def format_program(program):
     return "\n".join(Clause.to_code(Clause.to_ordered(clause)) + '.' for clause in program)

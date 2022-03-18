@@ -18,3 +18,8 @@ my_succ(4,5).
 my_succ(5,6).
 my_succ(6,7).
 my_succ(7,8).
+
+
+#defined my_true_cell/2.
+#defined does_jump/3.
+#defined my_true_step/1.

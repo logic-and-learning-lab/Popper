@@ -11,6 +11,8 @@ import clingo.script
 import multiprocessing
 import time
 
+MAX_RULE_SIZE = 10
+
 clingo.script.enable_python()
 
 def dbg(*args):
@@ -27,127 +29,119 @@ def deduce_bk_cons(settings):
         arg_str2 = lookup2[a]
         rule = f'holds({p},{arg_str}):- {p}{arg_str2}.'
         prog.append(rule)
+    prog = '\n'.join(prog)
 
-    solver = clingo.Control()
     with open(settings.bias_file) as f:
-        solver.add('base', [], f.read())
+        bias = f.read()
     with open(settings.bk_file.replace('bk', 'bk-all')) as f:
-        solver.add('base', [], f.read())
-    solver.add('base', [], '\n'.join(prog) + '\n')
+        bk_all = f.read()
     with open('popper/lp/cons.pl') as f:
-        solver.add('base', [], f.read())
+        cons = f.read()
+
+    task_bk = parse_bk(settings, bk_all)
+
+    all_counts = defaultdict(set)
+    all_props = None
+    for task, bk in task_bk.items():
+        xs = deduce_bk_cons_aux(cons, prog, bias, bk)
+        for x in xs:
+            if 'countk' in str(x):
+                k = x.arguments[1]
+                v = x.arguments[2]
+                all_counts[k].add(v)
+        if all_props == None:
+            all_props = xs
+        else:
+            all_props = all_props.intersection(xs)
+
+    print('intersection')
+    for x in sorted(list(all_props)):
+        print(str(x) +  '.')
+
+    print('counts')
+    for k, vs in all_counts.items():
+        if len(vs) == 1:
+            continue
+        print(f'prop(countk,{k},{max(vs)}).')
+        # print(str(x) +  '.')
+
+    exit()
+
+
+def deduce_bk_cons_aux(cons, prog, bias, bk):
+    solver = clingo.Control()
+    cons_prog = cons + '\n' + prog + '\n' + bias + '\n' + bk
+    solver.add('base', [], cons_prog)
     solver.ground([('base', [])])
+    out = set()
     with solver.solve(yield_=True) as handle:
         for m in handle:
             for atom in m.symbols(shown = True):
                 if atom.name == 'prop':
-                    print(str(atom) + '.')
-    exit()
+                    # print(str(atom) + '.')
+                    out.add(atom)
+    return out
 
-# def get_bk()
-def gen_args(args):
-    return tuple(chr(ord('A') + arg.number) for arg in args)
 
-def parse_model(model):
-    directions = defaultdict(lambda: defaultdict(lambda: '?'))
+arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
+
+# TODO: COULD CACHE TUPLES OF ARGS FOR TINY OPTIMISATION
+def parse_model(head, model):
     body_atoms = []
-    # print('--')
     for atom in model:
-        # print(atom)
         pred = atom.arguments[0].name
-        args = gen_args(atom.arguments[2].arguments)
-        arity = len(args)
-        modes = tuple(directions[pred][i] for i in range(arity))
-        literal = Literal(pred, args, modes)
-        if atom.name == 'body_literal':
-            body_atoms.append(literal)
-        elif atom.name == 'head_literal':
-            head = literal
-
+        args = atom.arguments[2].arguments
+        args = tuple(arg_lookup[arg] for arg in args)
+        literal = Literal(pred, args, [])
+        body_atoms.append(literal)
     return head, frozenset(body_atoms)
 
 # def split(a, n):
 #     k, m = divmod(len(a), n)
 #     return (a[i*k+min(i, m):(i+1)*k+min(i+1, m)] for i in range(n))
 
-def test_rules_clingo(stats, bk, pos, neg, rules):
-    # print(f'test_rules_clingo pos:{pos}')
+def test_rules_clingo(settings, stats, bk, pos, neg, rules):
     result_inconsistent = {}
-    result_covers = {}
+    result_covers = defaultdict(set)
 
-    # for x in sorted(neg):
-        # print('sorted_neg', x)
-
-    grouped_pos = {}
-    grouped_neg = {}
+    grouped_pos = defaultdict(set)
+    grouped_neg = defaultdict(set)
     for ex_task, ex in pos:
-        if ex_task not in grouped_pos:
-            grouped_pos[ex_task] = set()
         grouped_pos[ex_task].add(ex)
     for ex_task, ex in neg:
-        if ex_task not in grouped_neg:
-            grouped_neg[ex_task] = set()
         grouped_neg[ex_task].add(ex)
 
+    for task, task_bk in bk.items():
+        if task not in grouped_pos:
+            continue
 
-    # for k, vs in grouped_neg.items():
-    #     print(k)
-    #     for v in vs:
-    #         print(v)
+        task_pos = grouped_pos[task]
+        task_neg = grouped_neg[task]
 
-    # task_neg = []
-    # for ex_task, ex in neg:
-    #     if ex_task == task:
-    #         task_neg.append(ex)
+        if len(task_pos) == 0:
+            continue
 
-    dbg(f'TMP1 pos:{len(grouped_pos)} rules:{len(rules)}')
-    with stats.duration('tmp1'):
-        for task, task_bk in bk.items():
-            # task_pos = []
-            # for ex_task, ex in pos:
-                # if ex_task == task:
-                    # task_pos.append(ex)
-
-            if task not in grouped_pos:
-                continue
-            task_pos = grouped_pos[task]
-
-            if len(task_pos) == 0:
-                continue
-
-            # print(f'TMP1 testing task:{task} with pos:{task_pos}')
-            # print(task_bk)
-
-
-            # TODO: ADD NEG HERE
-            for rule, inconsistent, covers in test_rules_clingo_aux(stats, task_bk, task_pos, [], rules):
-                covers = set((task, ex) for ex in covers)
-                # print('tmp1', format_rule(rule), inconsistent, covers)
-                if rule not in result_covers:
-                    result_covers[rule] = set()
-                result_covers[rule].update(covers)
+        for rule, inconsistent, covers in test_rules_clingo_aux(settings, stats, task_bk, task_pos, task_neg, rules):
+            covers = set((task, ex) for ex in covers)
+            result_covers[rule].update(covers)
+            result_inconsistent[rule] = inconsistent
 
     to_check_rules = set()
     for rule in rules:
-        # print(format_rule(rule), len(pos), len(result_covers[rule]), len(result_covers[rule]) == len(pos))
-        if len(result_covers[rule]) == len(pos):
-            to_check_rules.add(rule)
+        if len(result_covers[rule]) != len(pos):
+            continue
+        if result_inconsistent[rule]:
+            continue
+        to_check_rules.add(rule)
 
-    # print('to_check_rules')
-    # for rule in to_check_rules:
-        # print('CHECK', format_rule(rule))
-
-    # dbg('TMP2')
-    dbg(f'TMP2 neg:{len(grouped_neg)} rules:{len(to_check_rules)}')
-    with stats.duration('tmp2'):
-        for task, task_bk in bk.items():
-            if len(to_check_rules) == 0:
-                break
-            task_neg = grouped_neg[task]
-            for rule, inconsistent, covers in test_rules_clingo_aux(stats, task_bk, [], task_neg, to_check_rules):
-                result_inconsistent[rule] = inconsistent
-                if inconsistent:
-                    to_check_rules.remove(rule)
+    for task, task_bk in bk.items():
+        if len(to_check_rules) == 0:
+            break
+        task_neg = grouped_neg[task]
+        for rule, inconsistent, covers in test_rules_clingo_aux(settings, stats, task_bk, [], task_neg, to_check_rules):
+            result_inconsistent[rule] = inconsistent
+            if inconsistent:
+                to_check_rules.remove(rule)
 
     for rule in rules:
         x = 'unknown'
@@ -166,14 +160,13 @@ pos_covers(R,E):- pos(E,Atom), holds(R,Atom).
 inconsistent(R):- neg(E,Atom), holds(R,Atom).
 """
 
-def test_rules_clingo_aux(stats, bk, pos, neg, rules):
+def test_rules_clingo_aux(settings, stats, bk, pos, neg, rules):
     if len(rules) == 0:
         return []
 
     hash_to_rule = {}
     hash_to_ex = {}
 
-    ta1 = time.time()
     with stats.duration('test.build'):
         prog = []
         prog.append(TEST_PROG)
@@ -181,61 +174,45 @@ def test_rules_clingo_aux(stats, bk, pos, neg, rules):
         for ex in pos:
             k = f'"{hash(ex)}"'
             hash_to_ex[k] = ex
-            prog.append(f'pos({k},{ex}).')
+            x = f'pos({k},{ex}).'
+            # print(x)
+            prog.append(x)
+
         for ex in neg:
             k = f'"{hash(ex)}"'
             hash_to_ex[k] = ex
-            prog.append(f'neg({k},{ex}).')
+            x = f'neg({k},{ex}).'
+            prog.append(x)
 
         for rule in rules:
             i = f'"{hash(rule)}"'
             hash_to_rule[i] = rule
             rule = format_rule(rule)
-            rule = rule.replace('next_value(A)', f'holds({i},next_value(A))')
-            rule = rule.replace('next_value(A,B)', f'holds({i},next_value(A,B))')
-            rule = rule.replace('f(A)', f'holds({i},f(A))')
-            rule = rule.replace('f(A,B)', f'holds({i},f(A,B))')
-            rule = rule.replace('out(A,B,C)', f'holds({i},out(A,B,C))')
-            rule = rule.replace('output(A,B,C)', f'holds({i},output(A,B,C))')
-            rule = rule.replace('out(A,B,C,D)', f'holds({i},out(A,B,C,D))')
-            rule = rule.replace('next_score(A,B,C)', f'holds({i},next_score(A,B,C))')
-            rule = rule.replace('next_score(A,B)', f'holds({i},next_score(A,B))')
-            rule = rule.replace('next(A,B)', f'holds({i},next(A,B))')
-            rule = rule.replace('next(A)', f'holds({i},next(A))')
-            rule = rule.replace('next_at(A,B,C)', f'holds({i},next_at(A,B,C))')
-            rule = rule.replace('next_cell(A,B,C)', f'holds({i},next_cell(A,B,C))')
-            rule = rule.replace('next_cell(A,B)', f'holds({i},next_cell(A,B))')
-            rule = rule.replace('next_color(A,B,C)', f'holds({i},next_color(A,B,C))')
+            rule = rule.replace(settings.head_str, f'holds({i},{settings.head_str})')
             prog.append(rule)
 
         prog = '\n'.join(prog)
-        # print('PROG!!!')
-        # print(prog + '\n' + bk)
-    ta2 = time.time()
+        # print('---')
+        # print(prog + bk)
 
     # solver = clingo.Control(["--single-shot", "-t16"])
     solver = clingo.Control(["--single-shot"])
     solver.add('base', [], bk)
     solver.add('base', [], prog)
 
-    tb1 = time.time()
     with stats.duration('test.ground'):
         solver.ground([('base', [])])
-    tb2 = time.time()
 
-    tc1 = time.time()
     atoms = []
     with stats.duration('test.solve'):
         with solver.solve(yield_=True) as handle:
             for m in handle:
                 atoms.extend(m.symbols(shown = True))
 
-    tc2 = time.time()
 
     inconsistent = {rule:False for rule in rules}
     covers = {rule:set() for rule in rules}
 
-    td1 = time.time()
     with stats.duration('test.parse'):
         for atom in atoms:
             if atom.name == 'pos_covers':
@@ -248,49 +225,29 @@ def test_rules_clingo_aux(stats, bk, pos, neg, rules):
                 rule_hash = str(atom.arguments[0])
                 rule = hash_to_rule[rule_hash]
                 inconsistent[rule] = True
-    td2 = time.time()
-    # print('inconsistent',inconsistent)
-    # print('covers',covers)
-    # print('moo', ta2-ta1, tb2-tb1, tc2-tc1, td2-td1)
-    # for rule in rules:
-        # print('a',format_rule(rule), covers[rule])
+
     return [(rule, inconsistent[rule], covers[rule]) for rule in rules]
 
-        # yield
-
-def test_coverage(stats, bk, pos, rules):
-
-    grouped_pos = {}
+def test_coverage(settings, stats, bk, pos, rules):
+    grouped_pos = defaultdict(set)
 
     for task, ex in pos:
-        if task not in grouped_pos:
-            grouped_pos[task] = set()
         grouped_pos[task].add(ex)
 
-    out = {}
+    out = defaultdict(set)
     for task, task_bk in bk.items():
         if task not in grouped_pos:
             continue
         task_pos = grouped_pos[task]
         if len(task_pos) == 0:
             continue
-        # print('<BK2>')
-        # print(task_bk)
-        # print('</BK2>')
-        # print('<task_pos>')
-        # print(task_pos)
-        # print('</task_pos>')
-        # for rule in rules:
-            # print('X', format_rule(rule))
-        res = test_coverage_aux(stats, task_bk, task_pos, rules)
+        res = test_coverage_aux(settings, stats, task_bk, task_pos, rules)
         for rule, covers in res.items():
             covers = set((task, ex) for ex in covers)
-            if rule not in out:
-                out[rule] = set()
             out[rule].update(covers)
     return out
 
-def test_coverage_aux(stats, bk, pos, rules):
+def test_coverage_aux(settings, stats, bk, pos, rules):
     assert(len(rules) > 0)
 
     with stats.duration('test.build'):
@@ -309,22 +266,7 @@ def test_coverage_aux(stats, bk, pos, rules):
             i = f'"{hash(rule)}"'
             hash_to_rule[i] = rule
             rule = format_rule(rule)
-
-            rule = rule.replace('next_at(A,B,C)', f'holds({i},next_at(A,B,C))')
-            rule = rule.replace('next_value(A)', f'holds({i},next_value(A))')
-            rule = rule.replace('next_value(A,B)', f'holds({i},next_value(A,B))')
-            rule = rule.replace('f(A)', f'holds({i},f(A))')
-            rule = rule.replace('f(A,B)', f'holds({i},f(A,B))')
-            rule = rule.replace('out(A,B,C)', f'holds({i},out(A,B,C))')
-            rule = rule.replace('output(A,B,C)', f'holds({i},output(A,B,C))')
-            rule = rule.replace('out(A,B,C,D)', f'holds({i},out(A,B,C,D))')
-            rule = rule.replace('next_score(A,B,C)', f'holds({i},next_score(A,B,C))')
-            rule = rule.replace('next_score(A,B)', f'holds({i},next_score(A,B))')
-            rule = rule.replace('next(A,B)', f'holds({i},next(A,B))')
-            rule = rule.replace('next(A)', f'holds({i},next(A))')
-            rule = rule.replace('next_cell(A,B,C)', f'holds({i},next_cell(A,B,C))')
-            rule = rule.replace('next_cell(A,B)', f'holds({i},next_cell(A,B))')
-            rule = rule.replace('next_color(A,B,C)', f'holds({i},next_color(A,B,C))')
+            rule = rule.replace(settings.head_str, f'holds({i},{settings.head_str})')
             prog.append(rule)
 
         prog = '\n'.join(prog)
@@ -344,7 +286,8 @@ def test_coverage_aux(stats, bk, pos, rules):
             for m in handle:
                 atoms.extend(m.symbols(shown = True))
 
-    out = {}
+    out = defaultdict(set)
+
     with stats.duration('test.parse'):
         for atom in atoms:
             # print(atom)
@@ -354,72 +297,75 @@ def test_coverage_aux(stats, bk, pos, rules):
             example_hash = str(atom.arguments[1])
             example = hash_to_ex[example_hash]
 
-            if rule not in out:
-                out[rule] = set()
             out[rule].add(example)
     return out
 
-def find_subset(examples, all_rules, sizes, covers):
+
+FIND_SUBSET_PROG = """
+#show rule/1.
+size(N):- #sum{K,R : rule(R), size(R,K)} == N.
+covered(E):- covers(R,E), rule(R).
+:- example(E), not covered(E).
+#minimize{X : size(X)}.
+different(R1,R2):- R1 != R2, size(R1,_), size(R2,_), covers(R1,E), not covers(R2,E).
+same(R1,R2):- R1 < R2, size(R1,_), size(R2,_), not different(R1,R2), not different(R2,R1).
+dominates(R1,R2):- different(R1,R2), not different(R2,R1).
+:- same(R1,R2), rule(R1), rule(R2).
+:- same(R1,R2), size(R1,K1), size(R2,K2), K1 >= K2, rule(R1).
+:- dominates(R1,R2), size(R1,K1), size(R2,K2), K1 <= K2, rule(R2).
+"""
+
+def find_subset(stats, examples, all_rules, sizes, covers):
     prog = []
 
-    example_to_hash = {}
-    for x in examples:
-        k = f'"{hash(x)}"'
-        example_to_hash[x] = k
+    with stats.duration('find_subset.build'):
+        example_to_hash = {}
+        for x in examples:
+            k = f'"{hash(x)}"'
+            example_to_hash[x] = k
+            prog.append(f'example({k}).')
 
-    for x in examples:
-        k = example_to_hash[x]
-        prog.append(f'example({k}).')
+        i = 0
+        rule_to_index = {}
+        index_to_rule = {}
+        for rule, xs in covers.items():
+            # print(i, format_rule(rule), xs)
+            prog.append('{rule(' + str(i) + ')}.')
+            index_to_rule[i] = rule
+            rule_to_index[rule] = i
+            for x in xs:
+                k = example_to_hash[x]
+                prog.append(f'covers({i},{k}).')
+            i +=1
+        for rule in all_rules:
+            size = sizes[rule]
+            if rule not in rule_to_index:
+                continue
+            i = rule_to_index[rule]
+            prog.append(f'size({i},{size}).')
 
-    i = 0
-    rule_to_index = {}
-    index_to_rule = {}
-    for rule, xs in covers.items():
-        # print(i, format_rule(rule), xs)
-        prog.append('{rule(' + str(i) + ')}.')
-        index_to_rule[i] = rule
-        rule_to_index[rule] = i
-        for x in xs:
-            k = example_to_hash[x]
-            prog.append(f'covers({i},{k}).')
-        i +=1
-    for rule in all_rules:
-        size = sizes[rule]
-        if rule not in rule_to_index:
-            continue
-        i = rule_to_index[rule]
-        prog.append(f'size({i},{size}).')
+        prog = '\n'.join(prog)
+        prog += '\n' + FIND_SUBSET_PROG
+        with open('sat-prob.pl', 'w') as f:
+            f.write(prog)
 
-    prog = '\n'.join(prog)
-
-    # print(prog)
-
-    prog += """
-    covered(E):- covers(R,E), rule(R).
-    :- example(E), not covered(E).
-    #show rule/1.
-    size(N):- #sum{K,R : rule(R), size(R,K)} == N.
-    #minimize{X : size(X)}.
-    """
-    # with open('sat-prob.pl', 'w') as f:
-        # f.write(prog)
-
-    # solver = clingo.Control(["--single-shot", "-t16"])
-    solver = clingo.Control(["--single-shot"])
+    solver = clingo.Control(["--single-shot", "-t10"])
+    # solver = clingo.Control(["--single-shot"])
     solver.add('base', [], prog)
-    solver.ground([('base', [])])
+
+    with stats.duration('find_subset.ground'):
+        solver.ground([('base', [])])
 
     out = []
-    with solver.solve(yield_=True) as handle:
-        for m in handle:
-            xs = m.symbols(shown = True)
-            out = [atom.arguments[0].number for atom in xs]
-            # print(xs)
-    # print('out',out)
+    with stats.duration('find_subset.solve'):
+        with solver.solve(yield_=True) as handle:
+            for m in handle:
+                xs = m.symbols(shown = True)
+                out = [atom.arguments[0].number for atom in xs]
+
     return [index_to_rule[i] for i in out]
 
 def format_rule(rule):
-    # return Clause.to_code(rule) + '.\n'
     return Clause.to_code(rule) + '.'
 
 NUM_LITERALS = """
@@ -432,23 +378,35 @@ NUM_LITERALS = """
 
 def get_solver(stats, settings, cons = set()):
 
-    check_cons(cons)
+    # TODO: FILTER SOME CONS MAYBE?
+    # check_cons(cons)
 
-    solver = clingo.Control()
-    # solver = clingo.Control(["-t16"])
-    # solver = clingo.Control(["-t2"])
-    # solver = clingo.Control(["-t4"])
-    solver = clingo.Control(["-t6"])
+    # solver = clingo.Control()
+    # solver = clingo.Control(["-t1"]) # 49/36s
+    # solver = clingo.Control(["-t2"]) # 98/75s
+    # solver = clingo.Control(["-t3"]) # 55/38s
+    # solver = clingo.Control(["-t4"]) # 60/36s
+    # solver = clingo.Control(["-t5"]) # 52/29s
+    solver = clingo.Control(["-t6"]) # 53/31s
+    # solver = clingo.Control(["-t7"]) # timeout after 10 minutes
+    # solver = clingo.Control(["-t8"]) # timeout after 10 minutes
+    # solver = clingo.Control(["-t9"]) # timeout after 10 minutes
+    # solver = clingo.Control(["-t10"]) # timeout after 10 minutes
+    # solver = clingo.Control(["-t16"]) # timeout after 10 minutes
+
 
     solver.configuration.solve.models = 0
+
     with open('popper/lp/alan.pl') as f:
         solver.add('base', [], f.read())
     with open(settings.bias_file) as f:
         solver.add('base', [], f.read())
+
     # add bootstap constraints
     solver.add('base', [], '\n'.join(cons))
 
-    solver.ground([('base', [])])
+    with stats.duration('ground_bootstap'):
+        solver.ground([('base', [])])
 
     solver.add('number_of_literals', ['n'], NUM_LITERALS)
 
@@ -484,6 +442,11 @@ def load_settings(settings):
         arity = args[1].number
         settings.head_pred = (symbol, arity)
 
+    head_pred, head_arity=  settings.head_pred
+    settings.head_literal = Literal(head_pred, tuple(arg_lookup[clingo.Number(arg)] for arg in range(head_arity)))
+    tmp_map = {1:'A', 2:'A,B',3:'A,B,C', 4:'A,B,C,D'}
+    settings.head_str =  f'{head_pred}({tmp_map[head_arity]})'
+
     settings.body_preds = set()
     for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
         args = x.symbol.arguments
@@ -492,11 +455,11 @@ def load_settings(settings):
         settings.body_preds.add((symbol, arity))
 
 def gen_rules(settings, stats, size, cons, solver):
-    with stats.duration('gen.ground.cons'):
-        if len(cons) > 0:
-            k = f'cons_{size}'
-            dbg(f'gen_rules.ground.cons {k} {len(cons)}')
-            solver.add(k, [], '\n'.join(cons))
+    if len(cons) > 0:
+        k = f'cons_{size}'
+        dbg(f'gen_rules.ground.cons {k} {len(cons)}')
+        solver.add(k, [], '\n'.join(cons))
+        with stats.duration('gen.ground.cons'):
             solver.ground([(k, [])])
 
     with stats.duration('gen.solve'):
@@ -508,7 +471,7 @@ def gen_rules(settings, stats, size, cons, solver):
 
     with stats.duration('gen.build'):
         dbg(f'gen_rules.build')
-        return [parse_model(model) for model in models]
+        return [parse_model(settings.head_literal, model) for model in models]
 
 def check_cons(cons):
     seen = []
@@ -574,8 +537,8 @@ def specialisation_constraint(rule):
 def find_rules(settings, stats, bk, pos, neg, boostrap_cons, max_size):
     assert(len(pos) > 0)
 
-    with stats.duration('get_solver'):
-        solver = get_solver(stats, settings, boostrap_cons)
+
+    solver = get_solver(stats, settings, boostrap_cons)
 
     # track the enabled/disabled size literals
     tracker = {}
@@ -591,51 +554,37 @@ def find_rules(settings, stats, bk, pos, neg, boostrap_cons, max_size):
 
     seen_ss = {}
 
-    max_size=8
-
     size = 1
     while size < max_size:
         size += 1
         body_size = size-1
 
         # increase program size constraint
-        update_num_literals(solver, tracker, body_size)
+        with stats.duration('update_num_literals'):
+            # pass
+            update_num_literals(solver, tracker, body_size)
 
-        dbg(f'size:{size} cons:{len(cons)} pos:{len(pos)}')
+        dbg(f'{settings.task} size:{size} cons:{len(cons)} pos:{len(pos)}')
 
         # generate all rules of size body_size + 1 that satisfy the constraints
         rules = list(gen_rules(settings, stats, body_size, cons, solver))
 
-        # print("HELLO")
-        dbg(f'num_rules:{len(rules)}')
-        # for rule in rules:
-            # print(format_rule(rule))
+        stats.total_programs += len(rules)
 
-        # reset cons
+        # TODO: PRUNE RULES WITH REDUNDANT LITERALS!!!
+
         cons = set()
 
-        # # remove rules that contain redundant literals
-        # with stats.duration('check_redundant'):
-        #     good_rules = []
-        #     for rule in rules:
-        #         if tester.rule_has_redundant_literal(rule):
-        #             # TODO: RULE OUT GENERALISATIONS
-        #             # gen_cons.add
-        #             pass
-        #         else:
-        #             good_rules.append(rule)
-        #     rules = good_rules
-
-        # rules = ptest_rules_clingo(tester, stats, rules, pos)
-        # print('ASDA')
-
         # test rules on the subset of examples
-        dbg('test_rules_clingo')
-        rules = test_rules_clingo(stats, bk, pos, neg, rules)
+        dbg(f'test_rules_clingo num_rules:{len(rules)}')
+
+        rules = list(test_rules_clingo(settings, stats, bk, pos, neg, rules))
 
         for rule, inconsistent, coverage in rules:
-            # if not inconsistent and len(coverage) > 0:
-                # print('E', format_rule(rule), coverage)
+            complete = len(coverage) == len(pos)
+            if len(coverage) == 0:
+                print('SHIT',format_rule(rule))
+            # and len(coverage) > 0:
 
             # if the rule does not cover the examples, eliminate specialisations
             if len(coverage) != len(pos):
@@ -647,10 +596,14 @@ def find_rules(settings, stats, bk, pos, neg, boostrap_cons, max_size):
             assert(len(coverage) > 0)
             assert(len(coverage) == len(pos))
 
+            # TODO: PRUNE DOMINATED!!!
+
             if inconsistent:
                 # TODO: RULE OUT GENERALISATIONS
                 # NEED TO MOVE ABOVE AS TO NOT SKIP
                 continue
+
+            # print('HERE!!!')
 
 
             # with stats.duration('check_crap'):
@@ -669,10 +622,9 @@ def find_rules(settings, stats, bk, pos, neg, boostrap_cons, max_size):
             cons.add(con)
             new_cons.add(con)
 
-            print('complete_rules.add(rule)',format_rule(rule))
+            print('complete_rule',format_rule(rule))
             complete_rules.add((rule, size))
 
-        # print('HERE?????', len(complete_rules))
         if len(complete_rules) > 0:
             # print('COMPLETE RULES RULEZ!')
             return complete_rules, new_cons
@@ -696,11 +648,8 @@ def parse_exs(task, exs_txt):
             for atom in m.symbols(shown = True):
                 yield atom.name, task, str(atom.arguments[0])
 
-def parse_input(settings):
-    with open(settings.bk_file.replace('bk','bk-all'), 'r') as f:
-        all_bk = f.read()
-        # print(all_bk)
 
+def parse_bk(settings, all_bk):
     bk = {}
 
     with open(settings.bk_file, 'r') as f:
@@ -719,6 +668,14 @@ def parse_input(settings):
 
     for task in bk:
         bk[task] += '\n' + all_bk
+
+    return bk
+
+def parse_input(settings):
+    with open(settings.bk_file.replace('bk','bk-all'), 'r') as f:
+        all_bk = f.read()
+
+    bk = parse_bk(settings, all_bk)
 
     examples = {}
     with open(settings.ex_file, 'r') as f:
@@ -751,10 +708,15 @@ def parse_input(settings):
     return bk, pos, neg
 
 def popper(settings, stats):
+    # print(settings.kbpath)
+    # exit()
     bk, all_pos, all_neg = parse_input(settings)
 
+    # print(all_pos)
+
     load_settings(settings)
-    # deduce_bk_cons(settings)
+    if settings.bkcons:
+        deduce_bk_cons(settings)
     # exit()
 
     print(f'num_examples:{len(all_pos)}')
@@ -762,19 +724,21 @@ def popper(settings, stats):
     # maintain specialisation constraints
     spec_cons = {x: set() for x in all_pos}
 
-    pos = set(all_pos)
+    pos = sorted(list(all_pos))
+    # pos = list((a,b) for (a,b) in all_pos if a == 1514)
 
     # start program size
     size = 0
 
     # maximum program size
-    max_size = 8
+    max_size = MAX_RULE_SIZE
 
     # best prog seen
     best_prog = []
 
     # chunk/partition size
     chunk_size = 1
+    # chunk_size = len(pos)
 
     all_chunks = [[x] for x in pos]
 
@@ -797,14 +761,14 @@ def popper(settings, stats):
         covered = set()
 
         for chunk_pos in chunks:
+            print(f'chunk_pos:{chunk_pos}')
             # if covered all chunks then stop
             if len(covered) == len(chunks):
                 break
 
             chunk_pos = set(flatten(chunk_pos))
             # print(f'chunk_size:{chunk_size} chunk_pos:{chunk_pos} todo:{len(chunks)} covered:{len(covered)}')
-            print(f'chunk_size:{chunk_size} covered:{len(covered)}/{len(chunks)}')
-
+            dbg(f'{settings.task} chunk_size:{chunk_size} covered:{len(covered)}/{len(chunks)}')
 
             # if all examples are covered, stop
             if chunk_pos.issubset(covered):
@@ -819,8 +783,10 @@ def popper(settings, stats):
                 boostrap_cons.update(spec_cons[x])
 
             # find new (i) complete and consistent rules, and (ii) cons (currently only specialisations)
-            new_rules, new_cons = find_rules(settings, stats, bk, chunk_pos, all_neg, boostrap_cons, max_size=max_size)
+            new_rules, new_cons = find_rules(settings, stats, bk, chunk_pos, all_neg, boostrap_cons, max_size)
             # exit()
+
+
 
             for rule, size in new_rules:
                 sizes[rule] = size
@@ -848,7 +814,7 @@ def popper(settings, stats):
                 # print('CHECK COVERAGE')
                 # print('CHUNK_POS',chunk_pos)
                 # calculate example coverage of the new rules
-                covers = test_coverage(stats, bk, all_pos, new_rules)
+                covers = test_coverage(settings, stats, bk, all_pos, new_rules)
                 for rule, covered_examples in covers.items():
                     # print('COVERED_EXAMPLES',covered_examples)
 
@@ -874,32 +840,39 @@ def popper(settings, stats):
         chunk_size += chunk_size
         all_rules.update(all_new_rules)
 
+        # print('A1', len(all_rules))
         assert(len(all_rules) > 0)
 
         # if no new rules, skip to the next chunk size
         if len(new_rules) == 0:
+            return
             continue
 
+        # print("ASDA")
+        # for rule in rules:
+            # print(format_rule(rule))
 
         if all(len(rule_example_coverage[rule]) == 0 for rule in new_rules):
             assert(False)
             continue
 
         with stats.duration('find_subset'):
-            print(f'subset problem:{len(all_rules)}')
+            print(f'{settings.task} subset problem:{len(all_rules)}')
 
             # find the minimal subset of rules that covers all the examples
-            rules = list(find_subset(all_pos, all_rules, sizes, rule_example_coverage))
+            rules = list(find_subset(stats, all_pos, all_rules, sizes, rule_example_coverage))
 
             # if there is no set, then continue to search
             if len(rules) == 0:
-                continue
+                print('NO SOLUTION - WEIRD!?')
+                return
 
-            print('Solution:')
+            print(f'{settings.task} solution:')
             for rule in rules:
                 print(format_rule(rule))
+            stats.solution_found = True
             # exit()
-            return
+            # return
         return
 
         # return
@@ -927,15 +900,16 @@ def popper(settings, stats):
 
 def learn_solution(settings):
     stats = Stats(log_best_programs=settings.info)
+    stats.solution_found = False
     log_level = logging.DEBUG if settings.debug else logging.INFO
     logging.basicConfig(level=log_level, stream=sys.stderr, format='%(message)s')
     timeout(popper, (settings, stats), timeout_duration=int(settings.timeout))
 
-    if stats.solution:
-        prog_stats = stats.solution
-    elif stats.best_programs:
-        prog_stats = stats.best_programs[-1]
-    else:
-        return None, stats
+    # if stats.solution:
+    #     prog_stats = stats.solution
+    # elif stats.best_programs:
+    #     prog_stats = stats.best_programs[-1]
+    # else:
+    #     return None, stats
 
-    return prog_stats.code, stats
+    return stats.solution_found, stats

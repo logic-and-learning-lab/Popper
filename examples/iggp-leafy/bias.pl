@@ -1,88 +1,128 @@
-%% next_leaf(V0, V1) :- true_leaf(V0, V1), V1 = 1, pos(V0), pos(V1).
-%% next_leaf(V0, V1) :- true_leaf(V0, V0), pos(V0), pos(V1).
-%% next_leaf(V0, V1) :- true_leaf(V8, V1), true_leaf(V0, V1), true_leaf(V9, V1), V8 = 3, V9 = 1, pos(V0), pos(V1), pos(V8), pos(V9).
-
-max_vars(5).
-max_body(10).
+max_vars(6).
+max_body(6).
 max_clauses(1).
 
-head_pred(next_leaf,3).
-body_pred(close,3).
-body_pred(does_move,4).
-body_pred(my_index,2).
-body_pred(my_input_move,4).
-body_pred(my_true_isplayer,4).
-body_pred(my_true_leaf,3).
-body_pred(c1,1).
-body_pred(c2,1).
-body_pred(c3,1).
-body_pred(c4,1).
-body_pred(c5,1).
-body_pred(c6,1).
-body_pred(c7,1).
-body_pred(c8,1).
-body_pred(c9,1).
+head_pred(next_leaf,2).
+%% body_pred(close,2).
+%% body_pred(does_move,3).
+%% body_pred(my_index,1).
+%% body_pred(my_input_move,3).
+%% body_pred(my_true_isplayer,3).
+body_pred(not_my_true_isplayer,3).
+body_pred(my_true_leaf,2).
+%% body_pred(agent,1).
+%% body_pred(pos,1).
+
+type(next_leaf,(pos,pos)).
+type(close,(pos,pos)).
+type(does_move,(pos,pos,action)).
+type(my_index,(pos,)).
+type(my_input_move,(agent,pos,pos)).
+type(my_true_isplayer,(pos,pos,agent)).
+type(not_my_true_isplayer,(pos,pos,agent)).
+type(my_true_leaf,(pos,pos)).
+type(agent,(agent,)).
+type(pos,(pos,)).
+
+body_pred(P,1):-
+    constant(T, P).
+type(P,(T,)):-
+    constant(T, P).
 
 %% (<= (next (leaf ?X ?Y)) (true (leaf ?X ?Y)) (not (true (isplayer ?X ?Y red))) (not (true (isplayer ?X ?Y blue))))
 
-type(next_leaf,(ex,pos,pos)).
-type(close,(ex,pos,pos)).
-type(does_move,(ex,pos,pos,action)).
-type(my_index,(ex,pos)).
-type(my_input_move,(ex,agent,pos,pos)).
-type(my_true_isplayer,(ex,pos,pos,agent)).
-type(my_true_leaf,(ex,pos,pos)).
-type(c1,(pos,)).
-type(c2,(pos,)).
-type(c3,(pos,)).
-type(c4,(pos,)).
-type(c5,(pos,)).
-type(c6,(pos,)).
-type(c7,(pos,)).
-type(c8,(pos,)).
-type(c9,(pos,)).
+constant(agent, red).
+constant(agent, blue).
+%% constant(pos, c1).
+%% constant(pos, c2).
+%% constant(pos, c3).
+%% constant(pos, c4).
+%% constant(pos, c5).
+%% constant(pos, c6).
+%% constant(pos, c7).
+%% constant(pos, c8).
+%% constant(int, c0).
+%% constant(int, c50).
+%% constant(int, c100).
 
-%% #modeb(true_leaf(ph(pos), ph(pos))).
-%% #modeb(true_isplayer(ph(pos), ph(pos), ph(agent))).
-%% #modeh(next_isplayer(ph(pos), ph(pos), ph(agent))).
-%% #modeb(input_move(ph(agent), ph(pos), ph(pos))).
-%% #modeb(does_move(ph(agent), ph(pos), ph(pos))).
-%% #modeb(role(ph(agent))).
-%% #modeb(close(ph(pos), ph(pos))).
-%% #modeb(index(ph(pos))).
-%% #modeb(agent(ph(agent))).
-%% #modeb(pos(ph(pos))).
-%% #modeb(int(ph(int))).
+%% (<= (next (leaf ?X ?Y))
+%%     (true (leaf ?X ?Y))
+%%     (not_true_isplayer ?X ?Y Z1,
+%%     (not (true (isplayer ?X ?Y Z2),
+%%     red(Z1),
+%%     blue(Z1).
 
-%% BECAUSE WE DO NOT LEARN FROM INTERPRETATIONS
+
+
 :-
-    clause(C),
-    #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
+    body_pred(close,(V0,V1)), V0 > V1.
+
+%% prop(singleton,c1).
+%% prop(singleton,c2).
+%% prop(singleton,c3).
+%% prop(singleton,c4).
+%% prop(singleton,c5).
+%% prop(singleton,c6).
+%% prop(singleton,c7).
+%% prop(singleton,c8).
+%% prop(singleton,c9).
+%% prop(unsat_pair,c2,c1).
+%% prop(unsat_pair,c3,c1).
+%% prop(unsat_pair,c4,c1).
+%% prop(unsat_pair,c5,c1).
+%% prop(unsat_pair,c6,c1).
+%% prop(unsat_pair,c7,c1).
+%% prop(unsat_pair,c8,c1).
+%% prop(unsat_pair,c9,c1).
+%% prop(unsat_pair,c3,c2).
+%% prop(unsat_pair,c4,c2).
+%% prop(unsat_pair,c5,c2).
+%% prop(unsat_pair,c6,c2).
+%% prop(unsat_pair,c7,c2).
+%% prop(unsat_pair,c8,c2).
+%% prop(unsat_pair,c9,c2).
+%% prop(unsat_pair,c4,c3).
+%% prop(unsat_pair,c5,c3).
+%% prop(unsat_pair,c6,c3).
+%% prop(unsat_pair,c7,c3).
+%% prop(unsat_pair,c8,c3).
+%% prop(unsat_pair,c9,c3).
+%% prop(unsat_pair,c5,c4).
+%% prop(unsat_pair,c6,c4).
+%% prop(unsat_pair,c7,c4).
+%% prop(unsat_pair,c8,c4).
+%% prop(unsat_pair,c9,c4).
+%% prop(unsat_pair,c6,c5).
+%% prop(unsat_pair,c7,c5).
+%% prop(unsat_pair,c8,c5).
+%% prop(unsat_pair,c9,c5).
+%% prop(unsat_pair,c7,c6).
+%% prop(unsat_pair,c8,c6).
+%% prop(unsat_pair,c9,c6).
+%% prop(unsat_pair,c8,c7).
+%% prop(unsat_pair,c9,c7).
+%% prop(unsat_pair,c9,c8).
+%% prop(unsat_pair,pos,c9).
+%% prop(unsat_pair,my_index,c9).
+
+%% prop(unsat_pair,my_true_isplayer,not_my_true_isplayer).
+%% prop(antitriangular,close).
+%% prop(antitransitive,close).
+%% prop(unique_ab_c,my_true_isplayer).
+%% prop(unique_c_ab,my_true_isplayer).
+%% prop(unique_a_bc,does_move).
+%% prop(unique_bc_a,does_move).
 
 
-%% true, next :: prop -> bool.
-
-%% legal, input, does :: agent -> action -> bool.
-
-%% goal :: agent -> int -> bool.
-
-%% terminal :: bool.
-
-%% role :: agent -> bool.
-
-%% red, blue :: agent.
-
-%% 1, 2, 3, 4, 5, 6, 7, 8 :: pos.
-
-%% 0, 50, 100 :: int.
-
-%% leaf :: pos -> pos -> prop.
-
-%% isplayer :: pos -> pos -> agent -> prop.
-
-%% move :: pos -> pos -> action.
-
-%% close :: pos -> pos -> bool.
-
-%% index :: pos -> bool.
-
+prop(antitransitive,close).
+prop(antitriangular,close).
+prop(singleton,blue).
+prop(singleton,red).
+prop(unique_a_bc,does_move).
+prop(unique_ab_c,my_true_isplayer).
+prop(unique_bc_a,does_move).
+prop(unique_c_ab,my_true_isplayer).
+prop(countk,blue,1).
+prop(countk,red,1).
+prop(unsat_pair,my_true_isplayer,not_my_true_isplayer).
+prop(unsat_pair,red,blue).

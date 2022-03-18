@@ -1,3 +1,5 @@
+%% # defined does/2.
+
 bounds(1).
 bounds(2).
 bounds(3).
