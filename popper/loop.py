@@ -11,7 +11,8 @@ import clingo.script
 import multiprocessing
 import time
 
-MAX_RULE_SIZE = 10
+MAX_RULE_SIZE = 8
+OPTIMAL = False
 
 clingo.script.enable_python()
 
@@ -625,12 +626,11 @@ def find_rules(settings, stats, bk, pos, neg, boostrap_cons, max_size):
             print('complete_rule',format_rule(rule))
             complete_rules.add((rule, size))
 
-        if len(complete_rules) > 0:
-            # print('COMPLETE RULES RULEZ!')
+        if not OPTIMAL and len(complete_rules) > 0:
             return complete_rules, new_cons
 
-
-    return [], new_cons
+    return complete_rules, new_cons
+    # return [], new_cons
 
 def chunk_list(xs, size):
     for i in range(0, len(xs), size):

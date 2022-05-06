@@ -39,3 +39,5 @@ prop(countk,different,2).
 prop(countk,my_succ,3).
 prop(countk,my_true_score,2).
 prop(countk,player,2).
+
+

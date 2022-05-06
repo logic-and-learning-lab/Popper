@@ -5,14 +5,36 @@
 %% ##################################################
 
 
-bfr((P,PArgs),(Q,QArgs)) :- head_literal(P,_,PArgs),body_literal(Q,_,QArgs).
-bfr((P,PArgs),(Q,QArgs)) :- body_literal(P,_,PArgs),body_literal(Q,_,QArgs),P<Q.
-bfr((P,PArgs1),(P,PArgs2)) :- body_literal(P,PA,PArgs1),body_literal(P,PA,PArgs2),PArgs1<PArgs2.
+bfr((P,PArgs),(Q,QArgs)):-
+    head_literal(P,_,PArgs),
+    body_literal(Q,_,QArgs).
 
-not_var_first_lit(V,(P,PArgs)) :- bfr((Q,QArgs),(P,PArgs)),var_member(V,QArgs),var_member(V,PArgs).
-var_first_lit(V,(P,PArgs)) :- body_literal(P,_,PArgs),var_member(V,PArgs),not not_var_first_lit(V,(P,PArgs)).
-pruned:-var_first_lit(V,(P,PArgs)),var_first_lit(W,(Q,QArgs)),bfr((P,PArgs),(Q,QArgs)),W<V.
-:-pruned.
+bfr((P,PArgs),(Q,QArgs)):-
+    body_literal(P,_,PArgs),
+    body_literal(Q,_,QArgs),
+    P<Q.
+
+bfr((P,PArgs1),(P,PArgs2)):-
+    body_literal(P,PA,PArgs1),
+    body_literal(P,PA,PArgs2),
+    PArgs1<PArgs2.
+
+%% TODO: TYPEMATCHNG?
+not_var_first_lit(V,(P,PArgs)):-
+    bfr((Q,QArgs),(P,PArgs)),
+    var_member(V,QArgs),
+    var_member(V,PArgs).
+
+var_first_lit(V,(P,PArgs)):-
+    body_literal(P,_,PArgs),
+    var_member(V,PArgs),
+    not not_var_first_lit(V,(P,PArgs)).
+
+:-
+    var_first_lit(V,(P,PArgs)),
+    var_first_lit(W,(Q,QArgs)),
+    bfr((P,PArgs),(Q,QArgs)),
+    W<V.
 
 
 #defined type/2.
@@ -40,6 +62,7 @@ head_literal(P,A,Vars):-
     Var1 > 1,
     Var2 = 0..Var1-1,
     not clause_var(Var2).
+
 
 %% ##################################################
 %% VARS ABOUT VARS - META4LIFE
@@ -240,9 +263,6 @@ arity(P,A):-
 :- prop(antitriangular,P), body_literal(P,_,(A,B)), body_literal(P,_,(B,C)), body_literal(P,_,(C,A)).
 
 :- prop(unsat_pair,P,Q), body_literal(P,_,Vars), body_literal(Q,_,Vars).
-
-%% :- prop(precon,P,Q), body_literal(P,_,(A,)), body_literal(Q,_,(A,_)).
-%% :- prop(postcon,P,Q), body_literal(P,_,(_,B)), body_literal(Q,_,(B,)).
 
 :- prop(symmetric_ab,P), body_literal(P,_,(A,B)), A>B.
 :- prop(countk,P,K), #count{Args : body_literal(P,_,Args)} > K.

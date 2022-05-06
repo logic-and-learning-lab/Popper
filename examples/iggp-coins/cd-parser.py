@@ -41,14 +41,6 @@ def parse_examples():
                 if task not in out:
                     out[task] = set()
                 out[task].add(x)
-                # pred = xs[0]
-                # args = xs[1].split(',')
-                # task = args[0]
-                # args = ','.join(args[1:])
-                # x = f'{pred}({args}'
-                # if task not in out:
-                    # out[task] = set()
-                # out[task].add(x)
 
     with open('exs.pl', 'w') as f:
         for k, xs in out.items():

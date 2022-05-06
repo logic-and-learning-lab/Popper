@@ -1,6 +1,6 @@
 max_clauses(1).
-max_vars(7).
-max_body(7).
+max_vars(8).
+max_body(8).
 
 head_pred(next_value,1).
 body_pred(does,2).
