@@ -2,7 +2,6 @@
 %% 15:23:10 next_cell(A,B,C):-does_jump(A,E,F,D),different(D,F),does_jump(A,E,F,B),c_twocoins(C).
 %% 15:23:10 next_cell(A,B,C):-does_jump(A,F,B,E),does_jump(A,F,D,E),c_zerocoins(C),different(E,D).
 
-
 max_vars(7).
 max_body(7).
 max_clauses(1).

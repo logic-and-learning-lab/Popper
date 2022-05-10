@@ -1,11 +1,4 @@
-%% dcc paper
-%% f :- a.
-%% f :- b.
-%% f :- c.
-%% f :- d.
-%% f :- x1, x2, x3, x4.
-%% overly specific solution is:
-%% target is
+#T1
 a(p1).
 b(p2).
 c(p3).
@@ -38,3 +31,12 @@ x4(p1).
 x4(p2).
 x4(p3).
 x4(p4).
+
+%% dcc paper
+%% f :- a.
+%% f :- b.
+%% f :- c.
+%% f :- d.
+%% f :- x1, x2, x3, x4.
+%% overly specific solution is:
+%% target is

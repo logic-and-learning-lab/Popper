@@ -107,11 +107,15 @@ def test_rules_clingo(settings, stats, bk, pos, neg, rules):
 
     grouped_pos = defaultdict(set)
     grouped_neg = defaultdict(set)
+
     for ex_task, ex in pos:
+        # print(ex_task, ex, 'pos')
         grouped_pos[ex_task].add(ex)
     for ex_task, ex in neg:
+        # print(ex_task, ex, 'neg')
         grouped_neg[ex_task].add(ex)
 
+    # print('task_pos',bk)
     for task, task_bk in bk.items():
         if task not in grouped_pos:
             continue
@@ -119,9 +123,11 @@ def test_rules_clingo(settings, stats, bk, pos, neg, rules):
         task_pos = grouped_pos[task]
         task_neg = grouped_neg[task]
 
+
         if len(task_pos) == 0:
             continue
-
+        # print('HELLO', rule, covers)
+        # with stats.duration('test'):
         for rule, inconsistent, covers in test_rules_clingo_aux(settings, stats, task_bk, task_pos, task_neg, rules):
             covers = set((task, ex) for ex in covers)
             result_covers[rule].update(covers)
@@ -168,64 +174,66 @@ def test_rules_clingo_aux(settings, stats, bk, pos, neg, rules):
     hash_to_rule = {}
     hash_to_ex = {}
 
-    with stats.duration('test.build'):
-        prog = []
-        prog.append(TEST_PROG)
+    # with stats.duration('test.build'):
+    prog = []
+    prog.append(TEST_PROG)
 
-        for ex in pos:
-            k = f'"{hash(ex)}"'
-            hash_to_ex[k] = ex
-            x = f'pos({k},{ex}).'
-            # print(x)
-            prog.append(x)
+    for ex in pos:
+        k = f'"{hash(ex)}"'
+        hash_to_ex[k] = ex
+        x = f'pos({k},{ex}).'
+        # print(x)
+        prog.append(x)
 
-        for ex in neg:
-            k = f'"{hash(ex)}"'
-            hash_to_ex[k] = ex
-            x = f'neg({k},{ex}).'
-            prog.append(x)
+    for ex in neg:
+        k = f'"{hash(ex)}"'
+        hash_to_ex[k] = ex
+        x = f'neg({k},{ex}).'
+        prog.append(x)
 
-        for rule in rules:
-            i = f'"{hash(rule)}"'
-            hash_to_rule[i] = rule
-            rule = format_rule(rule)
-            rule = rule.replace(settings.head_str, f'holds({i},{settings.head_str})')
-            prog.append(rule)
+    for rule in rules:
+        i = f'"{hash(rule)}"'
+        hash_to_rule[i] = rule
+        rule = format_rule(rule)
+        rule = rule.replace(settings.head_str, f'holds({i},{settings.head_str})')
+        prog.append(rule)
 
-        prog = '\n'.join(prog)
+    prog = '\n'.join(prog)
         # print('---')
         # print(prog + bk)
 
+    # solver = clingo.Control(["--single-shot"])
     # solver = clingo.Control(["--single-shot", "-t16"])
     solver = clingo.Control(["--single-shot"])
     solver.add('base', [], bk)
     solver.add('base', [], prog)
 
-    with stats.duration('test.ground'):
-        solver.ground([('base', [])])
+    # with stats.duration('test.ground'):
+    # VERY SLOW!!!
+    solver.ground([('base', [])])
 
     atoms = []
-    with stats.duration('test.solve'):
-        with solver.solve(yield_=True) as handle:
-            for m in handle:
-                atoms.extend(m.symbols(shown = True))
+    # with stats.duration('test.solve'):
+    with solver.solve(yield_=True) as handle:
+        for m in handle:
+            atoms.extend(m.symbols(shown = True))
 
 
     inconsistent = {rule:False for rule in rules}
     covers = {rule:set() for rule in rules}
 
-    with stats.duration('test.parse'):
-        for atom in atoms:
-            if atom.name == 'pos_covers':
-                rule_hash = str(atom.arguments[0])
-                example_hash = str(atom.arguments[1])
-                rule = hash_to_rule[rule_hash]
-                example = hash_to_ex[example_hash]
-                covers[rule].add(example)
-            elif atom.name == 'inconsistent':
-                rule_hash = str(atom.arguments[0])
-                rule = hash_to_rule[rule_hash]
-                inconsistent[rule] = True
+    # with stats.duration('test.parse'):
+    for atom in atoms:
+        if atom.name == 'pos_covers':
+            rule_hash = str(atom.arguments[0])
+            example_hash = str(atom.arguments[1])
+            rule = hash_to_rule[rule_hash]
+            example = hash_to_ex[example_hash]
+            covers[rule].add(example)
+        elif atom.name == 'inconsistent':
+            rule_hash = str(atom.arguments[0])
+            rule = hash_to_rule[rule_hash]
+            inconsistent[rule] = True
 
     return [(rule, inconsistent[rule], covers[rule]) for rule in rules]
 
@@ -242,6 +250,7 @@ def test_coverage(settings, stats, bk, pos, rules):
         task_pos = grouped_pos[task]
         if len(task_pos) == 0:
             continue
+        # with stats.duration('test_coverage_aux'):
         res = test_coverage_aux(settings, stats, task_bk, task_pos, rules)
         for rule, covers in res.items():
             covers = set((task, ex) for ex in covers)
@@ -251,26 +260,26 @@ def test_coverage(settings, stats, bk, pos, rules):
 def test_coverage_aux(settings, stats, bk, pos, rules):
     assert(len(rules) > 0)
 
-    with stats.duration('test.build'):
-        prog = []
-        prog.append("#show covers/2.")
-        prog.append("covers(R,E):- example(E,Atom), holds(R,Atom).")
-        hash_to_rule = {}
-        hash_to_ex = {}
+    # with stats.duration('test.build'):
+    prog = []
+    prog.append("#show covers/2.")
+    prog.append("covers(R,E):- example(E,Atom), holds(R,Atom).")
+    hash_to_rule = {}
+    hash_to_ex = {}
 
-        for ex in pos:
-            k = f'"{hash(ex)}"'
-            hash_to_ex[k] = ex
-            prog.append(f'example({k},{ex}).')
+    for ex in pos:
+        k = f'"{hash(ex)}"'
+        hash_to_ex[k] = ex
+        prog.append(f'example({k},{ex}).')
 
-        for rule in rules:
-            i = f'"{hash(rule)}"'
-            hash_to_rule[i] = rule
-            rule = format_rule(rule)
-            rule = rule.replace(settings.head_str, f'holds({i},{settings.head_str})')
-            prog.append(rule)
+    for rule in rules:
+        i = f'"{hash(rule)}"'
+        hash_to_rule[i] = rule
+        rule = format_rule(rule)
+        rule = rule.replace(settings.head_str, f'holds({i},{settings.head_str})')
+        prog.append(rule)
 
-        prog = '\n'.join(prog)
+    prog = '\n'.join(prog)
     # print(prog)
 
     # solver = clingo.Control(["--single-shot", "-t16"])
@@ -278,27 +287,27 @@ def test_coverage_aux(settings, stats, bk, pos, rules):
     solver.add('base', [], bk)
     solver.add('base', [], prog)
 
-    with stats.duration('test.ground'):
-        solver.ground([('base', [])])
+    # with stats.duration('test.ground'):
+    solver.ground([('base', [])])
 
     atoms = []
-    with stats.duration('test.solve'):
-        with solver.solve(yield_=True) as handle:
-            for m in handle:
-                atoms.extend(m.symbols(shown = True))
+    # with stats.duration('test.solve'):
+    with solver.solve(yield_=True) as handle:
+        for m in handle:
+            atoms.extend(m.symbols(shown = True))
 
     out = defaultdict(set)
 
-    with stats.duration('test.parse'):
-        for atom in atoms:
-            # print(atom)
-            rule_hash = str(atom.arguments[0])
-            rule = hash_to_rule[rule_hash]
+    # with stats.duration('test.parse'):
+    for atom in atoms:
+        # print(atom)
+        rule_hash = str(atom.arguments[0])
+        rule = hash_to_rule[rule_hash]
 
-            example_hash = str(atom.arguments[1])
-            example = hash_to_ex[example_hash]
+        example_hash = str(atom.arguments[1])
+        example = hash_to_ex[example_hash]
 
-            out[rule].add(example)
+        out[rule].add(example)
     return out
 
 
@@ -319,50 +328,50 @@ dominates(R1,R2):- different(R1,R2), not different(R2,R1).
 def find_subset(stats, examples, all_rules, sizes, covers):
     prog = []
 
-    with stats.duration('find_subset.build'):
-        example_to_hash = {}
-        for x in examples:
-            k = f'"{hash(x)}"'
-            example_to_hash[x] = k
-            prog.append(f'example({k}).')
+    # with stats.duration('find_subset.build'):
+    example_to_hash = {}
+    for x in examples:
+        k = f'"{hash(x)}"'
+        example_to_hash[x] = k
+        prog.append(f'example({k}).')
 
-        i = 0
-        rule_to_index = {}
-        index_to_rule = {}
-        for rule, xs in covers.items():
-            # print(i, format_rule(rule), xs)
-            prog.append('{rule(' + str(i) + ')}.')
-            index_to_rule[i] = rule
-            rule_to_index[rule] = i
-            for x in xs:
-                k = example_to_hash[x]
-                prog.append(f'covers({i},{k}).')
-            i +=1
-        for rule in all_rules:
-            size = sizes[rule]
-            if rule not in rule_to_index:
-                continue
-            i = rule_to_index[rule]
-            prog.append(f'size({i},{size}).')
+    i = 0
+    rule_to_index = {}
+    index_to_rule = {}
+    for rule, xs in covers.items():
+        # print(i, format_rule(rule), xs)
+        prog.append('{rule(' + str(i) + ')}.')
+        index_to_rule[i] = rule
+        rule_to_index[rule] = i
+        for x in xs:
+            k = example_to_hash[x]
+            prog.append(f'covers({i},{k}).')
+        i +=1
+    for rule in all_rules:
+        size = sizes[rule]
+        if rule not in rule_to_index:
+            continue
+        i = rule_to_index[rule]
+        prog.append(f'size({i},{size}).')
 
-        prog = '\n'.join(prog)
-        prog += '\n' + FIND_SUBSET_PROG
-        with open('sat-prob.pl', 'w') as f:
-            f.write(prog)
+    prog = '\n'.join(prog)
+    prog += '\n' + FIND_SUBSET_PROG
+    with open('sat-prob.pl', 'w') as f:
+        f.write(prog)
 
-    solver = clingo.Control(["--single-shot", "-t10"])
-    # solver = clingo.Control(["--single-shot"])
+    # solver = clingo.Control(["--single-shot", "-t10"])
+    solver = clingo.Control(["--single-shot"])
     solver.add('base', [], prog)
 
-    with stats.duration('find_subset.ground'):
-        solver.ground([('base', [])])
+    # with stats.duration('find_subset.ground'):
+    solver.ground([('base', [])])
 
     out = []
-    with stats.duration('find_subset.solve'):
-        with solver.solve(yield_=True) as handle:
-            for m in handle:
-                xs = m.symbols(shown = True)
-                out = [atom.arguments[0].number for atom in xs]
+    # with stats.duration('find_subset.solve'):
+    with solver.solve(yield_=True) as handle:
+        for m in handle:
+            xs = m.symbols(shown = True)
+            out = [atom.arguments[0].number for atom in xs]
 
     return [index_to_rule[i] for i in out]
 
@@ -378,25 +387,13 @@ NUM_LITERALS = """
 """
 
 def get_solver(stats, settings, cons = set()):
-
+    # print('NEW SOLVER!!!')
     # TODO: FILTER SOME CONS MAYBE?
-    # check_cons(cons)
+    solver = clingo.Control(["-t1"]) # 53/31s
+    # solver = clingo.Control(["-t6"]) # 53/31s
+    # solver = clingo.Control(["-t6"]) # 53/31s
 
-    # solver = clingo.Control()
-    # solver = clingo.Control(["-t1"]) # 49/36s
-    # solver = clingo.Control(["-t2"]) # 98/75s
-    # solver = clingo.Control(["-t3"]) # 55/38s
-    # solver = clingo.Control(["-t4"]) # 60/36s
-    # solver = clingo.Control(["-t5"]) # 52/29s
-    solver = clingo.Control(["-t6"]) # 53/31s
-    # solver = clingo.Control(["-t7"]) # timeout after 10 minutes
-    # solver = clingo.Control(["-t8"]) # timeout after 10 minutes
-    # solver = clingo.Control(["-t9"]) # timeout after 10 minutes
-    # solver = clingo.Control(["-t10"]) # timeout after 10 minutes
-    # solver = clingo.Control(["-t16"]) # timeout after 10 minutes
-
-
-    solver.configuration.solve.models = 0
+    # solver.configuration.solve.models = 0
 
     with open('popper/lp/alan.pl') as f:
         solver.add('base', [], f.read())
@@ -406,8 +403,8 @@ def get_solver(stats, settings, cons = set()):
     # add bootstap constraints
     solver.add('base', [], '\n'.join(cons))
 
-    with stats.duration('ground_bootstap'):
-        solver.ground([('base', [])])
+    # with stats.duration('ground_bootstap'):
+    solver.ground([('base', [])])
 
     solver.add('number_of_literals', ['n'], NUM_LITERALS)
 
@@ -455,24 +452,35 @@ def load_settings(settings):
         arity = args[1].number
         settings.body_preds.add((symbol, arity))
 
+con_count = 0
 def gen_rules(settings, stats, size, cons, solver):
-    if len(cons) > 0:
-        k = f'cons_{size}'
-        dbg(f'gen_rules.ground.cons {k} {len(cons)}')
-        solver.add(k, [], '\n'.join(cons))
-        with stats.duration('gen.ground.cons'):
-            solver.ground([(k, [])])
+    # if len(cons) > 0:
 
-    with stats.duration('gen.solve'):
-        dbg(f'gen_rules.solve')
-        models = []
-        with solver.solve(yield_=True) as handle:
-            for m in handle:
-                models.append(m.symbols(shown = True))
+    #     # k = f'cons_{size}'
+    #     global con_count
+    #     k = f'cons_{con_count}'
+    #     con_count+=1
 
-    with stats.duration('gen.build'):
-        dbg(f'gen_rules.build')
-        return [parse_model(settings.head_literal, model) for model in models]
+    #     solver.add(k, [], '\n'.join(cons))
+    #     t1 = time.time()
+    #     # with stats.duration('gen.ground.cons'):
+    #     solver.ground([(k, [])])
+    #     t2 = time.time()
+    #     # dbg(f'gen_rules.ground.cons {k} {len(cons)} {t2-t1}')
+
+    # with stats.duration('gen.solve'):
+        # dbg(f'gen_rules.solve')
+    models = []
+    t1 = time.time()
+    with solver.solve(yield_=True) as handle:
+        for m in handle:
+            models.append(m.symbols(shown = True))
+    t2 = time.time()
+    # dbg(f'gen_rules.solve {t2-t1}')
+
+    # with stats.duration('gen.build'):
+        # dbg(f'gen_rules.build')
+    return [parse_model(settings.head_literal, model) for model in models]
 
 def check_cons(cons):
     seen = []
@@ -527,110 +535,160 @@ def format_constraint(con):
     # print(x)
     return x
 
+def find_all_vars(body):
+    all_vars = set()
+    for literal in body:
+        for arg in literal.arguments:
+            all_vars.add(arg)
+            # if isinstance(arg, ConstVar):
+            #     all_vars.add(arg)
+            # elif isinstance(arg, tuple):
+            #     for t_arg in arg:
+            #         if isinstance(t_arg, ConstVar):
+            #             all_vars.add(t_arg)
+    return all_vars
+
 def specialisation_constraint(rule):
     literals = []
     head, body = rule
     literals.append(Literal('head_literal', (head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
     for body_literal in body:
         literals.append(Literal('body_literal', (body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+    # literals.append(Literal('body_size', (len(body),)))
+    # for v1 in body_literal.arguments:
+        # for v2 in body_literal
+    # print(find_all_vars(body))
+    import itertools
+    xs = find_all_vars(body)
+    for v1,v2 in itertools.combinations(xs, 2):
+        vo_variable(v1),
+        vo_variable(v2),
+        literals.append(Literal('!=', (v1,v2), meta=True))
+    # print(format_constraint((None, tuple(literals))))
     return format_constraint((None, tuple(literals)))
 
-def find_rules(settings, stats, bk, pos, neg, boostrap_cons, max_size):
+def elimination_constraint(rule):
+    literals = []
+    head, body = rule
+    literals.append(Literal('head_literal', (head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
+    for body_literal in body:
+        literals.append(Literal('body_literal', (body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+    # k = len(body)
+    literals.append(Literal('body_size', (len(body),)))
+    # print(format_constraint((None, tuple(literals))))
+    import itertools
+    xs = find_all_vars(body)
+    for v1,v2 in itertools.combinations(xs, 2):
+        vo_variable(v1),
+        vo_variable(v2),
+        literals.append(Literal('!=', (v1,v2), meta=True))
+    # print(format_constraint((None, tuple(literals))))
+    return format_constraint((None, tuple(literals)))
+
+def find_rules(settings, stats, bk, pos, neg, bootstrap_cons, max_size):
     assert(len(pos) > 0)
 
-
-    solver = get_solver(stats, settings, boostrap_cons)
+    solver = get_solver(stats, settings, bootstrap_cons)
 
     # track the enabled/disabled size literals
     tracker = {}
 
-    # complete rules found
-    complete_rules = set()
-
-    # all news
+    # iteration cons
     cons = set()
-
-    # new cons
+    # all new cons
     new_cons = set()
 
-    seen_ss = {}
+    max_size = 7
 
-    size = 1
-    while size < max_size:
-        size += 1
+    for size in range(1, max_size+1):
         body_size = size-1
 
-        # increase program size constraint
-        with stats.duration('update_num_literals'):
-            # pass
-            update_num_literals(solver, tracker, body_size)
+        # increase program size
+        update_num_literals(solver, tracker, body_size)
 
         dbg(f'{settings.task} size:{size} cons:{len(cons)} pos:{len(pos)}')
 
-        # generate all rules of size body_size + 1 that satisfy the constraints
-        rules = list(gen_rules(settings, stats, body_size, cons, solver))
+        while True:
 
-        stats.total_programs += len(rules)
+            # generate all rules of size body_size + 1 that satisfy the constraints
+            with stats.duration('constrain'):
+                if len(cons) > 0:
+                    # k = f'cons_{size}'
+                    global con_count
+                    k = f'cons_{con_count}'
+                    con_count+=1
 
-        # TODO: PRUNE RULES WITH REDUNDANT LITERALS!!!
+                    solver.add(k, [], '\n'.join(cons))
+                    t1 = time.time()
+                    # with stats.duration('gen.ground.cons'):
+                    solver.ground([(k, [])])
+                    t2 = time.time()
+                    dbg(f'ground {k} {len(cons)} {t2-t1}')
 
-        cons = set()
+            with stats.duration('gen'):
+                t1 = time.time()
+                rules = list(gen_rules(settings, stats, body_size, cons, solver))
+                t2 = time.time()
+                # dbg(f'solve {t2-t1}')
 
-        # test rules on the subset of examples
-        dbg(f'test_rules_clingo num_rules:{len(rules)}')
+            cons = set()
 
-        rules = list(test_rules_clingo(settings, stats, bk, pos, neg, rules))
+            if rules == []:
+                break
 
-        for rule, inconsistent, coverage in rules:
-            complete = len(coverage) == len(pos)
-            if len(coverage) == 0:
-                print('SHIT',format_rule(rule))
-            # and len(coverage) > 0:
+            stats.total_programs += len(rules)
 
-            # if the rule does not cover the examples, eliminate specialisations
-            if len(coverage) != len(pos):
-                con = specialisation_constraint(rule)
-                cons.add(con)
-                new_cons.add(con)
-                continue
+            # TODO: PRUNE RULES WITH REDUNDANT LITERALS!!!
+            # test rules on the subset of examples
+            # dbg(f'test_rules_clingo num_rules:{len(rules)}')
 
-            assert(len(coverage) > 0)
-            assert(len(coverage) == len(pos))
+            t1 = time.time()
+            with stats.duration('test'):
+                rules = list(test_rules_clingo(settings, stats, bk, pos, neg, rules))
+            t2 = time.time()
+            # dbg(f'test_rules_clingo {t2-t1}')
 
-            # TODO: PRUNE DOMINATED!!!
+            for rule, inconsistent, coverage in rules:
+                # print(format_rule(rule), inconsistent, coverage)
+                # complete = len(coverage) == len(pos)
+                # if len(coverage) == 0:
+                #     # SPECIALISE!
+                #     pass
 
-            if inconsistent:
-                # TODO: RULE OUT GENERALISATIONS
-                # NEED TO MOVE ABOVE AS TO NOT SKIP
-                continue
+                # if the rule does not cover the examples, prune specialisations
+                if len(coverage) != len(pos):
+                    con = specialisation_constraint(rule)
+                    # print('ELIM')
+                    # con = elimination_constraint(rule)
+                    cons.add(con)
+                    new_cons.add(con)
+                    continue
 
-            # print('HERE!!!')
+                assert(len(coverage) > 0)
+                assert(len(coverage) == len(pos))
 
+                # TODO: PRUNE DOMINATED!!!
 
-            # with stats.duration('check_crap'):
-            # is_crap = False
-            # for i, xs in covers.items():
-            #     if coverage.issubset(xs):
-            #         is_crap = True
-            #         for con in constrainer.specialisation_constraint([rule], {}, {}):
-            #             cons.add(constrainer.format_constraint(con))
-            #             bad_rules.append(rule)
-            # if is_crap:
-                # continue
+                if inconsistent:
+                    con = elimination_constraint(rule)
+                    print('MOO')
+                    cons.add(con)
+                    new_cons.add(con)
+                    # TODO: RULE OUT GENERALISATIONS
+                    # NEED TO MOVE ABOVE AS TO NOT SKIP
+                    continue
 
-            # rule must be complete and consistent, so we can prune specialisations
-            con = specialisation_constraint(rule)
-            cons.add(con)
-            new_cons.add(con)
+                print('WTF')
+                # con = specialisation_constraint(rule)
+                # cons.add(con)
+                # new_cons.add(con)
 
-            print('complete_rule',format_rule(rule))
-            complete_rules.add((rule, size))
+                dbg(f'complete_rule {format_rule(rule)} {stats.total_programs}')
+                # exit()
+                # complete_rules.add()
+                return [(rule, size)], new_cons
 
-        if not OPTIMAL and len(complete_rules) > 0:
-            return complete_rules, new_cons
-
-    return complete_rules, new_cons
-    # return [], new_cons
+    return [], new_cons
 
 def chunk_list(xs, size):
     for i in range(0, len(xs), size):
@@ -751,6 +809,9 @@ def popper(settings, stats):
     # map rules to sizes
     sizes = {}
 
+
+    # with stats.duration('loop'):
+
     while chunk_size <= len(pos):
         chunks = list(chunk_list(all_chunks, chunk_size))
 
@@ -778,15 +839,13 @@ def popper(settings, stats):
                 print('Can we skip some?', len(x in covered for x in chunk_pos), len(chunk_pos))
 
             # retrieve specialisation cons from previous iterations
-            boostrap_cons = set()
+            bootstrap_cons = set()
             for x in chunk_pos:
-                boostrap_cons.update(spec_cons[x])
+                bootstrap_cons.update(spec_cons[x])
 
+            # with stats.duration('find rules'):
             # find new (i) complete and consistent rules, and (ii) cons (currently only specialisations)
-            new_rules, new_cons = find_rules(settings, stats, bk, chunk_pos, all_neg, boostrap_cons, max_size)
-            # exit()
-
-
+            new_rules, new_cons = find_rules(settings, stats, bk, chunk_pos, all_neg, bootstrap_cons, max_size)
 
             for rule, size in new_rules:
                 sizes[rule] = size
@@ -904,12 +963,5 @@ def learn_solution(settings):
     log_level = logging.DEBUG if settings.debug else logging.INFO
     logging.basicConfig(level=log_level, stream=sys.stderr, format='%(message)s')
     timeout(popper, (settings, stats), timeout_duration=int(settings.timeout))
-
-    # if stats.solution:
-    #     prog_stats = stats.solution
-    # elif stats.best_programs:
-    #     prog_stats = stats.best_programs[-1]
-    # else:
-    #     return None, stats
 
     return stats.solution_found, stats

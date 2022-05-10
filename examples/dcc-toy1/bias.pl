@@ -1,5 +1,6 @@
 %% target theory is:
 %% f :- c, d.
+%% max_clauses(1).
 max_clauses(1).
 max_vars(5).
 max_body(5).

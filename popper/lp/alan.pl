@@ -36,7 +36,6 @@ var_first_lit(V,(P,PArgs)):-
     bfr((P,PArgs),(Q,QArgs)),
     W<V.
 
-
 #defined type/2.
 #defined size/1.
 
@@ -55,6 +54,12 @@ head_literal(P,A,Vars):-
 %% GUESS BODY LITERALS
 1 {body_literal(P,A,Vars): body_pred(P,A), vars(A,Vars)} N:-
     max_body(N).
+
+body_size(N):-
+    max_body(MaxN),
+    N > 0,
+    N <= MaxN,
+    #count{P,Vars : body_literal(P,_,Vars)} == N.
 
 %% USE VARS IN ORDER IN A CLAUSE
 :-

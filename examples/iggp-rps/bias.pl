@@ -1,6 +1,6 @@
 max_clauses(1).
 max_vars(7).
-max_body(7).
+max_body(6).
 
 head_pred(next_score,2).
 body_pred(my_true_score,2).
