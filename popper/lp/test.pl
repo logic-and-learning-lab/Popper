@@ -49,6 +49,9 @@ test_ex(Atom):-
 pos_covered(Xs):-
     findall(ID, (pos_index(ID,Atom),call(Atom)), Xs).
 
+neg_covered(Xs):-
+    findall(ID, (neg_index(ID,Atom),call(Atom)), Xs).
+
 inconsistent:-
     neg_index(_,Atom),
     call(Atom).

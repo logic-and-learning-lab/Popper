@@ -1,6 +1,11 @@
+%% f(A):- has_load(D,E),has_load(C,B),has_car(A,D),hexagon(E),has_car(A,C),triangle(B).
+%% f(A):- has_car(A,B),roof_flat(C),roof_open(B),long(C),short(B),has_car(A,C).
+%% f(A):- hexagon(B),has_load(C,B),three_load(B),has_car(A,C),roof_open(C).
+%% f(A):- has_load(C,D),has_load(C,B),diamond(D),has_car(A,C),rectangle(B).
+
 %% dcc paper
-max_vars(6).
-max_body(7).
+max_vars(5).
+max_body(6).
 max_clauses(1).
 %% allow_singletons.
 
@@ -66,7 +71,6 @@ direction(rectangle,(in,)).
 direction(diamond,(in,)).
 direction(hexagon,(in,)).
 direction(inverted_triangle,(in,)).
-
 
 prop(unique_b_a,has_car).
 prop(unique_b_a,has_load).

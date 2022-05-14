@@ -46,6 +46,7 @@ var_first_lit(V,(P,PArgs)):-
 
 %% #show head_literal/3.
 #show body_literal/3.
+%% #show direction_/3.
 
 head_literal(P,A,Vars):-
     head_vars(A,Vars),
@@ -160,7 +161,7 @@ head_connected(Var1):-
     var_member(Var1,Vars),
     var_member(Var2,Vars),
     Var1 != Var2.
-a:-
+:-
     head_literal(_,A,_),
     Var >= A,
     body_var(Var),
@@ -192,6 +193,14 @@ var_type(Var,@pytype(Pos,Types)):-
 %% def pylen(directions):
 %%     return Number(len(directions.arguments))
 %% #end.
+
+%% direction_aux(P, @pylen(Directions), Directions):-
+%%     direction(P,Directions).
+
+%% direction_(P,Pos,@pydirection(Pos,Directions)):-
+%%     arity(P,A),
+%%     Pos=0..A-1,
+%%     direction_aux(P,A,Directions).
 
 arity(P,A):-
     head_pred(P,A).

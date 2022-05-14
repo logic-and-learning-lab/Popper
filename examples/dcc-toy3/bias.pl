@@ -1,37 +1,26 @@
-max_vars(3).
-max_body(2).
-enable_recursion.
+%% dcc paper
+%% target is
+%% f :- a, b.
+%% f :- c, d.
+
+%% overly specific solution is:
+%% f :- x1.
+%% f :- x2.
+%% f :- x3.
+%% f :- x4.
+
+max_vars(1).
+max_body(5).
 
 head_pred(f,1).
-body_pred(head,2).
-body_pred(tail,2).
-body_pred(c0,1).
-body_pred(c1,1).
-body_pred(c2,1).
-body_pred(c3,1).
-body_pred(c4,1).
-body_pred(c5,1).
-body_pred(c6,1).
-body_pred(c7,1).
-body_pred(c8,1).
-body_pred(c9,1).
-body_pred(c10,1).
+body_pred(x0,1).
+body_pred(a,1).
+body_pred(b,1).
+body_pred(c,1).
+body_pred(d,1).
+body_pred(x1,1).
+body_pred(x2,1).
+body_pred(x3,1).
+body_pred(x4,1).
 
-
-
-
-type(f,(list,)).
-type(head,(list,element)).
-type(tail,(list,list)).
-
-type(c0,(element,)).
-type(c1,(element,)).
-type(c2,(element,)).
-type(c3,(element,)).
-type(c4,(element,)).
-type(c5,(element,)).
-type(c6,(element,)).
-type(c7,(element,)).
-type(c8,(element,)).
-type(c9,(element,)).
-type(c10,(element,)).
+max_clauses(1).

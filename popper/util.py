@@ -1,3 +1,7 @@
+import clingo
+import clingo.script
+import multiprocessing
+import time
 import signal
 import argparse
 import os
@@ -5,8 +9,10 @@ import logging
 import copy
 from time import perf_counter
 from contextlib import contextmanager
-from .core import Clause
-from .constrain import Constrain
+from .core import Literal
+# from .constrain import Constrain
+
+clingo.script.enable_python()
 
 # TIMEOUT=600
 TIMEOUT=1200
@@ -23,6 +29,7 @@ def parse_args():
     parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help='Maximum number of literals allowed in program')
     # parser.add_argument('--max-solutions', type=int, default=MAX_SOLUTIONS, help='Maximum number of solutions to print')
     parser.add_argument('--test-all', default=False, action='store_true', help='Test all examples')
+    parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
     parser.add_argument('--info', default=False, action='store_true', help='Print best programs so far to stderr')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
@@ -123,8 +130,8 @@ class Settings:
         self.hspace = hspace
         self.task = task
 
-def format_program(program):
-    return "\n".join(Clause.to_code(Clause.to_ordered(clause)) + '.' for clause in program)
+# def format_program(program):
+    # return "\n".join(Clause.to_code(Clause.to_ordered(clause)) + '.' for clause in program)
 
 def format_conf_matrix(conf_matrix):
     tp, fn, tn, fp = conf_matrix
@@ -279,6 +286,71 @@ class Stats:
             else:
                 self.durations[operation].append(duration)
 
+# def format_program(program):
+    # return "\n".join(Clause.to_code(Clause.to_ordered(clause)) + '.' for clause in program)
+
+def format_rule(rule):
+    # return Clause.to_code(rule) + '.'
+    (head, body) = rule
+    head_str = ''
+    if head:
+        head_str = Literal.to_code(head)
+    body_str = ','.join(Literal.to_code(literal) for literal in body)
+    return f'{head_str}:- {body_str}.'
+
+def order_rule(rule):
+
+    directions = {}
+    directions['has_car'] = ('+','-')
+    directions['has_load'] = ('+','-')
+
+    def tmp(literal):
+        if literal.predicate not in directions:
+            literal.inputs = frozenset([literal.arguments[0]])
+            literal.outputs = frozenset([])
+        else:
+            literal.inputs = frozenset([literal.arguments[0]])
+            literal.outputs = frozenset([literal.arguments[1]])
+
+    head, body = rule
+
+    tmp(head)
+    for x in body:
+        tmp(x)
+
+    ordered_body = []
+    grounded_variables = head.inputs
+    body_literals = set(body)
+
+    if head.inputs == []:
+        return clause
+
+    # print('grounded_variables',grounded_variables)
+    while body_literals:
+        selected_literal = None
+        for literal in body_literals:
+            # print('literal.inputs',literal.inputs)
+            # AC: could cache for a micro-optimisation
+            if literal.inputs.issubset(grounded_variables):
+                if literal.predicate != head.predicate:
+                    # find the first ground non-recursive body literal and stop
+                    selected_literal = literal
+                    break
+                else:
+                    # otherwise use the recursive body literal
+                    selected_literal = literal
+
+        if selected_literal == None:
+            message = f'{selected_literal} in clause {format_rule(rule)} could not be grounded'
+            raise ValueError(message)
+
+        ordered_body.append(selected_literal)
+        grounded_variables = grounded_variables.union(selected_literal.outputs)
+        body_literals = body_literals.difference({selected_literal})
+
+    return (head, tuple(ordered_body))
+
+
 class Stage:
     def __init__(self, num_literals, total_programs, programs, total_exec_time, exec_time):
         self.num_literals = num_literals
@@ -305,3 +377,157 @@ class DurationSummary:
         self.total = total
         self.mean = mean
         self.maximum = maximum
+
+
+def parse_exs(task, exs_txt):
+    solver = clingo.Control()
+    solver.add('base', [], exs_txt)
+    solver.ground([('base', [])])
+    with solver.solve(yield_=True) as handle:
+        for m in handle:
+            for atom in m.symbols(shown = True):
+                yield atom.name, task, str(atom.arguments[0])
+
+def parse_exs2(txt):
+    solver = clingo.Control()
+    solver.add('base', [], txt)
+    solver.ground([('base', [])])
+    with solver.solve(yield_=True) as handle:
+        for m in handle:
+            for atom in m.symbols(shown = True):
+                yield atom.name, str(atom.arguments[0])
+
+def parse_bk(settings, all_bk):
+    bk = {}
+
+    with open(settings.bk_file, 'r') as f:
+        x = f.read()
+    txt = ''
+    for line in x.split('\n'):
+        if line.startswith('#T'):
+            if txt != '':
+                bk[task] = txt
+                txt = ''
+            task = int(line.strip()[2:])
+        else:
+            txt += line + '\n'
+    if txt != '':
+        bk[task] = txt
+
+    for task in bk:
+        bk[task] += '\n' + all_bk
+
+    return bk
+
+def parse_input2(settings):
+    with open(settings.bk_file, 'r') as f:
+        bk = f.read()
+    pos = set()
+    neg = set()
+    with open(settings.ex_file, 'r') as f:
+        txt = f.read()
+        for label, value in parse_exs2(txt):
+            if label == 'pos':
+                pos.add(value)
+            else:
+                neg.add(value)
+    return bk, pos, neg
+
+
+
+def parse_input(settings):
+    with open(settings.bk_file.replace('bk','bk-all'), 'r') as f:
+        all_bk = f.read()
+
+    bk = parse_bk(settings, all_bk)
+
+    examples = {}
+    with open(settings.ex_file, 'r') as f:
+        x = f.read()
+        if '#T' not in x:
+            pass
+            # parse file
+        else:
+            tasks = set()
+            txt = ''
+            for line in x.split('\n'):
+                if line.startswith('#T'):
+                    if txt != '':
+                        examples[task] = txt
+                        txt = ''
+                    task = int(line.strip()[2:])
+                else:
+                    txt += line + '\n'
+    if txt != '':
+        examples[task] = txt
+
+    pos = set()
+    neg = set()
+    for k, v in examples.items():
+        for label, task, ex in parse_exs(k, v):
+            if label == 'pos':
+                pos.add((task, ex))
+            elif label == 'neg':
+                neg.add((task, ex))
+    return bk, pos, neg
+
+
+def chunk_list(xs, size):
+    for i in range(0, len(xs), size):
+        yield xs[i:i+size]
+
+def flatten(xs):
+    return [item for sublist in xs for item in sublist]
+
+arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
+
+class Settings2:
+    def __init__(self):
+        settings = parse_settings()
+
+
+        # bk, all_pos, all_neg = parse_input(settings)
+        bk, all_pos, all_neg = parse_input2(settings)
+
+
+        self.bk_file = settings.bk_file
+        self.ex_file = settings.ex_file
+        self.bk = bk
+        self.pos = all_pos
+        self.neg = all_neg
+        self.bias_file = settings.bias_file
+
+
+        solver = clingo.Control()
+        with open(settings.bias_file) as f:
+            solver.add('bias', [], f.read())
+        solver.add('bias', [], """
+            #defined body_literal/3.
+            #defined clause_var/1.
+            #defined var_type/2.
+        """)
+        solver.ground([('bias', [])])
+
+        for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
+            args = x.symbol.arguments
+            symbol = args[0].name
+            arity = args[1].number
+            self.head_pred = symbol, arity
+
+        head_pred, head_arity=  self.head_pred
+        self.head_literal = Literal(head_pred, tuple(arg_lookup[clingo.Number(arg)] for arg in range(head_arity)))
+        tmp_map = {1:'A', 2:'A,B',3:'A,B,C', 4:'A,B,C,D'}
+        self.head_str =  f'{head_pred}({tmp_map[head_arity]})'
+
+        settings.body_preds = set()
+        for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
+            args = x.symbol.arguments
+            symbol = args[0]
+            arity = args[1].number
+            settings.body_preds.add((symbol, arity))
+
+
+        settings.body_preds = set()
+        for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
+            args = x.symbol.arguments
+            self.max_size = args[0].number

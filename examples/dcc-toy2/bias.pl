@@ -8,7 +8,7 @@
 %% f :- c.
 %% f :- d.
 
-max_vars(5).
+max_vars(1).
 max_body(5).
 
 head_pred(f,1).

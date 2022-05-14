@@ -1,4 +1,3 @@
-#T1
 circle(t1000_c2_l2).
 circle(t1000_c2_l3).
 circle(t101_c1_l1).

@@ -2,6 +2,11 @@ max_clauses(1).
 max_vars(7).
 max_body(6).
 
+%% next_score(A,B):- different(A,E),my_true_score(A,B),does(A,C),beats(D,C),does(E,D).
+%% next_score(A,B):- does(E,C),my_true_score(F,G),does(A,D),my_succ(G,B),beats(D,C),different(E,F).
+%% next_score(A,B):- does(D,E),different(C,D),does(C,E),different(D,A),my_true_score(C,B).
+
+
 head_pred(next_score,2).
 body_pred(my_true_score,2).
 body_pred(my_succ,2).

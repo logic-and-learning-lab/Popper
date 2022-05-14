@@ -1,10 +1,10 @@
-#defined my_true_value/1.
+#defined true_value/1.
 
-my_succ(0,1).
-my_succ(1,2).
-my_succ(2,3).
-my_succ(3,4).
-my_succ(4,5).
+succ(0,1).
+succ(1,2).
+succ(2,3).
+succ(3,4).
+succ(4,5).
 c_pressButton(pressButton).
 c_noop(noop).
 c_player(player).

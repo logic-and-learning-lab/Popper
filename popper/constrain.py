@@ -1,258 +1,124 @@
-import operator
-from collections import defaultdict
-from . core import ConstVar, Literal, Clause
+from . core import Literal, ConstVar
 
-def alldiff(args):
-    return Literal('AllDifferent', args, meta=True)
+class Constrainer:
+    def __init__(self, settings):
+        self.elim_cons = set()
+        self.gen_cons = set()
+        self.spec_cons = {x: set() for x in settings.pos}
 
-def lt(a, b):
-    return Literal('<', (a,b), meta=True)
+    def add_elimination(self, rule):
+        self.elim_cons.add(elimination_constraint(rule))
 
-def eq(a, b):
-    return Literal('==', (a,b), meta=True)
+    def add_specialisation(self, rule, e):
+        self.spec_cons[e].add(specialisation_constraint(rule))
 
-def gteq(a, b):
-    return Literal('>=', (a,b), meta=True)
+def find_all_vars(body):
+    all_vars = set()
+    for literal in body:
+        # print('literal',literal)
+        for arg in literal.arguments:
+            all_vars.add(arg)
+            if isinstance(arg, ConstVar):
+                all_vars.add(arg)
+            if isinstance(arg, tuple):
+                for t_arg in arg:
+                    # if isinstance(t_arg, ConstVar):
+                    all_vars.add(t_arg)
+    return sorted(all_vars)
 
-def vo_clause(variable):
-    return ConstVar(f'C{variable}', 'Clause')
+def specialisation_constraint(rule):
+    literals = []
+    head, body = rule
+    literals.append(Literal('head_literal', (head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
+    for body_literal in body:
+        literals.append(Literal('body_literal', (body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+    # literals.append(Literal('body_size', (len(body),)))
+    # for v1 in body_literal.arguments:
+        # for v2 in body_literal
+    # print(find_all_vars(body))
+    import itertools
+    xs = find_all_vars(body)
+    for v1,v2 in itertools.combinations(xs, 2):
+        vo_variable(v1),
+        vo_variable(v2),
+        literals.append(Literal('!=', (v1,v2), meta=True))
+    # print(format_constraint((None, tuple(literals))))
+    # return format_constraint((None, tuple(literals)))
+    return None, tuple(literals)
+
+def elimination_constraint(rule):
+    literals = []
+    head, body = rule
+    literals.append(Literal('head_literal', (head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
+    for body_literal in body:
+        literals.append(Literal('body_literal', (body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+    # k = len(body)
+    literals.append(Literal('body_size', (len(body),)))
+    # print(format_constraint((None, tuple(literals))))
+    import itertools
+    xs = find_all_vars(body)
+    # print('xs', xs)
+
+    for v1,v2 in itertools.combinations(xs, 2):
+        vo_variable(v1),
+        vo_variable(v2),
+        literals.append(Literal('!=', (v1,v2), meta=True))
+        # print('HERE')
+    # print(format_constraint((None, tuple(literals))))
+    # return format_constraint((None, tuple(literals)))
+    return None, tuple(literals)
 
 def vo_variable(variable):
     return ConstVar(f'{variable}', 'Variable')
 
-# restrict a clause id to have a specific body size
-def body_size_literal(clause_var, body_size):
-    return Literal('body_size', (clause_var, body_size))
+# def format_constraint(con):
+#     head, body = con
+#     constraint_literals = []
+#     for constobj in body:
+#         if not constobj.meta:
+#             constraint_literals.append(str(constobj))
+#             continue
+#         arga, argb = constobj.arguments
+#         if isinstance(arga, ConstVar):
+#             arga = arga.name
+#         else:
+#             arga = str(arga)
+#         if isinstance(argb, ConstVar):
+#             argb = argb.name
+#         else:
+#             argb = str(argb)
+#         constraint_literals.append(f'{arga}{constobj.predicate}{argb}')
 
-class Constrain:
-    def __init__(self):
-        self.seen_clause_handle = {}
-        self.added_clauses = set()
+#     x = f':- {", ".join(constraint_literals)}.'
+#     if head:
+#         x = f'{head} {x}'
+#     # print(x)
+#     return x
 
-    def make_literal_handle(self, literal):
-        return f'{literal.predicate}{"".join(literal.arguments)}'
+def format_constraint(con):
+    # print(con)
+    head, body = con
+    # print(str(head), list(str(x) for x in body))
+    constraint_literals = []
+    for constobj in body:
+        if not constobj.meta:
+            constraint_literals.append(str(constobj))
+            continue
+        # else:
+            # print(constobj)
+        arga, argb = constobj.arguments
+        if isinstance(arga, ConstVar):
+            arga = arga.name
+        else:
+            arga = str(arga)
+        if isinstance(argb, ConstVar):
+            argb = argb.name
+        else:
+            argb = str(argb)
+        constraint_literals.append(f'{arga}{constobj.predicate}{argb}')
 
-    def make_clause_handle(self, clause):
-        if clause in self.seen_clause_handle:
-            return self.seen_clause_handle[clause]
-        (head, body) = clause
-        body_literals = sorted(body, key = operator.attrgetter('predicate'))
-        clause_handle = ''.join(self.make_literal_handle(literal) for literal in [head] + body_literals)
-        self.seen_clause_handle[clause] = clause_handle
-        return clause_handle
-
-    def make_clause_inclusion_rule(self, clause, min_num, clause_handle):
-        if clause_handle in self.added_clauses:
-            return
-            yield
-
-        (head, body) = clause
-
-        self.added_clauses.add(clause_handle)
-        clause_number = vo_clause('l')
-
-        literals = []
-        literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
-
-        for body_literal in body:
-            literals.append(Literal('body_literal', (clause_number, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
-
-        literals.append(gteq(clause_number, min_num))
-
-        # ensure that each var_var is ground to a unique value
-        literals.append(alldiff(tuple(vo_variable(v) for v in Clause.all_vars(clause))))
-
-        for idx, var in enumerate(head.arguments):
-            literals.append(eq(vo_variable(var), idx))
-
-        yield (Literal('included_clause', (clause_handle, clause_number)), tuple(literals))
-
-    def banish_constraint(self, program, before, min_clause):
-        literals = []
-        for clause_number, clause in enumerate(program):
-            (head, body) = clause
-            clause_handle = self.make_clause_handle(clause)
-            yield from self.make_clause_inclusion_rule(clause, min_clause[clause_number], clause_handle)
-
-            literals.append(Literal('included_clause', (clause_handle, vo_clause(clause_number))))
-            literals.append(body_size_literal(vo_clause(clause_number), len(body)))
-
-        for clause_id1, clause_numbers in before.items():
-            for clause_id2 in clause_numbers:
-                literals.append(lt(vo_clause(clause_id1), vo_clause(clause_id2)))
-
-        for clause_number, clause in enumerate(program):
-            literals.append(gteq(vo_clause(clause_number), min_clause[clause]))
-
-        num_clauses = len(program)
-        # ensure that each clause_var is ground to a unique value
-        literals.append(alldiff(tuple(vo_clause(c) for c in range(num_clauses))))
-        literals.append(Literal('clause', (num_clauses, ), positive = False))
-
-        yield (None, tuple(literals))
-
-    def generalisation_constraint(self, program, before, min_clause):
-        literals = []
-        for clause_number, clause in enumerate(program):
-            (_head, body) = clause
-            clause_handle = self.make_clause_handle(clause)
-            yield from self.make_clause_inclusion_rule(clause,  min_clause[clause], clause_handle)
-
-            literals.append(Literal('included_clause', (clause_handle, vo_clause(clause_number))))
-            literals.append(body_size_literal(vo_clause(clause_number), len(body)))
-
-        for clause_id1, clause_numbers in before.items():
-            for clause_id2 in clause_numbers:
-                literals.append(lt(vo_clause(clause_id1), vo_clause(clause_id2)))
-
-        for clause_number, clause in enumerate(program):
-            literals.append(gteq(vo_clause(clause_number), min_clause[clause]))
-
-        # ensure that each clause_var is ground to a unique value
-        literals.append(alldiff(tuple(vo_clause(c) for c in range(len(program)))))
-
-        yield (None, tuple(literals))
-
-    def specialisation_constraint(self, program, before, min_clause):
-        literals = []
-
-        for clause_number, clause in enumerate(program):
-            clause_handle = self.make_clause_handle(clause)
-            yield from self.make_clause_inclusion_rule(clause, 0, clause_handle)
-            clause_variable = vo_clause(clause_number)
-            literals.append(Literal('included_clause', (clause_handle, clause_variable)))
-
-        for clause_id1, clause_numbers in before.items():
-            for clause_id2 in clause_numbers:
-                literals.append(lt(vo_clause(clause_id1), vo_clause(clause_id2)))
-
-        num_clauses = len(program)
-        # ensure that each clause_var is ground to a unique value
-        literals.append(alldiff(tuple(vo_clause(c) for c in range(num_clauses))))
-        literals.append(Literal('clause', (num_clauses, ), positive = False))
-
-        yield (None, tuple(literals))
-
-
-    # def subsumption_constraint(self, rule1, min_clause):
-    #     # prune all rules that rule1 subsumes, where k is the number of literals in the body of rule1
-    #     # :- seen(rule1,C0), seen(rule1,C1), C0 != C1, body_size(C0,k)
-    #     _head1, body1 = rule1
-    #     rule1_handle = self.make_clause_handle(rule1)
-    #     yield from self.make_clause_inclusion_rule(rule1, min_clause[rule1], rule1_handle)
-    #     v1 = vo_clause(0)
-    #     v2 = vo_clause(1)
-    #     literals = []
-    #     literals.append(body_size_literal(v1, len(body1)))
-    #     literals.append(Literal('included_clause', (rule1_handle, v1)))
-    #     literals.append(Literal('included_clause', (rule1_handle, v2)))
-    #     literals.append(alldiff((v1, v2)))
-    #     yield None, tuple(literals)
-
-    def subsumption_constraint_pairs(self, rule1, rule2, min_clause):
-        # if rule1 subsumes rule2 then build the following constraint where k is the body size of rule1
-        # :- seen(rule1,C0), seen(rule2,C1), C0 != C1, body_size(C0,k)
-        _head1, body1 = rule1
-        literals = []
-        rule1_handle = self.make_clause_handle(rule1)
-        rule2_handle = self.make_clause_handle(rule2)
-        yield from self.make_clause_inclusion_rule(rule1, min_clause[rule1], rule1_handle)
-        yield from self.make_clause_inclusion_rule(rule2, min_clause[rule2], rule2_handle)
-        v1 = vo_clause(0)
-        v2 = vo_clause(1)
-        literals = []
-        literals.append(body_size_literal(v1, len(body1)))
-        literals.append(Literal('included_clause', (rule1_handle, v1)))
-        literals.append(Literal('included_clause', (rule2_handle, v2)))
-        literals.append(alldiff((v1, v2)))
-        yield None, tuple(literals)
-
-    # AC: THIS CONSTRAINT DUPLICATES THE GENERALISATION CONSTRAINT AND NEEDS REFACTORING
-    def redundant_literal_constraint(self, clause, before, min_clause):
-        (_head, body) = clause
-        clause_handle = self.make_clause_handle(clause)
-        yield from self.make_clause_inclusion_rule(clause, min_clause[clause], clause_handle)
-        literals = []
-        clause_variable = vo_clause(0)
-        literals.append(Literal('included_clause', (clause_handle, clause_variable)))
-        literals.append(body_size_literal(clause_variable, len(body)))
-        yield (None, tuple(literals))
-
-    # Jk: AC, I cleaned this up a bit, but this reorg is for you. Godspeed!
-    # AC: @JK, I made another pass through it. It was tough. I will try again once we have the whole codebase tidied.
-    def redundancy_constraint(self, program, before, min_clause):
-        lits_num_clauses = defaultdict(int)
-        lits_num_recursive_clauses = defaultdict(int)
-        for clause in program:
-            (head, _) = clause
-            lits_num_clauses[head.predicate] += 1
-            if Clause.is_recursive(clause):
-                lits_num_recursive_clauses[head.predicate] += 1
-
-        recursively_called = set()
-        while True:
-            something_added = False
-            for clause in program:
-                (head, body) = clause
-                is_rec = Clause.is_recursive(clause)
-                for body_literal in body:
-                    if body_literal.predicate not in lits_num_clauses:
-                        continue
-                    if (body_literal.predicate != head.predicate and is_rec) or (head.predicate in recursively_called):
-                        something_added |= not body_literal.predicate in recursively_called
-                        recursively_called.add(body_literal.predicate)
-            if not something_added:
-                break
-
-        for lit in lits_num_clauses.keys() - recursively_called:
-            literals = []
-
-            for clause_number, clause in enumerate(program):
-                clause_handle = self.make_clause_handle(clause)
-                yield from self.make_clause_inclusion_rule(clause, min_clause[clause], clause_handle)
-                clause_variable = vo_clause(clause_number)
-                literals.append(Literal('included_clause', (clause_handle, clause_variable)))
-
-            for clause_id1, clause_numbers in before.items():
-                for clause_id2 in clause_numbers:
-                    literals.append(lt(vo_clause(clause_id1), vo_clause(clause_id2)))
-
-            # ensure that each clause_var is ground to a unique value
-            literals.append(alldiff(tuple(vo_clause(c) for c in range(len(program)))))
-
-            for other_lit, num_clauses in lits_num_clauses.items():
-                if other_lit == lit:
-                    continue
-                literals.append(Literal('num_clauses', (other_lit, num_clauses)))
-            num_recursive = lits_num_recursive_clauses[lit]
-
-            literals.append(Literal('num_recursive', (lit, num_recursive)))
-
-            yield (None, tuple(literals))
-
-    @staticmethod
-    def format_constraint(con):
-        (head, body) = con
-        constraint_literals = []
-        for constobj in body:
-            if not constobj.meta:
-                constraint_literals.append(str(constobj))
-                continue
-            if constobj.predicate == 'AllDifferent':
-                # AC: TODO!!!
-                continue
-            arga, argb = constobj.arguments
-            if isinstance(arga, ConstVar):
-                arga = arga.name
-            else:
-                arga = str(arga)
-            if isinstance(argb, ConstVar):
-                argb = argb.name
-            else:
-                argb = str(argb)
-            constraint_literals.append(f'{arga}{constobj.predicate}{argb}')
-
-        x = f':- {", ".join(constraint_literals)}.'
-        if head:
-            x = f'{head} {x}'
-        return x
+    x = f':- {", ".join(constraint_literals)}.'
+    if head:
+        x = f'{head} {x}'
+    # print(x)
+    return x
