@@ -1,13 +1,12 @@
 %% python3 popper.py examples/trains
-%% f(A) :- has_car(A,C),
-%% long(C),
-%% roof_closed(C),
-%% has_car(A,B),
-%% three_wheels(B).
+%% S f(A):- has_car(A,B),has_car(A,C),roof_closed(B),three_wheels(C),long(B).
 %% 0.83s user 0.03s system 99% cpu 0.860 total
 
-max_vars(3).
-max_body(5).
+%% :- not body_size(_,4).
+
+max_vars(6).
+max_body(6).
+max_clauses(1).
 
 head_pred(f,1).
 body_pred(has_car,2).
@@ -25,10 +24,6 @@ body_pred(three_load,1).
 body_pred(circle,1).
 body_pred(triangle,1).
 body_pred(rectangle,1).
-
-%% prop(count_a_b,has_car,2).
-
-%% :- #count{1, Args : body_literal(has_car,A,Args)} > 2.
 
 type(f,(train,)).
 type(has_car,(train,car)).
@@ -66,7 +61,7 @@ direction(rectangle,(in,)).
 
 prop(unique_b_a,has_car).
 prop(unique_b_a,has_load).
-%% prop(count_a_b,has_car,4).
+prop(count_a_b,has_car,4).
 prop(count_a_b,has_load,3).
 prop(unsat_pair,three_wheels,short).
 prop(unsat_pair,short,long).
@@ -100,35 +95,16 @@ prop(unsat_pair,triangle,inverted_triangle).
 prop(unsat_pair,rectangle,inverted_triangle).
 
 
-%% %% % f(A):- has_car(A,B),roof_closed(B).
-%% :- head_literal(f,1,(A,)), body_literal(roof_closed,1,(B,)), body_literal(has_car,2,(A,B)), body_size(2).
-%% %% % f(A):- has_car(A,B),three_wheels(B).
-%% :- head_literal(f,1,(A,)), body_literal(has_car,2,(A,B)), body_literal(three_wheels,1,(B,)), body_size(2).
-%% %% % f(A):- has_car(A,B),long(B).
-%% :- head_literal(f,1,(A,)), body_literal(has_car,2,(A,B)), body_literal(long,1,(B,)), body_size(2).
-%% %% % f(A):- has_car(A,B),roof_closed(B),three_wheels(B).
-%% :- head_literal(f,1,(A,)), body_literal(roof_closed,1,(B,)), body_literal(has_car,2,(A,B)), body_literal(three_wheels,1,(B,)), body_size(3).
-%% %% % f(A):- has_car(A,B),long(B),three_wheels(B).
-%% :- head_literal(f,1,(A,)), body_literal(has_car,2,(A,B)), body_literal(long,1,(B,)), body_literal(three_wheels,1,(B,)), body_size(3).
-%% %% % f(A):- has_car(A,B),long(B),roof_closed(B).
-%% :- head_literal(f,1,(A,)), body_literal(roof_closed,1,(B,)), body_literal(has_car,2,(A,B)), body_literal(long,1,(B,)), body_size(3).
-%% %% % f(A):- has_car(A,B),long(B),roof_closed(B),three_wheels(B).
-%% :- head_literal(f,1,(A,)), body_literal(roof_closed,1,(B,)), body_literal(has_car,2,(A,B)), body_literal(long,1,(B,)), body_literal(three_wheels,1,(B,)), body_size(4).
-%% %% % f(A):- has_car(A,B),has_car(A,C),roof_closed(C),three_wheels(B).
-%% :- head_literal(f,1,(A,)), body_literal(has_car,2,(A,B)), body_literal(roof_closed,1,(C,)), body_literal(has_car,2,(A,C)), body_literal(three_wheels,1,(B,)), body_size(4).
-%% %% % f(A):- has_car(A,B),has_car(A,C),three_wheels(B),three_wheels(C).
-%% :- head_literal(f,1,(A,)), body_literal(has_car,2,(A,B)), body_literal(three_wheels,1,(C,)), body_literal(has_car,2,(A,C)), body_literal(three_wheels,1,(B,)), body_size(4).
-%% %% % f(A):- has_car(A,B),has_car(A,C),long(C),roof_closed(B).
-%% :- head_literal(f,1,(A,)), body_literal(roof_closed,1,(B,)), body_literal(has_car,2,(A,B)), body_literal(has_car,2,(A,C)), body_literal(long,1,(C,)), body_size(4).
-%% %% % f(A):- has_car(A,B),has_car(A,C),roof_closed(B),roof_closed(C).
-%% :- head_literal(f,1,(A,)), body_literal(roof_closed,1,(B,)), body_literal(has_car,2,(A,B)), body_literal(roof_closed,1,(C,)), body_literal(has_car,2,(A,C)), body_size(4).
-%% %% % f(A):- has_car(A,B),has_car(A,C),long(B),long(C).
-%% :- head_literal(f,1,(A,)), body_literal(has_car,2,(A,B)), body_literal(long,1,(B,)), body_literal(has_car,2,(A,C)), body_literal(long,1,(C,)), body_size(4).
-%% %% % f(A):- has_car(A,B),has_car(A,C),roof_closed(B),three_wheels(B),three_wheels(C).
-%% :- head_literal(f,1,(A,)), body_literal(three_wheels,1,(C,)), body_literal(has_car,2,(A,C)), body_literal(roof_closed,1,(B,)), body_literal(three_wheels,1,(B,)), body_literal(has_car,2,(A,B)), body_size(5).
-%% %% % f(A):- has_car(A,B),has_car(A,C),long(B),roof_closed(B),three_wheels(C).
-%% :- head_literal(f,1,(A,)), body_literal(three_wheels,1,(C,)), body_literal(long,1,(B,)), body_literal(has_car,2,(A,C)), body_literal(roof_closed,1,(B,)), body_literal(has_car,2,(A,B)), body_size(5).
-%% %% % f(A):- has_car(A,B),has_car(A,C),long(B),long(C),roof_closed(B).
-%% %% :- head_literal(f,1,(A,)), body_literal(long,1,(B,)), body_literal(has_car,2,(A,C)), body_literal(roof_closed,1,(B,)), body_literal(long,1,(C,)), body_literal(has_car,2,(A,B)), body_size(5).
-%% %% % f(A):- has_car(A,B),has_car(A,C),long(B),long(C),three_wheels(C).
-%% %% :- head_literal(f,1,(A,)), body_literal(three_wheels,1,(C,)), body_literal(long,1,(B,)), body_literal(has_car,2,(A,C)), body_literal(long,1,(C,)), body_literal(has_car,2,(A,B)), body_size(5).
+%% :- head_literal(0,f,1,(A,)), body_literal(0,long,1,(B,)), body_literal(0,has_car,2,(A,B)), body_size(0,2), A!=B.
+%% :- head_literal(0,f,1,(A,)), body_literal(0,three_wheels,1,(B,)), body_literal(0,has_car,2,(A,B)), body_size(0,2), A!=B.
+%% :- head_literal(0,f,1,(A,)), body_literal(0,roof_closed,1,(B,)), body_literal(0,has_car,2,(A,B)), body_size(0,2), A!=B.
+%% :- head_literal(0,f,1,(A,)), body_literal(0,three_wheels,1,(B,)), body_literal(0,long,1,(B,)), body_literal(0,has_car,2,(A,B)), body_size(0,3), A!=B.
+%% :- head_literal(0,f,1,(A,)), body_literal(0,roof_closed,1,(B,)), body_literal(0,three_wheels,1,(B,)), body_literal(0,has_car,2,(A,B)), body_size(0,3), A!=B.
+%% :- head_literal(0,f,1,(A,)), body_literal(0,roof_closed,1,(B,)), body_literal(0,long,1,(B,)), body_literal(0,has_car,2,(A,B)), body_size(0,3), A!=B.
+%% :- head_literal(0,f,1,(A,)), body_literal(0,has_car,2,(A,C)), body_literal(0,roof_closed,1,(C,)), body_literal(0,long,1,(B,)), body_literal(0,has_car,2,(A,B)), body_size(0,4), A!=B, A!=C, B!=C.
+%% :- head_literal(0,f,1,(A,)), body_literal(0,has_car,2,(A,C)), body_literal(0,roof_closed,1,(C,)), body_literal(0,has_car,2,(A,B)), body_literal(0,three_wheels,1,(B,)), body_size(0,4), A!=B, A!=C, B!=C.
+%% :- head_literal(0,f,1,(A,)), body_literal(0,has_car,2,(A,C)), body_literal(0,roof_closed,1,(B,)), body_literal(0,roof_closed,1,(C,)), body_literal(0,has_car,2,(A,B)), body_size(0,4), A!=B, A!=C, B!=C.
+%% :- head_literal(0,f,1,(A,)), body_literal(0,has_car,2,(A,C)), body_literal(0,long,1,(B,)), body_literal(0,has_car,2,(A,B)), body_literal(0,long,1,(C,)), body_size(0,4), A!=B, A!=C, B!=C.
+%% :- head_literal(0,f,1,(A,)), body_literal(0,has_car,2,(A,C)), body_literal(0,long,1,(B,)), body_literal(0,three_wheels,1,(C,)), body_literal(0,has_car,2,(A,B)), body_size(0,4), A!=B, A!=C, B!=C.
+%% :- head_literal(0,f,1,(A,)), body_literal(0,has_car,2,(A,C)), body_literal(0,three_wheels,1,(B,)), body_literal(0,three_wheels,1,(C,)), body_literal(0,has_car,2,(A,B)), body_size(0,4), A!=B, A!=C, B!=C.
+%% :- head_literal(0,f,1,(A,)), body_literal(0,three_wheels,1,(B,)), body_literal(0,has_car,2,(A,B)), body_literal(0,long,1,(B,)), body_literal(0,roof_closed,1,(B,)), body_size(0,4), A!=B.

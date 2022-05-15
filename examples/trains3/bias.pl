@@ -1,3 +1,8 @@
+%% S f(A):- has_load(B,C),has_car(A,B),roof_open(B),three_load(C).
+%% S f(A):- has_car(A,B),roof_closed(C),roof_open(B),has_car(A,C).
+%% S f(A):- rectangle(E),has_car(A,B),has_load(C,E),has_load(B,D),triangle(D),has_car(A,C).
+
+
 %% dcc paper
 max_vars(6).
 max_body(6).

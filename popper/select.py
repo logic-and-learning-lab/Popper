@@ -74,6 +74,6 @@ class Selector:
                 size += len(body) + 1
             print(f'NEW SOLUTION OF SIZE: {size}')
             for rule in new_solution:
-                print(format_rule(rule))
+                print('S',format_rule(rule))
             print('*'*20)
             self.max_size = size

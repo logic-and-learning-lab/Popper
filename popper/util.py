@@ -303,7 +303,6 @@ def order_rule(rule):
     head, body = rule
 
     if not any(literal.predicate == 'has_car' for literal in body):
-        print(format_rule(rule))
         return rule
 
     directions = {}
