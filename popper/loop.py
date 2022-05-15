@@ -5,9 +5,8 @@ from . util import Settings2, Stats, timeout, format_rule, chunk_list, flatten
 # from . tester import Tester
 from . pltester import Tester
 # from . asptester import Tester
-from . generate import Generator
+from . generate import Generator, Constrainer, specialisation_constraint, elimination_constraint
 from . select import Selector
-from . constrain import Constrainer, specialisation_constraint, elimination_constraint
 import time
 
 def dbg(*args):
@@ -40,9 +39,8 @@ def find_rules(settings, cons, rule_size, rule_coverage, chunk_pos):
             with settings.stats.duration('test'):
                 inconsistent, pos_covered = tester.test_rule(rule)
 
-            with settings.stats.duration('A'):
-                chunk_pos_covered = set([x for x in chunk_pos if x in pos_covered])
-                incomplete = len(chunk_pos_covered) != len(chunk_pos)
+            chunk_pos_covered = set([x for x in chunk_pos if x in pos_covered])
+            incomplete = len(chunk_pos_covered) != len(chunk_pos)
 
             # dbg(format_rule(rule), f'incomplete:{incomplete}', f'inconsistent:{inconsistent}', len(pos_covered))
             # print('%', format_rule(rule))
@@ -56,7 +54,11 @@ def find_rules(settings, cons, rule_size, rule_coverage, chunk_pos):
 
             add_spec = False
             spec_con = specialisation_constraint(rule)
+
             elim_con = elimination_constraint(rule)
+
+            # always add an elimination constraint
+            cons.add_elimination(elim_con)
 
             # if not inconsistent and len(pos_covered) > 0:
             #     xs = frozenset(pos_covered)
@@ -78,54 +80,41 @@ def find_rules(settings, cons, rule_size, rule_coverage, chunk_pos):
             #     else:
             #         ss[xs] = rule
 
-            with settings.stats.duration('B1'):
-                cons.add_elimination(elim_con)
 
-            with settings.stats.duration('B2'):
-                # if inconsistent, then rule all generalisations
-                if inconsistent:
-                    pass
-                    # cons.add_generalisation(rule)
-                    # add_gen = True
-                else:
-                    # if consistent, no need to specialise
-                    add_spec = True
-                    for e in settings.pos:
-                        cons.add_specialisation(spec_con, e)
-
-            with settings.stats.duration('B3.1'):
-                # for any examples uncovered, save a specialisation constraint
+            # if inconsistent, then rule all generalisations
+            if inconsistent:
+                pass
+                # cons.add_generalisation(rule)
+                # add_gen = True
+            else:
+                # if consistent, no need to specialise
+                add_spec = True
                 for e in settings.pos:
-                    if e not in pos_covered:
-                        cons.add_specialisation(spec_con, e)
-
-            with settings.stats.duration('B3.2'):
-                for e in settings.pos.difference(pos_covered):
                     cons.add_specialisation(spec_con, e)
 
-            with settings.stats.duration('B4'):
-                # if consistent and covers at least one pos example, yield rule
-                if len(pos_covered) > 0 and not inconsistent:
-                    dbg(f'yield rule: {format_rule(rule)}')
-                    rule_size[rule] = size + 1 # need to add 1 for the head literal
-                    rule_coverage[rule] = pos_covered
-                    yield rule
+            # for any examples uncovered, save a specialisation constraint
+            for e in settings.pos.difference(pos_covered):
+                cons.add_specialisation(spec_con, e)
 
-            with settings.stats.duration('B5'):
-                # if it does not cover any chunk example, then prune specialisations
-                if len(chunk_pos_covered) == 0:
-                    add_spec = True
+            # if consistent and covers at least one pos example, yield rule
+            if len(pos_covered) > 0 and not inconsistent:
+                dbg(f'yield rule: {format_rule(rule)}')
+                rule_size[rule] = size + 1 # need to add 1 for the head literal
+                rule_coverage[rule] = pos_covered
+                yield rule
 
-            with settings.stats.duration('B6'):
-                # if it covers all examples, add candidate rule and prune specialisations
-                if len(chunk_pos_covered) == len(chunk_pos) and not inconsistent:
-                    return
+            # if it does not cover any chunk example, then prune specialisations
+            if len(chunk_pos_covered) == 0:
+                add_spec = True
+
+            # if it covers all examples, add candidate rule and prune specialisations
+            if len(chunk_pos_covered) == len(chunk_pos) and not inconsistent:
+                return
 
             with settings.stats.duration('constrain'):
                 if add_spec:
                     generator.add_constraint(spec_con)
                 else:
-
                     generator.add_constraint(elim_con)
     # assert(False)
 
@@ -164,25 +153,11 @@ def popper(ignore, stats):
                 break
 
             # find new candidate rules
-
-            with settings.stats.duration('find_rules'):
-                new_rules = list(find_rules(settings, cons, selector.rule_size, selector.rule_coverage, chunk_pos))
-                for rule in new_rules:
-                    covered.update(selector.rule_coverage[rule])
-                    all_rules.add(rule)
-
-            with settings.stats.duration('select'):
-                if len(new_rules) > 0:
+            for rule in find_rules(settings, cons, selector.rule_size, selector.rule_coverage, chunk_pos):
+                covered.update(selector.rule_coverage[rule])
+                all_rules.add(rule)
+                with settings.stats.duration('select'):
                     selector.update_best_solution(all_rules)
-
-            # find new candidate rules
-
-            # with settings.stats.duration('doit'):
-            #     for rule in find_rules(settings, cons, selector.rule_size, selector.rule_coverage, chunk_pos):
-            #         covered.update(selector.rule_coverage[rule])
-            #         all_rules.add(rule)
-            #         # with settings.stats.duration('select'):
-            #         selector.update_best_solution(all_rules)
 
         # chunk_size += chunk_size
         if chunk_size == 1:
