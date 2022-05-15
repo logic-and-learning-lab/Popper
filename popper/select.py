@@ -19,91 +19,61 @@ dominates(R1,R2):- different(R1,R2), not different(R2,R1).
 class Selector:
     def __init__(self, settings):
         self.settings = settings
-
-        # prog = [FIND_SUBSET_PROG]
-
-        # self.example_to_hash = {}
-        # for x in settings.pos:
-        #     k = f'"{hash(x)}"'
-        #     self.example_to_hash[x] = k
-        #     prog.append(f'example({k}).')
-        # prog = '\n'.join(prog)
-
-        # self.tmp = prog
-        # solver = clingo.Control()
-        # solver.add('base', [], prog)
-        # # solver.ground([('base', [])])
-        # # solver.solve([('base', [])])
-
-        # self.solver = solver
         self.rule_coverage = {}
         self.rule_size = {}
         self.index_to_rule = {}
-        self.added_rules = set()
-        self.loop_count = 0
-
-    def update_best_solution(self, new_rules):
-
-        solver = clingo.Control()
-
-        prog = [FIND_SUBSET_PROG]
+        # self.added_rules = set()
+        # self.loop_count = 0
+        self.max_size = None
 
         self.example_to_hash = {}
+        example_prog = []
         for x in self.settings.pos:
             k = f'"{hash(x)}"'
             self.example_to_hash[x] = k
-            prog.append(f'example({k}).')
-        # prog = '\n'.join(prog)
+            example_prog.append(f'example({k}).')
+        self.EXAMPLE_PROG = '\n'.join(example_prog)
 
-        # self.tmp = prog
-        # solver = clingo.Control()
-        # solver.add('base', [], prog)
-        # solver.ground([('base', [])])
-        # solver.solve([('base', [])])
+    def update_best_solution(self, new_rules):
+        prog = [FIND_SUBSET_PROG, self.EXAMPLE_PROG]
 
-        # self.solver = solver
-
-        # print('ASDA!!!!')
-        # print(len(new_rules))
-        # prog = []
         for rule in new_rules:
-            # print('LOOP RULE!!', format_rule(rule))
             k = f'"{hash(rule)}"'
             assert(k not in self.index_to_rule)
             self.index_to_rule[str(hash(rule))] = rule
             size = self.rule_size[rule]
             prog.append(f'size({k},{size}).')
-            # print('rule_coverage', self.rule_coverage[rule])
             for ex in self.rule_coverage[rule]:
                 ex = self.example_to_hash[ex]
                 prog.append(f'covers({k},{ex}).')
 
+        if self.max_size != None:
+            prog.append(f':- size(N), N >= {self.max_size}.')
+
         prog = '\n'.join(prog)
 
-        print(f'CANDIDATE RULES: {len(new_rules)}')
+        # with open('sat-prob.pl', 'w') as f:
+            # f.write(prog)
 
-        with open('sat-prob.pl', 'w') as f:
-            f.write(prog)
-
-        prog_key = f'prog_{self.loop_count}'
-
-
+        solver = clingo.Control()
         solver.add('base', [], prog)
-        # self.solver.add(prog_key, [], prog)
         solver.ground([('base', [])])
-        # self.solver.ground([(prog_key, [])])
 
         out = []
         with solver.solve(yield_=True) as handle:
             for m in handle:
-                # print('M!!!')
                 xs = m.symbols(shown = True)
-                # print('xs',xs)
                 out = [atom.arguments[0].string for atom in xs]
 
-        tmp = [self.index_to_rule[k] for k in out]
-        print('*'*20)
-        print('SOLUTION')
-        for x in tmp:
-            print(format_rule(x))
-        print('*'*20)
+        new_solution = [self.index_to_rule[k] for k in out]
+        if len(new_solution) > 0:
+            print('*'*20)
+            size = 0
+            for rule in new_solution:
+                head, body = rule
+                size += len(body) + 1
+            print(f'NEW SOLUTION OF SIZE: {size}')
+            for rule in new_solution:
+                print(format_rule(rule))
+            print('*'*20)
+            self.max_size = size

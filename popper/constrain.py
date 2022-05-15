@@ -6,11 +6,11 @@ class Constrainer:
         self.gen_cons = set()
         self.spec_cons = {x: set() for x in settings.pos}
 
-    def add_elimination(self, rule):
-        self.elim_cons.add(elimination_constraint(rule))
+    def add_elimination(self, con):
+        self.elim_cons.add(con)
 
-    def add_specialisation(self, rule, e):
-        self.spec_cons[e].add(specialisation_constraint(rule))
+    def add_specialisation(self, con, e):
+        self.spec_cons[e].add(con)
 
 def find_all_vars(body):
     all_vars = set()

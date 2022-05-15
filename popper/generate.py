@@ -18,9 +18,7 @@ class Generator:
         # track number of constraints added
         self.con_count = 0
 
-        solver = clingo.Control(["-t1"]) # 53/31s
-        # solver = clingo.Control(["-t6"]) # 53/31s
-        # solver.configuration.solve.models = 0
+        solver = clingo.Control(["-t1"]) #
 
         with open('popper/lp/alan.pl') as f:
             solver.add('base', [], f.read())
@@ -66,50 +64,12 @@ class Generator:
             literal = Literal(pred, args, [])
             body_atoms.append(literal)
         return self.settings.head_literal, frozenset(body_atoms)
-    # def parse_model(self, atoms):
-    #     body_atoms = []
-    #     for atom in atoms:
-    #         # args = atom.args
-    #         if atom.name == 'body_literal':
-    #             pred = atom.arguments[0].name
-    #             args = atom.arguments[2].arguments
-    #             args = tuple(arg_lookup[arg] for arg in args)
-    #             literal = Literal(pred, args, [])
-    #             body_atoms.append(literal)
-    #         # # TODO: CUT THIS REPEATED PARSING!!!
-    #         # elif atom.name == 'direction_':
-    #         #     # print(atom)
-    #         #     pred_name = atom.arguments[0].name
-    #         #     arg_index = atom.arguments[1].number
-    #         #     arg_dir_str = atom.arguments[2].name
-    #         #     if arg_dir_str == 'in':
-    #         #         arg_dir = '+'
-    #         #     elif arg_dir_str == 'out':
-    #         #         arg_dir = '-'
-    #         #     else:
-    #         #         raise Exception(f'Unrecognised argument direction "{arg_dir_str}"')
-    #         #     # directions[pred_name][arg_index] = arg_dir
-    #     return self.settings.head_literal, frozenset(body_atoms)
-
-# head_modes = tuple(directions[head_pred][i] for i in range(head_arity))
-# head = Literal(head_pred, head_args, head_modes)
-
-# body = set()
-# for (body_pred, body_args, body_arity) in clause_id_to_body[clause_id]:
-#     body_modes = tuple(directions[body_pred][i] for i in range(body_arity))
-#     body.add(Literal(body_pred, body_args, body_modes))
 
     def add_constraint(self, con):
         self.con_count+=1
         k = f'cons_{self.con_count}'
         self.solver.add(k, [], format_constraint(con))
-        # print(format_constraint(con))
-        # print(con)
-        # t1 = time.time()
         self.solver.ground([(k, [])])
-        # t2 = time.time()
-        # print(f'ground {k} {len(cons)} {t2-t1}')
-
 
 NUM_LITERALS = """
 %%% External atom for number of literals in the program %%%%%
