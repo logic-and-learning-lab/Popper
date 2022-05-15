@@ -289,14 +289,19 @@ class Stats:
 # def format_program(program):
     # return "\n".join(Clause.to_code(Clause.to_ordered(clause)) + '.' for clause in program)
 
+def format_prog(prog):
+    return '\n'.join(format_rule(rule) for rule in prog)
+
 def format_rule(rule):
-    # return Clause.to_code(rule) + '.'
-    (head, body) = rule
+    head, body = rule
     head_str = ''
     if head:
         head_str = Literal.to_code(head)
     body_str = ','.join(Literal.to_code(literal) for literal in body)
     return f'{head_str}:- {body_str}.'
+
+def prog_size(prog):
+    return sum(1 + len(body) for head, body in prog)
 
 def order_rule(rule):
 

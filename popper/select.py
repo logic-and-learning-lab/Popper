@@ -1,5 +1,5 @@
 import clingo
-from . util import format_rule
+from . util import format_rule, prog_size, format_prog
 
 FIND_SUBSET_PROG = """
 #show rule/1.
@@ -19,61 +19,59 @@ dominates(R1,R2):- different(R1,R2), not different(R2,R1).
 class Selector:
     def __init__(self, settings):
         self.settings = settings
-        self.rule_coverage = {}
-        self.rule_size = {}
-        self.index_to_rule = {}
-        # self.added_rules = set()
-        # self.loop_count = 0
+        self.prog_coverage = {}
+        self.index_to_prog = {}
         self.max_size = None
-
+        self.prog_encoding = ''
         self.example_to_hash = {}
+        self.prog_count = 0
+        self.build_example_encoding()
+
+    def build_example_encoding(self):
         example_prog = []
-        for x in self.settings.pos:
-            k = f'"{hash(x)}"'
-            self.example_to_hash[x] = k
-            example_prog.append(f'example({k}).')
-        self.EXAMPLE_PROG = '\n'.join(example_prog)
+        for i, x in enumerate(self.settings.pos):
+            self.example_to_hash[x] = i
+            example_prog.append(f'example({i}).')
+        self.example_prog = '\n'.join(example_prog)
 
-    def update_best_solution(self, new_rules):
-        prog = [FIND_SUBSET_PROG, self.EXAMPLE_PROG]
+    def build_prog_encoding(self, prog):
+        self.prog_count += 1
+        self.index_to_prog[self.prog_count] = prog
+        size = prog_size(prog)
+        prog_builder = []
+        prog_builder.append(f'size({self.prog_count},{size}).')
+        for ex in self.prog_coverage[prog]:
+            i = self.example_to_hash[ex]
+            prog_builder.append(f'covers({self.prog_count},{i}).')
+        self.prog_encoding += '\n'.join(prog_builder) + '\n'
 
-        for rule in new_rules:
-            k = f'"{hash(rule)}"'
-            assert(k not in self.index_to_rule)
-            self.index_to_rule[str(hash(rule))] = rule
-            size = self.rule_size[rule]
-            prog.append(f'size({k},{size}).')
-            for ex in self.rule_coverage[rule]:
-                ex = self.example_to_hash[ex]
-                prog.append(f'covers({k},{ex}).')
-
+    def update_best_prog(self, prog):
+        self.build_prog_encoding(prog)
+        encoding = [FIND_SUBSET_PROG, self.example_prog, self.prog_encoding]
         if self.max_size != None:
-            prog.append(f':- size(N), N >= {self.max_size}.')
-
-        prog = '\n'.join(prog)
-
-        # with open('sat-prob.pl', 'w') as f:
-            # f.write(prog)
+            encoding.append(f':- size(N), N >= {self.max_size}.')
+        encoding = '\n'.join(encoding)
 
         solver = clingo.Control()
-        solver.add('base', [], prog)
+        solver.add('base', [], encoding)
         solver.ground([('base', [])])
 
         out = []
         with solver.solve(yield_=True) as handle:
             for m in handle:
-                xs = m.symbols(shown = True)
-                out = [atom.arguments[0].string for atom in xs]
+                atoms = m.symbols(shown = True)
+                out = [atom.arguments[0].number for atom in atoms]
 
-        new_solution = [self.index_to_rule[k] for k in out]
+        new_solution = [self.index_to_prog[k] for k in out]
         if len(new_solution) > 0:
             print('*'*20)
             size = 0
-            for rule in new_solution:
-                head, body = rule
-                size += len(body) + 1
+            for sub_prog in new_solution:
+                for rule in sub_prog:
+                    head, body = rule
+                    size += len(body) + 1
+                    print(format_rule(rule))
             print(f'NEW SOLUTION OF SIZE: {size}')
-            for rule in new_solution:
-                print('S',format_rule(rule))
             print('*'*20)
             self.max_size = size
+            self.best_program = new_solution

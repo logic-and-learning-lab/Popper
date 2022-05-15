@@ -174,7 +174,9 @@ def find_all_vars(body):
                     all_vars.add(t_arg)
     return sorted(all_vars)
 
-def specialisation_constraint(rule):
+def specialisation_constraint(prog):
+    # TMP!
+    rule = list(prog)[0]
     literals = []
     head, body = rule
     literals.append(Literal('head_literal', (0, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
@@ -187,7 +189,9 @@ def specialisation_constraint(rule):
         literals.append(Literal('!=', (v1,v2), meta=True))
     return None, tuple(literals)
 
-def elimination_constraint(rule):
+def elimination_constraint(prog):
+    # TMP!
+    rule = list(prog)[0]
     literals = []
     head, body = rule
     literals.append(Literal('head_literal', (0, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
