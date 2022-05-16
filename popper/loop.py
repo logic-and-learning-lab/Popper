@@ -11,6 +11,10 @@ def find_progs(settings, tester, grounder, cons, prog_coverage, success_sets, ch
         generator = Generator(settings, grounder, bootstrap_cons)
 
     for size in range(1, max_size+1):
+
+        if size > settings.max_literals:
+            continue
+
         settings.stats.logger.info(f'SEARCHING SIZE: {size}')
         generator.update_num_literals(size)
 
@@ -65,14 +69,14 @@ def find_progs(settings, tester, grounder, cons, prog_coverage, success_sets, ch
                     for e in settings.pos:
                         cons.add_specialisation(prog, e)
 
-            # if consistent and covers at least one example
+            # if consistent, covers at least one example, and is not subsumed, yield candidate program
             if len(pos_covered) > 0 and not inconsistent and not subsumed:
                 success_sets[pos_covered] = prog
                 settings.stats.register_candidate_prog(prog)
                 prog_coverage[prog] = pos_covered
                 yield prog
 
-            # if it covers all examples, add candidate rule and prune specialisations
+            # if it covers all examples, stop
             if len(chunk_pos_covered) == len(chunk_pos) and not inconsistent:
                 return
 
@@ -96,8 +100,8 @@ def popper(settings):
     selector = Selector(settings)
 
     all_chunks = [[x] for x in settings.pos]
-    chunk_size = 1
-    # chunk_size = len(settings.pos)
+    # chunk_size = 1
+    chunk_size = len(settings.pos)
     max_size = settings.max_literals
     success_sets = {}
 
@@ -126,8 +130,10 @@ def popper(settings):
                 covered_examples.update(selector.prog_coverage[prog])
                 with settings.stats.duration('select'):
                     new_solution_found = selector.update_best_prog(prog)
-                    if new_solution_found and len(chunk_pos) == 1:
+                    if new_solution_found:
                         max_size = selector.max_size - 1
+                        settings.max_literals = max_size
+                        continue
                 # TODO: CONSTRAIN PROGRAM SIZE
 
         # chunk_size += chunk_size

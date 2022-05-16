@@ -5,10 +5,10 @@ body_pred(my_succ,2).
 body_pred(pressButton,1).
 body_pred(noop,1).
 body_pred(player,1).
-body_pred(c1,1).
-body_pred(c2,1).
-body_pred(c3,1).
-body_pred(c4,1).
+%% body_pred(c1,1).
+%% body_pred(c2,1).
+%% body_pred(c3,1).
+%% body_pred(c4,1).
 body_pred(c5,1).
 
 type(next_value,(ex,int)).
