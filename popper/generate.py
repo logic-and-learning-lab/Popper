@@ -3,13 +3,14 @@ import clingo
 import clingo.script
 import numbers
 import itertools
+import operator
+import pkg_resources
 from . core import Literal, ConstVar
 from . util import format_rule
 from collections import defaultdict
-# from . constrain import format_constraint, find_all_vars
 from clingo import Function, Number, Tuple_
+import clingo.script
 clingo.script.enable_python()
-
 arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
 
 def arg_to_symbol(arg):
@@ -28,36 +29,31 @@ def atom_to_symbol(pred, args):
 class Generator:
     def __init__(self, settings, bootstrap_cons):
         self.settings = settings
-        # track size literals
-        self.tracker = {}
-        # track number of constraints added
-        self.con_count = 0
+        self.last_size = None
 
         self.constrain = Constrain()
-        self.grounder = ClingoGrounder()
+        self.grounder = Grounder()
         self.seen_symbols = {}
 
-
+        # build generator program
         prog = []
         with open('popper/lp/alan.pl') as f:
             prog.append(f.read())
         with open(settings.bias_file) as f:
             prog.append(f.read())
-
         prog.append(f'max_clauses({settings.max_rules}).')
         prog.append(f'max_body({settings.max_body}).')
         prog.append(f'max_vars({settings.max_vars}).')
-
         prog = '\n'.join(prog)
-        # with open('gen.pl', 'w') as f:
-            # f.write(prog)
-        # solver = clingo.Control(['-t6'])
+
+        # build solver
         solver = clingo.Control()
         solver.add('base', [], prog)
         solver.ground([('base', [])])
         solver.add('number_of_literals', ['n'], NUM_LITERALS)
         self.solver = solver
 
+        # bootstrap with constraints
         specs, elims, gens = bootstrap_cons
         cons = set()
         for prog in specs:
@@ -69,14 +65,15 @@ class Generator:
         self.add_constraints(cons)
 
     def update_num_literals(self, size):
-        # 1. Release those that have already been assigned
-        for atom, truth_value in self.tracker.items():
-            if atom[0] == 'size_in_literals' and truth_value:
-                self.tracker[atom] = False
-                symbol = clingo.Function('size_in_literals', [clingo.Number(atom[1])])
-                self.solver.release_external(symbol)
+        # release atoms already assigned
+        if self.last_size != None:
+            symbol = clingo.Function('size_in_literals', [clingo.Number(self.last_size)])
+            self.solver.release_external(symbol)
+        # set new size
+        self.last_size = size
+        # ground new size
         self.solver.ground([('number_of_literals', [clingo.Number(size)])])
-        self.tracker[('size_in_literals', size)] = True
+        # assign new size
         symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
         self.solver.assign_external(symbol, True)
 
@@ -103,7 +100,6 @@ class Generator:
                 predicate = args[1].name
                 atom_args = args[3].arguments
                 atom_args = tuple(arg_lookup[arg] for arg in atom_args)
-                # arguments = gen_args(args[3].arguments)
                 arity = len(atom_args)
                 body_literal = (predicate, atom_args, arity)
                 rule_index_to_body[rule_index].add(body_literal)
@@ -113,9 +109,7 @@ class Generator:
                 predicate = args[1].name
                 atom_args = args[3].arguments
                 atom_args = tuple(arg_lookup[arg] for arg in atom_args)
-                # arguments = args[3].arguments
                 arity = len(atom_args)
-                # arguments = gen_args(arguments)
                 head_literal = (predicate, atom_args, arity)
                 rule_index_to_head[rule_index] = head_literal
 
@@ -134,10 +128,9 @@ class Generator:
 
         prog = []
         for rule_index in rule_index_to_head:
-            (head_pred, head_args, head_arity) = rule_index_to_head[rule_index]
+            head_pred, head_args, head_arity = rule_index_to_head[rule_index]
             head_modes = tuple(directions[head_pred][i] for i in range(head_arity))
             head = Literal(head_pred, head_args, head_modes)
-
             body = set()
             for (body_pred, body_args, body_arity) in rule_index_to_body[rule_index]:
                 body_modes = tuple(directions[body_pred][i] for i in range(body_arity))
@@ -148,20 +141,20 @@ class Generator:
         return frozenset(prog)
 
     def add_constraints(self, rules):
-        out = set()
-        for clause in rules:
-            head, body = clause
+        ground_rules = set()
+        for rule in rules:
+            head, body = rule
 
-            # find bindings for variables in the constraint
-            assignments = self.grounder.find_bindings(clause, self.settings.max_rules, self.settings.max_vars)
+            # find bindings for variables in the rule
+            assignments = self.grounder.find_bindings(rule, self.settings.max_rules, self.settings.max_vars)
 
             # keep only standard literals
             body = tuple(literal for literal in body if not literal.meta)
 
-            # ground the clause for each variable assignment
+            # ground the rule for each variable assignment
             for assignment in assignments:
-                out.add(Grounding.ground_clause((head, body), assignment))
-        self.add_ground_rules(out)
+                ground_rules.add(self.grounder.ground_rule((head, body), assignment))
+        self.add_ground_rules(ground_rules)
 
     def gen_symbol(self, literal, backend):
         sign, pred, args = literal
@@ -176,7 +169,6 @@ class Generator:
     def add_ground_rules(self, rules):
         with self.solver.backend() as backend:
             for rule in rules:
-                # print(format_constraint_rule(rule))
                 head, body = rule
                 head_literal = []
                 if head:
@@ -197,47 +189,6 @@ class Generator:
     def build_elimination_constraint(self, prog):
         return self.constrain.banish_constraint(prog)
 
-def format_literal(literal):
-    sign, pred, args = literal
-    out = ''
-    if sign == False:
-        out = 'not '
-    arg_str = ','.join(str(arg) for arg in args)
-    return out + f'{pred}({arg_str})'
-
-def format_constraint_rule(rule):
-    # print('---')
-    # print(rule)
-    head, body = rule
-    rule_str = ''
-    if head:
-        rule_str = format_literal(head)
-    rule_str += ':- ' + ','.join(format_literal(literal) for literal in body) + '.'
-    return rule_str
-
-def format_constraint(con):
-    head, body = con
-    constraint_literals = []
-    for constobj in body:
-        if not constobj.meta:
-            constraint_literals.append(str(constobj))
-            continue
-        arga, argb = constobj.arguments
-        if isinstance(arga, ConstVar):
-            arga = arga.name
-        else:
-            arga = str(arga)
-        if isinstance(argb, ConstVar):
-            argb = argb.name
-        else:
-            argb = str(argb)
-        constraint_literals.append(f'{arga}{constobj.predicate}{argb}')
-
-    x = f':- {", ".join(constraint_literals)}.'
-    if head:
-        x = f'{head} {x}'
-    return x
-
 NUM_LITERALS = """
 %%% External atom for number of literals in the program %%%%%
 #external size_in_literals(n).
@@ -245,7 +196,6 @@ NUM_LITERALS = """
     size_in_literals(n),
     #sum{K+1,Rule : body_size(Rule,K)} != n.
 """
-
 
 class Constrainer:
     def __init__(self, settings):
@@ -259,110 +209,8 @@ class Constrainer:
     def add_specialisation(self, con, e):
         self.spec_cons[e].add(con)
 
-def find_all_vars(body):
-    all_vars = set()
-    for literal in body:
-        for arg in literal.arguments:
-            all_vars.add(arg)
-            if isinstance(arg, ConstVar):
-                all_vars.add(arg)
-            if isinstance(arg, tuple):
-                for t_arg in arg:
-                    # if isinstance(t_arg, ConstVar):
-                    all_vars.add(t_arg)
-    return sorted(all_vars)
-
-# def specialisation_constraint(prog):
-#     # TMP!
-#     rule = list(prog)[0]
-#     literals = []
-#     head, body = rule
-#     literals.append(Literal('head_literal', (0, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
-#     for body_literal in body:
-#         literals.append(Literal('body_literal', (0, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
-#     xs = find_all_vars(body)
-#     for v1,v2 in itertools.combinations(xs, 2):
-#         vo_variable(v1),
-#         vo_variable(v2),
-#         literals.append(Literal('!=', (v1,v2), meta=True))
-#     return None, tuple(literals)
-
-# def elimination_constraint(prog):
-#     # TMP!
-#     rule = list(prog)[0]
-#     literals = []
-#     head, body = rule
-#     literals.append(Literal('head_literal', (0, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
-#     for body_literal in body:
-#         literals.append(Literal('body_literal', (0, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
-#     literals.append(Literal('body_size', (0,len(body),)))
-#     xs = find_all_vars(body)
-
-#     for v1,v2 in itertools.combinations(xs, 2):
-#         vo_variable(v1),
-#         vo_variable(v2),
-#         literals.append(Literal('!=', (v1,v2), meta=True))
-#     return None, tuple(literals)
-
 def vo_variable(variable):
     return ConstVar(f'{variable}', 'Variable')
-
-# def format_constraint(con):
-#     head, body = con
-#     constraint_literals = []
-#     for constobj in body:
-#         if not constobj.meta:
-#             constraint_literals.append(str(constobj))
-#             continue
-#         arga, argb = constobj.arguments
-#         if isinstance(arga, ConstVar):
-#             arga = arga.name
-#         else:
-#             arga = str(arga)
-#         if isinstance(argb, ConstVar):
-#             argb = argb.name
-#         else:
-#             argb = str(argb)
-#         constraint_literals.append(f'{arga}{constobj.predicate}{argb}')
-
-#     x = f':- {", ".join(constraint_literals)}.'
-#     if head:
-#         x = f'{head} {x}'
-#     return x
-
-def format_constraint(con):
-    head, body = con
-    constraint_literals = []
-    for constobj in body:
-        if not constobj.meta:
-            constraint_literals.append(str(constobj))
-            continue
-        arga, argb = constobj.arguments
-        if isinstance(arga, ConstVar):
-            arga = arga.name
-        else:
-            arga = str(arga)
-        if isinstance(argb, ConstVar):
-            argb = argb.name
-        else:
-            argb = str(argb)
-        constraint_literals.append(f'{arga}{constobj.predicate}{argb}')
-
-    x = f':- {", ".join(constraint_literals)}.'
-    if head:
-        x = f'{head} {x}'
-    return x
-
-
-import operator
-from collections import defaultdict
-import pkg_resources
-from . core import *
-from clingo import Function, Number, Tuple_
-import clingo.script
-clingo.script.enable_python()
-
-# GROUND_BOUNDS = pkg_resources.resource_string(__name__, "lp/ground-bounds.pl").decode()
 
 def alldiff(args):
     return Literal('AllDifferent', args, meta=True)
@@ -387,51 +235,6 @@ def body_size_literal(clause_var, body_size):
 
 def make_literal_handle(literal):
     return f'{literal.predicate}({".".join(literal.arguments)})'
-
-def deduce_min_rule(rule):
-    if rule_is_invented(rule):
-        head, body = rule
-        # inv symbols are inv1, inv2, etc ...
-        min_rule = int(head.predicate[-1])
-        if rule_is_recursive(rule):
-            min_rule += 1
-        return min_rule
-
-    if rule_is_recursive(rule):
-        return 1
-
-    return 0
-
-def deduce_ordering(ordered_rules):
-    if len(ordered_rules) == 1:
-        return []
-
-    prog = []
-    for i, rule in enumerate(ordered_rules):
-        head, body = rule
-        level = 0
-        if rule_is_invented(rule):
-            level = int(head.predicate[-1])
-        x = f'rule({i},{head.predicate},{len(body)},{int(rule_is_recursive(rule))},{level}). '
-        prog.append(x)
-    prog.append(GROUND_BOUNDS)
-    # TODO: CHECK THESE VALUES IN CACHE!!!
-    prog = '\n'.join(prog)
-    solver = clingo.Control()
-    solver.add('base', [], prog)
-    solver.ground([("base", [])])
-    out = []
-    with solver.solve(yield_=True) as handle:
-        for m in handle:
-            for atom in m.symbols(shown=True):
-                a = atom.arguments[0]
-                b = atom.arguments[1]
-                out.append((a,b))
-    return out
-
-import operator
-from collections import defaultdict
-from . core import ConstVar, Literal
 
 def alldiff(args):
     return Literal('AllDifferent', args, meta=True)
@@ -532,7 +335,7 @@ class Constrain:
 
         num_clauses = len(program)
         # ensure that each clause_var is ground to a unique value
-        literals.append(alldiff(tuple(vo_clause(c) for c in range(num_clauses))))
+        # literals.append(alldiff(tuple(vo_clause(c) for c in range(num_clauses))))
         literals.append(Literal('clause', (num_clauses, ), positive = False))
 
         yield (None, tuple(literals))
@@ -555,30 +358,9 @@ class Constrain:
             literals.append(gteq(vo_clause(clause_number), min_clause[clause]))
 
         # ensure that each clause_var is ground to a unique value
-        literals.append(alldiff(tuple(vo_clause(c) for c in range(len(program)))))
+        # literals.append(alldiff(tuple(vo_clause(c) for c in range(len(program)))))
 
         yield (None, tuple(literals))
-
-    # def specialisation_constraint_old(self, program, before={}, min_clause=defaultdict(int)):
-    #     literals = []
-
-    #     for clause_number, clause in enumerate(program):
-    #         clause_handle = self.make_clause_handle(clause)
-    #         yield from self.make_clause_inclusion_rule(clause, min_clause[clause], clause_handle)
-    #         clause_variable = vo_clause(clause_number)
-    #         literals.append(Literal('included_clause', (clause_handle, clause_variable)))
-
-    #     for clause_number1, clause_numbers in before.items():
-    #         for clause_number2 in clause_numbers:
-    #             literals.append(lt(vo_clause(clause_number1), vo_clause(clause_number2)))
-
-    #     num_clauses = len(program)
-    #     # ensure that each clause_var is ground to a unique value
-    #     literals.append(alldiff(tuple(vo_clause(c) for c in range(num_clauses))))
-    #     literals.append(Literal('clause', (num_clauses, ), positive = False))
-
-    #     yield (None, tuple(literals))
-
 
     def specialisation_constraint(self, program, before={}, min_clause=defaultdict(int)):
         clause_variable = vo_clause('')
@@ -594,130 +376,17 @@ class Constrain:
         yield (None, (Literal('clause_not_spec', (prog_handle,), positive = False),))
 
 
-    # def specialisation_constraint(self, rules):
-    #     literals = []
-    #     ordered_rules = sorted(rules)
-
-    #     for clause_number, clause in enumerate(ordered_rules):
-    #         clause_handle = self.make_rule_handle(clause)
-    #         # yield from self.make_clause_inclusion_rule(clause, min_clause[clause], clause_handle)
-    #         yield from self.make_clause_inclusion_rule(clause, clause_handle)
-    #         clause_var = vo_clause(clause_number)
-    #         literals.append(Literal('included_clause', (clause_handle, clause_var)))
-    #         literals.append(self.min_rule_literal(clause, clause_var))
-
-    #     literals.extend(self.before_literals(ordered_rules))
-
-    #     num_clauses = len(rules)
-    #     # ensure that each clause_var is ground to a unique value
-    #     if num_clauses > 1:
-    #         literals.append(alldiff(tuple(vo_clause(c) for c in range(num_clauses))))
-    #     literals.append(Literal('clause', (num_clauses, ), positive = False))
-
-    #     yield (None, tuple(literals))
-
-    # AC: THIS CONSTRAINT DUPLICATES THE GENERALISATION CONSTRAINT AND NEEDS REFACTORING
-    def redundant_literal_constraint(self, clause, before, min_clause):
-        (_head, body) = clause
-        clause_handle = self.make_clause_handle(clause)
-        yield from self.make_clause_inclusion_rule(clause, min_clause[clause], clause_handle)
-        literals = []
-        clause_variable = vo_clause(0)
-        literals.append(Literal('included_clause', (clause_handle, clause_variable)))
-        literals.append(body_size_literal(clause_variable, len(body)))
-        yield (None, tuple(literals))
-
-    # Jk: AC, I cleaned this up a bit, but this reorg is for you. Godspeed!
-    # AC: @JK, I made another pass through it. It was tough. I will try again once we have the whole codebase tidied.
-    def redundancy_constraint(self, program, before, min_clause):
-        lits_num_clauses = defaultdict(int)
-        lits_num_recursive_clauses = defaultdict(int)
-        for clause in program:
-            (head, _) = clause
-            lits_num_clauses[head.predicate] += 1
-            if Clause.is_recursive(clause):
-                lits_num_recursive_clauses[head.predicate] += 1
-
-        recursively_called = set()
-        while True:
-            something_added = False
-            for clause in program:
-                (head, body) = clause
-                is_rec = Clause.is_recursive(clause)
-                for body_literal in body:
-                    if body_literal.predicate not in lits_num_clauses:
-                        continue
-                    if (body_literal.predicate != head.predicate and is_rec) or (head.predicate in recursively_called):
-                        something_added |= not body_literal.predicate in recursively_called
-                        recursively_called.add(body_literal.predicate)
-            if not something_added:
-                break
-
-        for lit in lits_num_clauses.keys() - recursively_called:
-            literals = []
-
-            for clause_number, clause in enumerate(program):
-                clause_handle = self.make_clause_handle(clause)
-                yield from self.make_clause_inclusion_rule(clause, min_clause[clause], clause_handle)
-                clause_variable = vo_clause(clause_number)
-                literals.append(Literal('included_clause', (clause_handle, clause_variable)))
-
-            for clause_number1, clause_numbers in before.items():
-                for clause_number2 in clause_numbers:
-                    literals.append(lt(vo_clause(clause_number1), vo_clause(clause_number2)))
-
-            # ensure that each clause_var is ground to a unique value
-            literals.append(alldiff(tuple(vo_clause(c) for c in range(len(program)))))
-
-            for other_lit, num_clauses in lits_num_clauses.items():
-                if other_lit == lit:
-                    continue
-                literals.append(Literal('num_clauses', (other_lit, num_clauses)))
-            num_recursive = lits_num_recursive_clauses[lit]
-
-            literals.append(Literal('num_recursive', (lit, num_recursive)))
-
-            yield (None, tuple(literals))
-
-    @staticmethod
-    def format_constraint(con):
-        (head, body) = con
-        constraint_literals = []
-        for constobj in body:
-            if not constobj.meta:
-                constraint_literals.append(str(constobj))
-                continue
-            if constobj.predicate == 'AllDifferent':
-                # AC: TODO!!!
-                continue
-            arga, argb = constobj.arguments
-            if isinstance(arga, ConstVar):
-                arga = arga.name
-            else:
-                arga = str(arga)
-            if isinstance(argb, ConstVar):
-                argb = argb.name
-            else:
-                argb = str(argb)
-            constraint_literals.append(f'{arga}{constobj.predicate}{argb}')
-
-        x = f':- {", ".join(constraint_literals)}.'
-        if head:
-            x = f'{head} {x}'
-        return x
-
-
-class ClingoGrounder():
+class Grounder():
     def __init__(self):
         self.seen_assignments = {}
 
     def find_bindings(self, clause, max_clauses, max_vars):
-        (_, body) = clause
-        all_vars = Grounding.find_all_vars(body)
+        _, body = clause
+        all_vars = self.find_all_vars(body)
         if len(all_vars) == 0:
             return [{}]
 
-        k = Grounding.grounding_hash(body, all_vars)
+        k = self.grounding_hash(body, all_vars)
         if k in self.seen_assignments:
             return self.seen_assignments[k]
 
@@ -796,10 +465,7 @@ class ClingoGrounder():
         self.seen_assignments[k] = out
         return out
 
-class Grounding:
-    @staticmethod
-    # IMPROVE/REFACTOR
-    def ground_literal(literal, assignment):
+    def ground_literal(self, literal, assignment):
         ground_args = []
         for arg in literal.arguments:
             if arg in assignment:
@@ -817,28 +483,25 @@ class Grounding:
                 ground_args.append(tuple(ground_t_args))
             else:
                 ground_args.append(arg)
-        return (literal.positive, literal.predicate, tuple(ground_args))
+        return literal.positive, literal.predicate, tuple(ground_args)
 
-    @staticmethod
-    def ground_clause(clause, assignment):
-        (head, body) = clause
+    def ground_rule(self, rule, assignment):
+        head, body = rule
         ground_head = None
         if head:
-            ground_head = Grounding.ground_literal(head, assignment)
-        ground_body = frozenset(Grounding.ground_literal(literal, assignment) for literal in body)
-        return (ground_head, ground_body)
+            ground_head = self.ground_literal(head, assignment)
+        ground_body = frozenset(self.ground_literal(literal, assignment) for literal in body)
+        return ground_head, ground_body
 
     # AC: When grounding constraint rules, we only care about the vars and the constraints, not the actual literals
-    @staticmethod
-    def grounding_hash(body, all_vars):
+    def grounding_hash(self, body, all_vars):
         cons = set()
         for lit in body:
             if lit.meta:
                 cons.add((lit.predicate, lit.arguments))
         return hash((frozenset(all_vars), frozenset(cons)))
 
-    @staticmethod
-    def find_all_vars(body):
+    def find_all_vars(self, body):
         all_vars = set()
         for literal in body:
             for arg in literal.arguments:

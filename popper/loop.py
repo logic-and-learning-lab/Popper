@@ -1,12 +1,9 @@
 import time
-from . pltester import Tester
 from . select import Selector
 from . util import timeout, chunk_list, flatten
-# from . tester import Tester
+from . tester import Tester
 # from . asptester import Tester
 from . generate import Generator, Constrainer
-
-
 
 def find_progs(settings, tester, cons, prog_coverage, success_sets, chunk_pos, max_size=20):
     bootstrap_cons = deduce_cons(cons, chunk_pos)
@@ -96,7 +93,7 @@ def popper(settings):
     all_chunks = [[x] for x in settings.pos]
     chunk_size = 1
     # chunk_size = len(settings.pos)
-    max_size = 20
+    max_size = settings.max_literals
     success_sets = {}
 
     while chunk_size <= len(settings.pos):

@@ -3,7 +3,6 @@
 %% f(A) :- head(A,C),even(C),tail(A,B),f(B).
 %% 0.62s user 0.03s system 99% cpu 0.648 total
 
-max_clauses(2).
 max_vars(5).
 max_body(5).
 enable_recursion.

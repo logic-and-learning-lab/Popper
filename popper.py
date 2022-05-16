@@ -6,5 +6,7 @@ if __name__ == '__main__':
     prog, stats = learn_solution(settings)
     if prog != None:
         print_prog(prog)
+    else:
+        print('NO SOLUTION')
     if settings.show_stats:
         stats.show()

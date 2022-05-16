@@ -1,17 +1,14 @@
 import sys
 import clingo
 import clingo.script
-import multiprocessing
 import time
 import signal
 import argparse
 import os
 import logging
-import copy
 from time import perf_counter
 from contextlib import contextmanager
 from .core import Literal
-# from .constrain import Constrain
 
 clingo.script.enable_python()
 
@@ -23,7 +20,6 @@ CLINGO_ARGS=''
 MAX_RULES=2
 MAX_VARS=6
 MAX_BODY=6
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper, an ILP engine based on learning from failures')
@@ -40,7 +36,7 @@ def parse_args():
     parser.add_argument('--max-rules', type=int, default=MAX_RULES, help=f'Maximum number of rules allowed in recursive program (default: {MAX_RULES})')
     # parser.add_argument('--test-all', default=False, action='store_true', help='Test all examples')
     # parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
-    parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')
+    # parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run custom functional test')
     parser.add_argument('--clingo-args', type=str, default=CLINGO_ARGS, help='Arguments to pass to Clingo')
     parser.add_argument('--ex-file', type=str, default='', help='Filename for the examples')
@@ -76,67 +72,20 @@ def fix_path(kbpath, filename):
     return full_filename.replace('\\', '\\\\') if os.name == 'nt' else full_filename
 
 class Stats:
-    def __init__(self,
-                    log_best_programs=False,
-                    num_literals = 0,
-                    total_programs = 0,
-                    total_rules = 0,
-                    total_ground_rules = 0,
-                    durations = None,
-                    final_exec_time = 0,
-                    stages = None,
-                    best_programs = None,
-                    solution = None,
-                    info = False,
-                    debug = False
-                    ):
-
+    def __init__(self, info = False, debug = False):
         self.exec_start = perf_counter()
         self.logger = logging.getLogger("popper")
 
         if debug:
             log_level = logging.DEBUG
             logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
-            # logging.basicConfig(level=log_level, stream=sys.stderr, format='%(message)s')
         elif info:
             log_level = logging.INFO
             logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
-            # logging.basicConfig(level=log_level, stream=sys.stderr, format='%(message)s')
 
+        self.total_programs = 0
+        self.durations = {}
 
-
-
-
-
-        self.log_best_programs = log_best_programs
-        self.num_literals = num_literals
-        self.total_programs = total_programs
-        self.total_rules = total_rules
-        self.total_ground_rules = total_ground_rules
-        self.durations = {} if not durations else durations
-        self.final_exec_time = final_exec_time
-        self.stages = [] if not stages else stages
-        self.best_programs = [] if not best_programs else best_programs
-        self.solution = solution
-
-    def __enter__(self):
-        return self
-
-    # def update_num_literals(self, size):
-    #     prev_stage = self.stages[-1] if self.stages else None
-    #     programs_tried = self.total_programs - prev_stage.total_programs if prev_stage else 0
-
-    #     total_exec_time = self.total_exec_time()
-    #     exec_time = total_exec_time - prev_stage.total_exec_time if prev_stage else 0
-        
-    #     self.stages.append(Stage(size, self.total_programs, programs_tried, total_exec_time, exec_time))
-
-    #     self.logger.debug(f'Programs tried: {programs_tried} Exec Time: {exec_time:0.3f}s Total Exec Time: {total_exec_time:0.3f}s\n')
-
-    #     self.logger.debug(f'{"*" * 20} MAX LITERALS: {size} {"*" * 20}')
-
-    #     self.num_literals = size
-    
     def register_prog(self, prog):
         self.logger.debug(f'Program {self.total_programs}:')
         for rule in prog:
@@ -151,43 +100,6 @@ class Stats:
         self.logger.info(f'New best solution of size {size}:')
         for rule in prog:
             self.logger.info(format_rule(rule))
-
-    # def log_final_result(self):
-    #     if self.solution:
-    #         prog_stats = self.solution
-    #     elif self.best_programs:
-    #         prog_stats = self.best_programs[-1]
-    #     else:
-    #         self.logger.info('NO PROGRAMS FOUND')
-    #         return
-
-    #     self.logger.info(f'\n% BEST PROG {self.total_programs}:')
-    #     self.logger.info(prog_stats.code)
-    #     self.logger.info(format_conf_matrix(prog_stats.conf_matrix))
-
-    def make_program_stats(self, program, conf_matrix):
-        code = format_program(program)
-        return ProgramStats(code, conf_matrix, self.total_exec_time(), self.duration_summary())
-
-    def register_solution(self, program, conf_matrix):
-        prog_stats = self.make_program_stats(program, conf_matrix)
-        self.solution = prog_stats
-
-    def register_completion(self):
-        self.logger.info('NO MORE SOLUTIONS')
-        self.final_exec_time = self.total_exec_time()
-
-    def register_program(self, prog):
-        self.logger.debug(f'Program {self.total_programs}:')
-        self.logger.debug(format_prog(prog))
-
-    @property
-    def best_program(self):
-        if self.solution:
-            return self.solution
-        if self.best_programs:
-            return self.best_programs[-1]
-        return None
 
     def total_exec_time(self):
         return perf_counter() - self.exec_start
@@ -229,18 +141,19 @@ class Stats:
             else:
                 self.durations[operation].append(duration)
 
-# def format_program(program):
-    # return "\n".join(Clause.to_code(Clause.to_ordered(clause)) + '.' for clause in program)
-
 def format_prog(prog):
     return '\n'.join(format_rule(rule) for rule in prog)
+
+def format_literal(literal):
+    args = ','.join(literal.arguments)
+    return f'{literal.predicate}({args})'
 
 def format_rule(rule):
     head, body = rule
     head_str = ''
     if head:
-        head_str = Literal.to_code(head)
-    body_str = ','.join(Literal.to_code(literal) for literal in body)
+        head_str = format_literal(head)
+    body_str = ','.join(format_literal(literal) for literal in body)
     return f'{head_str}:- {body_str}.'
 
 def print_prog(prog):
@@ -260,11 +173,9 @@ def order_rule(rule):
     if head.inputs == []:
         return clause
 
-    # print('grounded_variables',grounded_variables)
     while body_literals:
         selected_literal = None
         for literal in body_literals:
-            # print('literal.inputs',literal.inputs)
             # AC: could cache for a micro-optimisation
             if literal.inputs.issubset(grounded_variables):
                 if literal.predicate != head.predicate:
@@ -283,27 +194,7 @@ def order_rule(rule):
         grounded_variables = grounded_variables.union(selected_literal.outputs)
         body_literals = body_literals.difference({selected_literal})
 
-    return (head, tuple(ordered_body))
-
-
-class Stage:
-    def __init__(self, num_literals, total_programs, programs, total_exec_time, exec_time):
-        self.num_literals = num_literals
-        self.total_programs = total_programs
-        self.programs = programs
-        self.total_exec_time = total_exec_time
-        self.exec_time = exec_time
-
-class ProgramStats:
-    def __init__(self, code, conf_matrix, total_exec_time, durations):
-        self.code = code
-        self.conf_matrix = conf_matrix
-        self.total_exec_time = total_exec_time
-        self.durations = durations
-
-        _, fn, _, fp = conf_matrix
-        
-        self.is_solution = fn == fp == 0
+    return head, tuple(ordered_body)
 
 class DurationSummary:
     def __init__(self, operation, called, total, mean, maximum):
@@ -320,8 +211,6 @@ def chunk_list(xs, size):
 def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
-arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
-
 class Settings:
     def __init__(self):
         args = parse_args()
@@ -334,9 +223,9 @@ class Settings:
         self.clingo_args = [] if not args.clingo_args else args.clingo_args.split(' ')
 
         self.functional_test = args.functional_test
-        self.hspace = args.hspace
         self.timeout = args.timeout
         self.eval_timeout = args.eval_timeout
+        self.solution = None
 
         solver = clingo.Control()
         with open(self.bias_file) as f:
