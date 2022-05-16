@@ -78,4 +78,5 @@ class Selector:
             print('*'*20)
             self.max_size = size
             self.best_program = new_solution
+            self.settings.solution = new_solution
             return True

@@ -1,6 +1,5 @@
 import logging
 import sys
-import numpy as np
 from datetime import datetime
 from . util import Settings2, Stats, timeout, format_prog, chunk_list, flatten
 from . pltester import Tester
@@ -15,13 +14,13 @@ def dbg(*args):
     current_time = now.strftime("%H:%M:%S")
     print(current_time, *args)
 
-def find_progs(settings, tester, cons, prog_coverage, chunk_pos, max_size=20):
+def find_progs(settings, tester, cons, prog_coverage, success_sets, chunk_pos, max_size=20):
     bootstrap_cons = deduce_cons(cons, chunk_pos)
     generator = Generator(settings, bootstrap_cons)
 
     for size in range(1, max_size+1):
+        dbg(f'SEARCHING SIZE: {size}')
         generator.update_num_literals(size)
-        print(f'SEARCHING SIZE: {size}')
 
         while True:
             with settings.stats.duration('gen'):
@@ -35,16 +34,12 @@ def find_progs(settings, tester, cons, prog_coverage, chunk_pos, max_size=20):
             # print(f'prog num: {settings.stats.total_programs}')
             # print(format_prog(prog))
 
-
             with settings.stats.duration('test'):
-                inconsistent, pos_covered = tester.test_prog(prog)
+                pos_covered, neg_covered = tester.test_prog(prog)
 
             chunk_pos_covered = set([x for x in chunk_pos if x in pos_covered])
             incomplete = len(chunk_pos_covered) != len(chunk_pos)
-
-            # print(f'inconsistent:{inconsistent}')
-            # print(f'incomplete:{incomplete}')
-            # print(f'totally incomplete:{len(pos_covered) == 0}')
+            inconsistent = len(neg_covered) > 0
 
             add_spec = False
             add_gen = False
@@ -52,39 +47,39 @@ def find_progs(settings, tester, cons, prog_coverage, chunk_pos, max_size=20):
             # always add an elimination constraint
             cons.add_elimination(prog)
 
-            # if not inconsistent and len(pos_covered) > 0:
-            #     xs = frozenset(pos_covered)
-            #     if xs in ss:
-            #         add_spec = True
-            #         for e in settings.pos:
-            #             cons.add_specialisation(spec_con, e)
-            #     else:
-            #         ss[xs] = rule
-
-            # if inconsistent, then rule all generalisations
+            # if inconsistent, prune generalisations
             if inconsistent:
                 add_gen = True
 
+            # if consistent, prune specialisations
             if not inconsistent:
-                # if consistent, no need to specialise
                 add_spec = True
                 for e in settings.pos:
                     cons.add_specialisation(prog, e)
 
-            # for any examples uncovered, save a specialisation constraint
+            # if too specific for an example e, save a specialisation constraint for e
             for e in settings.pos.difference(pos_covered):
                 cons.add_specialisation(prog, e)
 
-            # if it does not cover any chunk example, then prune specialisations
+            # if it does not cover any example, prune specialisations
             if len(chunk_pos_covered) == 0:
                 add_spec = True
 
-            # if consistent and covers at least one pos example, yield rule
+
+            # if consistent and covers at least one example
             if len(pos_covered) > 0 and not inconsistent:
-                print('rule')
-                print(format_prog(prog))
-                prog_coverage[prog] = pos_covered
-                yield prog
+                # check whether subsumed by an already seen program
+                # if so, prune specialisations and do not yield
+                if pos_covered in success_sets:
+                    add_spec = True
+                    for e in settings.pos:
+                        cons.add_specialisation(prog, e)
+                else:
+                    success_sets[pos_covered] = prog
+                    dbg('CANDIDATE PROGRAM:')
+                    print(format_prog(prog))
+                    prog_coverage[prog] = pos_covered
+                    yield prog
 
             # if it covers all examples, add candidate rule and prune specialisations
             if len(chunk_pos_covered) == len(chunk_pos) and not inconsistent:
@@ -99,35 +94,28 @@ def find_progs(settings, tester, cons, prog_coverage, chunk_pos, max_size=20):
                 if not add_spec and not add_gen:
                     new_cons.update(generator.build_elimination_constraint(prog))
                 generator.add_constraints(new_cons)
-    # assert(False)
-    # exit()
 
 def deduce_cons(cons, chunk_pos):
     return set.intersection(*[cons.spec_cons[x] for x in chunk_pos]), cons.elim_cons
 
-def popper(ignore, stats):
-    settings = Settings2()
-    # note: tester loads the examples and adds them to settings
+def popper(settings):
     tester = Tester(settings)
-    settings.stats=stats
     cons = Constrainer(settings)
     selector = Selector(settings)
 
     all_chunks = [[x] for x in settings.pos]
     chunk_size = 1
-    max_size = 20
-
     # chunk_size = len(settings.pos)
+    max_size = 20
+    success_sets = {}
 
     while chunk_size <= len(settings.pos):
-        print('CHUNK_SIZE', chunk_size)
         chunks = list(chunk_list(all_chunks, chunk_size))
 
         covered_examples = set()
 
         for chunk_pos in chunks:
             chunk_pos = set(flatten(chunk_pos))
-            # print('chunk_pos', chunk_pos)
 
             # if all examples are covered, stop
             if len(covered_examples) == len(chunks):
@@ -136,13 +124,12 @@ def popper(ignore, stats):
             if chunk_pos.issubset(covered_examples):
                 continue
 
-            for prog in find_progs(settings, tester, cons, selector.prog_coverage, chunk_pos, max_size):
+            for prog in find_progs(settings, tester, cons, selector.prog_coverage, success_sets, chunk_pos, max_size):
                 covered_examples.update(selector.prog_coverage[prog])
                 with settings.stats.duration('select'):
                     new_solution = selector.update_best_prog(prog)
                     if new_solution and len(chunk_pos) == 1:
                         max_size = selector.max_size - 1
-
                 # TODO: CONSTRAIN PROGRAM SIZE
 
         # chunk_size += chunk_size
@@ -151,14 +138,6 @@ def popper(ignore, stats):
         elif chunk_size == len(settings.pos):
             chunk_size += 1
 
-    return selector.best_program
-
-
 def learn_solution(settings):
-    stats = Stats(log_best_programs=settings.info)
-    stats.solution_found = False
-    log_level = logging.DEBUG if settings.debug else logging.INFO
-    logging.basicConfig(level=log_level, stream=sys.stderr, format='%(message)s')
-    timeout(popper, (settings, stats), timeout_duration=int(settings.timeout))
-
-    return stats.solution_found, stats
+    timeout(popper, (settings,), timeout_duration=int(settings.timeout))
+    return settings.solution, settings.stats

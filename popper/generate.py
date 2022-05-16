@@ -80,16 +80,12 @@ class Generator:
         symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
         self.solver.assign_external(symbol, True)
 
-    # con_count = 0
     def gen_prog(self):
         with self.solver.solve(yield_ = True) as handle:
-            with self.settings.stats.duration('gen.get_model'):
-                m = handle.model()
+            m = handle.model()
             if m:
-                with self.settings.stats.duration('gen.get_atoms'):
-                    atoms = m.symbols(shown = True)
-                with self.settings.stats.duration('gen.parse_model'):
-                    return self.parse_model(atoms)
+                atoms = m.symbols(shown = True)
+                return self.parse_model(atoms)
         return None
 
     # TODO: COULD CACHE TUPLES OF ARGS FOR TINY OPTIMISATION

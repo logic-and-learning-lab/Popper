@@ -260,7 +260,7 @@ class Stats:
                 total_op_time += summary.total
         message += f'Total operation time: {total_op_time:0.2f}s\n'
         message += f'Total execution time: {self.total_exec_time():0.2f}s'
-        self.logger.info(message)
+        print(message)
 
     def duration_summary(self):
         summary = []
@@ -469,6 +469,11 @@ arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
 class Settings2:
     def __init__(self):
         settings = parse_settings()
+
+        self.hspace = settings.hspace
+        self.timeout = settings.timeout
+
+        self.stats = Stats(log_best_programs=settings.info)
         # bk, all_pos, all_neg = parse_input(settings)
         # bk, all_pos, all_neg = parse_input2(settings)
 

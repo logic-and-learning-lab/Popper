@@ -43,6 +43,11 @@ class Tester():
             atom = x['Atom']
             self.pos_index[index] = atom
 
+        for x in self.prolog.query('current_predicate(neg_index/2),neg_index(I,Atom)'):
+            index = x['I']
+            atom = x['Atom']
+            self.neg_index[index] = atom
+
         self.settings.pos = frozenset(self.pos_index.values())
         self.settings.neg = frozenset(self.neg_index.values())
 
@@ -57,11 +62,11 @@ class Tester():
 
     def test_prog(self, prog):
         with self.using(prog):
-            pos_covered = set(next(self.prolog.query('pos_covered(Xs)'))['Xs'])
-            pos_covered = set(self.pos_index[i] for i in pos_covered)
-            neg_covered = set(next(self.prolog.query('neg_covered(Xs)'))['Xs'])
-            inconsistent = len(neg_covered) > 0
-            return inconsistent, pos_covered
+            pos_covered = frozenset(next(self.prolog.query('pos_covered(Xs)'))['Xs'])
+            pos_covered = frozenset(self.pos_index[i] for i in pos_covered)
+            neg_covered = frozenset(next(self.prolog.query('neg_covered(Xs)'))['Xs'])
+            neg_covered = frozenset(self.neg_index[i] for i in neg_covered)
+            return pos_covered, neg_covered
 
     # def get_pos_covered(self, prog):
     #     with self.using(prog):
