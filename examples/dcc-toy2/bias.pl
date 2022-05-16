@@ -20,5 +20,3 @@ body_pred(x1,1).
 body_pred(x2,1).
 body_pred(x3,1).
 body_pred(x4,1).
-
-max_clauses(1).

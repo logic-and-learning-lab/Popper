@@ -44,6 +44,10 @@ class Generator:
         with open(settings.bias_file) as f:
             prog.append(f.read())
 
+        prog.append(f'max_clauses({settings.max_rules}).')
+        prog.append(f'max_body({settings.max_body}).')
+        prog.append(f'max_vars({settings.max_vars}).')
+
         prog = '\n'.join(prog)
         # with open('gen.pl', 'w') as f:
             # f.write(prog)

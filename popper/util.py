@@ -15,25 +15,31 @@ from .core import Literal
 
 clingo.script.enable_python()
 
-# TIMEOUT=600
 TIMEOUT=1200
 EVAL_TIMEOUT=0.001
 MAX_LITERALS=100
 MAX_SOLUTIONS=1
 CLINGO_ARGS=''
+MAX_RULES=2
+MAX_VARS=6
+MAX_BODY=6
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper, an ILP engine based on learning from failures')
     parser.add_argument('kbpath', help = 'Path to the knowledge base one wants to learn on')
-    parser.add_argument('--eval-timeout', type=float, default=EVAL_TIMEOUT, help='Prolog evaluation timeout in seconds')
-    parser.add_argument('--timeout', type=float, default=TIMEOUT, help='Overall timeout (in seconds)')
-    parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help='Maximum number of literals allowed in program')
-    # parser.add_argument('--max-solutions', type=int, default=MAX_SOLUTIONS, help='Maximum number of solutions to print')
-    parser.add_argument('--test-all', default=False, action='store_true', help='Test all examples')
-    parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
     parser.add_argument('--info', default=False, action='store_true', help='Print best programs so far to stderr')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
+
+    parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {timeout})')
+    parser.add_argument('--eval-timeout', type=float, default=EVAL_TIMEOUT, help=f'Prolog evaluation timeout in seconds (default: {EVAL_TIMEOUT})')
+    parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help=f'Maximum number of literals allowed in program (default: {MAX_LITERALS})')
+    parser.add_argument('--max-body', type=int, default=MAX_BODY, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
+    parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
+    parser.add_argument('--max-rules', type=int, default=MAX_RULES, help=f'Maximum number of rules allowed in recursive program (default: {MAX_RULES})')
+    # parser.add_argument('--test-all', default=False, action='store_true', help='Test all examples')
+    # parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
     parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run custom functional test')
     parser.add_argument('--clingo-args', type=str, default=CLINGO_ARGS, help='Arguments to pass to Clingo')
@@ -68,81 +74,6 @@ def load_kbpath(kbpath):
 def fix_path(kbpath, filename):
     full_filename = os.path.join(kbpath, filename)
     return full_filename.replace('\\', '\\\\') if os.name == 'nt' else full_filename
-
-def parse_settings():
-    args = parse_args()
-    
-    (bk_file, ex_file, bias_file) = load_kbpath(args.kbpath)
-
-    return Settings(
-        bias_file,
-        args.ex_file if args.ex_file else ex_file,
-        args.bk_file if args.bk_file else bk_file,
-        info = args.info,
-        bkcons = args.bkcons,
-        kbpath = args.kbpath,
-        debug = args.debug,
-        stats = args.stats,
-        eval_timeout = args.eval_timeout,
-        test_all = args.test_all,
-        timeout = args.timeout,
-        max_literals = args.max_literals,
-        clingo_args= [] if not args.clingo_args else args.clingo_args.split(' '),
-        max_solutions = MAX_SOLUTIONS,
-        functional_test = args.functional_test,
-        hspace = False if args.hspace == -1 else args.hspace
-    )
-
-class Settings:
-    def __init__(self,
-            bias_file,
-            ex_file,
-            bk_file,
-            info = False,
-            bkcons = False,
-            debug = False,
-            stats = False,
-            kbpath = None,
-            eval_timeout = EVAL_TIMEOUT,
-            test_all = False,
-            timeout = TIMEOUT,
-            max_literals = MAX_LITERALS,
-            clingo_args = CLINGO_ARGS,
-            max_solutions = MAX_SOLUTIONS,
-            functional_test = False,
-            task = '',
-            hspace=False):
-            
-        self.bias_file = bias_file
-        self.ex_file = ex_file
-        self.bk_file = bk_file
-        self.info = info
-        self.bkcons = bkcons
-        self.debug = debug
-        self.stats = stats
-        self.eval_timeout = eval_timeout
-        self.test_all = test_all
-        self.timeout = timeout
-        self.kbpath = kbpath
-        self.max_literals = max_literals
-        self.clingo_args = clingo_args
-        self.max_solutions = max_solutions
-        self.functional_test = functional_test
-        self.hspace = hspace
-        self.task = task
-
-# def format_program(program):
-    # return "\n".join(Clause.to_code(Clause.to_ordered(clause)) + '.' for clause in program)
-
-def format_conf_matrix(conf_matrix):
-    tp, fn, tn, fp = conf_matrix
-    precision = 'n/a'
-    if (tp+fp) > 0:
-        precision = f'{tp / (tp+fp):0.2f}'
-    recall = 'n/a'
-    if (tp+fn) > 0:
-        recall = f'{tp / (tp+fn):0.2f}'
-    return f'% Precision:{precision}, Recall:{recall}, TP:{tp}, FN:{fn}, TN:{tn}, FP:{fp}\n'
 
 class Stats:
     def __init__(self,
@@ -221,19 +152,18 @@ class Stats:
         for rule in prog:
             self.logger.info(format_rule(rule))
 
+    # def log_final_result(self):
+    #     if self.solution:
+    #         prog_stats = self.solution
+    #     elif self.best_programs:
+    #         prog_stats = self.best_programs[-1]
+    #     else:
+    #         self.logger.info('NO PROGRAMS FOUND')
+    #         return
 
-    def log_final_result(self):
-        if self.solution:
-            prog_stats = self.solution
-        elif self.best_programs:
-            prog_stats = self.best_programs[-1]
-        else:
-            self.logger.info('NO PROGRAMS FOUND')
-            return
-
-        self.logger.info(f'\n% BEST PROG {self.total_programs}:')
-        self.logger.info(prog_stats.code)
-        self.logger.info(format_conf_matrix(prog_stats.conf_matrix))
+    #     self.logger.info(f'\n% BEST PROG {self.total_programs}:')
+    #     self.logger.info(prog_stats.code)
+    #     self.logger.info(format_conf_matrix(prog_stats.conf_matrix))
 
     def make_program_stats(self, program, conf_matrix):
         code = format_program(program)
@@ -313,6 +243,11 @@ def format_rule(rule):
     body_str = ','.join(Literal.to_code(literal) for literal in body)
     return f'{head_str}:- {body_str}.'
 
+def print_prog(prog):
+    print('*'*10 + ' SOLUTION ' + '*'*10)
+    print(format_prog(prog))
+    print('*'*30)
+
 def prog_size(prog):
     return sum(1 + len(body) for head, body in prog)
 
@@ -378,47 +313,6 @@ class DurationSummary:
         self.mean = mean
         self.maximum = maximum
 
-
-def parse_exs(task, exs_txt):
-    solver = clingo.Control()
-    solver.add('base', [], exs_txt)
-    solver.ground([('base', [])])
-    with solver.solve(yield_=True) as handle:
-        for m in handle:
-            for atom in m.symbols(shown = True):
-                yield atom.name, task, str(atom.arguments[0])
-
-def parse_exs2(txt):
-    solver = clingo.Control()
-    solver.add('base', [], txt)
-    solver.ground([('base', [])])
-    with solver.solve(yield_=True) as handle:
-        for m in handle:
-            for atom in m.symbols(shown = True):
-                yield atom.name, str(atom.arguments[0])
-
-def parse_bk(settings, all_bk):
-    bk = {}
-
-    with open(settings.bk_file, 'r') as f:
-        x = f.read()
-    txt = ''
-    for line in x.split('\n'):
-        if line.startswith('#T'):
-            if txt != '':
-                bk[task] = txt
-                txt = ''
-            task = int(line.strip()[2:])
-        else:
-            txt += line + '\n'
-    if txt != '':
-        bk[task] = txt
-
-    for task in bk:
-        bk[task] += '\n' + all_bk
-
-    return bk
-
 def chunk_list(xs, size):
     for i in range(0, len(xs), size):
         yield xs[i:i+size]
@@ -428,62 +322,56 @@ def flatten(xs):
 
 arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
 
-class Settings2:
+class Settings:
     def __init__(self):
-        settings = parse_settings()
+        args = parse_args()
 
-        self.hspace = settings.hspace
-        self.timeout = settings.timeout
+        self.stats = Stats(info=args.info, debug=args.debug)
+        self.bk_file, self.ex_file, self.bias_file = load_kbpath(args.kbpath)
+        self.show_stats = args.stats
 
-        self.stats = Stats(info=settings.info, debug=settings.debug)
-        # bk, all_pos, all_neg = parse_input(settings)
-        # bk, all_pos, all_neg = parse_input2(settings)
+        self.max_literals = args.max_literals
+        self.clingo_args = [] if not args.clingo_args else args.clingo_args.split(' ')
 
-        self.bk_file = settings.bk_file
-        self.ex_file = settings.ex_file
-        # self.bk = bk
-        # self.pos = all_pos
-        # self.neg = all_neg
-        self.bias_file = settings.bias_file
-        self.eval_timeout = settings.eval_timeout
-
+        self.functional_test = args.functional_test
+        self.hspace = args.hspace
+        self.timeout = args.timeout
+        self.eval_timeout = args.eval_timeout
 
         solver = clingo.Control()
-        with open(settings.bias_file) as f:
+        with open(self.bias_file) as f:
             solver.add('bias', [], f.read())
         solver.add('bias', [], """
-            #defined body_literal/3.
-            #defined clause_var/1.
-            #defined var_type/2.
+            #defined body_literal/4.
+            #defined clause/1.
+            #defined clause_var/2.
+            #defined var_type/3.
         """)
         solver.ground([('bias', [])])
 
-        for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
-            args = x.symbol.arguments
-            symbol = args[0].name
-            arity = args[1].number
-            self.head_pred = symbol, arity
-
-        head_pred, head_arity=  self.head_pred
-        self.head_literal = Literal(head_pred, tuple(arg_lookup[clingo.Number(arg)] for arg in range(head_arity)))
-        tmp_map = {1:'A', 2:'A,B',3:'A,B,C', 4:'A,B,C,D'}
-        self.head_str =  f'{head_pred}({tmp_map[head_arity]})'
-
-        settings.body_preds = set()
-        for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
-            args = x.symbol.arguments
-            symbol = args[0]
-            arity = args[1].number
-            settings.body_preds.add((symbol, arity))
-
+        self.max_body = args.max_body
         for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
-            args = x.symbol.arguments
-            self.max_size = args[0].number
+            self.max_body = x.symbol.arguments[0].number
 
+        self.max_vars = args.max_vars
         for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
-            args = x.symbol.arguments
-            self.max_vars = args[0].number
+            self.max_vars = x.symbol.arguments[0].number
 
+        self.max_rules = None
         for x in solver.symbolic_atoms.by_signature('max_clauses', arity=1):
-            args = x.symbol.arguments
-            self.max_rules = args[0].number
+            self.max_rules = x.symbol.arguments[0].number
+
+        if self.max_rules == None:
+            pi_or_recursion = False
+            for x in solver.symbolic_atoms.by_signature('enable_recursion', arity=0):
+                pi_or_recursion = True
+            for x in solver.symbolic_atoms.by_signature('enable_pi', arity=0):
+                pi_or_recursion = True
+            if pi_or_recursion:
+                self.max_rules = args.max_rules
+            else:
+                self.max_rules = 1
+
+        self.stats.logger.debug(f'Max rules: {self.max_rules}')
+        self.stats.logger.debug(f'Max vars: {self.max_vars}')
+        self.stats.logger.debug(f'Max body: {self.max_body}')

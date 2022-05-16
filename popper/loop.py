@@ -1,18 +1,12 @@
-import logging
-import sys
-from datetime import datetime
-from . util import Settings2, Stats, timeout, format_prog, chunk_list, flatten
+import time
 from . pltester import Tester
+from . select import Selector
+from . util import timeout, chunk_list, flatten
 # from . tester import Tester
 # from . asptester import Tester
-from . generate import Generator, Constrainer, format_constraint
-from . select import Selector
-import time
+from . generate import Generator, Constrainer
 
-def dbg(*args):
-    now = datetime.now()
-    current_time = now.strftime("%H:%M:%S")
-    print(current_time, *args)
+
 
 def find_progs(settings, tester, cons, prog_coverage, success_sets, chunk_pos, max_size=20):
     bootstrap_cons = deduce_cons(cons, chunk_pos)
