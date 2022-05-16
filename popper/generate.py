@@ -54,19 +54,15 @@ class Generator:
         solver.add('number_of_literals', ['n'], NUM_LITERALS)
         self.solver = solver
 
-        specs, elims = bootstrap_cons
+        specs, elims, gens = bootstrap_cons
         cons = set()
         for prog in specs:
             cons.update(self.build_specialisation_constraint(prog))
         for prog in elims:
             cons.update(self.build_elimination_constraint(prog))
-        # print(cons)
+        for prog in gens:
+            cons.update(self.build_generalisation_constraint(prog))
         self.add_constraints(cons)
-        # add bootstap constraints
-        # for con in bootstrap_cons:
-            # self.add_constraint(con)
-            # prog.append(format_constraint(con))
-
 
     def update_num_literals(self, size):
         # 1. Release those that have already been assigned

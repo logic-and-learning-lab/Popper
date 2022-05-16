@@ -19,7 +19,7 @@ def find_progs(settings, tester, cons, prog_coverage, success_sets, chunk_pos, m
     generator = Generator(settings, bootstrap_cons)
 
     for size in range(1, max_size+1):
-        dbg(f'SEARCHING SIZE: {size}')
+        settings.stats.logger.info(f'SEARCHING SIZE: {size}')
         generator.update_num_literals(size)
 
         while True:
@@ -30,12 +30,10 @@ def find_progs(settings, tester, cons, prog_coverage, success_sets, chunk_pos, m
 
             settings.stats.total_programs += 1
 
-            # print('')
-            # print(f'prog num: {settings.stats.total_programs}')
-            # print(format_prog(prog))
-
             with settings.stats.duration('test'):
                 pos_covered, neg_covered = tester.test_prog(prog)
+
+            settings.stats.register_prog(prog)
 
             chunk_pos_covered = set([x for x in chunk_pos if x in pos_covered])
             incomplete = len(chunk_pos_covered) != len(chunk_pos)
@@ -65,7 +63,6 @@ def find_progs(settings, tester, cons, prog_coverage, success_sets, chunk_pos, m
             if len(chunk_pos_covered) == 0:
                 add_spec = True
 
-
             # if consistent and covers at least one example
             if len(pos_covered) > 0 and not inconsistent:
                 # check whether subsumed by an already seen program
@@ -76,8 +73,7 @@ def find_progs(settings, tester, cons, prog_coverage, success_sets, chunk_pos, m
                         cons.add_specialisation(prog, e)
                 else:
                     success_sets[pos_covered] = prog
-                    dbg('CANDIDATE PROGRAM:')
-                    print(format_prog(prog))
+                    settings.stats.register_candidate_prog(prog)
                     prog_coverage[prog] = pos_covered
                     yield prog
 
@@ -96,7 +92,7 @@ def find_progs(settings, tester, cons, prog_coverage, success_sets, chunk_pos, m
                 generator.add_constraints(new_cons)
 
 def deduce_cons(cons, chunk_pos):
-    return set.intersection(*[cons.spec_cons[x] for x in chunk_pos]), cons.elim_cons
+    return set.intersection(*[cons.spec_cons[x] for x in chunk_pos]), cons.elim_cons, cons.gen_cons
 
 def popper(settings):
     tester = Tester(settings)
@@ -115,7 +111,7 @@ def popper(settings):
         covered_examples = set()
 
         for chunk_pos in chunks:
-            chunk_pos = set(flatten(chunk_pos))
+            chunk_pos = frozenset(flatten(chunk_pos))
 
             # if all examples are covered, stop
             if len(covered_examples) == len(chunks):
@@ -127,8 +123,8 @@ def popper(settings):
             for prog in find_progs(settings, tester, cons, selector.prog_coverage, success_sets, chunk_pos, max_size):
                 covered_examples.update(selector.prog_coverage[prog])
                 with settings.stats.duration('select'):
-                    new_solution = selector.update_best_prog(prog)
-                    if new_solution and len(chunk_pos) == 1:
+                    new_solution_found = selector.update_best_prog(prog)
+                    if new_solution_found and len(chunk_pos) == 1:
                         max_size = selector.max_size - 1
                 # TODO: CONSTRAIN PROGRAM SIZE
 

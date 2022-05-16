@@ -1,5 +1,5 @@
 import clingo
-from . util import format_rule, prog_size, format_prog
+from . util import format_rule, prog_size, format_prog, flatten
 
 FIND_SUBSET_PROG = """
 #show rule/1.
@@ -30,11 +30,9 @@ class Selector:
     def build_example_encoding(self):
         example_prog = []
         for i, x in enumerate(self.settings.pos):
-            # print(i, x)
             self.example_to_hash[x] = i
             example_prog.append(f'example({i}).')
         self.example_prog = '\n'.join(example_prog)
-        # print(self.example_to_hash)
 
     def build_prog_encoding(self, prog):
         self.prog_count += 1
@@ -42,7 +40,6 @@ class Selector:
         size = prog_size(prog)
         prog_builder = []
         prog_builder.append(f'size({self.prog_count},{size}).')
-        # print(self.prog_coverage[prog])
         for ex in self.prog_coverage[prog]:
             i = self.example_to_hash[ex]
             prog_builder.append(f'covers({self.prog_count},{i}).')
@@ -65,18 +62,16 @@ class Selector:
                 atoms = m.symbols(shown = True)
                 out = [atom.arguments[0].number for atom in atoms]
 
-        new_solution = [self.index_to_prog[k] for k in out]
-        if len(new_solution) > 0:
-            print('*'*20)
-            size = 0
-            for sub_prog in new_solution:
-                for rule in sub_prog:
-                    head, body = rule
-                    size += len(body) + 1
-                    print(format_rule(rule))
-            print(f'NEW SOLUTION OF SIZE: {size}')
-            print('*'*20)
-            self.max_size = size
-            self.best_program = new_solution
-            self.settings.solution = new_solution
-            return True
+        new_solution = flatten([self.index_to_prog[k] for k in out])
+        if len(new_solution) == 0:
+            return False
+
+        size = 0
+        for rule in new_solution:
+            head, body = rule
+            size += len(body) + 1
+        self.settings.stats.register_best_prog(new_solution, size)
+        self.max_size = size
+        self.best_program = new_solution
+        self.settings.solution = new_solution
+        return True

@@ -1,3 +1,4 @@
+import sys
 import clingo
 import clingo.script
 import multiprocessing
@@ -154,9 +155,27 @@ class Stats:
                     final_exec_time = 0,
                     stages = None,
                     best_programs = None,
-                    solution = None):
+                    solution = None,
+                    info = False,
+                    debug = False
+                    ):
+
         self.exec_start = perf_counter()
         self.logger = logging.getLogger("popper")
+
+        if debug:
+            log_level = logging.DEBUG
+            logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
+            # logging.basicConfig(level=log_level, stream=sys.stderr, format='%(message)s')
+        elif info:
+            log_level = logging.INFO
+            logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
+            # logging.basicConfig(level=log_level, stream=sys.stderr, format='%(message)s')
+
+
+
+
+
 
         self.log_best_programs = log_best_programs
         self.num_literals = num_literals
@@ -187,20 +206,21 @@ class Stats:
 
     #     self.num_literals = size
     
-    # def register_program(self, program, conf_matrix):
-    #     self.total_programs +=1
-        
-    #     self.logger.debug(f'Program {self.total_programs}:')
-    #     self.logger.debug(format_program(program))
-    #     self.logger.debug(format_conf_matrix(conf_matrix))
-    
-    # def register_best_program(self, program, conf_matrix):
-    #     prog_stats = self.make_program_stats(program, conf_matrix)
-    #     self.best_programs.append(prog_stats)
-    #     if self.log_best_programs:
-    #         self.logger.info(f'% NEW BEST PROG {self.total_programs}:')
-    #         self.logger.info(prog_stats.code)
-    #         self.logger.info(format_conf_matrix(conf_matrix))
+    def register_prog(self, prog):
+        self.logger.debug(f'Program {self.total_programs}:')
+        for rule in prog:
+            self.logger.debug(format_rule(rule))
+
+    def register_candidate_prog(self, prog):
+        self.logger.info(f'Candidate program:')
+        for rule in prog:
+            self.logger.info(format_rule(rule))
+
+    def register_best_prog(self, prog, size):
+        self.logger.info(f'New best solution of size {size}:')
+        for rule in prog:
+            self.logger.info(format_rule(rule))
+
 
     def log_final_result(self):
         if self.solution:
@@ -227,16 +247,9 @@ class Stats:
         self.logger.info('NO MORE SOLUTIONS')
         self.final_exec_time = self.total_exec_time()
 
-    def register_rules(self, rules):
-        self.logger.debug('Rules:')
-        for rule in rules:
-            self.logger.debug(Constrain.format_constraint(rule))
-        self.logger.debug('\n')
-
-        self.total_rules += len(rules)
-    
-    def register_ground_rules(self, rules):
-        self.total_ground_rules += len(rules)
+    def register_program(self, prog):
+        self.logger.debug(f'Program {self.total_programs}:')
+        self.logger.debug(format_prog(prog))
 
     @property
     def best_program(self):
@@ -406,57 +419,6 @@ def parse_bk(settings, all_bk):
 
     return bk
 
-# def parse_input2(settings):
-#     with open(settings.bk_file, 'r') as f:
-#         bk = f.read()
-#     pos = set()
-#     neg = set()
-#     with open(settings.ex_file, 'r') as f:
-#         txt = f.read()
-#         for label, value in parse_exs2(txt):
-#             if label == 'pos':
-#                 pos.add(value)
-#             else:
-#                 neg.add(value)
-#     return bk, pos, neg
-
-# def parse_input(settings):
-#     with open(settings.bk_file.replace('bk','bk-all'), 'r') as f:
-#         all_bk = f.read()
-
-#     bk = parse_bk(settings, all_bk)
-
-#     examples = {}
-#     with open(settings.ex_file, 'r') as f:
-#         x = f.read()
-#         if '#T' not in x:
-#             pass
-#             # parse file
-#         else:
-#             tasks = set()
-#             txt = ''
-#             for line in x.split('\n'):
-#                 if line.startswith('#T'):
-#                     if txt != '':
-#                         examples[task] = txt
-#                         txt = ''
-#                     task = int(line.strip()[2:])
-#                 else:
-#                     txt += line + '\n'
-#     if txt != '':
-#         examples[task] = txt
-
-#     pos = set()
-#     neg = set()
-#     for k, v in examples.items():
-#         for label, task, ex in parse_exs(k, v):
-#             if label == 'pos':
-#                 pos.add((task, ex))
-#             elif label == 'neg':
-#                 neg.add((task, ex))
-#     return bk, pos, neg
-
-
 def chunk_list(xs, size):
     for i in range(0, len(xs), size):
         yield xs[i:i+size]
@@ -473,7 +435,7 @@ class Settings2:
         self.hspace = settings.hspace
         self.timeout = settings.timeout
 
-        self.stats = Stats(log_best_programs=settings.info)
+        self.stats = Stats(info=settings.info, debug=settings.debug)
         # bk, all_pos, all_neg = parse_input(settings)
         # bk, all_pos, all_neg = parse_input2(settings)
 
