@@ -1,13 +1,14 @@
 import time
 from . select import Selector
-from . util import timeout, chunk_list, flatten
+from . util import timeout, chunk_list, flatten, print_prog, format_rule
 from . tester import Tester
 # from . asptester import Tester
 from . generate import Generator, Constrainer
 
 def find_progs(settings, tester, cons, prog_coverage, success_sets, chunk_pos, max_size=20):
     bootstrap_cons = deduce_cons(cons, chunk_pos)
-    generator = Generator(settings, bootstrap_cons)
+    with settings.stats.duration('bootstrap'):
+        generator = Generator(settings, bootstrap_cons)
 
     for size in range(1, max_size+1):
         settings.stats.logger.info(f'SEARCHING SIZE: {size}')
@@ -54,19 +55,22 @@ def find_progs(settings, tester, cons, prog_coverage, success_sets, chunk_pos, m
             if len(chunk_pos_covered) == 0:
                 add_spec = True
 
-            # if consistent and covers at least one example
-            if len(pos_covered) > 0 and not inconsistent:
-                # check whether subsumed by an already seen program
-                # if so, prune specialisations and do not yield
-                if pos_covered in success_sets:
+            # check whether subsumed by an already seen program
+            # if so, prune specialisations
+            subsumed = False
+            if len(pos_covered)>0:
+                subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets.keys())
+                if subsumed:
                     add_spec = True
                     for e in settings.pos:
                         cons.add_specialisation(prog, e)
-                else:
-                    success_sets[pos_covered] = prog
-                    settings.stats.register_candidate_prog(prog)
-                    prog_coverage[prog] = pos_covered
-                    yield prog
+
+            # if consistent and covers at least one example
+            if len(pos_covered) > 0 and not inconsistent and not subsumed:
+                success_sets[pos_covered] = prog
+                settings.stats.register_candidate_prog(prog)
+                prog_coverage[prog] = pos_covered
+                yield prog
 
             # if it covers all examples, add candidate rule and prune specialisations
             if len(chunk_pos_covered) == len(chunk_pos) and not inconsistent:
