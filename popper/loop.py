@@ -3,12 +3,12 @@ from . select import Selector
 from . util import timeout, chunk_list, flatten, print_prog, format_rule
 from . tester import Tester
 # from . asptester import Tester
-from . generate import Generator, Constrainer
+from . generate import Generator, Constrainer, Grounder
 
-def find_progs(settings, tester, cons, prog_coverage, success_sets, chunk_pos, max_size=20):
+def find_progs(settings, tester, grounder, cons, prog_coverage, success_sets, chunk_pos, max_size=20):
     bootstrap_cons = deduce_cons(cons, chunk_pos)
     with settings.stats.duration('bootstrap'):
-        generator = Generator(settings, bootstrap_cons)
+        generator = Generator(settings, grounder, bootstrap_cons)
 
     for size in range(1, max_size+1):
         settings.stats.logger.info(f'SEARCHING SIZE: {size}')
@@ -30,10 +30,6 @@ def find_progs(settings, tester, cons, prog_coverage, success_sets, chunk_pos, m
             chunk_pos_covered = set([x for x in chunk_pos if x in pos_covered])
             incomplete = len(chunk_pos_covered) != len(chunk_pos)
             inconsistent = len(neg_covered) > 0
-
-            # # if it covers all examples, add candidate rule and prune specialisations
-            # if not inconsistent and len(pos_covered) == len(settings.pos):
-            #     settings.stats.logger.info('STOP EARLY!')
 
             add_spec = False
             add_gen = False
@@ -96,6 +92,7 @@ def deduce_cons(cons, chunk_pos):
 def popper(settings):
     tester = Tester(settings)
     cons = Constrainer(settings)
+    grounder = Grounder()
     selector = Selector(settings)
 
     all_chunks = [[x] for x in settings.pos]
@@ -119,7 +116,8 @@ def popper(settings):
             if chunk_pos.issubset(covered_examples):
                 continue
 
-            for prog in find_progs(settings, tester, cons, selector.prog_coverage, success_sets, chunk_pos, max_size):
+            # def find_progs(settings, tester, grounder, cons, prog_coverage, success_sets, chunk_pos, max_size=20):
+            for prog in find_progs(settings, tester, grounder, cons, selector.prog_coverage, success_sets, chunk_pos, max_size):
                 # if we find a program that covers all examples, stop
                 if selector.prog_coverage[prog] == settings.pos:
                     selector.update_best_prog(prog)

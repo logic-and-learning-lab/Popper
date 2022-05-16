@@ -1,6 +1,5 @@
 max_vars(6).
 max_body(6).
-max_clauses(1).
 
 %% 10:17:46 next(A,B):-c_b(C),my_input(D,C),does(A,D,C),my_true(A,B),c_r(B)
 %% 10:17:46 next(A,B):-c_b(C),my_input(D,C),c_p(E),does(A,D,C),c_q(B),my_true(A,E)

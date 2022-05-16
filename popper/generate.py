@@ -27,12 +27,12 @@ def atom_to_symbol(pred, args):
     return Function(name = pred, arguments = xs)
 
 class Generator:
-    def __init__(self, settings, bootstrap_cons):
+    def __init__(self, settings, grounder, bootstrap_cons):
         self.settings = settings
         self.last_size = None
 
         self.constrain = Constrain()
-        self.grounder = Grounder()
+        self.grounder = grounder
         self.seen_symbols = {}
 
         # build generator program
@@ -140,9 +140,14 @@ class Generator:
             prog.append((rule))
         return frozenset(prog)
 
+    # cached_groundings = {}
+
     def add_constraints(self, rules):
         ground_rules = set()
         for rule in rules:
+            # if rule in self.cached_groundings:
+                # ground_rules.update(self.cached_groundings[rule])
+                # continue
             head, body = rule
 
             # find bindings for variables in the rule
@@ -152,8 +157,9 @@ class Generator:
             body = tuple(literal for literal in body if not literal.meta)
 
             # ground the rule for each variable assignment
-            for assignment in assignments:
-                ground_rules.add(self.grounder.ground_rule((head, body), assignment))
+            xs = set(self.grounder.ground_rule((head, body), assignment) for assignment in assignments)
+            ground_rules.update(xs)
+            # self.cached_groundings[rule] = xs
         self.add_ground_rules(ground_rules)
 
     def gen_symbol(self, literal, backend):
