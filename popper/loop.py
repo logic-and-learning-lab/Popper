@@ -31,6 +31,10 @@ def find_progs(settings, tester, cons, prog_coverage, success_sets, chunk_pos, m
             incomplete = len(chunk_pos_covered) != len(chunk_pos)
             inconsistent = len(neg_covered) > 0
 
+            # # if it covers all examples, add candidate rule and prune specialisations
+            # if not inconsistent and len(pos_covered) == len(settings.pos):
+            #     settings.stats.logger.info('STOP EARLY!')
+
             add_spec = False
             add_gen = False
 
@@ -116,6 +120,11 @@ def popper(settings):
                 continue
 
             for prog in find_progs(settings, tester, cons, selector.prog_coverage, success_sets, chunk_pos, max_size):
+                # if we find a program that covers all examples, stop
+                if selector.prog_coverage[prog] == settings.pos:
+                    selector.update_best_prog(prog)
+                    return
+
                 covered_examples.update(selector.prog_coverage[prog])
                 with settings.stats.duration('select'):
                     new_solution_found = selector.update_best_prog(prog)

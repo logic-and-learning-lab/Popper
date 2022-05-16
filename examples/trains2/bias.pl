@@ -1,10 +1,8 @@
 %% S f(A):- has_car(A,B),has_car(A,C),roof_closed(C),two_wheels(B),roof_open(B).
 %% S f(A):- has_car(A,B),has_load(B,C),triangle(C),roof_open(B).
 
-
 max_vars(6).
 max_body(6).
-max_clauses(1).
 
 head_pred(f,1).
 body_pred(has_car,2).
