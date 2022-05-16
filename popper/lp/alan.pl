@@ -33,6 +33,10 @@ pruned:-var_first_lit(C,V,(P,PArgs)),var_first_lit(C,W,(Q,QArgs)),bfr(C,(P,PArgs
 pi_or_rec:- recursive.
 pi_or_rec:- pi.
 
+:-
+    clause(1),
+    not pi_or_rec.
+
 %% HEAD PRED SYMBOL IF GIVEN BY USER OR INVENTED
 head_aux(P,A):-
     head_pred(P,A).

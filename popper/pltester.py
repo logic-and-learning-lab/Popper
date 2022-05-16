@@ -25,6 +25,7 @@ class Tester():
 
         bk_pl_path = self.settings.bk_file
         exs_pl_path = self.settings.ex_file
+
         test_pl_path = pkg_resources.resource_filename(__name__, "lp/test.pl")
 
         for x in [exs_pl_path, bk_pl_path, test_pl_path]:
@@ -42,7 +43,10 @@ class Tester():
             atom = x['Atom']
             self.pos_index[index] = atom
 
-        # self.prolog.assertz(f'timeout({self.eval_timeout})')
+        self.settings.pos = frozenset(self.pos_index.values())
+        self.settings.neg = frozenset(self.neg_index.values())
+
+        self.prolog.assertz(f'timeout({self.settings.eval_timeout})')
 
     # def test_prog(self, prog):
     #     neg_covered = self.get_neg_covered(prog)
@@ -59,17 +63,17 @@ class Tester():
             inconsistent = len(neg_covered) > 0
             return inconsistent, pos_covered
 
-    def get_pos_covered(self, prog):
-        with self.using(prog):
-            return set(next(self.prolog.query('pos_covered(Xs)'))['Xs'])
+    # def get_pos_covered(self, prog):
+    #     with self.using(prog):
+    #         return set(next(self.prolog.query('pos_covered(Xs)'))['Xs'])
 
-    def get_neg_covered(self, prog):
-        with self.using(prog):
-            return set(next(self.prolog.query('neg_covered(Xs)'))['Xs'])
+    # def get_neg_covered(self, prog):
+    #     with self.using(prog):
+    #         return set(next(self.prolog.query('neg_covered(Xs)'))['Xs'])
 
-    def is_inconsistent(self, prog):
-        with self.using(prog):
-            return len(list(self.prolog.query('inconsistent'))) > 0
+    # def is_inconsistent(self, prog):
+    #     with self.using(prog):
+    #         return len(list(self.prolog.query('inconsistent'))) > 0
 
     @contextmanager
     def using(self, prog):

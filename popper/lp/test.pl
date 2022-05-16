@@ -47,14 +47,14 @@ test_ex(Atom):-
     %% findall(ID, (ex_index(ID,Atom),test_ex(Atom)), Xs).
 
 pos_covered(Xs):-
-    findall(ID, (pos_index(ID,Atom),call(Atom)), Xs).
+    findall(ID, (pos_index(ID,Atom),test_ex(Atom)), Xs).
 
 neg_covered(Xs):-
-    findall(ID, (neg_index(ID,Atom),call(Atom)), Xs).
+    findall(ID, (neg_index(ID,Atom),test_ex(Atom)), Xs).
 
-inconsistent:-
-    neg_index(_,Atom),
-    call(Atom).
+%% inconsistent:-
+    %% neg_index(_,Atom),
+    %% call(Atom).
     %% findall(ID, (ex_index(ID,Atom),test_ex(Atom)), Xs).
 
 %% ========== FUNCTIONAL CHECKS ==========

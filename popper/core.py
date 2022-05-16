@@ -61,11 +61,11 @@ class Literal:
         self.predicate = predicate
         self.arguments = arguments
         self.arity = len(arguments)
-        self.directions = None
+        self.directions = directions
         self.positive = positive
         self.meta = meta
-        # self.inputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
-        # self.outputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
+        self.inputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
+        self.outputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
 
     @staticmethod
     def to_code(literal):

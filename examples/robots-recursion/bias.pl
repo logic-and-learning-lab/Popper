@@ -5,7 +5,7 @@
 
 max_vars(4).
 max_body(3).
-max_clauses(3).
+max_clauses(2).
 enable_recursion.
 
 head_pred(f,2).

@@ -30,9 +30,11 @@ class Selector:
     def build_example_encoding(self):
         example_prog = []
         for i, x in enumerate(self.settings.pos):
+            # print(i, x)
             self.example_to_hash[x] = i
             example_prog.append(f'example({i}).')
         self.example_prog = '\n'.join(example_prog)
+        # print(self.example_to_hash)
 
     def build_prog_encoding(self, prog):
         self.prog_count += 1
@@ -40,6 +42,7 @@ class Selector:
         size = prog_size(prog)
         prog_builder = []
         prog_builder.append(f'size({self.prog_count},{size}).')
+        # print(self.prog_coverage[prog])
         for ex in self.prog_coverage[prog]:
             i = self.example_to_hash[ex]
             prog_builder.append(f'covers({self.prog_count},{i}).')
@@ -75,3 +78,4 @@ class Selector:
             print('*'*20)
             self.max_size = size
             self.best_program = new_solution
+            return True

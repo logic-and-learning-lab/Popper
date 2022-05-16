@@ -172,35 +172,35 @@ class Stats:
     def __enter__(self):
         return self
 
-    def update_num_literals(self, size):
-        prev_stage = self.stages[-1] if self.stages else None
-        programs_tried = self.total_programs - prev_stage.total_programs if prev_stage else 0
+    # def update_num_literals(self, size):
+    #     prev_stage = self.stages[-1] if self.stages else None
+    #     programs_tried = self.total_programs - prev_stage.total_programs if prev_stage else 0
 
-        total_exec_time = self.total_exec_time()
-        exec_time = total_exec_time - prev_stage.total_exec_time if prev_stage else 0
+    #     total_exec_time = self.total_exec_time()
+    #     exec_time = total_exec_time - prev_stage.total_exec_time if prev_stage else 0
         
-        self.stages.append(Stage(size, self.total_programs, programs_tried, total_exec_time, exec_time))
+    #     self.stages.append(Stage(size, self.total_programs, programs_tried, total_exec_time, exec_time))
 
-        self.logger.debug(f'Programs tried: {programs_tried} Exec Time: {exec_time:0.3f}s Total Exec Time: {total_exec_time:0.3f}s\n')
+    #     self.logger.debug(f'Programs tried: {programs_tried} Exec Time: {exec_time:0.3f}s Total Exec Time: {total_exec_time:0.3f}s\n')
 
-        self.logger.debug(f'{"*" * 20} MAX LITERALS: {size} {"*" * 20}')
+    #     self.logger.debug(f'{"*" * 20} MAX LITERALS: {size} {"*" * 20}')
 
-        self.num_literals = size
+    #     self.num_literals = size
     
-    def register_program(self, program, conf_matrix):
-        self.total_programs +=1
+    # def register_program(self, program, conf_matrix):
+    #     self.total_programs +=1
         
-        self.logger.debug(f'Program {self.total_programs}:')
-        self.logger.debug(format_program(program))
-        self.logger.debug(format_conf_matrix(conf_matrix))
+    #     self.logger.debug(f'Program {self.total_programs}:')
+    #     self.logger.debug(format_program(program))
+    #     self.logger.debug(format_conf_matrix(conf_matrix))
     
-    def register_best_program(self, program, conf_matrix):
-        prog_stats = self.make_program_stats(program, conf_matrix)
-        self.best_programs.append(prog_stats)
-        if self.log_best_programs:
-            self.logger.info(f'% NEW BEST PROG {self.total_programs}:')
-            self.logger.info(prog_stats.code)
-            self.logger.info(format_conf_matrix(conf_matrix))
+    # def register_best_program(self, program, conf_matrix):
+    #     prog_stats = self.make_program_stats(program, conf_matrix)
+    #     self.best_programs.append(prog_stats)
+    #     if self.log_best_programs:
+    #         self.logger.info(f'% NEW BEST PROG {self.total_programs}:')
+    #         self.logger.info(prog_stats.code)
+    #         self.logger.info(format_conf_matrix(conf_matrix))
 
     def log_final_result(self):
         if self.solution:
@@ -304,30 +304,7 @@ def prog_size(prog):
     return sum(1 + len(body) for head, body in prog)
 
 def order_rule(rule):
-
     head, body = rule
-
-    if not any(literal.predicate == 'has_car' for literal in body):
-        return rule
-
-    directions = {}
-    directions['has_car'] = ('+','-')
-    directions['has_load'] = ('+','-')
-
-    def tmp(literal):
-        if literal.predicate not in directions:
-            literal.inputs = frozenset([literal.arguments[0]])
-            literal.outputs = frozenset([])
-        else:
-            literal.inputs = frozenset([literal.arguments[0]])
-            literal.outputs = frozenset([literal.arguments[1]])
-
-
-
-    tmp(head)
-    for x in body:
-        tmp(x)
-
     ordered_body = []
     grounded_variables = head.inputs
     body_literals = set(body)
@@ -429,57 +406,55 @@ def parse_bk(settings, all_bk):
 
     return bk
 
-def parse_input2(settings):
-    with open(settings.bk_file, 'r') as f:
-        bk = f.read()
-    pos = set()
-    neg = set()
-    with open(settings.ex_file, 'r') as f:
-        txt = f.read()
-        for label, value in parse_exs2(txt):
-            if label == 'pos':
-                pos.add(value)
-            else:
-                neg.add(value)
-    return bk, pos, neg
+# def parse_input2(settings):
+#     with open(settings.bk_file, 'r') as f:
+#         bk = f.read()
+#     pos = set()
+#     neg = set()
+#     with open(settings.ex_file, 'r') as f:
+#         txt = f.read()
+#         for label, value in parse_exs2(txt):
+#             if label == 'pos':
+#                 pos.add(value)
+#             else:
+#                 neg.add(value)
+#     return bk, pos, neg
 
+# def parse_input(settings):
+#     with open(settings.bk_file.replace('bk','bk-all'), 'r') as f:
+#         all_bk = f.read()
 
+#     bk = parse_bk(settings, all_bk)
 
-def parse_input(settings):
-    with open(settings.bk_file.replace('bk','bk-all'), 'r') as f:
-        all_bk = f.read()
+#     examples = {}
+#     with open(settings.ex_file, 'r') as f:
+#         x = f.read()
+#         if '#T' not in x:
+#             pass
+#             # parse file
+#         else:
+#             tasks = set()
+#             txt = ''
+#             for line in x.split('\n'):
+#                 if line.startswith('#T'):
+#                     if txt != '':
+#                         examples[task] = txt
+#                         txt = ''
+#                     task = int(line.strip()[2:])
+#                 else:
+#                     txt += line + '\n'
+#     if txt != '':
+#         examples[task] = txt
 
-    bk = parse_bk(settings, all_bk)
-
-    examples = {}
-    with open(settings.ex_file, 'r') as f:
-        x = f.read()
-        if '#T' not in x:
-            pass
-            # parse file
-        else:
-            tasks = set()
-            txt = ''
-            for line in x.split('\n'):
-                if line.startswith('#T'):
-                    if txt != '':
-                        examples[task] = txt
-                        txt = ''
-                    task = int(line.strip()[2:])
-                else:
-                    txt += line + '\n'
-    if txt != '':
-        examples[task] = txt
-
-    pos = set()
-    neg = set()
-    for k, v in examples.items():
-        for label, task, ex in parse_exs(k, v):
-            if label == 'pos':
-                pos.add((task, ex))
-            elif label == 'neg':
-                neg.add((task, ex))
-    return bk, pos, neg
+#     pos = set()
+#     neg = set()
+#     for k, v in examples.items():
+#         for label, task, ex in parse_exs(k, v):
+#             if label == 'pos':
+#                 pos.add((task, ex))
+#             elif label == 'neg':
+#                 neg.add((task, ex))
+#     return bk, pos, neg
 
 
 def chunk_list(xs, size):
@@ -494,18 +469,16 @@ arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
 class Settings2:
     def __init__(self):
         settings = parse_settings()
-
-
         # bk, all_pos, all_neg = parse_input(settings)
-        bk, all_pos, all_neg = parse_input2(settings)
-
+        # bk, all_pos, all_neg = parse_input2(settings)
 
         self.bk_file = settings.bk_file
         self.ex_file = settings.ex_file
-        self.bk = bk
-        self.pos = all_pos
-        self.neg = all_neg
+        # self.bk = bk
+        # self.pos = all_pos
+        # self.neg = all_neg
         self.bias_file = settings.bias_file
+        self.eval_timeout = settings.eval_timeout
 
 
         solver = clingo.Control()
@@ -536,8 +509,14 @@ class Settings2:
             arity = args[1].number
             settings.body_preds.add((symbol, arity))
 
-
-        settings.body_preds = set()
         for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
             args = x.symbol.arguments
             self.max_size = args[0].number
+
+        for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
+            args = x.symbol.arguments
+            self.max_vars = args[0].number
+
+        for x in solver.symbolic_atoms.by_signature('max_clauses', arity=1):
+            args = x.symbol.arguments
+            self.max_rules = args[0].number

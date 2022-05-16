@@ -5,7 +5,7 @@
 %% :- not body_size(_,4).
 
 max_vars(6).
-max_body(6).
+max_body(5).
 max_clauses(1).
 
 head_pred(f,1).
