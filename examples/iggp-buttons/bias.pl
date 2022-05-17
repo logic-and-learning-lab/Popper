@@ -44,69 +44,69 @@ type(not_my_true,(ex,prop)).
     #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
 
 
-prop(antitransitive,my_succ).
-prop(antitriangular,my_succ).
-prop(asymmetric_ab_ba,my_succ).
-prop(pab_qac,(does,my_input)).
-prop(postcon,(my_succ,c_p)).
-prop(postcon,(my_succ,c_q)).
-prop(postcon,(my_succ,c_r)).
-prop(postcon,(my_succ,not_my_true)).
-prop(pre_postcon,(c_p,my_succ,c_p)).
-prop(pre_postcon,(c_p,my_succ,c_q)).
-prop(pre_postcon,(c_p,my_succ,c_r)).
-prop(pre_postcon,(c_p,my_succ,my_true)).
-prop(pre_postcon,(c_p,my_succ,not_my_true)).
-prop(pre_postcon,(c_q,my_succ,c_p)).
-prop(pre_postcon,(c_q,my_succ,c_q)).
-prop(pre_postcon,(c_q,my_succ,c_r)).
-prop(pre_postcon,(c_q,my_succ,my_true)).
-prop(pre_postcon,(c_q,my_succ,not_my_true)).
-prop(pre_postcon,(c_r,my_succ,c_p)).
-prop(pre_postcon,(c_r,my_succ,c_q)).
-prop(pre_postcon,(c_r,my_succ,c_r)).
-prop(pre_postcon,(c_r,my_succ,my_true)).
-prop(pre_postcon,(c_r,my_succ,not_my_true)).
-prop(pre_postcon,(my_true,my_succ,c_p)).
-prop(pre_postcon,(my_true,my_succ,c_q)).
-prop(pre_postcon,(my_true,my_succ,c_r)).
-prop(pre_postcon,(my_true,my_succ,my_true)).
-prop(pre_postcon,(my_true,my_succ,not_my_true)).
-prop(pre_postcon,(not_my_true,my_succ,c_p)).
-prop(pre_postcon,(not_my_true,my_succ,c_q)).
-prop(pre_postcon,(not_my_true,my_succ,c_r)).
-prop(pre_postcon,(not_my_true,my_succ,my_true)).
-prop(pre_postcon,(not_my_true,my_succ,not_my_true)).
-prop(pre_postcon,(role,my_input,c_a)).
-prop(pre_postcon,(role,my_input,c_b)).
-prop(pre_postcon,(role,my_input,c_c)).
-prop(precon,(c_p,my_succ)).
-prop(precon,(c_q,my_succ)).
-prop(precon,(c_r,my_succ)).
-prop(precon,(not_my_true,my_succ)).
-prop(singleton,c_a).
-prop(singleton,c_b).
-prop(singleton,c_c).
-prop(singleton,c_p).
-prop(singleton,c_q).
-prop(singleton,c_r).
-prop(singleton,role).
-prop(unique_a_b,does).
-prop(unique_a_b,my_succ).
-prop(unique_b_a,does).
-prop(unique_b_a,my_succ).
-prop(countk,c_a,1).
-prop(countk,c_b,1).
-prop(countk,c_c,1).
-prop(countk,c_p,1).
-prop(countk,c_q,1).
-prop(countk,c_r,1).
-prop(countk,role,1).
-prop(unsat_pair,c_b,c_a).
-prop(unsat_pair,c_c,c_a).
-prop(unsat_pair,c_c,c_b).
-prop(unsat_pair,c_q,c_p).
-prop(unsat_pair,c_r,c_p).
-prop(unsat_pair,c_r,c_q).
-prop(unsat_pair,not_my_true,my_true).
-prop(countk,my_true,3).
+%% prop(antitransitive,my_succ).
+%% prop(antitriangular,my_succ).
+%% prop(asymmetric_ab_ba,my_succ).
+%% prop(pab_qac,(does,my_input)).
+%% prop(postcon,(my_succ,c_p)).
+%% prop(postcon,(my_succ,c_q)).
+%% prop(postcon,(my_succ,c_r)).
+%% prop(postcon,(my_succ,not_my_true)).
+%% prop(pre_postcon,(c_p,my_succ,c_p)).
+%% prop(pre_postcon,(c_p,my_succ,c_q)).
+%% prop(pre_postcon,(c_p,my_succ,c_r)).
+%% prop(pre_postcon,(c_p,my_succ,my_true)).
+%% prop(pre_postcon,(c_p,my_succ,not_my_true)).
+%% prop(pre_postcon,(c_q,my_succ,c_p)).
+%% prop(pre_postcon,(c_q,my_succ,c_q)).
+%% prop(pre_postcon,(c_q,my_succ,c_r)).
+%% prop(pre_postcon,(c_q,my_succ,my_true)).
+%% prop(pre_postcon,(c_q,my_succ,not_my_true)).
+%% prop(pre_postcon,(c_r,my_succ,c_p)).
+%% prop(pre_postcon,(c_r,my_succ,c_q)).
+%% prop(pre_postcon,(c_r,my_succ,c_r)).
+%% prop(pre_postcon,(c_r,my_succ,my_true)).
+%% prop(pre_postcon,(c_r,my_succ,not_my_true)).
+%% prop(pre_postcon,(my_true,my_succ,c_p)).
+%% prop(pre_postcon,(my_true,my_succ,c_q)).
+%% prop(pre_postcon,(my_true,my_succ,c_r)).
+%% prop(pre_postcon,(my_true,my_succ,my_true)).
+%% prop(pre_postcon,(my_true,my_succ,not_my_true)).
+%% prop(pre_postcon,(not_my_true,my_succ,c_p)).
+%% prop(pre_postcon,(not_my_true,my_succ,c_q)).
+%% prop(pre_postcon,(not_my_true,my_succ,c_r)).
+%% prop(pre_postcon,(not_my_true,my_succ,my_true)).
+%% prop(pre_postcon,(not_my_true,my_succ,not_my_true)).
+%% prop(pre_postcon,(role,my_input,c_a)).
+%% prop(pre_postcon,(role,my_input,c_b)).
+%% prop(pre_postcon,(role,my_input,c_c)).
+%% prop(precon,(c_p,my_succ)).
+%% prop(precon,(c_q,my_succ)).
+%% prop(precon,(c_r,my_succ)).
+%% prop(precon,(not_my_true,my_succ)).
+%% prop(singleton,c_a).
+%% prop(singleton,c_b).
+%% prop(singleton,c_c).
+%% prop(singleton,c_p).
+%% prop(singleton,c_q).
+%% prop(singleton,c_r).
+%% prop(singleton,role).
+%% prop(unique_a_b,does).
+%% prop(unique_a_b,my_succ).
+%% prop(unique_b_a,does).
+%% prop(unique_b_a,my_succ).
+%% prop(countk,c_a,1).
+%% prop(countk,c_b,1).
+%% prop(countk,c_c,1).
+%% prop(countk,c_p,1).
+%% prop(countk,c_q,1).
+%% prop(countk,c_r,1).
+%% prop(countk,role,1).
+%% prop(unsat_pair,c_b,c_a).
+%% prop(unsat_pair,c_c,c_a).
+%% prop(unsat_pair,c_c,c_b).
+%% prop(unsat_pair,c_q,c_p).
+%% prop(unsat_pair,c_r,c_p).
+%% prop(unsat_pair,c_r,c_q).
+%% prop(unsat_pair,not_my_true,my_true).
+%% prop(countk,my_true,3).

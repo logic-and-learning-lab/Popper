@@ -47,7 +47,7 @@ test_ex(Atom):-
     catch(call_with_time_limit(T, call(Atom)),time_limit_exceeded,false),!.
 
 test_ex(Atom):-
-    call(Atom).
+    call(Atom),!.
 
 pos_covered(Xs):-
     findall(ID, (pos_index(ID,Atom),test_ex(Atom)), Xs).

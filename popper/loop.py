@@ -50,6 +50,12 @@ def find_progs(settings, tester, grounder, cons, prog_coverage, success_sets, ch
                 for e in settings.pos:
                     cons.add_specialisation(prog, e)
 
+            # # TMP!
+            # if len(chunk_pos) > 1 and len(chunk_pos_covered) != len(chunk_pos):
+            #     add_spec = True
+            #     for e in settings.pos:
+            #         cons.add_specialisation(prog, e)
+
             # if too specific for an example e, save a specialisation constraint for e
             for e in settings.pos.difference(pos_covered):
                 cons.add_specialisation(prog, e)
