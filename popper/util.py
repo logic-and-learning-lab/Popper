@@ -93,7 +93,7 @@ class Stats:
 
     def register_candidate_prog(self, prog):
         self.logger.info(f'Candidate program:')
-        for rule in prog:
+        for rule in order_prog(prog):
             self.logger.info(format_rule(rule))
 
     def register_best_prog(self, prog, size):
@@ -142,7 +142,7 @@ class Stats:
                 self.durations[operation].append(duration)
 
 def format_prog(prog):
-    return '\n'.join(format_rule(rule) for rule in prog)
+    return '\n'.join(format_rule(order_rule(rule)) for rule in prog)
 
 def format_literal(literal):
     args = ','.join(literal.arguments)
@@ -158,11 +158,20 @@ def format_rule(rule):
 
 def print_prog(prog):
     print('*'*10 + ' SOLUTION ' + '*'*10)
-    print(format_prog(prog))
+    print(format_prog(order_prog(prog)))
     print('*'*30)
 
 def prog_size(prog):
     return sum(1 + len(body) for head, body in prog)
+
+def order_prog(prog):
+    return sorted(list(prog), key=lambda rule: (rule_is_recursive(rule), len(rule[1])))
+
+def rule_is_recursive(rule):
+    head, body = rule
+    if not head:
+        return False
+    return any(head.predicate  == literal.predicate for literal in body if isinstance(literal, Literal))
 
 def order_rule(rule):
     head, body = rule

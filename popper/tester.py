@@ -5,7 +5,7 @@ import pkg_resources
 from pyswip import Prolog
 from contextlib import contextmanager
 from . core import Literal
-from . util import format_rule, order_rule
+from . util import format_rule, order_rule, order_prog
 
 class Tester():
 
@@ -59,6 +59,8 @@ class Tester():
 
     @contextmanager
     def using(self, prog):
+        if self.settings.recursion_enabled:
+            prog = order_prog(prog)
         current_clauses = set()
         try:
             for rule in prog:
@@ -71,6 +73,8 @@ class Tester():
             for predicate, arity in current_clauses:
                 args = ','.join(['_'] * arity)
                 self.prolog.retractall(f'{predicate}({args})')
+
+
 
     # def is_non_functional(self, program):
     #     try:
