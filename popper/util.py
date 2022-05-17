@@ -250,13 +250,16 @@ class Settings:
         for x in solver.symbolic_atoms.by_signature('max_clauses', arity=1):
             self.max_rules = x.symbol.arguments[0].number
 
+        self.recursion_enabled = False
+        for x in solver.symbolic_atoms.by_signature('enable_recursion', arity=0):
+            self.recursion_enabled = True
+
+        self.pi_enabled = False
+        for x in solver.symbolic_atoms.by_signature('enable_pi', arity=0):
+            pi_or_recursion = True
+
         if self.max_rules == None:
-            pi_or_recursion = False
-            for x in solver.symbolic_atoms.by_signature('enable_recursion', arity=0):
-                pi_or_recursion = True
-            for x in solver.symbolic_atoms.by_signature('enable_pi', arity=0):
-                pi_or_recursion = True
-            if pi_or_recursion:
+            if self.recursion_enabled or self.pi_enabled:
                 self.max_rules = args.max_rules
             else:
                 self.max_rules = 1

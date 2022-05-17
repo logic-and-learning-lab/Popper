@@ -315,7 +315,7 @@ class Constrain:
         literals.append(gteq(clause_number, min_num))
 
         # ensure that each var_var is ground to a unique value
-        literals.append(alldiff(tuple(vo_variable(v) for v in self.all_vars(clause))))
+        # literals.append(alldiff(tuple(vo_variable(v) for v in self.all_vars(clause))))
 
         for idx, var in enumerate(head.arguments):
             literals.append(eq(vo_variable(var), idx))

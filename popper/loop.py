@@ -27,13 +27,12 @@ def find_progs(settings, tester, grounder, cons, prog_coverage, success_sets, ch
             settings.stats.total_programs += 1
 
             with settings.stats.duration('test'):
-                pos_covered, neg_covered = tester.test_prog(prog)
+                pos_covered, inconsistent = tester.test_prog(prog)
 
             settings.stats.register_prog(prog)
 
             chunk_pos_covered = set([x for x in chunk_pos if x in pos_covered])
             incomplete = len(chunk_pos_covered) != len(chunk_pos)
-            inconsistent = len(neg_covered) > 0
 
             add_spec = False
             add_gen = False
@@ -100,8 +99,8 @@ def popper(settings):
     selector = Selector(settings)
 
     all_chunks = [[x] for x in settings.pos]
-    # chunk_size = 1
-    chunk_size = len(settings.pos)
+    chunk_size = 1
+    # chunk_size = len(settings.pos)
     max_size = settings.max_literals
     success_sets = {}
 

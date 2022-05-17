@@ -43,15 +43,19 @@ class Tester():
         self.settings.pos = frozenset(self.pos_index.values())
         self.settings.neg = frozenset(self.neg_index.values())
 
-        self.prolog.assertz(f'timeout({self.settings.eval_timeout})')
+        if self.settings.recursion_enabled:
+            self.prolog.assertz(f'timeout({self.settings.eval_timeout})')
 
     def test_prog(self, prog):
         with self.using(prog):
             pos_covered = frozenset(next(self.prolog.query('pos_covered(Xs)'))['Xs'])
             pos_covered = frozenset(self.pos_index[i] for i in pos_covered)
-            neg_covered = frozenset(next(self.prolog.query('neg_covered(Xs)'))['Xs'])
-            neg_covered = frozenset(self.neg_index[i] for i in neg_covered)
-            return pos_covered, neg_covered
+
+            # neg_covered = frozenset(next(self.prolog.query('neg_covered(Xs)'))['Xs'])
+            # neg_covered = frozenset(self.neg_index[i] for i in neg_covered)
+
+            inconsistent = len(list(self.prolog.query("inconsistent"))) > 0
+            return pos_covered, inconsistent
 
     @contextmanager
     def using(self, prog):
