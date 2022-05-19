@@ -37,10 +37,6 @@ ex_index(ID,Atom):-
     current_predicate(neg_index/2),
     neg_index(ID,Atom).
 
-%% writeln(here1),
-    %% functor(Atom,P,A),
-    %% current_predicate(P/A),!,
-
 test_ex(Atom):-
     current_predicate(timeout/1),!,
     timeout(T),

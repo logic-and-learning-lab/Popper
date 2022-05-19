@@ -12,9 +12,12 @@ my_succ(5,6).
 my_succ(6,7).
 
 not_my_true(A,B):-
-    %% not_my_true_a(A),
-    %% not_my_true_b(B),
     \+ my_true(A,B).
+
+%% not_my_true(A,B):-
+%%     not_my_true_a(A),
+%%     not_my_true_b(B),
+%%     not my_true(A,B).
 
 not_my_true_a(A):-
     my_true(A,_).

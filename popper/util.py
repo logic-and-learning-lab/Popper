@@ -12,7 +12,7 @@ from .core import Literal
 
 clingo.script.enable_python()
 
-TIMEOUT=1200
+TIMEOUT=600
 EVAL_TIMEOUT=0.001
 MAX_LITERALS=40
 MAX_SOLUTIONS=1
@@ -239,6 +239,7 @@ class Settings:
         self.stats = Stats(info=args.info, debug=args.debug)
         self.bk_file, self.ex_file, self.bias_file = load_kbpath(args.kbpath)
         self.show_stats = args.stats
+        self.bkcons = None
 
         self.max_literals = args.max_literals
         self.clingo_args = [] if not args.clingo_args else args.clingo_args.split(' ')

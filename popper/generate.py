@@ -44,7 +44,14 @@ class Generator:
         prog.append(f'max_clauses({settings.max_rules}).')
         prog.append(f'max_body({settings.max_body}).')
         prog.append(f'max_vars({settings.max_vars}).')
+
+        if self.settings.bkcons != None:
+            prog.append(self.settings.bkcons)
+
         prog = '\n'.join(prog)
+
+        # print(prog)
+        # exit()
 
         # build solver
         solver = clingo.Control()

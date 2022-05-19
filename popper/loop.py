@@ -4,6 +4,7 @@ from . util import timeout, chunk_list, flatten, print_prog, format_rule
 from . tester import Tester
 # from . asptester import Tester
 from . generate import Generator, Constrainer, Grounder
+from . bkcons import deduce_bk_cons
 
 SIMPLE_HACK = True
 
@@ -67,7 +68,7 @@ def find_progs(settings, tester, grounder, cons, prog_coverage, success_sets, ch
                 for e in settings.pos:
                     cons.add_specialisation(prog, e)
 
-            # # # # TODO: IF WE ALREADY HAVE A SOLUTION, ANY NEW RULE MUST COVER AT LEAST TWO EXAMPLES
+            # # # # # TODO: IF WE ALREADY HAVE A SOLUTION, ANY NEW RULE MUST COVER AT LEAST TWO EXAMPLES
             # if len(chunk_pos) > 1 and len(chunk_pos_covered) < 2:
             #     # print('asda2')
             #     add_spec = True
@@ -123,6 +124,9 @@ def deduce_cons(cons, chunk_pos):
     return set.intersection(*[cons.spec_cons[x] for x in chunk_pos]), cons.elim_cons, cons.gen_cons
 
 def popper(settings):
+    deduce_bk_cons(settings)
+    # exit()
+
     tester = Tester(settings)
     cons = Constrainer(settings)
     grounder = Grounder()
