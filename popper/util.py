@@ -14,7 +14,7 @@ clingo.script.enable_python()
 
 TIMEOUT=1200
 EVAL_TIMEOUT=0.001
-MAX_LITERALS=100
+MAX_LITERALS=40
 MAX_SOLUTIONS=1
 CLINGO_ARGS=''
 MAX_RULES=2
@@ -164,6 +164,18 @@ def print_prog(prog):
 def prog_size(prog):
     return sum(1 + len(body) for head, body in prog)
 
+def reduce_prog(prog):
+    def f(literal):
+        return literal.predicate, literal.arguments
+    reduced = {}
+    for rule in prog:
+        head, body = rule
+        head = f(head)
+        body = frozenset(f(literal) for literal in body)
+        k = head, body
+        reduced[k] = rule
+    return reduced.values()
+
 def order_prog(prog):
     return sorted(list(prog), key=lambda rule: (rule_is_recursive(rule), len(rule[1])))
 
@@ -235,6 +247,7 @@ class Settings:
         self.timeout = args.timeout
         self.eval_timeout = args.eval_timeout
         self.solution = None
+        self.best_prog = None
 
         solver = clingo.Control()
         with open(self.bias_file) as f:

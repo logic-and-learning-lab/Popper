@@ -12,7 +12,8 @@ class Tester:
         self.settings = settings
 
         solver = clingo.Control()
-        solver.add('bk', [], self.settings.bk)
+        with open(self.settings.bk_file, 'r') as f:
+            solver.add('bk', [], f.read())
         t1 = time.time()
         solver.ground([('bk', [])])
         t2 = time.time()
@@ -185,5 +186,5 @@ class Tester:
                         inconsistent = True
         t2 = time.time()
         # print('solving', t2-t1)
-        return inconsistent, pos_covered
+        return pos_covered, inconsistent
 

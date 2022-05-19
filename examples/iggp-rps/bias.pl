@@ -21,8 +21,8 @@ type(different,(player,player)).
     clause(C),
     #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
 
-%% :-
-    %% body_literal(_,different,_,(V0,V1)), V0 > V1.
+:-
+    body_literal(_,different,_,(V0,V1)), V0 > V1.
 
 %% prop(antitransitive,beats).
 %% prop(antitransitive,different).

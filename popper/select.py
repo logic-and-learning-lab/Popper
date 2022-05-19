@@ -1,5 +1,5 @@
 import clingo
-from . util import format_rule, prog_size, format_prog, flatten
+from . util import format_rule, prog_size, format_prog, flatten, reduce_prog
 
 FIND_SUBSET_PROG = """
 #show rule/1.
@@ -17,15 +17,18 @@ dominates(R1,R2):- different(R1,R2), not different(R2,R1).
 """
 
 class Selector:
-    def __init__(self, settings):
+    def __init__(self, settings, tester):
         self.settings = settings
         self.prog_coverage = {}
         self.index_to_prog = {}
         self.max_size = None
+        self.best_prog = None
         self.prog_encoding = ''
         self.example_to_hash = {}
         self.prog_count = 0
         self.build_example_encoding()
+        self.tester = tester
+        self.constraints = []
 
     def build_example_encoding(self):
         example_prog = []
@@ -45,33 +48,42 @@ class Selector:
             prog_builder.append(f'covers({self.prog_count},{i}).')
         self.prog_encoding += '\n'.join(prog_builder) + '\n'
 
-    def update_best_prog(self, prog):
-        self.build_prog_encoding(prog)
-        encoding = [FIND_SUBSET_PROG, self.example_prog, self.prog_encoding]
+    def select_solution(self):
+        encoding = [FIND_SUBSET_PROG, '\n'.join(self.constraints), self.example_prog, self.prog_encoding]
         if self.max_size != None:
             encoding.append(f':- size(N), N >= {self.max_size}.')
         encoding = '\n'.join(encoding)
 
+        # print(encoding)
         solver = clingo.Control()
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
-
         out = []
         with solver.solve(yield_=True) as handle:
             for m in handle:
                 atoms = m.symbols(shown = True)
                 out = [atom.arguments[0].number for atom in atoms]
+                tmp = flatten([self.index_to_prog[k] for k in out])
+                _, inconsistent = self.tester.test_prog(tmp)
+                if inconsistent:
+                    con = ':-' + ','.join(f'rule({i})' for i in out) + '.'
+                    self.constraints.append(con)
+                    return self.select_solution()
+        return flatten([self.index_to_prog[k] for k in out])
 
-        new_solution = flatten([self.index_to_prog[k] for k in out])
+    def update_best_prog(self, prog):
+        self.build_prog_encoding(prog)
+        new_solution = self.select_solution()
+
         if len(new_solution) == 0:
             return False
-
+        new_solution = reduce_prog(new_solution)
         size = 0
         for rule in new_solution:
             head, body = rule
             size += len(body) + 1
         self.settings.stats.register_best_prog(new_solution, size)
         self.max_size = size
-        self.best_program = new_solution
+        self.best_prog = new_solution
         self.settings.solution = new_solution
         return True

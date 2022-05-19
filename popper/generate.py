@@ -48,6 +48,7 @@ class Generator:
 
         # build solver
         solver = clingo.Control()
+        # solver = clingo.Control(["-t5"])
         solver.add('base', [], prog)
         solver.ground([('base', [])])
         solver.add('number_of_literals', ['n'], NUM_LITERALS)
