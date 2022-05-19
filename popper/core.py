@@ -2,6 +2,22 @@ from collections import namedtuple, defaultdict
 
 ConstVar = namedtuple('ConstVar', ['name', 'type'])
 
+class Constrainer:
+    def __init__(self, settings):
+        self.elim_cons = set()
+        self.gen_cons = set()
+        self.spec_cons = {x: set() for x in settings.pos}
+
+    def add_elimination(self, con):
+        self.elim_cons.add(con)
+
+    def add_generalisation(self, con):
+        self.gen_cons.add(con)
+
+    def add_specialisation(self, con, e):
+        self.spec_cons[e].add(con)
+
+
 class Literal:
     def __init__(self, predicate, arguments, directions = [], positive = True, meta=False):
         self.predicate = predicate

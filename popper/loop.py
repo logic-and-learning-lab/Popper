@@ -3,10 +3,12 @@ from . select import Selector
 from . util import timeout, chunk_list, flatten, print_prog, format_rule
 from . tester import Tester
 # from . asptester import Tester
-from . generate import Generator, Constrainer, Grounder
+from . generate import Generator, Grounder
 from . bkcons import deduce_bk_cons
+from . core import Constrainer
 
 SIMPLE_HACK = True
+
 
 def find_progs(settings, tester, grounder, cons, prog_coverage, success_sets, chunk_pos, max_size=20):
     bootstrap_cons = deduce_cons(cons, chunk_pos)
@@ -61,6 +63,26 @@ def find_progs(settings, tester, grounder, cons, prog_coverage, success_sets, ch
             # if inconsistent, prune generalisations
             if inconsistent:
                 add_gen = True
+                cons.add_generalisation(prog)
+
+                k = '-'.join(sorted(format_rule(rule) for rule in prog))
+                if k in settings.TMP:
+                    settings.TMP_SHIT_COUNT+=1
+                    print("FUCK", settings.TMP_SHIT_COUNT)
+                    for rule in prog:
+                        print(format_rule(rule))
+                elif any(format_rule(rule) in settings.TMP for rule in prog):
+                    settings.TMP_SHIT_COUNT+=1
+                    print("FUCKER", settings.TMP_SHIT_COUNT)
+                    for rule in prog:
+                        print(format_rule(rule))
+                else:
+                    # if len(prog) > 1:
+                    # print('INCONSISTENT')
+                    # for rule in prog:
+                        # print(format_rule(rule))
+                    settings.TMP.add(k)
+
 
             # if consistent, prune specialisations
             if not inconsistent:
@@ -126,6 +148,9 @@ def deduce_cons(cons, chunk_pos):
 def popper(settings):
     # deduce_bk_cons(settings)
     # exit()
+
+    settings.TMP = set()
+    settings.TMP_SHIT_COUNT = 0
 
     tester = Tester(settings)
     cons = Constrainer(settings)

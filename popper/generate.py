@@ -211,18 +211,6 @@ NUM_LITERALS = """
     #sum{K+1,Rule : body_size(Rule,K)} != n.
 """
 
-class Constrainer:
-    def __init__(self, settings):
-        self.elim_cons = set()
-        self.gen_cons = set()
-        self.spec_cons = {x: set() for x in settings.pos}
-
-    def add_elimination(self, con):
-        self.elim_cons.add(con)
-
-    def add_specialisation(self, con, e):
-        self.spec_cons[e].add(con)
-
 def vo_variable(variable):
     return ConstVar(f'{variable}', 'Variable')
 

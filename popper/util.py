@@ -34,9 +34,9 @@ def parse_args():
     parser.add_argument('--max-body', type=int, default=MAX_BODY, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
     parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
     parser.add_argument('--max-rules', type=int, default=MAX_RULES, help=f'Maximum number of rules allowed in recursive program (default: {MAX_RULES})')
-    # parser.add_argument('--test-all', default=False, action='store_true', help='Test all examples')
-    # parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
-    # parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')
+
+    parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
+    parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run custom functional test')
     parser.add_argument('--clingo-args', type=str, default=CLINGO_ARGS, help='Arguments to pass to Clingo')
     parser.add_argument('--ex-file', type=str, default='', help='Filename for the examples')
@@ -65,11 +65,10 @@ def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
     return result
 
 def load_kbpath(kbpath):
-    return fix_path(kbpath, "bk.pl"), fix_path(kbpath, "exs.pl"), fix_path(kbpath, "bias.pl")
-    
-def fix_path(kbpath, filename):
-    full_filename = os.path.join(kbpath, filename)
-    return full_filename.replace('\\', '\\\\') if os.name == 'nt' else full_filename
+    def fix_path(filename):
+        full_filename = os.path.join(kbpath, filename)
+        return full_filename.replace('\\', '\\\\') if os.name == 'nt' else full_filename
+    return fix_path("bk.pl"), fix_path("exs.pl"), fix_path("bias.pl")
 
 class Stats:
     def __init__(self, info = False, debug = False):
