@@ -124,7 +124,7 @@ def deduce_cons(cons, chunk_pos):
     return set.intersection(*[cons.spec_cons[x] for x in chunk_pos]), cons.elim_cons, cons.gen_cons
 
 def popper(settings):
-    deduce_bk_cons(settings)
+    # deduce_bk_cons(settings)
     # exit()
 
     tester = Tester(settings)
