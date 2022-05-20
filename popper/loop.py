@@ -146,7 +146,9 @@ def deduce_cons(cons, chunk_pos):
     return set.intersection(*[cons.spec_cons[x] for x in chunk_pos]), cons.elim_cons, cons.gen_cons
 
 def popper(settings):
-    deduce_bk_cons(settings)
+    if settings.bkcons:
+        with settings.stats.duration('bkcons'):
+            deduce_bk_cons(settings)
 
     settings.TMP = set()
     settings.TMP_SHIT_COUNT = 0

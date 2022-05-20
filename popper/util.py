@@ -20,7 +20,7 @@ CLINGO_ARGS=''
 MAX_RULES=2
 MAX_VARS=6
 MAX_BODY=6
-MAX_EXAMPLES=1000
+MAX_EXAMPLES=10000
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper, an ILP engine based on learning from failures')
@@ -240,7 +240,7 @@ class Settings:
         self.stats = Stats(info=args.info, debug=args.debug)
         self.bk_file, self.ex_file, self.bias_file = load_kbpath(args.kbpath)
         self.show_stats = args.stats
-        self.bkcons = None
+        self.bkcons = args.bkcons
 
         self.max_literals = args.max_literals
         self.clingo_args = [] if not args.clingo_args else args.clingo_args.split(' ')

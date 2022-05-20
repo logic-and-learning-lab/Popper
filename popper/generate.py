@@ -45,17 +45,13 @@ class Generator:
         prog.append(f'max_body({settings.max_body}).')
         prog.append(f'max_vars({settings.max_vars}).')
 
-        if self.settings.bkcons != None:
+        if self.settings.bkcons:
             prog.append(self.settings.bkcons)
 
         prog = '\n'.join(prog)
 
-        # print(prog)
-        # exit()
-
         # build solver
         solver = clingo.Control()
-        # solver = clingo.Control(["-t5"])
         solver.add('base', [], prog)
         solver.ground([('base', [])])
         solver.add('number_of_literals', ['n'], NUM_LITERALS)
