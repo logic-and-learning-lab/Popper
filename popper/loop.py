@@ -91,11 +91,11 @@ def find_progs(settings, tester, grounder, cons, prog_coverage, success_sets, ch
                     cons.add_specialisation(prog, e)
 
             # # # # # TODO: IF WE ALREADY HAVE A SOLUTION, ANY NEW RULE MUST COVER AT LEAST TWO EXAMPLES
-            # if len(chunk_pos) > 1 and len(chunk_pos_covered) < 2:
-            #     # print('asda2')
-            #     add_spec = True
-            #     for e in settings.pos:
-            #         cons.add_specialisation(prog, e)
+            if len(chunk_pos) > 1 and len(chunk_pos_covered) == 1:
+                # print('asda2')
+                add_spec = True
+                for e in settings.pos:
+                    cons.add_specialisation(prog, e)
             # if SIMPLE_HACK and len(chunk_pos) > 1 and len(settings.best_prog) == 2 and len(chunk_pos_covered) != len(chunk_pos):
             #     # print('asda3')
             #     add_spec = True
@@ -146,8 +146,7 @@ def deduce_cons(cons, chunk_pos):
     return set.intersection(*[cons.spec_cons[x] for x in chunk_pos]), cons.elim_cons, cons.gen_cons
 
 def popper(settings):
-    # deduce_bk_cons(settings)
-    # exit()
+    deduce_bk_cons(settings)
 
     settings.TMP = set()
     settings.TMP_SHIT_COUNT = 0

@@ -20,6 +20,7 @@ CLINGO_ARGS=''
 MAX_RULES=2
 MAX_VARS=6
 MAX_BODY=6
+MAX_EXAMPLES=1000
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper, an ILP engine based on learning from failures')
@@ -34,6 +35,7 @@ def parse_args():
     parser.add_argument('--max-body', type=int, default=MAX_BODY, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
     parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
     parser.add_argument('--max-rules', type=int, default=MAX_RULES, help=f'Maximum number of rules allowed in recursive program (default: {MAX_RULES})')
+    parser.add_argument('--max-examples', type=int, default=MAX_EXAMPLES, help=f'Maximum number of examples per label (positive or negative) to learn from (default: {MAX_EXAMPLES})')
 
     parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
     parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')
@@ -248,6 +250,8 @@ class Settings:
         self.eval_timeout = args.eval_timeout
         self.solution = None
         self.best_prog = None
+
+        self.max_examples = args.max_examples
 
         solver = clingo.Control()
         with open(self.bias_file) as f:

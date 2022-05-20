@@ -7,21 +7,23 @@ from clingo import Function, Number, Tuple_
 tmp_map = {}
 for i in range(1,20):
     tmp_map[i] = ','.join(f'V{j}' for j in range(i))
-        # print(i,)
-    # tmp_map[i] = f'V{j} ofr
+
 
 # print(tmp_map)
 arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
+
+TIDY_OUTPUT = """
+#defined body_literal/4.
+#defined clause_var/2.
+#defined var_type/3.
+#defined clause/1.
+"""
 
 def get_body_preds(settings):
     solver = clingo.Control()
     with open(settings.bias_file) as f:
         solver.add('bias', [], f.read())
-    solver.add('bias', [], """
-        #defined body_literal/4.
-        #defined clause_var/2.
-        #defined var_type/3.
-    """)
+    solver.add('bias', [], TIDY_OUTPUT)
     solver.ground([('bias', [])])
 
     for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
@@ -84,11 +86,11 @@ def deduce_bk_cons(settings):
 
     # exit()
 
-
 def deduce_bk_cons_aux(cons, prog, bias, bk):
+    encoding = [cons, prog, bias, bk, TIDY_OUTPUT]
+    encoding = '\n'.join(encoding)
     solver = clingo.Control()
-    cons_prog = cons + '\n' + prog + '\n' + bias + '\n' + bk
-    solver.add('base', [], cons_prog)
+    solver.add('base', [], encoding)
     solver.ground([('base', [])])
     out = set()
     with solver.solve(yield_=True) as handle:

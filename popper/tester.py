@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import numpy as np
 import pkg_resources
 from pyswip import Prolog
 from contextlib import contextmanager
@@ -9,15 +10,29 @@ from . util import format_rule, order_rule, order_prog
 
 class Tester():
 
+    # TODO: COULD PUSH TO CLINGO TO SAVE PROLOG FROM HAVING TO INDEX STUFF
+    def get_examples(self):
+        pos = set(next(self.prolog.query('findall(X,pos(X),Xs)'))['Xs'])
+        neg = set(next(self.prolog.query('findall(X,neg(X),Xs)'))['Xs'])
+
+        self.settings.stats.logger.info(f'Num. pos examples: {len(pos)}')
+        self.settings.stats.logger.info(f'Num. neg examples: {len(neg)}')
+
+        if self.settings.max_examples < len(pos):
+            self.settings.stats.logger.info(f'Sampling {self.settings.max_examples} pos examples')
+            pos = np.random.choice(list(pos), self.settings.max_examples)
+        if self.settings.max_examples < len(neg):
+            self.settings.stats.logger.info(f'Sampling {self.settings.max_examples} neg examples')
+            neg = np.random.choice(list(neg), self.settings.max_examples)
+
+        return pos, neg
+
     def __init__(self, settings):
         self.settings = settings
         self.prolog = Prolog()
-        # self.prolog.retractall(f'pos_index(_,_)')
-        # self.prolog.retractall(f'neg_index(_,_)')
 
         bk_pl_path = self.settings.bk_file
         exs_pl_path = self.settings.ex_file
-
         test_pl_path = pkg_resources.resource_filename(__name__, "lp/test.pl")
 
         for x in [exs_pl_path, bk_pl_path, test_pl_path]:
@@ -25,25 +40,22 @@ class Tester():
                 x = x.replace('\\', '\\\\')
             self.prolog.consult(x)
 
-        list(self.prolog.query('load_examples'))
-
         self.pos_index = {}
         self.neg_index = {}
 
-        # for x in self.prolog.query('current_predicate(pos_index/2),pos_index(I,Atom)'):
-        #     index = x['I']
-        #     atom = x['Atom']
-        #     self.pos_index[index] = atom
-        # for x in self.prolog.query('current_predicate(neg_index/2),neg_index(I,Atom)'):
-        #     index = x['I']
-        #     atom = x['Atom']
-        #     self.neg_index[index] = atom
+        with self.settings.stats.duration('get_examples'):
+            pos, neg = self.get_examples()
 
-        for i, atom in enumerate(next(self.prolog.query('findall(Atom,pos_index(I,Atom),Xs)'))['Xs']):
-            self.pos_index[i+1] = atom
-        for i, atom in enumerate(next(self.prolog.query('findall(Atom,neg_index(I,Atom),Xs)'))['Xs']):
-            i = i+1
-            self.neg_index[-i] = atom
+        with self.settings.stats.duration('assert examples'):
+            for i, atom in enumerate(pos):
+                k = i+1
+                self.prolog.assertz(f'pos_index({k},{atom})')
+                self.pos_index[k] = atom
+
+            for i, atom in enumerate(neg):
+                k = -(i+1)
+                self.prolog.assertz(f'neg_index({k},{atom})')
+                self.neg_index[k] = atom
 
         self.settings.pos = frozenset(self.pos_index.values())
         self.settings.neg = frozenset(self.neg_index.values())
@@ -57,7 +69,9 @@ class Tester():
             pos_covered = frozenset(self.pos_index[i] for i in pos_covered)
             # neg_covered = frozenset(next(self.prolog.query('neg_covered(Xs)'))['Xs'])
             # neg_covered = frozenset(self.neg_index[i] for i in neg_covered)
-            inconsistent = len(list(self.prolog.query("inconsistent"))) > 0
+            inconsistent = False
+            if len(self.neg_index):
+                inconsistent = len(list(self.prolog.query("inconsistent"))) > 0
         return pos_covered, inconsistent
 
     @contextmanager
