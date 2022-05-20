@@ -43,19 +43,19 @@ class Tester():
         self.pos_index = {}
         self.neg_index = {}
 
-        with self.settings.stats.duration('get_examples'):
-            pos, neg = self.get_examples()
+        pos, neg = self.get_examples()
+        self.num_pos = len(pos)
+        self.num_neg = len(neg)
 
-        with self.settings.stats.duration('assert examples'):
-            for i, atom in enumerate(pos):
-                k = i+1
-                self.prolog.assertz(f'pos_index({k},{atom})')
-                self.pos_index[k] = atom
+        for i, atom in enumerate(pos):
+            k = i+1
+            self.prolog.assertz(f'pos_index({k},{atom})')
+            self.pos_index[k] = atom
 
-            for i, atom in enumerate(neg):
-                k = -(i+1)
-                self.prolog.assertz(f'neg_index({k},{atom})')
-                self.neg_index[k] = atom
+        for i, atom in enumerate(neg):
+            k = -(i+1)
+            self.prolog.assertz(f'neg_index({k},{atom})')
+            self.neg_index[k] = atom
 
         self.settings.pos = frozenset(self.pos_index.values())
         self.settings.neg = frozenset(self.neg_index.values())

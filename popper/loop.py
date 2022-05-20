@@ -9,8 +9,7 @@ from . core import Constrainer
 
 SIMPLE_HACK = True
 
-
-def find_progs(settings, tester, grounder, cons, prog_coverage, success_sets, chunk_pos, max_size=20):
+def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_size=20):
     bootstrap_cons = deduce_cons(cons, chunk_pos)
     # # TODO: WE CAN TAKE THE UNION OF SPECIALISATIONS WHEN THE BEST SOLUTION ONLY HAS TWO RULES
     # if SIMPLE_HACK and settings.best_prog != None and len(chunk_pos) > 1 and len(settings.best_prog) == 2:
@@ -64,28 +63,8 @@ def find_progs(settings, tester, grounder, cons, prog_coverage, success_sets, ch
             if inconsistent:
                 add_gen = True
                 cons.add_generalisation(prog)
-
-                k = '-'.join(sorted(format_rule(rule) for rule in prog))
-                if k in settings.TMP:
-                    settings.TMP_SHIT_COUNT+=1
-                    print("FUCK", settings.TMP_SHIT_COUNT)
-                    for rule in prog:
-                        print(format_rule(rule))
-                elif any(format_rule(rule) in settings.TMP for rule in prog):
-                    settings.TMP_SHIT_COUNT+=1
-                    print("FUCKER", settings.TMP_SHIT_COUNT)
-                    for rule in prog:
-                        print(format_rule(rule))
-                else:
-                    # if len(prog) > 1:
-                    # print('INCONSISTENT')
-                    # for rule in prog:
-                        # print(format_rule(rule))
-                    settings.TMP.add(k)
-
-
             # if consistent, prune specialisations
-            if not inconsistent:
+            else:
                 add_spec = True
                 for e in settings.pos:
                     cons.add_specialisation(prog, e)
@@ -122,10 +101,8 @@ def find_progs(settings, tester, grounder, cons, prog_coverage, success_sets, ch
 
             # if consistent, covers at least one example, and is not subsumed, yield candidate program
             if len(pos_covered) > 0 and not inconsistent and not subsumed:
-                success_sets[pos_covered] = prog
                 settings.stats.register_candidate_prog(prog)
-                prog_coverage[prog] = pos_covered
-                yield prog
+                yield prog, pos_covered
 
             # if it covers all examples, stop
             if len(chunk_pos_covered) == len(chunk_pos) and not inconsistent:
@@ -150,36 +127,36 @@ def popper(settings):
         with settings.stats.duration('bkcons'):
             deduce_bk_cons(settings)
 
-    settings.TMP = set()
-    settings.TMP_SHIT_COUNT = 0
-
     tester = Tester(settings)
     cons = Constrainer(settings)
     grounder = Grounder()
-    selector = Selector(settings, tester)
+    prog_coverage = {}
     success_sets = {}
+    selector = Selector(settings, tester, prog_coverage)
     covered_examples = set()
 
     def find_solution(examples, max_size):
         settings.stats.logger.info(f'Trying to cover: {examples}')
-        for prog in find_progs(settings, tester, grounder, cons, selector.prog_coverage, success_sets, examples, max_size):
-
-            # if we find a program that covers all examples, stop
-            if selector.prog_coverage[prog] == settings.pos:
-                selector.update_best_prog(prog)
-                return True
+        for prog, coverage in find_progs(settings, tester, grounder, cons, success_sets, examples, max_size):
 
             # update coverage
-            covered_examples.update(selector.prog_coverage[prog])
+            prog_coverage[prog] = coverage
+            covered_examples.update(coverage)
+            success_sets[coverage] = prog
+
+            # if we find a program that covers all examples, stop
+            if len(coverage) == len(settings.pos):
+                selector.update_best_prog(prog)
+                return True
 
             with settings.stats.duration('select'):
                 new_solution_found = selector.update_best_prog(prog)
                 if new_solution_found:
-                    settings.best_prog = selector.best_prog
                     max_size = selector.max_size - 1
                     settings.max_literals = max_size
                     continue
 
+    # in the first pass we try to cover each example
     for pos in settings.pos:
         # if all examples are covered, stop
         if len(covered_examples) == len(settings.pos):
@@ -194,6 +171,7 @@ def popper(settings):
         if optimal_found:
             return
 
+    # we then try to generalise over all examples
     find_solution(settings.pos, settings.max_literals)
 
 def learn_solution(settings):

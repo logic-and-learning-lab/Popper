@@ -48,6 +48,7 @@ def parse_args():
     return parser.parse_args()
 
 def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
+    result = default
     class TimeoutError(Exception):
         pass
 
@@ -60,7 +61,9 @@ def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
     try:
         result = func(*args, **kwargs)
     except TimeoutError as exc:
-        result = default
+        return result
+    # except AttributeError as moo:
+        # return result
     finally:
         signal.alarm(0)
 
@@ -75,7 +78,6 @@ def load_kbpath(kbpath):
 class Stats:
     def __init__(self, info = False, debug = False):
         self.exec_start = perf_counter()
-        self.logger = logging.getLogger("popper")
 
         if debug:
             log_level = logging.DEBUG
@@ -235,9 +237,11 @@ def flatten(xs):
 
 class Settings:
     def __init__(self):
+        self.logger = logging.getLogger("popper")
         args = parse_args()
 
         self.stats = Stats(info=args.info, debug=args.debug)
+        self.stats.logger = self.logger
         self.bk_file, self.ex_file, self.bias_file = load_kbpath(args.kbpath)
         self.show_stats = args.stats
         self.bkcons = args.bkcons
@@ -293,3 +297,8 @@ class Settings:
         self.stats.logger.debug(f'Max rules: {self.max_rules}')
         self.stats.logger.debug(f'Max vars: {self.max_vars}')
         self.stats.logger.debug(f'Max body: {self.max_body}')
+
+    def print_incomplete_solution(self, prog, tp, fn, size):
+        self.logger.info(f'New best hypothesis - tp:{tp} fn:{fn} size:{size}:')
+        for rule in prog:
+            self.logger.info(format_rule(rule))
