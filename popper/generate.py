@@ -24,7 +24,9 @@ def arg_to_symbol(arg):
 
 def atom_to_symbol(pred, args):
     xs = tuple(arg_to_symbol(arg) for arg in args)
-    return Function(name = pred, arguments = xs)
+    out = Function(name = pred, arguments = xs)
+    # print(pred, args, out)
+    return out
 
 class Generator:
     def __init__(self, settings, grounder, bootstrap_cons):
@@ -52,7 +54,7 @@ class Generator:
 
         # build solver
         solver = clingo.Control()
-        # solver = clingo.Control(["-t5"])
+        solver.configuration.solve.models = 0
         solver.add('base', [], prog)
         solver.ground([('base', [])])
         solver.add('number_of_literals', ['n'], NUM_LITERALS)
@@ -67,7 +69,7 @@ class Generator:
             cons.update(self.build_elimination_constraint(prog))
         for prog in gens:
             cons.update(self.build_generalisation_constraint(prog))
-        self.add_constraints(cons)
+        # self.add_constraints(cons)
 
     def update_num_literals(self, size):
         # release atoms already assigned
@@ -82,13 +84,13 @@ class Generator:
         symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
         self.solver.assign_external(symbol, True)
 
-    def gen_prog(self):
-        with self.solver.solve(yield_ = True) as handle:
-            m = handle.model()
-            if m:
-                atoms = m.symbols(shown = True)
-                return self.parse_model(atoms)
-        return None
+    # def gen_prog(self):
+    #     with self.solver.solve(yield_ = True) as handle:
+    #         m = handle.model()
+    #         if m:
+    #             atoms = m.symbols(shown = True)
+    #             return self.parse_model(atoms)
+    #     return None
 
     # TODO: COULD CACHE TUPLES OF ARGS FOR TINY OPTIMISATION
     def parse_model(self, model):
@@ -147,8 +149,8 @@ class Generator:
 
     # cached_groundings = {}
 
-    def add_constraints(self, rules):
-        ground_rules = set()
+    def get_ground_rules(self, rules):
+        out = set()
         for rule in rules:
             head, body = rule
 
@@ -160,8 +162,11 @@ class Generator:
 
             # ground the rule for each variable assignment
             xs = set(self.grounder.ground_rule((head, body), assignment) for assignment in assignments)
-            ground_rules.update(xs)
+            out.update(xs)
+        return out
 
+    def add_constraints(self, rules):
+        ground_rules = self.get_ground_rules(rules)
         self.add_ground_rules(ground_rules)
 
     def gen_symbol(self, literal, backend):
@@ -359,19 +364,44 @@ class Constrain:
 
         yield (None, tuple(literals))
 
-    def specialisation_constraint(self, program, before={}, min_clause=defaultdict(int)):
-        clause_variable = vo_clause('')
-        literals = [Literal('clause', (clause_variable,))]
-        prog_handle = "prog"
-        for clause in program:
-            clause_handle = self.make_clause_handle(clause)
-            yield from self.make_clause_inclusion_rule(clause, min_clause[clause], clause_handle)
-            literals.append(Literal('included_clause', (clause_handle, clause_variable), positive = False))
-            prog_handle += '_' + clause_handle
+    def specialisation_constraint(self, prog, before={}, min_clause=defaultdict(int)):
+        literals = []
+        for rule in prog:
+            head, body = rule
+            clause_number = vo_clause('l')
+            literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
 
-        yield (Literal('clause_not_spec', (prog_handle,)), tuple(literals))
-        yield (None, (Literal('clause_not_spec', (prog_handle,), positive = False),))
+            for body_literal in body:
+                literals.append(Literal('body_literal', (clause_number, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
 
+            # literals.append(gteq(clause_number, min_num))
+
+            for idx, var in enumerate(head.arguments):
+                literals.append(eq(vo_variable(var), idx))
+        literals.append(Literal('clause', (len(prog), ), positive = False))
+        return tuple(literals)
+
+ # def specialisation_constraint(self, rules):
+ #        literals = []
+ #        ordered_rules = sorted(rules)
+
+ #        for clause_number, clause in enumerate(ordered_rules):
+ #            clause_handle = self.make_rule_handle(clause)
+ #            # yield from self.make_clause_inclusion_rule(clause, min_clause[clause], clause_handle)
+ #            yield from self.make_clause_inclusion_rule(clause, clause_handle)
+ #            clause_var = vo_clause(clause_number)
+ #            literals.append(Literal('included_clause', (clause_handle, clause_var)))
+ #            literals.append(self.min_rule_literal(clause, clause_var))
+
+ #        literals.extend(self.before_literals(ordered_rules))
+
+ #        num_clauses = len(rules)
+ #        # ensure that each clause_var is ground to a unique value
+ #        if num_clauses > 1:
+ #            literals.append(alldiff(tuple(vo_clause(c) for c in range(num_clauses))))
+ #        literals.append(Literal('clause', (num_clauses, ), positive = False))
+
+ #        yield (None, tuple(literals))
 
 class Grounder():
     def __init__(self):

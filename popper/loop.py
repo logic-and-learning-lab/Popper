@@ -3,7 +3,7 @@ from . select import Selector
 from . util import timeout, chunk_list, flatten, print_prog, format_rule
 from . tester import Tester
 # from . asptester import Tester
-from . generate import Generator, Grounder
+from . generate import Generator, Grounder, atom_to_symbol
 from . bkcons import deduce_bk_cons
 from . core import Constrainer
 
@@ -22,91 +22,128 @@ def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_si
         settings.stats.logger.info(f'Searching size: {size}')
         generator.update_num_literals(size)
 
-        while True:
-            with settings.stats.duration('gen'):
-                prog = generator.gen_prog()
-            if prog == None or prog == []:
-                break
 
-            settings.stats.total_programs += 1
+        with generator.solver.solve(yield_ = True) as handle:
+            for model in handle:
+                atoms = model.symbols(shown = True)
+                prog = generator.parse_model(atoms)
 
-            with settings.stats.duration('test'):
-                pos_covered, inconsistent = tester.test_prog(prog)
+                settings.stats.total_programs += 1
 
-            settings.stats.register_prog(prog)
+                with settings.stats.duration('test'):
+                    pos_covered, inconsistent = tester.test_prog(prog)
 
-            chunk_pos_covered = set([x for x in chunk_pos if x in pos_covered])
-            incomplete = len(chunk_pos_covered) != len(chunk_pos)
+                settings.stats.register_prog(prog)
 
-            add_spec = False
-            add_gen = False
+                chunk_pos_covered = set([x for x in chunk_pos if x in pos_covered])
+                incomplete = len(chunk_pos_covered) != len(chunk_pos)
 
-            # always add an elimination constraint
-            cons.add_elimination(prog)
+                # print('inconsistent', inconsistent)
+                # print('incomplete', incomplete)
 
-            # if inconsistent, prune generalisations
-            if inconsistent:
-                add_gen = True
-                cons.add_generalisation(prog)
-                # print('inconsistent')
-                # for rule in prog:
-                #     print(format_rule(rule))
+                add_spec = False
+                add_gen = False
 
-            # if consistent, prune specialisations
-            else:
-                add_spec = True
-                for e in settings.pos:
-                    cons.add_specialisation(prog, e)
+                # always add an elimination constraint
+                cons.add_elimination(prog)
 
-            # HACKY
-            # if we already have a solution, any new rule must cover at least two examples
-            if len(chunk_pos) > 1 and len(chunk_pos_covered) == 1:
-                add_spec = True
-                for e in settings.pos:
-                    cons.add_specialisation(prog, e)
-            # if SIMPLE_HACK and len(chunk_pos) > 1 and len(settings.best_prog) == 2 and len(chunk_pos_covered) != len(chunk_pos):
-            #     # print('asda3')
-            #     add_spec = True
-            #     for e in settings.pos:
-            #         cons.add_specialisation(prog, e)
+                # if inconsistent, prune generalisations
+                if inconsistent:
+                    add_gen = True
+                    cons.add_generalisation(prog)
+                    # for rule in prog:
+                    #     print(format_rule(rule))
 
-            # if too specific for an example e, save a specialisation constraint for e
-            for e in settings.pos.difference(pos_covered):
-                cons.add_specialisation(prog, e)
-
-            # if it does not cover any example, prune specialisations
-            if len(chunk_pos_covered) == 0:
-                add_spec = True
-
-            # check whether subsumed by an already seen program
-            # if so, prune specialisations
-            subsumed = False
-            if len(pos_covered) > 0:
-                subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets.keys())
-                if subsumed:
+                # if consistent, prune specialisations
+                else:
                     add_spec = True
                     for e in settings.pos:
                         cons.add_specialisation(prog, e)
 
-            # if consistent, covers at least one example, and is not subsumed, yield candidate program
-            if len(pos_covered) > 0 and not inconsistent and not subsumed:
-                # settings.stats.register_candidate_prog(prog)
-                yield prog, pos_covered
+                # HACKY
+                # if we already have a solution, any new rule must cover at least two examples
+                if len(chunk_pos) > 1 and len(chunk_pos_covered) == 1:
+                    add_spec = True
+                    for e in settings.pos:
+                        cons.add_specialisation(prog, e)
+                # if SIMPLE_HACK and len(chunk_pos) > 1 and len(settings.best_prog) == 2 and len(chunk_pos_covered) != len(chunk_pos):
+                #     # print('asda3')
+                #     add_spec = True
+                #     for e in settings.pos:
+                #         cons.add_specialisation(prog, e)
 
-            # if it covers all examples, stop
-            if len(chunk_pos_covered) == len(chunk_pos) and not inconsistent:
-                settings.logger.debug(f'Found complete and consistent program for examples: {chunk_pos}')
-                return
+                # if too specific for an example e, save a specialisation constraint for e
+                for e in settings.pos.difference(pos_covered):
+                    cons.add_specialisation(prog, e)
 
-            with settings.stats.duration('constrain'):
-                new_cons = set()
-                if add_spec:
-                    new_cons.update(generator.build_specialisation_constraint(prog))
-                if add_gen:
-                    new_cons.update(generator.build_generalisation_constraint(prog))
-                if not add_spec and not add_gen:
-                    new_cons.update(generator.build_elimination_constraint(prog))
-                generator.add_constraints(new_cons)
+                # if it does not cover any example, prune specialisations
+                if len(chunk_pos_covered) == 0:
+                    add_spec = True
+
+                # check whether subsumed by an already seen program
+                # if so, prune specialisations
+                subsumed = False
+                if len(pos_covered) > 0:
+                    subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets.keys())
+                    if subsumed:
+                        add_spec = True
+                        for e in settings.pos:
+                            cons.add_specialisation(prog, e)
+
+                # if consistent, covers at least one example, and is not subsumed, yield candidate program
+                if len(pos_covered) > 0 and not inconsistent and not subsumed:
+                    # settings.stats.register_candidate_prog(prog)
+                    yield prog, pos_covered
+
+                # if it covers all examples, stop
+                if len(chunk_pos_covered) == len(chunk_pos) and not inconsistent:
+                    settings.logger.debug(f'Found complete and consistent program for examples: {chunk_pos}')
+                    return
+
+                with settings.stats.duration('A'):
+                    new_cons = set()
+                    if add_spec:
+                        new_cons.add(generator.build_specialisation_constraint(prog))
+                    # if add_gen:
+                        # new_cons.update(generator.build_generalisation_constraint(prog))
+                    # if not add_spec and not add_gen:
+                        # new_cons.update(generator.build_elimination_constraint(prog))
+                    # generator.add_constraints(new_cons)
+
+                with settings.stats.duration('B'):
+                    s = set()
+                    for con in new_cons:
+                        for grule in generator.get_ground_rules([(None, con)]):
+                            h, b = grule
+                            s.add(b)
+
+                with settings.stats.duration('C'):
+                    nogoods = []
+                    for b in s:
+                        # pass
+                        # print('***')
+                        # print(b)
+                        # print(grule)
+                        # print(type(con))
+                        # print('1',con)
+                        # h, b = con
+                        # atom_to_symbol
+                        # print(con)
+                        tmp = []
+                        for sign, pred, args in b:
+                            x = (atom_to_symbol(pred, args), sign)
+                            tmp.append(x)
+                        nogoods.append(tmp)
+                    # grule = [(atom_to_symbol(atom.predicate, atom.arguments), atom.positive) for atom in b]
+                    # for x in con:
+                    #     print(x)
+                    # print('2',con)
+                    # print(con)
+                with settings.stats.duration('D'):
+                    for tmp in nogoods:
+                        model.context.add_nogood(tmp)
+
+                    # print(new_cons)
 
 def deduce_cons(cons, chunk_pos):
     return set.intersection(*[cons.spec_cons[x] for x in chunk_pos]), cons.elim_cons, cons.gen_cons
