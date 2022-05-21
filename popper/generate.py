@@ -52,6 +52,7 @@ class Generator:
 
         # build solver
         solver = clingo.Control()
+        # solver = clingo.Control(["-t5"])
         solver.add('base', [], prog)
         solver.ground([('base', [])])
         solver.add('number_of_literals', ['n'], NUM_LITERALS)
@@ -148,12 +149,7 @@ class Generator:
 
     def add_constraints(self, rules):
         ground_rules = set()
-
-        # with self.settings.stats.duration('build_ground_rules'):
         for rule in rules:
-            # if rule in self.cached_groundings:
-                # ground_rules.update(self.cached_groundings[rule])
-                # continue
             head, body = rule
 
             # find bindings for variables in the rule
@@ -165,8 +161,7 @@ class Generator:
             # ground the rule for each variable assignment
             xs = set(self.grounder.ground_rule((head, body), assignment) for assignment in assignments)
             ground_rules.update(xs)
-            # self.cached_groundings[rule] = xs
-        # with self.settings.stats.duration('add_ground_rules'):
+
         self.add_ground_rules(ground_rules)
 
     def gen_symbol(self, literal, backend):
@@ -181,22 +176,18 @@ class Generator:
 
     def add_ground_rules(self, rules):
         with self.solver.backend() as backend:
-            tmp = []
-            with self.settings.stats.duration('A'):
-                for rule in rules:
-                    head, body = rule
-                    head_literal = []
-                    if head:
-                        head_literal = [self.gen_symbol(head, backend)]
-                    body_lits = []
-                    for literal in body:
-                        sign, _pred, _args = literal
-                        symbol = self.gen_symbol(literal, backend)
-                        body_lits.append(symbol if sign else -symbol)
-                    tmp.append((head_literal, body_lits))
-            with self.settings.stats.duration('B'):
-                for head_literal, body_lits in tmp:
-                    backend.add_rule(head_literal, body_lits)
+            for rule in rules:
+                # print(rule)
+                head, body = rule
+                head_literal = []
+                if head:
+                    head_literal = [self.gen_symbol(head, backend)]
+                body_lits = []
+                for literal in body:
+                    sign, _pred, _args = literal
+                    symbol = self.gen_symbol(literal, backend)
+                    body_lits.append(symbol if sign else -symbol)
+                backend.add_rule(head_literal, body_lits)
 
     def build_specialisation_constraint(self, prog):
         return self.constrain.specialisation_constraint(prog)

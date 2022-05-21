@@ -47,8 +47,8 @@ def parse_args():
     parser.add_argument('--bkcons', default=False, action='store_true', help='do bk cons')
     return parser.parse_args()
 
-def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
-    result = default
+def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
+    result = None
     class TimeoutError(Exception):
         pass
 
@@ -61,9 +61,13 @@ def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
     try:
         result = func(*args, **kwargs)
     except TimeoutError as exc:
+        settings.logger.warn('timeout')
         return result
-    # except AttributeError as moo:
-        # return result
+    except AttributeError as moo:
+        if '_SolveEventHandler' in str(moo):
+            settings.logger.warn('timeout')
+            return result
+        raise moo
     finally:
         signal.alarm(0)
 
@@ -99,10 +103,10 @@ class Stats:
         for rule in order_prog(prog):
             self.logger.info(format_rule(rule))
 
-    def register_best_prog(self, prog, size):
-        self.logger.info(f'New best solution of size {size}:')
-        for rule in prog:
-            self.logger.info(format_rule(rule))
+    # def register_best_prog(self, prog, size):
+    #     self.logger.info(f'New best solution of size {size}:')
+    #     for rule in prog:
+    #         self.logger.info(format_rule(rule))
 
     def total_exec_time(self):
         return perf_counter() - self.exec_start
@@ -299,6 +303,10 @@ class Settings:
         self.stats.logger.debug(f'Max body: {self.max_body}')
 
     def print_incomplete_solution(self, prog, tp, fn, size):
-        self.logger.info(f'New best hypothesis - tp:{tp} fn:{fn} size:{size}:')
+        # self.logger.info(self.hypothesis_output(prog, tp, fn, size))
+        self.logger.info('*'*20)
+        self.logger.info(f'New best hypothesis:')
+        self.logger.info(f'tp:{tp} fn:{fn} size:{size}')
         for rule in prog:
             self.logger.info(format_rule(rule))
+        self.logger.info('*'*20)

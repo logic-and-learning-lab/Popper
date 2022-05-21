@@ -11,26 +11,11 @@ SIMPLE_HACK = True
 
 def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_size=20):
     bootstrap_cons = deduce_cons(cons, chunk_pos)
-    # # TODO: WE CAN TAKE THE UNION OF SPECIALISATIONS WHEN THE BEST SOLUTION ONLY HAS TWO RULES
-    # if SIMPLE_HACK and settings.best_prog != None and len(chunk_pos) > 1 and len(settings.best_prog) == 2:
-        # bootstrap_cons = set.union(*[cons.spec_cons[x] for x in chunk_pos]), cons.elim_cons, cons.gen_cons
-
-    # a = len(set.union(*[cons.spec_cons[x] for x in chunk_pos]))
-    # b = len(set.intersection(*[cons.spec_cons[x] for x in chunk_pos]))
-    # counts = {}
-    # for x in chunk_pos:
-    #     for con in cons.spec_cons[x]:
-    #         if con not in counts:
-    #             counts[con] += 1
-    #         else:
-    #             counts[con] = 1
-    # c = len(con for con, count in counts.items() if count >= 1)
 
     with settings.stats.duration('bootstrap'):
         generator = Generator(settings, grounder, bootstrap_cons)
 
     for size in range(1, max_size+1):
-
         if size > settings.max_literals:
             continue
 
@@ -63,15 +48,19 @@ def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_si
             if inconsistent:
                 add_gen = True
                 cons.add_generalisation(prog)
+                # print('inconsistent')
+                # for rule in prog:
+                #     print(format_rule(rule))
+
             # if consistent, prune specialisations
             else:
                 add_spec = True
                 for e in settings.pos:
                     cons.add_specialisation(prog, e)
 
-            # # # # # TODO: IF WE ALREADY HAVE A SOLUTION, ANY NEW RULE MUST COVER AT LEAST TWO EXAMPLES
+            # HACKY
+            # if we already have a solution, any new rule must cover at least two examples
             if len(chunk_pos) > 1 and len(chunk_pos_covered) == 1:
-                # print('asda2')
                 add_spec = True
                 for e in settings.pos:
                     cons.add_specialisation(prog, e)
@@ -101,12 +90,12 @@ def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_si
 
             # if consistent, covers at least one example, and is not subsumed, yield candidate program
             if len(pos_covered) > 0 and not inconsistent and not subsumed:
-                settings.stats.register_candidate_prog(prog)
+                # settings.stats.register_candidate_prog(prog)
                 yield prog, pos_covered
 
             # if it covers all examples, stop
             if len(chunk_pos_covered) == len(chunk_pos) and not inconsistent:
-                settings.stats.logger.info('Found complete and consistent program for examples')
+                settings.logger.debug(f'Found complete and consistent program for examples: {chunk_pos}')
                 return
 
             with settings.stats.duration('constrain'):
@@ -136,7 +125,8 @@ def popper(settings):
     covered_examples = set()
 
     def find_solution(examples, max_size):
-        settings.stats.logger.info(f'Trying to cover: {examples}')
+        settings.stats.logger.info(f'Trying to cover:')
+        settings.stats.logger.info(f'{set(examples)}')
         for prog, coverage in find_progs(settings, tester, grounder, cons, success_sets, examples, max_size):
 
             # update coverage
@@ -175,5 +165,5 @@ def popper(settings):
     find_solution(settings.pos, settings.max_literals)
 
 def learn_solution(settings):
-    timeout(popper, (settings,), timeout_duration=int(settings.timeout))
+    timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)
     return settings.solution, settings.stats
