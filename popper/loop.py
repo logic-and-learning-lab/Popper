@@ -5,23 +5,27 @@ from . tester import Tester
 # from . asptester import Tester
 from . generate import Generator, Grounder, atom_to_symbol
 from . bkcons import deduce_bk_cons
+from clingo import Function, Number, Tuple_
 from . core import Constrainer
 
 SIMPLE_HACK = True
 
 def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_size=20):
     bootstrap_cons = deduce_cons(cons, chunk_pos)
+    # print('bootstrap_cons',bootstrap_cons)
 
-    with settings.stats.duration('bootstrap'):
-        generator = Generator(settings, grounder, bootstrap_cons)
+    # with settings.stats.duration('bootstrap'):
+
 
     for size in range(1, max_size+1):
+
         if size > settings.max_literals:
             continue
 
-        settings.stats.logger.info(f'Searching size: {size}')
-        generator.update_num_literals(size)
-
+        with settings.stats.duration('BOOTING'):
+            settings.stats.logger.info(f'Searching size: {size}')
+            generator = Generator(settings, grounder, bootstrap_cons)
+            generator.update_num_literals(size)
 
         with generator.solver.solve(yield_ = True) as handle:
             for model in handle:
@@ -39,13 +43,14 @@ def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_si
                 incomplete = len(chunk_pos_covered) != len(chunk_pos)
 
                 # print('inconsistent', inconsistent)
-                # print('incomplete', incomplete)
+                # print('coverage', pos_covered)
 
                 add_spec = False
                 add_gen = False
 
                 # always add an elimination constraint
                 cons.add_elimination(prog)
+                # print(len(cons.elim_cons))
 
                 # if inconsistent, prune generalisations
                 if inconsistent:
@@ -103,44 +108,59 @@ def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_si
                 with settings.stats.duration('A'):
                     new_cons = set()
                     if add_spec:
+                        # print('BUILD SPEC')
                         new_cons.add(generator.build_specialisation_constraint(prog))
-                    # if add_gen:
+                    if add_gen:
+                        pass
+                        # print('BUILD GEN')
                         # new_cons.update(generator.build_generalisation_constraint(prog))
-                    # if not add_spec and not add_gen:
+                    if not add_spec and not add_gen:
+                        assert(False)
                         # new_cons.update(generator.build_elimination_constraint(prog))
                     # generator.add_constraints(new_cons)
 
                 with settings.stats.duration('B'):
                     s = set()
                     for con in new_cons:
+
+                        # for x in generator.con_to_strings(con):
+                            # print(x)
                         for grule in generator.get_ground_rules([(None, con)]):
                             h, b = grule
                             s.add(b)
+                            # print(b)
 
                 with settings.stats.duration('C'):
                     nogoods = []
                     for b in s:
-                        # pass
-                        # print('***')
-                        # print(b)
-                        # print(grule)
-                        # print(type(con))
-                        # print('1',con)
-                        # h, b = con
-                        # atom_to_symbol
-                        # print(con)
                         tmp = []
                         for sign, pred, args in b:
                             x = (atom_to_symbol(pred, args), sign)
                             tmp.append(x)
+                        # print(tmp)
                         nogoods.append(tmp)
-                    # grule = [(atom_to_symbol(atom.predicate, atom.arguments), atom.positive) for atom in b]
-                    # for x in con:
-                    #     print(x)
-                    # print('2',con)
-                    # print(con)
+
+                # tmp = [
+                #     (Function('body_literal', [Number(0), Function('true_value', [], True), Number(2), Function('', [Number(0), Number(1)], True)], True), True),
+                #     (Function('head_literal', [Number(0), Function('next_value', [], True), Number(2), Function('', [Number(0), Number(1)], True)], True), True),
+                #     (Function('clause', [Number(1)], True), False)
+                # ]
+
+
+                # tmp = [
+                # (Function('body_literal', [Number(0), Function('true_value', []), Number(2), Function('', [Number(0), Number(1)])]), True),
+                # (Function('head_literal', [Number(0), Function('next_value', []), Number(2), Function('', [Number(0), Number(1)])]), True),
+                # (Function('body_literal', [Number(0), Function('c1', [], True), Number(1), Function('', [Number(1)])]), True),
+                # (Function('clause', [Number(1)], True), False)
+                # ]
+
+                # model.context.add_nogood(tmp)
+                # generator.update_num_literals(size)
+                # print('ADDED THE MOFO!!!!')
+
                 with settings.stats.duration('D'):
                     for tmp in nogoods:
+                        # print('TMP', tmp)
                         model.context.add_nogood(tmp)
 
                     # print(new_cons)
@@ -162,8 +182,8 @@ def popper(settings):
     covered_examples = set()
 
     def find_solution(examples, max_size):
-        settings.stats.logger.info(f'Trying to cover:')
-        settings.stats.logger.info(f'{set(examples)}')
+        # settings.stats.logger.info(f'Trying to cover:')
+        # settings.stats.logger.info(f'{set(examples)}')
         for prog, coverage in find_progs(settings, tester, grounder, cons, success_sets, examples, max_size):
 
             # update coverage
@@ -198,6 +218,7 @@ def popper(settings):
         if optimal_found:
             return
 
+    # return
     # we then try to generalise over all examples
     find_solution(settings.pos, settings.max_literals)
 

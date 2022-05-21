@@ -29,6 +29,25 @@ def atom_to_symbol(pred, args):
     return out
 
 class Generator:
+
+    def con_to_strings(self, con):
+         for grule in self.get_ground_rules([(None, con)]):
+            h, b = grule
+            # print(b)
+            rule = []
+            for sign, pred, args in b:
+                # print(type(pred))
+                # pred = pred.replace("'",'')
+                if not sign:
+                    rule.append(f'not {pred}{args}')
+                else:
+                    rule.append(f'{pred}{args}')
+            rule = ':- ' + ', '.join(sorted(rule)) + '.'
+            rule = rule.replace("'","")
+            rule = rule.replace('not clause(1,)','not clause(1)')
+            yield rule
+
+
     def __init__(self, settings, grounder, bootstrap_cons):
         self.settings = settings
         self.last_size = None
@@ -38,38 +57,75 @@ class Generator:
         self.seen_symbols = {}
 
         # build generator program
-        prog = []
+        encoding = []
         with open('popper/lp/alan.pl') as f:
-            prog.append(f.read())
+            encoding.append(f.read())
         with open(settings.bias_file) as f:
-            prog.append(f.read())
-        prog.append(f'max_clauses({settings.max_rules}).')
-        prog.append(f'max_body({settings.max_body}).')
-        prog.append(f'max_vars({settings.max_vars}).')
+            encoding.append(f.read())
+        encoding.append(f'max_clauses({settings.max_rules}).')
+        encoding.append(f'max_body({settings.max_body}).')
+        encoding.append(f'max_vars({settings.max_vars}).')
 
         if self.settings.bkcons:
-            prog.append(self.settings.bkcons)
+            encoding.append(self.settings.bkcons)
 
-        prog = '\n'.join(prog)
 
-        # build solver
-        solver = clingo.Control()
-        solver.configuration.solve.models = 0
-        solver.add('base', [], prog)
-        solver.ground([('base', [])])
-        solver.add('number_of_literals', ['n'], NUM_LITERALS)
-        self.solver = solver
 
         # bootstrap with constraints
         specs, elims, gens = bootstrap_cons
+        # specs = set()
+        # elims = set()
+        # gens = set()
         cons = set()
         for prog in specs:
-            cons.update(self.build_specialisation_constraint(prog))
-        for prog in elims:
-            cons.update(self.build_elimination_constraint(prog))
-        for prog in gens:
-            cons.update(self.build_generalisation_constraint(prog))
-        # self.add_constraints(cons)
+            cons.add(self.build_specialisation_constraint(prog))
+        # print('ELIMS!!!', len(elims))
+        # for prog in elims:
+        #     # print('E1')
+        #     # cons.update()
+        #     con = self.build_elimination_constraint(prog)
+        #     # print('E2')
+        #     # for x in self.con_to_strings(con):
+        #         # print('x',x)
+        # for prog in gens:
+        #     cons.update(self.build_generalisation_constraint(prog))
+
+        # nogoods = []
+        for con in cons:
+            # print('***')
+            # print(con)
+            for grule in self.get_ground_rules([(None, con)]):
+                h, b = grule
+                # print(b)
+                rule = []
+                for sign, pred, args in b:
+                    # print(type(pred))
+                    # pred = pred.replace("'",'')
+                    if not sign:
+                        rule.append(f'not {pred}{args}')
+                    else:
+                        rule.append(f'{pred}{args}')
+                rule = ':- ' + ', '.join(sorted(rule)) + '.'
+                rule = rule.replace("'","")
+                rule = rule.replace('not clause(1,)','not clause(1)')
+                # print(rule)
+                encoding.append(rule)
+                # nogoods.append(rule)
+
+        # for
+
+        encoding = '\n'.join(encoding)
+
+        # build solver
+        solver = clingo.Control(["--opt-mode=optN"])
+        # solver = clingo.Control()
+        solver.configuration.solve.models = 0
+
+
+        solver.add('base', [], encoding)
+        solver.ground([('base', [])])
+        solver.add('number_of_literals', ['n'], NUM_LITERALS)
+        self.solver = solver
 
     def update_num_literals(self, size):
         # release atoms already assigned
@@ -318,51 +374,56 @@ class Constrain:
 
         yield (Literal('included_clause', (clause_handle, clause_number)), tuple(literals))
 
-    def banish_constraint(self, program, before={}, min_clause=defaultdict(int)):
+    def banish_constraint(self, prog, before={}, min_clause=defaultdict(int)):
         literals = []
-        for clause_number, clause in enumerate(program):
-            head, body = clause
-            clause_handle = self.make_clause_handle(clause)
-            yield from self.make_clause_inclusion_rule(clause, min_clause[clause_number], clause_handle)
+        for clause_number, rule in enumerate(prog):
+            head, body = rule
+            clause_number = vo_clause('l')
+            literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
 
-            literals.append(Literal('included_clause', (clause_handle, vo_clause(clause_number))))
+            for body_literal in body:
+                literals.append(Literal('body_literal', (clause_number, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+
+            for idx, var in enumerate(head.arguments):
+                literals.append(eq(vo_variable(var), idx))
+
             literals.append(body_size_literal(vo_clause(clause_number), len(body)))
-
-        for clause_number1, clause_numbers in before.items():
-            for clause_number2 in clause_numbers:
-                literals.append(lt(vo_clause(clause_number1), vo_clause(clause_number2)))
-
-        for clause_number, clause in enumerate(program):
-            literals.append(gteq(vo_clause(clause_number), min_clause[clause]))
-
-        num_clauses = len(program)
-        # ensure that each clause_var is ground to a unique value
-        # literals.append(alldiff(tuple(vo_clause(c) for c in range(num_clauses))))
-        literals.append(Literal('clause', (num_clauses, ), positive = False))
-
-        yield (None, tuple(literals))
+        literals.append(Literal('clause', (len(prog)-1, )))
+        # print(literals)
+        return tuple(literals)
 
     def generalisation_constraint(self, program, before={}, min_clause=defaultdict(int)):
         literals = []
-        for clause_number, clause in enumerate(program):
-            (_head, body) = clause
-            clause_handle = self.make_clause_handle(clause)
-            yield from self.make_clause_inclusion_rule(clause,  min_clause[clause], clause_handle)
+        for clause_number, rule in enumerate(program):
+            head, body = rule
+            clause_number = vo_clause('l')
+            literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
 
-            literals.append(Literal('included_clause', (clause_handle, vo_clause(clause_number))))
+            for body_literal in body:
+                literals.append(Literal('body_literal', (clause_number, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+
+            for idx, var in enumerate(head.arguments):
+                literals.append(eq(vo_variable(var), idx))
+            # (_head, body) = clause
+            # clause_handle = self.make_clause_handle(clause)
+            # yield from self.make_clause_inclusion_rule(clause,  min_clause[clause], clause_handle)
+
+            # literals.append(Literal('included_clause', (clause_handle, vo_clause(clause_number))))
             literals.append(body_size_literal(vo_clause(clause_number), len(body)))
+            # for idx, var in enumerate(head.arguments):
+                # literals.append(eq(vo_variable(var), idx))
 
-        for clause_number1, clause_numbers in before.items():
-            for clause_number2 in clause_numbers:
-                literals.append(lt(vo_clause(clause_number1), vo_clause(clause_number2)))
+        # for clause_number1, clause_numbers in before.items():
+        #     for clause_number2 in clause_numbers:
+        #         literals.append(lt(vo_clause(clause_number1), vo_clause(clause_number2)))
 
-        for clause_number, clause in enumerate(program):
-            literals.append(gteq(vo_clause(clause_number), min_clause[clause]))
+        # for clause_number, clause in enumerate(program):
+        #     literals.append(gteq(vo_clause(clause_number), min_clause[clause]))
 
         # ensure that each clause_var is ground to a unique value
         # literals.append(alldiff(tuple(vo_clause(c) for c in range(len(program)))))
 
-        yield (None, tuple(literals))
+        return tuple(literals)
 
     def specialisation_constraint(self, prog, before={}, min_clause=defaultdict(int)):
         literals = []

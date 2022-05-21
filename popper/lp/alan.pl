@@ -30,6 +30,8 @@
 #show body_literal/4.
 #show direction_/3.
 
+%% :~ #sum{K+1,C : body_size(C,K)} == N. [N@1]
+
 pi_or_rec:- recursive.
 pi_or_rec:- pi.
 
