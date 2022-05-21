@@ -46,6 +46,7 @@ def timeout(func, args=(), kwargs={}, timeout_duration=1, default=None):
     try:
         result = func(*args, **kwargs)
     except TimeoutError as exc:
+        logging.warning(f'% hgalted execution after overall timeout of {timeout_duration} seconds')
         result = default
     finally:
         signal.alarm(0)
