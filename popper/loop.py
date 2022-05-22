@@ -11,21 +11,25 @@ from . core import Constrainer
 SIMPLE_HACK = True
 
 def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_size=20):
-    bootstrap_cons = deduce_cons(cons, chunk_pos)
+
     # print('bootstrap_cons',bootstrap_cons)
 
     # with settings.stats.duration('bootstrap'):
 
+    print('chunk_pos',chunk_pos)
 
+
+    # new_cons = set(), set(), set()
     for size in range(1, max_size+1):
 
         if size > settings.max_literals:
             continue
+        print(size)
 
-        with settings.stats.duration('BOOTING'):
-            settings.stats.logger.info(f'Searching size: {size}')
-            generator = Generator(settings, grounder, bootstrap_cons)
-            generator.update_num_literals(size)
+        bootstrap_cons = deduce_cons(cons, chunk_pos)
+        generator = Generator(settings, grounder, bootstrap_cons)
+        generator.update_num_literals(size)
+        # generator.load_cons(new_cons)
 
         with generator.solver.solve(yield_ = True) as handle:
             for model in handle:
@@ -111,9 +115,9 @@ def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_si
                         # print('BUILD SPEC')
                         new_cons.add(generator.build_specialisation_constraint(prog))
                     if add_gen:
-                        pass
+                        # pass
                         # print('BUILD GEN')
-                        # new_cons.update(generator.build_generalisation_constraint(prog))
+                        new_cons.add(generator.build_generalisation_constraint(prog))
                     if not add_spec and not add_gen:
                         assert(False)
                         # new_cons.update(generator.build_elimination_constraint(prog))
@@ -122,7 +126,8 @@ def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_si
                 with settings.stats.duration('B'):
                     s = set()
                     for con in new_cons:
-
+                        # print('asda')
+                        # print(con)
                         # for x in generator.con_to_strings(con):
                             # print(x)
                         for grule in generator.get_ground_rules([(None, con)]):

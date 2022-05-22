@@ -48,9 +48,48 @@ class Generator:
             yield rule
 
 
+    def load_cons(self, cons):
+
+        # bootstrap with constraints
+        specs, elims, gens = cons
+        # specs = set()
+        # elims = set()
+        # gens = set()
+        cons = set()
+        for prog in specs:
+            cons.add(self.build_specialisation_constraint(prog))
+        # print('ELIMS!!!', len(elims))
+        encoding  =[]
+        for con in cons:
+        # print('***')
+        # print(con)
+            for grule in self.get_ground_rules([(None, con)]):
+                h, b = grule
+                # print(b)
+                rule = []
+                for sign, pred, args in b:
+                    # print(type(pred))
+                    # pred = pred.replace("'",'')
+                    if not sign:
+                        rule.append(f'not {pred}{args}')
+                    else:
+                        rule.append(f'{pred}{args}')
+                rule = ':- ' + ', '.join(sorted(rule)) + '.'
+                rule = rule.replace("'","")
+                rule = rule.replace('not clause(1,)','not clause(1)')
+                encoding.append(rule)
+        encoding = '\n'.join(encoding)
+        encoding = '\n'.join(encoding)
+        k = f'prog-{self.step_count}'
+        self.solver.add(k, [], encoding)
+        self.solver.ground([(k, [])])
+
+
+
     def __init__(self, settings, grounder, bootstrap_cons):
         self.settings = settings
         self.last_size = None
+        self.step_count = 0
 
         self.constrain = Constrain()
         self.grounder = grounder
@@ -79,6 +118,10 @@ class Generator:
         cons = set()
         for prog in specs:
             cons.add(self.build_specialisation_constraint(prog))
+        for prog in gens:
+            cons.add(self.build_generalisation_constraint(prog))
+        for prog in elims:
+            cons.add(self.build_elimination_constraint(prog))
         # print('ELIMS!!!', len(elims))
         # for prog in elims:
         #     # print('E1')
@@ -117,8 +160,8 @@ class Generator:
         encoding = '\n'.join(encoding)
 
         # build solver
-        solver = clingo.Control(["--opt-mode=optN"])
-        # solver = clingo.Control()
+        # solver = clingo.Control(["--opt-mode=optN"])
+        solver = clingo.Control()
         solver.configuration.solve.models = 0
 
 
