@@ -1,4 +1,8 @@
-%% max_body(4).
+%% max_body(6).
+%% max_vars(6).
+%% max_clauses(6).
+
+%% #show size/1.
 head_pred(next_value,2).
 body_pred(does,3).
 body_pred(true_value,2).

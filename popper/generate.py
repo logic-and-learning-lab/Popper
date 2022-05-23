@@ -86,7 +86,10 @@ class Generator:
 
 
 
-    def __init__(self, settings, grounder, bootstrap_cons):
+    def __init__(self, settings, grounder, bootstrap_cons, max_size=None):
+
+        print('INIT WITH MAX_SIZE', max_size)
+
         self.settings = settings
         self.last_size = None
         self.step_count = 0
@@ -108,13 +111,9 @@ class Generator:
         if self.settings.bkcons:
             encoding.append(self.settings.bkcons)
 
-
-
+        settings.logger.info('generate.bootstrap_cons.a')
         # bootstrap with constraints
         specs, elims, gens = bootstrap_cons
-        # specs = set()
-        # elims = set()
-        # gens = set()
         cons = set()
         for prog in specs:
             cons.add(self.build_specialisation_constraint(prog))
@@ -122,18 +121,9 @@ class Generator:
             cons.add(self.build_generalisation_constraint(prog))
         for prog in elims:
             cons.add(self.build_elimination_constraint(prog))
-        # print('ELIMS!!!', len(elims))
-        # for prog in elims:
-        #     # print('E1')
-        #     # cons.update()
-        #     con = self.build_elimination_constraint(prog)
-        #     # print('E2')
-        #     # for x in self.con_to_strings(con):
-        #         # print('x',x)
-        # for prog in gens:
-        #     cons.update(self.build_generalisation_constraint(prog))
 
         # nogoods = []
+        settings.logger.info('generate.bootstrap_cons.b')
         for con in cons:
             # print('***')
             # print(con)
@@ -161,13 +151,14 @@ class Generator:
 
         # build solver
         # solver = clingo.Control(["--opt-mode=optN"])
-        solver = clingo.Control()
+        solver = clingo.Control(["--heuristic=Domain"])
         solver.configuration.solve.models = 0
 
-
+        settings.logger.info('generate.bootstrap_cons.add_and_ground')
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         solver.add('number_of_literals', ['n'], NUM_LITERALS)
+        settings.logger.info('generate.bootstrap_cons.done')
         self.solver = solver
 
     def update_num_literals(self, size):

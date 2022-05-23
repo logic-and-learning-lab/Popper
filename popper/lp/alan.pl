@@ -30,6 +30,22 @@
 #show body_literal/4.
 #show direction_/3.
 
+size(N):-
+    #sum{K+1,C : body_size(C,K)} == N.
+
+#show size/1.
+#heuristic size(1). [10,true]
+#heuristic size(2). [9,true]
+#heuristic size(3). [8,true]
+#heuristic size(4). [7,true]
+#heuristic size(5). [6,true]
+#heuristic size(6). [5,true]
+#heuristic size(7). [4,true]
+#heuristic size(8). [3,true]
+
+%% #heuristic size(K). [-K,true]
+%% #heuristic size(K). [K,true]
+
 %% :~ #sum{K+1,C : body_size(C,K)} == N. [N@1]
 
 pi_or_rec:- recursive.
