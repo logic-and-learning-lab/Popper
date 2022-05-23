@@ -1,6 +1,6 @@
 import time
 from . select import Selector
-from . util import timeout, chunk_list, flatten, print_prog, format_rule
+from . util import timeout, chunk_list, flatten, print_prog, format_rule, format_prog
 from . tester import Tester
 # from . asptester import Tester
 from . generate import Generator, Grounder, atom_to_symbol
@@ -13,12 +13,14 @@ SIMPLE_HACK = True
 def prog_size(prog):
     return sum(1 + len(body) for head, body in prog)
 
+seen = set()
 def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_size=20):
 
     print('chunk_pos',chunk_pos)
 
     bootstrap_cons = deduce_cons(cons, chunk_pos)
     with settings.stats.duration('init'):
+
         # TODO: ADD NOGOOD ON SIZE
         generator = Generator(settings, grounder, bootstrap_cons, max_size)
 
@@ -29,10 +31,14 @@ def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_si
 
             settings.stats.total_programs += 1
 
+            settings.stats.register_prog(prog)
+            assert(format_prog(prog) not in seen)
+            seen.add(format_prog(prog))
+
             with settings.stats.duration('test'):
                 pos_covered, inconsistent = tester.test_prog(prog)
 
-            settings.stats.register_prog(prog)
+
 
             chunk_pos_covered = set([x for x in chunk_pos if x in pos_covered])
             incomplete = len(chunk_pos_covered) != len(chunk_pos)
@@ -59,10 +65,10 @@ def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_si
 
             # HACKY
             # if we already have a solution, any new rule must cover at least two examples
-            # if len(chunk_pos) > 1 and len(chunk_pos_covered) == 1:
-            #     add_spec = True
-            #     for e in settings.pos:
-            #         cons.add_specialisation(prog, e)
+            if len(chunk_pos) > 1 and len(chunk_pos_covered) == 1:
+                add_spec = True
+                for e in settings.pos:
+                    cons.add_specialisation(prog, e)
 
             # if SIMPLE_HACK and len(chunk_pos) > 1 and len(settings.best_prog) == 2 and len(chunk_pos_covered) != len(chunk_pos):
             #     add_spec = True
@@ -94,14 +100,6 @@ def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_si
 
             # if it covers all examples, stop
             if len(chunk_pos_covered) == len(chunk_pos) and not inconsistent:
-                # TODO: ADD A NOGOOD ON PROGRAM SIZE AND LOOP AGAIN!
-                # ":- size(K), K >= M".
-                # k = prog_size(prog)
-                # print('FOUND SOMETHING', k, format_rule(list(prog)[0]))
-                # for i in range(k, max_size+1):
-                #     tmp = [(atom_to_symbol("size", (i,)), True)]
-                #     print(tmp)
-                #     model.context.add_nogood(tmp)
                 settings.logger.debug(f'Found complete and consistent program for examples: {chunk_pos}')
                 return
 

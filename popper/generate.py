@@ -6,7 +6,7 @@ import itertools
 import operator
 import pkg_resources
 from . core import Literal, ConstVar
-from . util import format_rule
+from . util import format_rule, format_prog
 from collections import defaultdict
 from clingo import Function, Number, Tuple_
 import clingo.script
@@ -48,41 +48,41 @@ class Generator:
             yield rule
 
 
-    def load_cons(self, cons):
+    # def load_cons(self, cons):
 
-        # bootstrap with constraints
-        specs, elims, gens = cons
-        # specs = set()
-        # elims = set()
-        # gens = set()
-        cons = set()
-        for prog in specs:
-            cons.add(self.build_specialisation_constraint(prog))
-        # print('ELIMS!!!', len(elims))
-        encoding  =[]
-        for con in cons:
-        # print('***')
-        # print(con)
-            for grule in self.get_ground_rules([(None, con)]):
-                h, b = grule
-                # print(b)
-                rule = []
-                for sign, pred, args in b:
-                    # print(type(pred))
-                    # pred = pred.replace("'",'')
-                    if not sign:
-                        rule.append(f'not {pred}{args}')
-                    else:
-                        rule.append(f'{pred}{args}')
-                rule = ':- ' + ', '.join(sorted(rule)) + '.'
-                rule = rule.replace("'","")
-                rule = rule.replace('not clause(1,)','not clause(1)')
-                encoding.append(rule)
-        encoding = '\n'.join(encoding)
-        encoding = '\n'.join(encoding)
-        k = f'prog-{self.step_count}'
-        self.solver.add(k, [], encoding)
-        self.solver.ground([(k, [])])
+    #     # bootstrap with constraints
+    #     specs, elims, gens = cons
+    #     # specs = set()
+    #     # elims = set()
+    #     # gens = set()
+    #     cons = set()
+    #     for prog in specs:
+    #         cons.add(self.build_specialisation_constraint(prog))
+    #     # print('ELIMS!!!', len(elims))
+    #     encoding  =[]
+    #     for con in cons:
+    #     # print('***')
+    #     # print(con)
+    #         for grule in self.get_ground_rules([(None, con)]):
+    #             h, b = grule
+    #             # print(b)
+    #             rule = []
+    #             for sign, pred, args in b:
+    #                 # print(type(pred))
+    #                 # pred = pred.replace("'",'')
+    #                 if not sign:
+    #                     rule.append(f'not {pred}{args}')
+    #                 else:
+    #                     rule.append(f'{pred}{args}')
+    #             rule = ':- ' + ', '.join(sorted(rule)) + '.'
+    #             rule = rule.replace("'","")
+    #             rule = rule.replace('not clause(1,)','not clause(1)')
+    #             encoding.append(rule)
+    #     encoding = '\n'.join(encoding)
+    #     encoding = '\n'.join(encoding)
+    #     k = f'prog-{self.step_count}'
+    #     self.solver.add(k, [], encoding)
+    #     self.solver.ground([(k, [])])
 
 
 
@@ -116,10 +116,13 @@ class Generator:
         specs, elims, gens = bootstrap_cons
         cons = set()
         for prog in specs:
+            # print('SPEC', format_prog(prog))
             cons.add(self.build_specialisation_constraint(prog))
         for prog in gens:
+            # print('GEN', format_prog(prog))
             cons.add(self.build_generalisation_constraint(prog))
         for prog in elims:
+            # print('ELIM', format_prog(prog))
             cons.add(self.build_elimination_constraint(prog))
 
         # nogoods = []
@@ -127,6 +130,8 @@ class Generator:
         for con in cons:
             # print('***')
             # print(con)
+            # for x in self.con_to_strings(con):
+                # print(x)
             for grule in self.get_ground_rules([(None, con)]):
                 h, b = grule
                 # print(b)
@@ -244,8 +249,12 @@ class Generator:
         for rule in rules:
             head, body = rule
 
+
+
             # find bindings for variables in the rule
             assignments = self.grounder.find_bindings(rule, self.settings.max_rules, self.settings.max_vars)
+
+            # print(assignments)
 
             # keep only standard literals
             body = tuple(literal for literal in body if not literal.meta)
@@ -421,8 +430,9 @@ class Constrain:
             for idx, var in enumerate(head.arguments):
                 literals.append(eq(vo_variable(var), idx))
 
-            literals.append(body_size_literal(vo_clause(clause_number), len(body)))
-        literals.append(Literal('clause', (len(prog)-1, )))
+            literals.append(body_size_literal(clause_number, len(body)))
+        # literals.append(Literal('clause', (len(prog)-1, )))
+        literals.append(Literal('clause', (len(prog), ), positive = False))
         # print(literals)
         return tuple(literals)
 
