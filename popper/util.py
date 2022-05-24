@@ -307,6 +307,6 @@ class Settings:
         self.logger.info('*'*20)
         self.logger.info(f'New best hypothesis:')
         self.logger.info(f'tp:{tp} fn:{fn} size:{size}')
-        for rule in prog:
+        for rule in order_prog(prog):
             self.logger.info(format_rule(rule))
         self.logger.info('*'*20)

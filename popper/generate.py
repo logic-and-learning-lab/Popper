@@ -6,7 +6,7 @@ import itertools
 import operator
 import pkg_resources
 from . core import Literal, ConstVar
-from . util import format_rule, format_prog
+from . util import format_rule, format_prog, rule_is_recursive
 from collections import defaultdict
 from clingo import Function, Number, Tuple_
 import clingo.script
@@ -336,8 +336,8 @@ def vo_variable(variable):
 def body_size_literal(clause_var, body_size):
     return Literal('body_size', (clause_var, body_size))
 
-def make_literal_handle(literal):
-    return f'{literal.predicate}({".".join(literal.arguments)})'
+# def make_literal_handle(literal):
+    # return f'{literal.predicate}({".".join(literal.arguments)})'
 
 def alldiff(args):
     return Literal('AllDifferent', args, meta=True)
@@ -381,43 +381,43 @@ class Constrain:
                             xs.add(t_arg)
         return xs
 
-    def make_literal_handle(self, literal):
-        return f'{literal.predicate}{"".join(literal.arguments)}'
+    # def make_literal_handle(self, literal):
+    #     return f'{literal.predicate}{"".join(literal.arguments)}'
 
-    def make_clause_handle(self, clause):
-        if clause in self.seen_clause_handle:
-            return self.seen_clause_handle[clause]
-        (head, body) = clause
-        body_literals = sorted(body, key = operator.attrgetter('predicate'))
-        clause_handle = ''.join(self.make_literal_handle(literal) for literal in [head] + body_literals)
-        self.seen_clause_handle[clause] = clause_handle
-        return clause_handle
+    # def make_clause_handle(self, clause):
+    #     if clause in self.seen_clause_handle:
+    #         return self.seen_clause_handle[clause]
+    #     (head, body) = clause
+    #     body_literals = sorted(body, key = operator.attrgetter('predicate'))
+    #     clause_handle = ''.join(self.make_literal_handle(literal) for literal in [head] + body_literals)
+    #     self.seen_clause_handle[clause] = clause_handle
+    #     return clause_handle
 
-    def make_clause_inclusion_rule(self, clause, min_num, clause_handle):
-        if clause_handle in self.added_clauses:
-            return
-            yield
+    # def make_clause_inclusion_rule(self, clause, min_num, clause_handle):
+    #     if clause_handle in self.added_clauses:
+    #         return
+    #         yield
 
-        head, body = clause
+    #     head, body = clause
 
-        self.added_clauses.add(clause_handle)
-        clause_number = vo_clause('l')
+    #     self.added_clauses.add(clause_handle)
+    #     clause_number = vo_clause('l')
 
-        literals = []
-        literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
+    #     literals = []
+    #     literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
 
-        for body_literal in body:
-            literals.append(Literal('body_literal', (clause_number, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+    #     for body_literal in body:
+    #         literals.append(Literal('body_literal', (clause_number, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
 
-        literals.append(gteq(clause_number, min_num))
+    #     literals.append(gteq(clause_number, min_num))
 
-        # ensure that each var_var is ground to a unique value
-        # literals.append(alldiff(tuple(vo_variable(v) for v in self.all_vars(clause))))
+    #     # ensure that each var_var is ground to a unique value
+    #     # literals.append(alldiff(tuple(vo_variable(v) for v in self.all_vars(clause))))
 
-        for idx, var in enumerate(head.arguments):
-            literals.append(eq(vo_variable(var), idx))
+    #     for idx, var in enumerate(head.arguments):
+    #         literals.append(eq(vo_variable(var), idx))
 
-        yield (Literal('included_clause', (clause_handle, clause_number)), tuple(literals))
+    #     yield (Literal('included_clause', (clause_handle, clause_number)), tuple(literals))
 
     def banish_constraint(self, prog, before={}, min_clause=defaultdict(int)):
         literals = []
@@ -438,9 +438,9 @@ class Constrain:
         # print(literals)
         return tuple(literals)
 
-    def generalisation_constraint(self, program, before={}, min_clause=defaultdict(int)):
+    def generalisation_constraint(self, prog, before={}, min_clause=defaultdict(int)):
         literals = []
-        for clause_number, rule in enumerate(program):
+        for clause_number, rule in enumerate(prog):
             head, body = rule
             clause_number = vo_clause(clause_number)
             literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
@@ -458,6 +458,21 @@ class Constrain:
             literals.append(body_size_literal(clause_number, len(body)))
             # for idx, var in enumerate(head.arguments):
                 # literals.append(eq(vo_variable(var), idx))
+
+        # sorted_list = sorted(list, key=lambda x: (x[0], -x[1]))
+
+        if len(prog) > 1:
+            base = []
+            step = []
+            for clause_number, rule in enumerate(prog):
+                if rule_is_recursive(rule):
+                    step.append(clause_number)
+                else:
+                    base.append(clause_number)
+            for rule1 in base:
+                for rule2 in step:
+                    literals.append(lt(vo_clause(rule1), vo_clause(rule2)))
+
 
         # for clause_number1, clause_numbers in before.items():
         #     for clause_number2 in clause_numbers:

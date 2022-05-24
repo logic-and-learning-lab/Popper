@@ -30,7 +30,17 @@
 #show body_literal/4.
 #show direction_/3.
 
+%% BOUND FROM ABOVE
+
+max_size(K):-
+    max_body(M),
+    max_clauses(N),
+    K = (M+1)*N.
+
 size(N):-
+    max_size(MaxSize),
+    N > 0,
+    N <= MaxSize,
     #sum{K+1,C : body_size(C,K)} == N.
 
 #show size/1.

@@ -120,11 +120,11 @@ class Selector:
             fn = self.tester.num_pos - tp
             if fn > 0:
                 self.num_covered = tp
-                print(f'NEW SOLUITON IS INCOMPLETE WITH TP:{tp} and FN{fn}:')
+                # print(f'NEW SOLUITON IS INCOMPLETE WITH TP:{tp} and FN{fn}:')
                 self.settings.print_incomplete_solution(new_solution, tp, fn, size)
                 return False
 
-        print('NEW SOLUITON IS GOOD', size)
+        # print('NEW SOLUITON IS GOOD', size)
         self.settings.print_incomplete_solution(new_solution, self.tester.num_pos, 0, size)
         self.solution_found = True
         self.max_size = size
