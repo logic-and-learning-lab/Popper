@@ -33,7 +33,7 @@ class Generator:
     def con_to_strings(self, con):
          for grule in self.get_ground_rules([(None, con)]):
             h, b = grule
-            # print(b)
+            # print(h,b)
             rule = []
             for sign, pred, args in b:
                 # print(type(pred))
@@ -111,46 +111,46 @@ class Generator:
         if self.settings.bkcons:
             encoding.append(self.settings.bkcons)
 
-        settings.logger.info('generate.bootstrap_cons.a')
-        # bootstrap with constraints
-        specs, elims, gens = bootstrap_cons
-        cons = set()
-        for prog in specs:
-            # print('SPEC', format_prog(prog))
-            cons.add(self.build_specialisation_constraint(prog))
-        for prog in gens:
-            # print('GEN', format_prog(prog))
-            cons.add(self.build_generalisation_constraint(prog))
-        for prog in elims:
-            # print('ELIM', format_prog(prog))
-            cons.add(self.build_elimination_constraint(prog))
+        # settings.logger.info('generate.bootstrap_cons.a')
+        # # bootstrap with constraints
+        # specs, elims, gens = bootstrap_cons
+        # cons = set()
+        # for prog in specs:
+        #     # print('SPEC', format_prog(prog))
+        #     cons.add(self.build_specialisation_constraint(prog))
+        # for prog in gens:
+        #     # print('GEN', format_prog(prog))
+        #     cons.add(self.build_generalisation_constraint(prog))
+        # for prog in elims:
+        #     # print('ELIM', format_prog(prog))
+        #     cons.add(self.build_elimination_constraint(prog))
 
-        # nogoods = []
-        settings.logger.info('generate.bootstrap_cons.b')
-        for con in cons:
-            # print('***')
-            # print(con)
-            # for x in self.con_to_strings(con):
-                # print(x)
-            for grule in self.get_ground_rules([(None, con)]):
-                h, b = grule
-                # print(b)
-                rule = []
-                for sign, pred, args in b:
-                    # print(type(pred))
-                    # pred = pred.replace("'",'')
-                    if not sign:
-                        rule.append(f'not {pred}{args}')
-                    else:
-                        rule.append(f'{pred}{args}')
-                rule = ':- ' + ', '.join(sorted(rule)) + '.'
-                rule = rule.replace("'","")
-                rule = rule.replace('not clause(1,)','not clause(1)')
-                # print(rule)
-                encoding.append(rule)
-                # nogoods.append(rule)
+        # # nogoods = []
+        # settings.logger.info('generate.bootstrap_cons.b')
+        # for con in cons:
+        #     # print('***')
+        #     # print(con)
+        #     # for x in self.con_to_strings(con):
+        #         # print(x)
+        #     for grule in self.get_ground_rules([(None, con)]):
+        #         h, b = grule
+        #         # print(b)
+        #         rule = []
+        #         for sign, pred, args in b:
+        #             # print(type(pred))
+        #             # pred = pred.replace("'",'')
+        #             if not sign:
+        #                 rule.append(f'not {pred}{args}')
+        #             else:
+        #                 rule.append(f'{pred}{args}')
+        #         rule = ':- ' + ', '.join(sorted(rule)) + '.'
+        #         rule = rule.replace("'","")
+        #         rule = rule.replace('not clause(1,)','not clause(1)')
+        #         # print(rule)
+        #         encoding.append(rule)
+        #         # nogoods.append(rule)
 
-        # for
+        # # for
 
         encoding = '\n'.join(encoding)
 
@@ -249,7 +249,9 @@ class Generator:
         for rule in rules:
             head, body = rule
 
-
+            # print('get_ground_rules.rule:')
+            # for x in body:
+            #     print(x)
 
             # find bindings for variables in the rule
             assignments = self.grounder.find_bindings(rule, self.settings.max_rules, self.settings.max_vars)
@@ -421,7 +423,7 @@ class Constrain:
         literals = []
         for clause_number, rule in enumerate(prog):
             head, body = rule
-            clause_number = vo_clause('l')
+            clause_number = vo_clause(clause_number)
             literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
 
             for body_literal in body:
@@ -440,7 +442,7 @@ class Constrain:
         literals = []
         for clause_number, rule in enumerate(program):
             head, body = rule
-            clause_number = vo_clause('l')
+            clause_number = vo_clause(clause_number)
             literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
 
             for body_literal in body:
@@ -453,7 +455,7 @@ class Constrain:
             # yield from self.make_clause_inclusion_rule(clause,  min_clause[clause], clause_handle)
 
             # literals.append(Literal('included_clause', (clause_handle, vo_clause(clause_number))))
-            literals.append(body_size_literal(vo_clause(clause_number), len(body)))
+            literals.append(body_size_literal(clause_number, len(body)))
             # for idx, var in enumerate(head.arguments):
                 # literals.append(eq(vo_variable(var), idx))
 
@@ -471,9 +473,9 @@ class Constrain:
 
     def specialisation_constraint(self, prog, before={}, min_clause=defaultdict(int)):
         literals = []
-        for rule in prog:
+        for i, rule in enumerate(prog):
             head, body = rule
-            clause_number = vo_clause('l')
+            clause_number = vo_clause(i)
             literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
 
             for body_literal in body:

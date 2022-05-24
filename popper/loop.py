@@ -1,6 +1,6 @@
 import time
 from . select import Selector
-from . util import timeout, chunk_list, flatten, print_prog, format_rule, format_prog
+from . util import timeout, chunk_list, flatten, print_prog, format_rule, format_prog, rule_is_recursive
 from . tester import Tester
 # from . asptester import Tester
 from . generate import Generator, Grounder, atom_to_symbol
@@ -8,79 +8,92 @@ from . bkcons import deduce_bk_cons
 from clingo import Function, Number, Tuple_
 from . core import Constrainer
 
-SIMPLE_HACK = True
-
 def prog_size(prog):
     return sum(1 + len(body) for head, body in prog)
 
-seen = set()
-def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_size=20):
+def find_progs(settings):
+    tester = Tester(settings)
+    cons = Constrainer(settings)
+    grounder = Grounder()
+    prog_coverage = {}
+    success_sets = {}
+    selector = Selector(settings, tester, prog_coverage)
+    covered_examples = set()
+    pos = settings.pos
 
-    print('chunk_pos',chunk_pos)
+    print('settings.max_literals', settings.max_literals)
+    generator = Generator(settings, grounder, settings.max_literals)
 
-    bootstrap_cons = deduce_cons(cons, chunk_pos)
-    with settings.stats.duration('init'):
-
-        # TODO: ADD NOGOOD ON SIZE
-        generator = Generator(settings, grounder, bootstrap_cons, max_size)
+    last_size = None
+    seen = set()
+    seen_inconsistent = set()
 
     with generator.solver.solve(yield_ = True) as handle:
         for model in handle:
+            new_cons = set()
+
             atoms = model.symbols(shown = True)
             prog = generator.parse_model(atoms)
 
-            settings.stats.total_programs += 1
 
-            settings.stats.register_prog(prog)
-            assert(format_prog(prog) not in seen)
-            seen.add(format_prog(prog))
+
+            prog_key = format_prog(prog)
+            assert(prog_key not in seen)
+            seen.add(prog_key)
+            k = prog_size(prog)
+            if last_size == None or k != last_size:
+                print(k)
+                last_size = k
 
             with settings.stats.duration('test'):
                 pos_covered, inconsistent = tester.test_prog(prog)
 
+            settings.stats.total_programs += 1
+            settings.stats.register_prog(prog)
 
+            # chunk_pos_covered = set([x for x in chunk_pos if x in pos_covered])
+            incomplete = len(pos_covered) != len(pos)
 
-            chunk_pos_covered = set([x for x in chunk_pos if x in pos_covered])
-            incomplete = len(chunk_pos_covered) != len(chunk_pos)
-
-            # print('inconsistent', inconsistent)
+            # print('stats', len(pos_covered), inconsistent)
             # print('coverage', pos_covered)
 
             add_spec = False
             add_gen = False
 
-            # always add an elimination constraint
-            cons.add_elimination(prog)
-
             # if inconsistent, prune generalisations
             if inconsistent:
+                # print('***')
+                # print('INCONSISTENT')
+                # for rule in prog:
+                    # print(format_rule(rule))
                 add_gen = True
                 cons.add_generalisation(prog)
+                if len(prog) > 1:
+                    for rule in prog:
+                        if rule_is_recursive(rule):
+                            continue
+                        subprog = frozenset([rule])
+                        if format_prog(subprog) in seen_inconsistent:
+                            print('SUBPROG SHOULD NOT BE HERE')
+                            print(format_rule(rule))
+                            assert(False)
+                        _, inconsistent1 = tester.test_prog(subprog)
+                        if inconsistent1:
+                            new_cons.add(generator.build_generalisation_constraint(subprog))
+                            seen_inconsistent.add(format_prog(subprog))
+                seen_inconsistent.add(prog_key)
 
             # if consistent, prune specialisations
             else:
                 add_spec = True
-                for e in settings.pos:
-                    cons.add_specialisation(prog, e)
-
-            # HACKY
-            # if we already have a solution, any new rule must cover at least two examples
-            if len(chunk_pos) > 1 and len(chunk_pos_covered) == 1:
-                add_spec = True
-                for e in settings.pos:
-                    cons.add_specialisation(prog, e)
-
-            # if SIMPLE_HACK and len(chunk_pos) > 1 and len(settings.best_prog) == 2 and len(chunk_pos_covered) != len(chunk_pos):
-            #     add_spec = True
-            #     for e in settings.pos:
-            #         cons.add_specialisation(prog, e)
-
-            # if too specific for an example e, save a specialisation constraint for e
-            for e in settings.pos.difference(pos_covered):
-                cons.add_specialisation(prog, e)
 
             # if it does not cover any example, prune specialisations
-            if len(chunk_pos_covered) == 0:
+            if len(pos_covered) == 0:
+                add_spec = True
+
+            # HACKY
+            # if we already have a solution, a new rule must cover at least two examples
+            if selector.solution_found and len(pos_covered) == 1:
                 add_spec = True
 
             # check whether subsumed by an already seen program
@@ -90,25 +103,52 @@ def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_si
                 subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets.keys())
                 if subsumed:
                     add_spec = True
-                    for e in settings.pos:
-                        cons.add_specialisation(prog, e)
+
+            if add_spec == False and selector.solution_found and len(selector.best_prog) == 1 and len(chunk_pos_covered) != len(pos):
+                print('prune baby prune')
+
 
             # if consistent, covers at least one example, and is not subsumed, yield candidate program
-            if len(pos_covered) > 0 and not inconsistent and not subsumed:
-                # settings.stats.register_candidate_prog(prog)
-                yield prog, pos_covered
+            if not inconsistent and not subsumed and len(pos_covered) > 0:
+                # update coverage
+                prog_coverage[prog] = pos_covered
+                covered_examples.update(pos_covered)
+                success_sets[pos_covered] = prog
+
+                print('CALLING SELECT')
+                for rule in prog:
+                    print(format_rule(rule))
+
+                with settings.stats.duration('select'):
+                    new_solution_found = selector.update_best_prog(prog)
+                    if new_solution_found:
+                        k = prog_size(selector.best_prog)
+                        # print('FOUND SOMETHING', k)
+                        for i in range(k, settings.max_literals+1):
+                            tmp = [(atom_to_symbol("size", (i,)), True)]
+                            # print(tmp)
+                            model.context.add_nogood(tmp)
+                        settings.max_literals = k-1
 
             # if it covers all examples, stop
-            if len(chunk_pos_covered) == len(chunk_pos) and not inconsistent:
-                settings.logger.debug(f'Found complete and consistent program for examples: {chunk_pos}')
+            if not inconsistent and len(pos_covered) == len(pos):
+                print('STOPPING')
+                # settings.logger.debug(f'Found complete and consistent program for examples: {chunk_pos}')
                 return
 
             with settings.stats.duration('constrain.build'):
-                new_cons = set()
                 if add_spec:
+                    # print("ADD_SPEC")
                     new_cons.add(generator.build_specialisation_constraint(prog))
+                # TODO: IF NO PI OR RECURSION THEN NO NEED TO ADD GEN
                 if add_gen:
-                    new_cons.add(generator.build_generalisation_constraint(prog))
+                    con = generator.build_generalisation_constraint(prog)
+                    new_cons.add(con)
+                    # for a in generator.con_to_strings(x):
+                        # pass
+                        # print(a)
+                    # for grule in generator.get_ground_rules([(None, x)]):
+                        # print(grule)
                 if not add_spec and not add_gen:
                     assert(False)
 
@@ -130,6 +170,7 @@ def find_progs(settings, tester, grounder, cons, success_sets, chunk_pos, max_si
 
             with settings.stats.duration('constrain.add'):
                 for tmp in nogoods:
+                    # pass
                     model.context.add_nogood(tmp)
 
 def deduce_cons(cons, chunk_pos):
@@ -140,54 +181,47 @@ def popper(settings):
         with settings.stats.duration('bkcons'):
             deduce_bk_cons(settings)
 
-    tester = Tester(settings)
-    cons = Constrainer(settings)
-    grounder = Grounder()
-    prog_coverage = {}
-    success_sets = {}
-    selector = Selector(settings, tester, prog_coverage)
-    covered_examples = set()
 
-    def find_solution(examples, max_size):
+    # def find_solution(examples, max_size):
         # settings.stats.logger.info(f'Trying to cover:')
         # settings.stats.logger.info(f'{set(examples)}')
-        for prog, coverage in find_progs(settings, tester, grounder, cons, success_sets, examples, max_size):
+    find_progs(settings)
 
-            # update coverage
-            prog_coverage[prog] = coverage
-            covered_examples.update(coverage)
-            success_sets[coverage] = prog
+            # # update coverage
+            # prog_coverage[prog] = coverage
+            # covered_examples.update(coverage)
+            # success_sets[coverage] = prog
 
-            # if we find a program that covers all examples, stop
-            if len(coverage) == len(settings.pos):
-                selector.update_best_prog(prog)
-                return True
+            # # # if we find a program that covers all examples, stop
+            # # if len(coverage) == len(settings.pos):
+            # #     selector.update_best_prog(prog)
+            # #     return True
 
-            with settings.stats.duration('select'):
-                new_solution_found = selector.update_best_prog(prog)
-                if new_solution_found:
-                    max_size = selector.max_size - 1
-                    settings.max_literals = max_size
-                    continue
+            # with settings.stats.duration('select'):
+            #     new_solution_found = selector.update_best_prog(prog)
+            #     if new_solution_found:
+            #         max_size = selector.max_size - 1
+            #         settings.max_literals = max_size
+            #         continue
 
-    # in the first pass we try to cover each example
-    for pos in settings.pos:
-        # if all examples are covered, stop
-        if len(covered_examples) == len(settings.pos):
-            break
+    # # in the first pass we try to cover each example
+    # for pos in settings.pos:
+    #     # if all examples are covered, stop
+    #     if len(covered_examples) == len(settings.pos):
+    #         break
 
-        # if example is covered, stop
-        if pos in covered_examples:
-            continue
+    #     # if example is covered, stop
+    #     if pos in covered_examples:
+    #         continue
 
-        # find a solution
-        optimal_found = find_solution(frozenset([pos]), settings.max_literals)
-        if optimal_found:
-            return
+    #     # find a solution
+    #     optimal_found = find_solution(frozenset([pos]), settings.max_literals)
+    #     if optimal_found:
+    #         return
 
     # return
     # we then try to generalise over all examples
-    find_solution(settings.pos, settings.max_literals)
+    # find_solution(settings.pos, settings.max_literals)
 
 def learn_solution(settings):
     timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)

@@ -23,11 +23,13 @@ class Selector:
         self.prog_coverage = prog_coverage
 
         self.solution_found = False
+        self.best_prog = None
+
         self.num_covered = 0
 
         self.index_to_prog = {}
         self.max_size = None
-        # self.best_prog = None
+
         self.prog_encoding = ''
         self.example_to_hash = {}
         self.prog_count = 0
@@ -66,8 +68,8 @@ class Selector:
 
         encoding = '\n'.join(encoding)
 
-        # with open('sat-problem.pl', 'w') as f:
-            # f.write(encoding)
+        with open('sat-problem.pl', 'w') as f:
+            f.write(encoding)
         # print(encoding)
         solver = clingo.Control()
         solver.add('base', [], encoding)
@@ -105,9 +107,8 @@ class Selector:
         if len(new_solution) == 0:
             return False
 
-        self.settings.solution = new_solution
-
         new_solution = reduce_prog(new_solution)
+        self.settings.solution = new_solution
         size = 0
         for rule in new_solution:
             head, body = rule
@@ -117,12 +118,16 @@ class Selector:
             covered, _ = self.tester.test_prog(new_solution)
             tp = len(covered)
             fn = self.tester.num_pos - tp
-            self.num_covered = tp
-            self.settings.print_incomplete_solution(new_solution, tp, fn, size)
-            return False
+            if fn > 0:
+                self.num_covered = tp
+                print(f'NEW SOLUITON IS INCOMPLETE WITH TP:{tp} and FN{fn}:')
+                self.settings.print_incomplete_solution(new_solution, tp, fn, size)
+                return False
 
+        print('NEW SOLUITON IS GOOD', size)
         self.settings.print_incomplete_solution(new_solution, self.tester.num_pos, 0, size)
         self.solution_found = True
         self.max_size = size
+        self.best_prog = new_solution
         # self.settings.solution = new_solution
         return True
