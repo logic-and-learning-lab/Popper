@@ -95,13 +95,13 @@ class Stats:
 
     def register_prog(self, prog):
         self.logger.debug(f'Program {self.total_programs}:')
-        for rule in prog:
+        for rule in order_prog(prog):
             self.logger.debug(format_rule(rule))
 
-    def register_candidate_prog(self, prog):
-        self.logger.info(f'Candidate program:')
-        for rule in order_prog(prog):
-            self.logger.info(format_rule(rule))
+    # def register_candidate_prog(self, prog):
+    #     self.logger.info(f'Candidate program:')
+    #     for rule in order_prog(prog):
+    #         self.logger.info(format_rule(rule))
 
     # def register_best_prog(self, prog, size):
     #     self.logger.info(f'New best solution of size {size}:')
