@@ -13,20 +13,7 @@ import clingo.script
 clingo.script.enable_python()
 arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
 
-def arg_to_symbol(arg):
-    if isinstance(arg, tuple):
-        return Tuple_(tuple(arg_to_symbol(a) for a in arg))
-    if isinstance(arg, numbers.Number):
-        return Number(arg)
-    if isinstance(arg, str):
-        return Function(arg)
-    assert False, f'Unhandled argtype({type(arg)}) in aspsolver.py arg_to_symbol()'
 
-def atom_to_symbol(pred, args):
-    xs = tuple(arg_to_symbol(arg) for arg in args)
-    out = Function(name = pred, arguments = xs)
-    # print(pred, args, out)
-    return out
 
 class Generator:
 
@@ -49,13 +36,8 @@ class Generator:
 
 
     def __init__(self, settings, grounder, bootstrap_cons):
-
         self.settings = settings
-        self.last_size = None
-        self.step_count = 0
-
         self.grounder = grounder
-        self.seen_symbols = {}
 
         # build generator program
         encoding = []
@@ -74,6 +56,7 @@ class Generator:
 
         solver = clingo.Control(["--heuristic=Domain"])
         solver.configuration.solve.models = 0
+        solver.configuration.solver.seed = 1
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver
@@ -220,6 +203,32 @@ class Generator:
         # literals.append(alldiff(tuple(vo_clause(c) for c in range(len(program)))))
 
         return tuple(literals)
+
+
+    # def literal(pred, args):
+        # Function(name = pred, arguments = xs)
+
+#         def prog_size(prog):
+#     return sum(1 + len(body) for head, body in prog)
+
+# # @profile
+# def arg_to_symbol(arg):
+#     print(arg)
+#     if isinstance(arg, tuple):
+#         return Tuple_(tuple(arg_to_symbol(a) for a in arg))
+#     if isinstance(arg, numbers.Number):
+#         return Number(arg)
+#     if isinstance(arg, str):
+#         return Function(arg)
+#     assert False, f'Unhandled argtype({type(arg)}) in aspsolver.py arg_to_symbol()'
+
+# @profile
+# def atom_to_symbol(pred, args):
+#     xs = tuple(arg_to_symbol(arg) for arg in args)
+#     out =
+#     # print(pred, args, out)
+#     return out
+
 
     def build_specialisation_constraint(self, prog):
         prog = list(prog)
