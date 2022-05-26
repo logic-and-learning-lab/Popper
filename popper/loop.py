@@ -1,6 +1,6 @@
 import time
 from . select import Selector
-from . util import timeout, chunk_list, flatten, print_prog, format_rule, format_prog, rule_is_recursive
+from . util import timeout, format_rule, format_prog, rule_is_recursive, order_prog
 from . tester import Tester
 # from . asptester import Tester
 from . generate import Generator, Grounder
@@ -26,13 +26,13 @@ def atom_to_symbol(pred, args):
     return Function(name = pred, arguments = xs)
 
 cached = {}
-seen_cons = set()
+# seen_cons = set()
 def f(settings, generator, new_cons, model):
     with settings.stats.duration('constrain.ground'):
         s = set()
         for con in new_cons:
-            assert(con not in seen_cons)
-            seen_cons.add(con)
+            # assert(con not in seen_cons)
+            # seen_cons.add(con)
             for grule in generator.get_ground_rules([(None, con)]):
                 h, b = grule
                 s.add(b)
@@ -80,45 +80,39 @@ def popper(settings):
     seen_incomplete_gen = set()
     seen_incomplete_spec = set()
 
+    inconsistent_count = 0
+
     with generator.solver.solve(yield_ = True) as handle:
         for model in handle:
             new_cons = set()
 
-            with settings.stats.duration('parse_model'):
-                atoms = model.symbols(shown = True)
-                prog = generator.parse_model(atoms)
-
-            # # **********
-            # # TMP
-            # prog_key = format_prog(prog)
-            # assert(prog_key not in seen)
-            # seen.add(prog_key)
-            # k = prog_size(prog)
-            # if last_size == None or k != last_size:
-            #     print(k)
-            #     last_size = k
-            # # **********
+            atoms = model.symbols(shown = True)
+            prog = generator.parse_model(atoms)
 
             with settings.stats.duration('test'):
                 pos_covered, inconsistent = tester.test_prog(prog)
 
             settings.stats.total_programs += 1
-            settings.stats.register_prog(prog)
+            settings.logger.debug(f'Program {settings.stats.total_programs}:')
+            for rule in order_prog(prog):
+                settings.logger.debug(format_rule(rule))
 
-            # chunk_pos_covered = set([x for x in chunk_pos if x in pos_covered])
+            k = prog_size(prog)
+            if last_size == None or k != last_size:
+                last_size = k
+                settings.logger.info(f'Searching programs of size: {k}')
+
+
             incomplete = len(pos_covered) != len(pos)
-
-            # print('stats', len(pos_covered), inconsistent)
-            # print('coverage', pos_covered)
 
             add_spec = False
             add_gen = False
 
             # if inconsistent, prune generalisations
             if inconsistent:
-                # print('***')
-                # print('INCONSISTENT')
-                # for rule in prog:
+                # inconsistent_count +=1
+                # print('INCONSISTENT', inconsistent_count, settings.stats.total_programs)
+                # for rule in order_prog(prog):
                     # print(format_rule(rule))
                 add_gen = True
                 cons.add_generalisation(prog)
@@ -127,16 +121,8 @@ def popper(settings):
                         if rule_is_recursive(rule):
                             continue
                         subprog = frozenset([rule])
-                        # if format_prog(subprog) in seen_inconsistent:
-                        #     print('SUBPROG SHOULD NOT BE HERE')
-                        #     print(format_rule(rule))
-                        #     assert(False)
-                        with settings.stats.duration('test-subprog'):
-                            _, inconsistent1 = tester.test_prog(subprog)
-                            if inconsistent1:
-                                new_cons.add(generator.build_generalisation_constraint(subprog))
-                                # seen_inconsistent.add(format_prog(subprog))
-                # seen_inconsistent.add(prog_key)
+                        if tester.is_inconsistent(subprog):
+                            new_cons.add(generator.build_generalisation_constraint(subprog))
 
             # if consistent, prune specialisations
             else:
@@ -153,6 +139,7 @@ def popper(settings):
 
             # check whether subsumed by an already seen program
             # if so, prune specialisations
+
             subsumed = False
             if len(pos_covered) > 0:
                 subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets.keys())
@@ -210,11 +197,6 @@ def popper(settings):
                         settings.max_literals = k-1
 
 
-            # if selector.solution_found:
-            #     best = prog_size(selector.best_prog)
-            #     fn = len(pos) - len(pos_covered)
-            #     prog_size(prog)
-
             # if it covers all examples, stop
             if not inconsistent and len(pos_covered) == len(pos):
                 return
@@ -222,39 +204,12 @@ def popper(settings):
             if add_spec:
                 new_cons.add(generator.build_specialisation_constraint(prog))
             if add_gen:
-                # TODO: IF NO PI OR RECURSION THEN NO NEED TO ADD GEN
                 new_cons.add(generator.build_generalisation_constraint(prog))
             if not add_spec and not add_gen:
                 assert(False)
 
             f(settings, generator, new_cons, model)
 
-def deduce_cons(cons, chunk_pos):
-    return set.intersection(*[cons.spec_cons[x] for x in chunk_pos]), cons.elim_cons, cons.gen_cons
-
 def learn_solution(settings):
     timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)
-    return settings.solution, settings.stats
-
-
-
-    # # # # # TODO: IF WE ALREADY HAVE A SOLUTION, ANY NEW RULE MUST COVER AT LEAST TWO EXAMPLES
-            # if len(chunk_pos) > 1 and len(chunk_pos_covered) < 2:
-            #     # print('asda2')
-            #     add_spec = True
-            #     for e in settings.pos:
-            #         cons.add_specialisation(prog, e)
-            # if SIMPLE_HACK and len(chunk_pos) > 1 and len(settings.best_prog) == 2 and len(chunk_pos_covered) != len(chunk_pos):
-            #     # print('asda3')
-            #     add_spec = True
-            #     for e in settings.pos:
-            #         cons.add_specialisation(prog, e)
-
-            # if too specific for an example e, save a specialisation constraint for e
-            # for e in settings.pos.difference(pos_covered):
-                # cons.add_specialisation(prog, e)
-
-
-
-            # check whether subsumed by an already seen program
-            # if so, prune specialisations
+    return settings.solution, settings.best_prog_score, settings.stats

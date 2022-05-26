@@ -42,6 +42,9 @@ class Tester:
         self.pos_index = {i+1:v for i, v in enumerate(pos)}
         self.neg_index = {-(i+1):v for i, v in enumerate(neg)}
 
+        self.num_pos = len(self.pos_index)
+        self.num_neg = len(self.neg_index)
+
         self.settings.pos = frozenset(self.pos_index.values())
         self.settings.neg = frozenset(self.neg_index.values())
 
@@ -68,6 +71,8 @@ class Tester:
                 prog_encoding.add(f'holds({p}(A,B)):-{p}(A,B).')
             elif len(head.arguments) == 3:
                 prog_encoding.add(f'holds({p}(A,B,C)):-{p}(A,B,C).')
+            elif len(head.arguments) == 3:
+                prog_encoding.add(f'holds({p}(A,B,C,D)):-{p}(A,B,C,D).')
 
         prog_encoding = '\n'.join(prog_encoding)
         prog = [TEST_PROG,self.bk,self.example_encoding,prog_encoding]

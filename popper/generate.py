@@ -54,9 +54,10 @@ class Generator:
 
         encoding = '\n'.join(encoding)
 
+        # solver = clingo.Control(["--heuristic=Domain","-t3"])
         solver = clingo.Control(["--heuristic=Domain"])
         solver.configuration.solve.models = 0
-        solver.configuration.solver.seed = 1
+        # solver.configuration.solver.seed = 1
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver

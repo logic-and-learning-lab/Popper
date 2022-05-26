@@ -3,6 +3,7 @@
 
 max_vars(6).
 max_body(6).
+%% max_clauses(6).
 
 head_pred(f,1).
 body_pred(has_car,2).

@@ -37,6 +37,8 @@ def parse_args():
     parser.add_argument('--max-rules', type=int, default=MAX_RULES, help=f'Maximum number of rules allowed in recursive program (default: {MAX_RULES})')
     parser.add_argument('--max-examples', type=int, default=MAX_EXAMPLES, help=f'Maximum number of examples per label (positive or negative) to learn from (default: {MAX_EXAMPLES})')
 
+    # parser.add_argument('--threads', type=int, default=MAX_LITERALS, help=f'Maximum number of threads (default: 1)')
+
     parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
     parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run custom functional test')
@@ -83,30 +85,8 @@ class Stats:
     def __init__(self, info = False, debug = False):
         self.exec_start = perf_counter()
 
-        if debug:
-            log_level = logging.DEBUG
-            logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
-        elif info:
-            log_level = logging.INFO
-            logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
-
         self.total_programs = 0
         self.durations = {}
-
-    def register_prog(self, prog):
-        self.logger.debug(f'Program {self.total_programs}:')
-        for rule in order_prog(prog):
-            self.logger.debug(format_rule(rule))
-
-    # def register_candidate_prog(self, prog):
-    #     self.logger.info(f'Candidate program:')
-    #     for rule in order_prog(prog):
-    #         self.logger.info(format_rule(rule))
-
-    # def register_best_prog(self, prog, size):
-    #     self.logger.info(f'New best solution of size {size}:')
-    #     for rule in prog:
-    #         self.logger.info(format_rule(rule))
 
     def total_exec_time(self):
         return perf_counter() - self.exec_start
@@ -163,8 +143,16 @@ def format_rule(rule):
     body_str = ','.join(format_literal(literal) for literal in body)
     return f'{head_str}:- {body_str}.'
 
-def print_prog(prog):
+def print_prog_score(prog, score):
+    tp, fn, tn, fp, size = score
+    precision = 'n/a'
+    if (tp+fp) > 0:
+        precision = f'{tp / (tp+fp):0.2f}'
+    recall = 'n/a'
+    if (tp+fn) > 0:
+        recall = f'{tp / (tp+fn):0.2f}'
     print('*'*10 + ' SOLUTION ' + '*'*10)
+    print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
     print(format_prog(order_prog(prog)))
     print('*'*30)
 
@@ -232,34 +220,58 @@ class DurationSummary:
         self.mean = mean
         self.maximum = maximum
 
-def chunk_list(xs, size):
-    for i in range(0, len(xs), size):
-        yield xs[i:i+size]
+# def chunk_list(xs, size):
+#     for i in range(0, len(xs), size):
+#         yield xs[i:i+size]
 
 def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self):
+    def __init__(self, kbpath=False, info=False, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS):
+
+        if kbpath == False:
+            args = parse_args()
+            info = args.info
+            debug = args.debug
+            kbpath = args.kbpath
+            show_stats = args.stats
+            bkcons = args.bkcons
+            max_literals = args.max_literals
+            timeout = args.timeout
+            eval_timeout = args.eval_timeout
+            max_examples = args.max_examples
+            max_body = args.max_body
+            max_vars = args.max_vars
+            max_rules = args.max_rules
+
         self.logger = logging.getLogger("popper")
-        args = parse_args()
 
-        self.stats = Stats(info=args.info, debug=args.debug)
+        if debug:
+            log_level = logging.DEBUG
+            logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
+        elif info:
+            log_level = logging.INFO
+            logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
+
+        self.stats = Stats(info=info, debug=debug)
         self.stats.logger = self.logger
-        self.bk_file, self.ex_file, self.bias_file = load_kbpath(args.kbpath)
-        self.show_stats = args.stats
-        self.bkcons = args.bkcons
+        self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
+        self.show_stats = show_stats
+        self.bkcons = bkcons
+        self.max_literals = max_literals
+        # self.clingo_args = [] if not args.clingo_args else args.clingo_args.split(' ')
+        # self.functional_test = args.functional_test
+        self.timeout = timeout
+        self.eval_timeout = eval_timeout
+        self.max_examples = max_examples
+        self.max_body = max_body
+        self.max_vars = max_vars
+        self.max_rules = max_rules
 
-        self.max_literals = args.max_literals
-        self.clingo_args = [] if not args.clingo_args else args.clingo_args.split(' ')
-
-        self.functional_test = args.functional_test
-        self.timeout = args.timeout
-        self.eval_timeout = args.eval_timeout
         self.solution = None
-        self.best_prog = None
-
-        self.max_examples = args.max_examples
+        self.best_prog_score = None
+        # self.best_prog = None
 
         solver = clingo.Control()
         with open(self.bias_file) as f:
@@ -272,11 +284,9 @@ class Settings:
         """)
         solver.ground([('bias', [])])
 
-        self.max_body = args.max_body
         for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
             self.max_body = x.symbol.arguments[0].number
 
-        self.max_vars = args.max_vars
         for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
             self.max_vars = x.symbol.arguments[0].number
 
@@ -294,13 +304,13 @@ class Settings:
 
         if self.max_rules == None:
             if self.recursion_enabled or self.pi_enabled:
-                self.max_rules = args.max_rules
+                self.max_rules = max_rules
             else:
                 self.max_rules = 1
 
-        self.stats.logger.debug(f'Max rules: {self.max_rules}')
-        self.stats.logger.debug(f'Max vars: {self.max_vars}')
-        self.stats.logger.debug(f'Max body: {self.max_body}')
+        self.logger.debug(f'Max rules: {self.max_rules}')
+        self.logger.debug(f'Max vars: {self.max_vars}')
+        self.logger.debug(f'Max body: {self.max_body}')
 
     def print_incomplete_solution(self, prog, tp, fn, size):
         # self.logger.info(self.hypothesis_output(prog, tp, fn, size))

@@ -291,8 +291,9 @@ beats(paper,stone).
 beats(scissors,paper).
 beats(stone,scissors).
 
-different(p1,p2).
-different(p2,p1).
+%% different(p1,p2).
+%% different(p2,p1).
+different(A,B):- ground(A), ground(B), A\=B.
 
 c_p1(p1).
 c_p2(p2).

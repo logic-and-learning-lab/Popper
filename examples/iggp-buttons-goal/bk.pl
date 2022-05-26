@@ -27,7 +27,8 @@ prop(q).
 prop(r).
 
 not_my_true(A,B):-
-    prop(B),
+    %% prop(B),
+    ground(B),
     \+ my_true(A,B).
 
 %% not_my_true(A,B):-

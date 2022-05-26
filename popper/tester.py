@@ -87,6 +87,12 @@ class Tester():
                 inconsistent = len(list(self.prolog.query("inconsistent"))) > 0
         return pos_covered, inconsistent
 
+    def is_inconsistent(self, prog):
+        if len(self.neg_index) == 0:
+            return False
+        with self.using(prog):
+            return len(list(self.prolog.query("inconsistent"))) > 0
+
     @contextmanager
     def using(self, prog):
         if self.settings.recursion_enabled:

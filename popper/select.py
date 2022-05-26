@@ -114,6 +114,9 @@ class Selector:
             head, body = rule
             size += len(body) + 1
 
+        tn = self.tester.num_neg
+        fp = 0
+
         if incomplete:
             covered, _ = self.tester.test_prog(new_solution)
             tp = len(covered)
@@ -122,12 +125,14 @@ class Selector:
                 self.num_covered = tp
                 # print(f'NEW SOLUITON IS INCOMPLETE WITH TP:{tp} and FN{fn}:')
                 self.settings.print_incomplete_solution(new_solution, tp, fn, size)
+                self.settings.best_prog_score = (tp, fn, tn, fp, size)
                 return False
 
-        # print('NEW SOLUITON IS GOOD', size)
         self.settings.print_incomplete_solution(new_solution, self.tester.num_pos, 0, size)
         self.solution_found = True
         self.max_size = size
         self.best_prog = new_solution
-        # self.settings.solution = new_solution
+        self.settings.best_prog_score = (self.tester.num_pos, 0, tn, fp, size)
         return True
+
+# % Precision:0.71, Recall:1.00, TP:5, FN:0, TN:3, FP:2

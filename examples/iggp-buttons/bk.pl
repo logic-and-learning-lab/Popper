@@ -12,6 +12,8 @@ my_succ(5,6).
 my_succ(6,7).
 
 not_my_true(A,B):-
+    ground(A),
+    ground(B),
     \+ my_true(A,B).
 
 %% not_my_true(A,B):-

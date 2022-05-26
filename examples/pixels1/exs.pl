@@ -1,18 +1,18 @@
-#T1
+%% #T1
 %% in(2,2)
-pos(out(1,2)).
-pos(out(2,2)).
-pos(out(3,2)).
-pos(out(2,3)).
-pos(out(2,1)).
+pos(out(e1, 1,2)).
+pos(out(e1, 2,2)).
+pos(out(e1, 3,2)).
+pos(out(e1, 2,3)).
+pos(out(e1, 2,1)).
 
-#T2
+%% #T2
 %% in(3,3)
-pos(out(2,3)).
-pos(out(3,3)).
-pos(out(4,3)).
-pos(out(3,2)).
-pos(out(3,4)).
+pos(out(e2, 2,3)).
+pos(out(e2, 3,3)).
+pos(out(e2, 4,3)).
+pos(out(e2, 3,2)).
+pos(out(e2, 3,4)).
 
 %% v(1).
 %% v(2).

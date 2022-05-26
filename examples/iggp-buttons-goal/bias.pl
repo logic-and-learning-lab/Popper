@@ -1,6 +1,7 @@
 max_vars(6).
 max_body(8).
 
+%% max_clauses(6).
 %%   (<= (goal robot 100) (true p) (true q) (true r))
 %%   (<= (goal robot 0) (not (true p)))
 %%   (<= (goal robot 0) (not (true q)))
