@@ -128,8 +128,16 @@ def popper(settings):
             else:
                 add_spec = True
 
+            if not inconsistent and settings.functional_test and len(pos_covered) > 0 and tester.is_non_functional(prog):
+                add_gen = True
+                inconsistent = True
+                cons.add_generalisation(prog)
+
             # if it does not cover any example, prune specialisations
             if len(pos_covered) == 0:
+                # print('INCOMPLETE')
+                # for rule in order_prog(prog):
+                    # print(format_rule(rule))
                 add_spec = True
 
             # HACKY

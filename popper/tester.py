@@ -111,13 +111,16 @@ class Tester():
                 self.prolog.retractall(f'{predicate}({args})')
 
 
-
-    # def is_non_functional(self, program):
-    #     try:
-    #         with self.using(program):
-    #             return len(list(self.prolog.query(f'non_functional.'))) > 0
-    #     except:
-    #         return True
+    def is_non_functional(self, prog):
+        print('is_non_functional')
+        for rule in prog:
+            print(format_rule(rule))
+        with self.using(prog):
+            x = self.bool_query('non_functional')
+            print(x)
+            return x
+        # except:
+            # return True
 
     # def is_functional(self, program):
     #     with self.using(program):

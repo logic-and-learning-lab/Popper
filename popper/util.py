@@ -228,7 +228,7 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, kbpath=False, info=False, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS):
+    def __init__(self, kbpath=False, info=False, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False):
 
         if kbpath == False:
             args = parse_args()
@@ -244,6 +244,7 @@ class Settings:
             max_body = args.max_body
             max_vars = args.max_vars
             max_rules = args.max_rules
+            functional_test = args.functional_test
 
         self.logger = logging.getLogger("popper")
 
@@ -261,7 +262,7 @@ class Settings:
         self.bkcons = bkcons
         self.max_literals = max_literals
         # self.clingo_args = [] if not args.clingo_args else args.clingo_args.split(' ')
-        # self.functional_test = args.functional_test
+        self.functional_test = functional_test
         self.timeout = timeout
         self.eval_timeout = eval_timeout
         self.max_examples = max_examples
