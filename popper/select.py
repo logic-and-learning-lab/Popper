@@ -68,8 +68,8 @@ class Selector:
 
         encoding = '\n'.join(encoding)
 
-        with open('sat-problem.pl', 'w') as f:
-            f.write(encoding)
+        # with open('sat-problem.pl', 'w') as f:
+            # f.write(encoding)
         # print(encoding)
         solver = clingo.Control()
         solver.add('base', [], encoding)
