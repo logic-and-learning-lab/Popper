@@ -31,6 +31,8 @@ def constrain(settings, generator, cons, model):
     with settings.stats.duration('constrain.ground'):
         ground_bodies = set()
         for con in cons:
+            # for x in generator.con_to_strings(con):
+                # print(x)
             for ground_rule in generator.get_ground_rules((None, con)):
                 ground_head, ground_body = ground_rule
                 ground_bodies.add(ground_body)
@@ -51,6 +53,7 @@ def constrain(settings, generator, cons, model):
 
     with settings.stats.duration('constrain.add_nogoods'):
         for nogood in nogoods:
+            settings.num_nogoods += 1
             model.context.add_nogood(nogood)
 
 def popper(settings):
@@ -78,7 +81,9 @@ def popper(settings):
             new_cons = set()
 
             atoms = model.symbols(shown = True)
-            prog = generator.parse_model(atoms)
+            # prog = generator.parse_model(atoms)
+            prog, rule_ordering = generator.parse_model(atoms)
+            # print(rule_ordering)
 
             with settings.stats.duration('test'):
                 pos_covered, inconsistent = tester.test_prog(prog)
@@ -191,13 +196,18 @@ def popper(settings):
             if not inconsistent and len(pos_covered) == len(pos):
                 return
 
-            if add_spec:
-                new_cons.add(generator.build_specialisation_constraint(prog))
-            if add_gen:
-                new_cons.add(generator.build_generalisation_constraint(prog))
+            with settings.stats.duration('build_cons'):
+                if add_spec:
+                    new_cons.add(generator.build_specialisation_constraint(prog, rule_ordering))
+                if add_gen:
+                    # pass
+                    new_cons.add(generator.build_generalisation_constraint(prog, rule_ordering))
 
             constrain(settings, generator, new_cons, model)
 
 def learn_solution(settings):
+    settings.num_nogoods = 0
     timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)
+    print('SETTINGS.NUM_NOGOODS')
+    print(settings.num_nogoods)
     return settings.solution, settings.best_prog_score, settings.stats

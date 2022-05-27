@@ -6,7 +6,7 @@
 
 max_vars(3).
 max_body(2).
-max_clauses(8).
+max_clauses(12).
 enable_pi.
 
 head_pred(f,2).

@@ -11,20 +11,16 @@ from collections import defaultdict
 from clingo import Function, Number, Tuple_
 import clingo.script
 clingo.script.enable_python()
+
 arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
-
-
 
 class Generator:
 
     def con_to_strings(self, con):
-         for grule in self.get_ground_rules([(None, con)]):
+         for grule in self.get_ground_rules((None, con)):
             h, b = grule
-            # print(h,b)
             rule = []
             for sign, pred, args in b:
-                # print(type(pred))
-                # pred = pred.replace("'",'')
                 if not sign:
                     rule.append(f'not {pred}{args}')
                 else:
@@ -33,7 +29,6 @@ class Generator:
             rule = rule.replace("'","")
             rule = rule.replace('not clause(1,)','not clause(1)')
             yield rule
-
 
     def __init__(self, settings, grounder, bootstrap_cons):
         self.settings = settings
@@ -57,10 +52,10 @@ class Generator:
         # solver = clingo.Control(["--heuristic=Domain","-t3"])
         solver = clingo.Control(["--heuristic=Domain"])
         solver.configuration.solve.models = 0
-        # solver.configuration.solver.seed = 1
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver
+
 
     # TODO: COULD CACHE TUPLES OF ARGS FOR TINY OPTIMISATION
     def parse_model(self, model):
@@ -68,6 +63,7 @@ class Generator:
         directions = defaultdict(lambda: defaultdict(lambda: '?'))
         rule_index_to_body = defaultdict(set)
         rule_index_to_head = {}
+        rule_index_ordering = defaultdict(set)
 
         for atom in model:
             args = atom.arguments
@@ -102,8 +98,14 @@ class Generator:
                 else:
                     raise Exception(f'Unrecognised argument direction "{arg_dir_str}"')
                 directions[pred_name][arg_index] = arg_dir
+            elif atom.name == 'before':
+                rule1 = args[0].number
+                rule2 = args[1].number
+                rule_index_ordering[rule1].add(rule2)
 
         prog = []
+        rule_lookup = {}
+
         for rule_index in rule_index_to_head:
             head_pred, head_args, head_arity = rule_index_to_head[rule_index]
             head_modes = tuple(directions[head_pred][i] for i in range(head_arity))
@@ -115,24 +117,14 @@ class Generator:
             body = frozenset(body)
             rule = head, body
             prog.append((rule))
-        return frozenset(prog)
+            rule_lookup[rule_index] = rule
 
-    # def get_ground_rules(self, rules):
-    #     out = set()
-    #     for rule in rules:
-    #         head, body = rule
+        rule_ordering = defaultdict(set)
+        for r1_index, lower_rule_indices in rule_index_ordering.items():
+            r1 = rule_lookup[r1_index]
+            rule_ordering[r1] = set(rule_lookup[r2_index] for r2_index in lower_rule_indices)
 
-    #         # find bindings for variables in the rule
-    #         assignments = self.grounder.find_bindings(rule, self.settings.max_rules, self.settings.max_vars)
-
-    #         # keep only standard literals
-    #         body = tuple(literal for literal in body if not literal.meta)
-
-    #         # ground the rule for each variable assignment
-    #         xs = set(self.grounder.ground_rule((head, body), assignment) for assignment in assignments)
-    #         out.update(xs)
-    #     return out
-
+        return frozenset(prog), rule_ordering
 
     def get_ground_rules(self, rule):
         head, body = rule
@@ -146,12 +138,46 @@ class Generator:
         # ground the rule for each variable assignment
         return set(self.grounder.ground_rule((head, body), assignment) for assignment in assignments)
 
-    def build_generalisation_constraint(self, prog):
+    # def orderings(self, prog):
+    #     prog = list(prog)
+    #     headpred = {}
+    #     for i in range(len(prog))
+    #         head, body = prog[i]
+
+    #     lower = set()
+    #     for i in range(1,10):
+    #         p1 = f'inv{i}'
+    #         lower.add(settings.headpred, p1)
+    #         for j in range(i+1,10):
+    #             p2 = f'inv{j}'
+    #             x = (p1,p2)
+    #             lower.add(x)
+
+    #     def before(r1, r2):
+
+    #         for i
+
+    # h1 = headpred(r1)
+    # h2 = headpred(r2)
+
+    # if (h1, h2) in lower:
+    #     return True
+
+    # if h1 == h2:
+    #     if not recursive(r1) and recursive(r2):
+    #         return True
+
+    #     if (not recursive(r1) and not recursive(r2)) or (recursive(r1) and recursive(r2)):
+    #         if size(r1) < size(r2):
+    #             return True
+    # return False
+
+    def build_generalisation_constraint(self, prog, rule_ordering={}):
         prog = list(prog)
-
+        rule_index = {}
         literals = []
-
         for clause_number, rule in enumerate(prog):
+            rule_index[rule] = vo_clause(clause_number)
             head, body = rule
             clause_number = vo_clause(clause_number)
             literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
@@ -164,152 +190,37 @@ class Generator:
 
             literals.append(body_size_literal(clause_number, len(body)))
 
-        if len(prog) > 1:
-            base = []
-            step = []
-            for clause_number, rule in enumerate(prog):
-                if rule_is_recursive(rule):
-                    step.append(clause_number)
-                else:
-                    base.append(clause_number)
-            for rule1 in base:
-                for rule2 in step:
-                    literals.append(lt(vo_clause(rule1), vo_clause(rule2)))
-
-            for clause_number, rule1 in enumerate(prog):
-                if rule_is_invented(rule1):
-                    for rule2 in base + step:
-                        literals.append(lt(vo_clause(rule2), vo_clause(clause_number)))
-
-            # for i in range(len(base)):
-            #     rule1 = prog[base[i]]
-            #     for j in range(i+1, len(base)):
-            #         rule2 = prog[base[j]]
-            #         _, b1 = prog[base[i]]
-            #         _, b2 = prog[base[j]]
-            #         if len(b1) < len(b2):
-            #             literals.append(lt(vo_clause(rule1), vo_clause(rule2)))
-            #             # print('base1')
-            #         elif len(b1) > len(b2):
-            #             literals.append(lt(vo_clause(rule2), vo_clause(rule1)))
-            #             # print('base2')
-
-            # for i in range(len(step)):
-            #     rule1 = prog[step[i]]
-            #     for j in range(i+1, len(step)):
-            #         rule2 = prog[step[j]]
-            #         _, b1 = prog[step[i]]
-            #         _, b2 = prog[step[j]]
-            #         if len(b1) < len(b2):
-            #             literals.append(lt(vo_clause(rule1), vo_clause(rule2)))
-            #             # print('base1')
-            #         elif len(b1) > len(b2):
-            #             literals.append(lt(vo_clause(rule2), vo_clause(rule1)))
-            #             # print('base2')
-
-
-
-
-
-        # for clause_number1, clause_numbers in before.items():
-        #     for clause_number2 in clause_numbers:
-        #         literals.append(lt(vo_clause(clause_number1), vo_clause(clause_number2)))
-
-        # for clause_number, clause in enumerate(program):
-        #     literals.append(gteq(vo_clause(clause_number), min_clause[clause]))
-
-        # ensure that each clause_var is ground to a unique value
-        # literals.append(alldiff(tuple(vo_clause(c) for c in range(len(program)))))
+        for r1, higher_rules in rule_ordering.items():
+            r1v = rule_index[r1]
+            for r2 in higher_rules:
+                r2v = rule_index[r2]
+                literals.append(lt(r1v, r2v))
 
         return tuple(literals)
 
-
-    # def literal(pred, args):
-        # Function(name = pred, arguments = xs)
-
-#         def prog_size(prog):
-#     return sum(1 + len(body) for head, body in prog)
-
-# # @profile
-# def arg_to_symbol(arg):
-#     print(arg)
-#     if isinstance(arg, tuple):
-#         return Tuple_(tuple(arg_to_symbol(a) for a in arg))
-#     if isinstance(arg, numbers.Number):
-#         return Number(arg)
-#     if isinstance(arg, str):
-#         return Function(arg)
-#     assert False, f'Unhandled argtype({type(arg)}) in aspsolver.py arg_to_symbol()'
-
-# @profile
-# def atom_to_symbol(pred, args):
-#     xs = tuple(arg_to_symbol(arg) for arg in args)
-#     out =
-#     # print(pred, args, out)
-#     return out
-
-
-    def build_specialisation_constraint(self, prog):
+    def build_specialisation_constraint(self, prog, rule_ordering={}):
         prog = list(prog)
+        rule_index = {}
         literals = []
-        for i, rule in enumerate(prog):
+        for clause_number, rule in enumerate(prog):
+            rule_index[rule] = vo_clause(clause_number)
             head, body = rule
-            clause_number = vo_clause(i)
+            clause_number = vo_clause(clause_number)
             literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
 
             for body_literal in body:
                 literals.append(Literal('body_literal', (clause_number, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
 
-            # literals.append(gteq(clause_number, min_num))
-
             for idx, var in enumerate(head.arguments):
                 literals.append(eq(vo_variable(var), idx))
+            literals.append(lt(clause_number, len(prog)))
         literals.append(Literal('clause', (len(prog), ), positive = False))
 
-        if len(prog) > 1:
-            base = []
-            step = []
-            for clause_number, rule in enumerate(prog):
-                if rule_is_recursive(rule):
-                    step.append(clause_number)
-                else:
-                    base.append(clause_number)
-            for rule1 in base:
-                for rule2 in step:
-                    literals.append(lt(vo_clause(rule1), vo_clause(rule2)))
-
-            for clause_number, rule1 in enumerate(prog):
-                if rule_is_invented(rule1):
-                    for rule2 in base + step:
-                        literals.append(lt(vo_clause(rule2), vo_clause(clause_number)))
-
-
-            # for i in range(len(base)):
-            #     rule1 = prog[base[i]]
-            #     for j in range(i+1, len(base)):
-            #         rule2 = prog[base[j]]
-            #         _, b1 = prog[base[i]]
-            #         _, b2 = prog[base[j]]
-            #         if len(b1) < len(b2):
-            #             literals.append(lt(vo_clause(rule1), vo_clause(rule2)))
-            #             # print('base1')
-            #         elif len(b1) > len(b2):
-            #             literals.append(lt(vo_clause(rule2), vo_clause(rule1)))
-            #             # print('base2')
-
-            # for i in range(len(step)):
-            #     rule1 = prog[step[i]]
-            #     for j in range(i+1, len(step)):
-            #         rule2 = prog[step[j]]
-            #         _, b1 = prog[step[i]]
-            #         _, b2 = prog[step[j]]
-            #         if len(b1) < len(b2):
-            #             literals.append(lt(vo_clause(rule1), vo_clause(rule2)))
-            #             # print('base1')
-            #         elif len(b1) > len(b2):
-            #             literals.append(lt(vo_clause(rule2), vo_clause(rule1)))
-            #             # print('base2')
-
+        for r1, higher_rules in rule_ordering.items():
+            r1v = rule_index[r1]
+            for r2 in higher_rules:
+                r2v = rule_index[r2]
+                literals.append(lt(r1v, r2v))
         return tuple(literals)
 
 
@@ -424,9 +335,17 @@ class Grounder():
                 for i in range(val):
                     solver.add('base', [], f':- c_var({var},{i}).')
             elif lit.predicate == '<':
-                var1 = c_vars[lit.arguments[0]]
-                var2 = c_vars[lit.arguments[1]]
-                solver.add('base', [], f':- c_var({var1},Val1), c_var({var2},Val2), Val1>=Val2.')
+                a = lit.arguments[0]
+                b = lit.arguments[1]
+                if type(lit.arguments[1]) == int:
+                # ABSOLUTE HACK
+                    var1 = c_vars[a]
+                    solver.add('base', [], f':- c_var({var1},Val1), Val1 >= {b}.')
+                    # pass
+                else:
+                    var1 = c_vars[a]
+                    var2 = c_vars[b]
+                    solver.add('base', [], f':- c_var({var1},Val1), c_var({var2},Val2), Val1>=Val2.')
 
         solver.ground([("base", [])])
 

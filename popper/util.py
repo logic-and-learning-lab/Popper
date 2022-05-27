@@ -288,6 +288,9 @@ class Settings:
             #defined clause/1.
             #defined clause_var/2.
             #defined var_type/3.
+            #defined body_size/2.
+            #defined recursive/0.
+            #defined var_in_literal/4.
         """)
         solver.ground([('bias', [])])
 

@@ -29,6 +29,7 @@
 #show head_literal/4.
 #show body_literal/4.
 #show direction_/3.
+#show before/2.
 
 %% BOUND FROM ABOVE
 
@@ -63,7 +64,6 @@ size(N):-
 #heuristic size(18). [84,true]
 #heuristic size(19). [83,true]
 #heuristic size(20). [82,true]
-
 
 %% #heuristic size(K). [-K,true]
 %% #heuristic size(K). [K,true]
@@ -229,41 +229,41 @@ var_pos(@pyvar_pos(Pos,Vars),Vars,Pos):-
     vars(A,Vars),
     Pos = 0..A-1.
 
-%% ##################################################
-%% REDUCE CONSTRAINT GROUNDING BY ORDERING CLAUSES
-%% ##################################################
-%% before(C1,C2):-
-%%     C1 < C2,
-%%     head_literal(C1,P,_,_),
-%%     head_literal(C2,Q,_,_),
-%%     lower(P,Q).
+%% %% ##################################################
+%% %% REDUCE CONSTRAINT GROUNDING BY ORDERING CLAUSES
+%% %% ##################################################
+before(C1,C2):-
+    C1 < C2,
+    head_literal(C1,P,_,_),
+    head_literal(C2,Q,_,_),
+    lower(P,Q).
 
-%% before(C1,C2):-
-%%     C1 < C2,
-%%     head_literal(C1,P,_,_),
-%%     head_literal(C2,P,_,_),
-%%     not recursive_clause(C1,P,A),
-%%     recursive_clause(C2,P,A).
+before(C1,C2):-
+    C1 < C2,
+    head_literal(C1,P,_,_),
+    head_literal(C2,P,_,_),
+    not recursive_clause(C1,P,A),
+    recursive_clause(C2,P,A).
 
-%% before(C1,C2):-
-%%     C1 < C2,
-%%     head_literal(C1,P,A,_),
-%%     head_literal(C2,P,A,_),
-%%     not recursive_clause(C1,P,A),
-%%     not recursive_clause(C2,P,A),
-%%     body_size(C1,K1),
-%%     body_size(C2,K2),
-%%     K2 < K1.
+before(C1,C2):-
+    C1 < C2,
+    head_literal(C1,P,A,_),
+    head_literal(C2,P,A,_),
+    not recursive_clause(C1,P,A),
+    not recursive_clause(C2,P,A),
+    body_size(C1,K1),
+    body_size(C2,K2),
+    K2 < K1.
 
-%% before(C1,C2):-
-%%     C1 < C2,
-%%     head_literal(C1,P,_,_),
-%%     head_literal(C2,P,_,_),
-%%     recursive_clause(C1,P,A),
-%%     recursive_clause(C2,P,A),
-%%     body_size(C1,K1),
-%%     body_size(C2,K2),
-%%     K2 < K1.
+before(C1,C2):-
+    C1 < C2,
+    head_literal(C1,P,_,_),
+    head_literal(C2,P,_,_),
+    recursive_clause(C1,P,A),
+    recursive_clause(C2,P,A),
+    body_size(C1,K1),
+    body_size(C2,K2),
+    K2 < K1.
 
 %% count_lower(P,N):-
 %%     head_literal(_,P,_,_),
