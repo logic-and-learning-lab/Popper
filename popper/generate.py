@@ -6,7 +6,7 @@ import itertools
 import operator
 import pkg_resources
 from . core import Literal, ConstVar
-from . util import format_rule, format_prog, rule_is_recursive
+from . util import format_rule, format_prog, rule_is_recursive, rule_is_invented
 from collections import defaultdict
 from clingo import Function, Number, Tuple_
 import clingo.script
@@ -176,6 +176,11 @@ class Generator:
                 for rule2 in step:
                     literals.append(lt(vo_clause(rule1), vo_clause(rule2)))
 
+            for clause_number, rule1 in enumerate(prog):
+                if rule_is_invented(rule1):
+                    for rule2 in base + step:
+                        literals.append(lt(vo_clause(rule2), vo_clause(clause_number)))
+
             # for i in range(len(base)):
             #     rule1 = prog[base[i]]
             #     for j in range(i+1, len(base)):
@@ -272,6 +277,11 @@ class Generator:
             for rule1 in base:
                 for rule2 in step:
                     literals.append(lt(vo_clause(rule1), vo_clause(rule2)))
+
+            for clause_number, rule1 in enumerate(prog):
+                if rule_is_invented(rule1):
+                    for rule2 in base + step:
+                        literals.append(lt(vo_clause(rule2), vo_clause(clause_number)))
 
 
             # for i in range(len(base)):

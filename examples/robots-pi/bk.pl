@@ -1,6 +1,6 @@
 :- use_module(library(clpfd)).
 
-size(10).
+size(30).
 
 at_left(w(1,_)).
 

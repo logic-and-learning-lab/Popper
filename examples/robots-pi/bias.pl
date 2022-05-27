@@ -3,10 +3,12 @@
 %% inv2(A,B) :- right(C,B),right(A,C).
 %% python3 popper.py examples/robots-pi  11.38s user 0.24s system 100% cpu 11.616 total
 
-max_vars(5).
-max_body(4).
-max_clauses(3).
+max_vars(3).
+max_body(2).
+max_clauses(6).
 enable_pi.
+
+:- recursive.
 
 head_pred(f,2).
 %% body_pred(up,2).

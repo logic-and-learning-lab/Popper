@@ -180,6 +180,12 @@ def rule_is_recursive(rule):
         return False
     return any(head.predicate  == literal.predicate for literal in body if isinstance(literal, Literal))
 
+def rule_is_invented(rule):
+    head, body = rule
+    if not head:
+        return False
+    return head.predicate.startswith('inv')
+
 def order_rule(rule):
     head, body = rule
     ordered_body = []
