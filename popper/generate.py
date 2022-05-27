@@ -117,21 +117,34 @@ class Generator:
             prog.append((rule))
         return frozenset(prog)
 
-    def get_ground_rules(self, rules):
-        out = set()
-        for rule in rules:
-            head, body = rule
+    # def get_ground_rules(self, rules):
+    #     out = set()
+    #     for rule in rules:
+    #         head, body = rule
 
-            # find bindings for variables in the rule
-            assignments = self.grounder.find_bindings(rule, self.settings.max_rules, self.settings.max_vars)
+    #         # find bindings for variables in the rule
+    #         assignments = self.grounder.find_bindings(rule, self.settings.max_rules, self.settings.max_vars)
 
-            # keep only standard literals
-            body = tuple(literal for literal in body if not literal.meta)
+    #         # keep only standard literals
+    #         body = tuple(literal for literal in body if not literal.meta)
 
-            # ground the rule for each variable assignment
-            xs = set(self.grounder.ground_rule((head, body), assignment) for assignment in assignments)
-            out.update(xs)
-        return out
+    #         # ground the rule for each variable assignment
+    #         xs = set(self.grounder.ground_rule((head, body), assignment) for assignment in assignments)
+    #         out.update(xs)
+    #     return out
+
+
+    def get_ground_rules(self, rule):
+        head, body = rule
+
+        # find bindings for variables in the rule
+        assignments = self.grounder.find_bindings(rule, self.settings.max_rules, self.settings.max_vars)
+
+        # keep only standard literals
+        body = tuple(literal for literal in body if not literal.meta)
+
+        # ground the rule for each variable assignment
+        return set(self.grounder.ground_rule((head, body), assignment) for assignment in assignments)
 
     def build_generalisation_constraint(self, prog):
         prog = list(prog)

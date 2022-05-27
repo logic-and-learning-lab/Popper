@@ -25,62 +25,53 @@ def atom_to_symbol(pred, args):
     xs = tuple(arg_to_symbol(arg) for arg in args)
     return Function(name = pred, arguments = xs)
 
-cached = {}
-# seen_cons = set()
-def f(settings, generator, new_cons, model):
-    with settings.stats.duration('constrain.ground'):
-        s = set()
-        for con in new_cons:
-            # assert(con not in seen_cons)
-            # seen_cons.add(con)
-            for grule in generator.get_ground_rules([(None, con)]):
-                h, b = grule
-                s.add(b)
+cached_clingo_atoms = {}
+def constrain(settings, generator, cons, model):
+    with settings.stats.duration('constrain'):
+    # with settings.stats.duration('constrain.ground'):
+        ground_bodies = set()
+        for con in cons:
+            for ground_rule in generator.get_ground_rules((None, con)):
+                ground_head, ground_body = ground_rule
+                ground_bodies.add(ground_body)
 
-    with settings.stats.duration('constrain.transform'):
+    # with settings.stats.duration('constrain.build_nogoods'):
         nogoods = []
-        for b in s:
-            tmp = []
-            for sign, pred, args in b:
+        for ground_body in ground_bodies:
+            nogood = []
+            for sign, pred, args in ground_body:
                 k = hash((sign, pred, args))
-                if k in cached:
-                    tmp.append(cached[k])
+                if k in cached_clingo_atoms:
+                    nogood.append(cached_clingo_atoms[k])
                 else:
                     x = (atom_to_symbol(pred, args), sign)
-                    tmp.append(x)
-                    cached[k] = x
-            nogoods.append(tmp)
+                    nogood.append(x)
+                    cached_clingo_atoms[k] = x
+            nogoods.append(nogood)
 
-    with settings.stats.duration('constrain.add'):
-        for tmp in nogoods:
-            # pass
-            model.context.add_nogood(tmp)
+    # with settings.stats.duration('constrain.add_nogoods'):
+        for nogood in nogoods:
+            model.context.add_nogood(nogood)
 
 def popper(settings):
     if settings.bkcons:
-        with settings.stats.duration('bkcons'):
-            deduce_bk_cons(settings)
+        deduce_bk_cons(settings)
 
     tester = Tester(settings)
     cons = Constrainer(settings)
     grounder = Grounder()
-    prog_coverage = {}
-    success_sets = {}
-    selector = Selector(settings, tester, prog_coverage)
-    covered_examples = set()
+    selector = Selector(settings, tester)
+    generator = Generator(settings, grounder, settings.max_literals)
     pos = settings.pos
 
-    generator = Generator(settings, grounder, settings.max_literals)
-
+    success_sets = {}
     last_size = None
-    seen = set()
-    seen_inconsistent = set()
+
+    # TMP SETS
     seen_covers_only_one_gen = set()
     seen_covers_only_one_spec = set()
     seen_incomplete_gen = set()
     seen_incomplete_spec = set()
-
-    inconsistent_count = 0
 
     with generator.solver.solve(yield_ = True) as handle:
         for model in handle:
@@ -102,62 +93,58 @@ def popper(settings):
                 last_size = k
                 settings.logger.info(f'Searching programs of size: {k}')
 
-
             incomplete = len(pos_covered) != len(pos)
 
             add_spec = False
             add_gen = False
 
-            # if inconsistent, prune generalisations
             if inconsistent:
-                # inconsistent_count +=1
-                # print('INCONSISTENT', inconsistent_count, settings.stats.total_programs)
-                # for rule in order_prog(prog):
-                    # print(format_rule(rule))
+                # if inconsistent, prune generalisations
                 add_gen = True
-                cons.add_generalisation(prog)
+                # if the program has multiple rules, test the consistency of each non-recursive rule as it might not have been before
                 if len(prog) > 1:
                     for rule in prog:
                         if rule_is_recursive(rule):
                             continue
                         subprog = frozenset([rule])
+                        # TODO: ADD CACHING IF THIS STEP BECOMES TOO EXPENSIVE
                         if tester.is_inconsistent(subprog):
                             new_cons.add(generator.build_generalisation_constraint(subprog))
-
-            # if consistent, prune specialisations
             else:
+                # if consistent, prune specialisations
                 add_spec = True
 
+            # if consistent and partially complete test whether functional
             if not inconsistent and settings.functional_test and len(pos_covered) > 0 and tester.is_non_functional(prog):
+                # if not functional, rule out generalisations and set as inconsistent
                 add_gen = True
                 inconsistent = True
                 cons.add_generalisation(prog)
 
             # if it does not cover any example, prune specialisations
             if len(pos_covered) == 0:
-                # print('INCOMPLETE')
-                # for rule in order_prog(prog):
-                    # print(format_rule(rule))
                 add_spec = True
 
             # HACKY
+            # TMP IDEA
             # if we already have a solution, a new rule must cover at least two examples
-            if selector.solution_found and len(pos_covered) == 1:
+            if not add_spec and selector.solution_found and len(pos_covered) == 1:
                 add_spec = True
 
             # check whether subsumed by an already seen program
-            # if so, prune specialisations
-
             subsumed = False
             if len(pos_covered) > 0:
                 subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets.keys())
+                # if so, prune specialisations
                 if subsumed:
                     add_spec = True
 
-            if add_spec == False and selector.solution_found and len(selector.best_prog) == 1 and len(chunk_pos_covered) != len(pos):
-                print('prune baby prune')
+            # if add_spec == False and selector.solution_found and len(selector.best_prog) == 1 and len(chunk_pos_covered) != len(pos):
+            #     print('prune baby prune')
 
-            # # TMP!!!!!
+            # TMP!! THIS IS A BACKTRACKING IDEA
+            # WE KEEP TRACK OF PROGRAMS SEEN THUS FAR THAT ONLY COVER ONE EXAMPLE
+            # ONCE WE FIND A SOLUTION, WE THEN APPLY SPECIALISATION OR/AND GENERALISATION CONSTRAINTS
             if len(pos_covered) == 1:
                 if not add_gen:
                     seen_covers_only_one_gen.add(prog)
@@ -186,23 +173,18 @@ def popper(settings):
                     seen_incomplete_gen = set()
                     seen_incomplete_spec = set()
 
-            # if consistent, covers at least one example, and is not subsumed, yield candidate program
+            # if consistent, covers at least one example, and is not subsumed, try to find a solution
             if not inconsistent and not subsumed and len(pos_covered) > 0:
-                # update coverage
-                prog_coverage[prog] = pos_covered
-                covered_examples.update(pos_covered)
+                # update success sets
                 success_sets[pos_covered] = prog
 
                 with settings.stats.duration('select'):
-                    new_solution_found = selector.update_best_prog(prog)
+                    new_solution_found = selector.update_best_prog(prog, pos_covered)
                     if new_solution_found:
-                        k = prog_size(selector.best_prog)
-                        # print('FOUND SOMETHING', k)
-                        for i in range(k, settings.max_literals+1):
-                            tmp = [(atom_to_symbol("size", (i,)), True)]
-                            # print(tmp)
-                            model.context.add_nogood(tmp)
-                        settings.max_literals = k-1
+                        for i in range(selector.max_size, settings.max_literals+1):
+                            size_con = [(atom_to_symbol("size", (i,)), True)]
+                            model.context.add_nogood(size_con)
+                        settings.max_literals = selector.max_size-1
 
 
             # if it covers all examples, stop
@@ -213,10 +195,8 @@ def popper(settings):
                 new_cons.add(generator.build_specialisation_constraint(prog))
             if add_gen:
                 new_cons.add(generator.build_generalisation_constraint(prog))
-            if not add_spec and not add_gen:
-                assert(False)
 
-            f(settings, generator, new_cons, model)
+            constrain(settings, generator, new_cons, model)
 
 def learn_solution(settings):
     timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)

@@ -18,9 +18,9 @@ incomplete:- example(E), not covered(E).
 """
 
 class Selector:
-    def __init__(self, settings, tester, prog_coverage):
+    def __init__(self, settings, tester):
         self.settings = settings
-        self.prog_coverage = prog_coverage
+        self.prog_coverage = {}
 
         self.solution_found = False
         self.best_prog = None
@@ -99,7 +99,8 @@ class Selector:
                     return self.select_solution()
         return flatten([self.index_to_prog[k] for k in out]), incomplete
 
-    def update_best_prog(self, prog):
+    def update_best_prog(self, prog, pos_covered):
+        self.prog_coverage[prog] = pos_covered
         self.build_prog_encoding(prog)
         new_solution, incomplete = self.select_solution()
 

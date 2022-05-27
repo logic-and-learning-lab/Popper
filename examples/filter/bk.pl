@@ -1,3 +1,7 @@
+%% :-table (f/2) as incremental.
+%% :-dynamic([f/2], [incremental(true)]).
+
+
 cons(A,B,C):-
     append([A],B,C).
 tail([_|T],T).
