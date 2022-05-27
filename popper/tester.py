@@ -110,17 +110,9 @@ class Tester():
                 args = ','.join(['_'] * arity)
                 self.prolog.retractall(f'{predicate}({args})')
 
-
     def is_non_functional(self, prog):
-        print('is_non_functional')
-        for rule in prog:
-            print(format_rule(rule))
         with self.using(prog):
-            x = self.bool_query('non_functional')
-            print(x)
-            return x
-        # except:
-            # return True
+            return self.bool_query('non_functional')
 
     # def is_functional(self, program):
     #     with self.using(program):

@@ -27,15 +27,15 @@ def atom_to_symbol(pred, args):
 
 cached_clingo_atoms = {}
 def constrain(settings, generator, cons, model):
-    with settings.stats.duration('constrain'):
-    # with settings.stats.duration('constrain.ground'):
+    # with settings.stats.duration('constrain'):
+    with settings.stats.duration('constrain.ground'):
         ground_bodies = set()
         for con in cons:
             for ground_rule in generator.get_ground_rules((None, con)):
                 ground_head, ground_body = ground_rule
                 ground_bodies.add(ground_body)
 
-    # with settings.stats.duration('constrain.build_nogoods'):
+    with settings.stats.duration('constrain.build_nogoods'):
         nogoods = []
         for ground_body in ground_bodies:
             nogood = []
@@ -49,7 +49,7 @@ def constrain(settings, generator, cons, model):
                     cached_clingo_atoms[k] = x
             nogoods.append(nogood)
 
-    # with settings.stats.duration('constrain.add_nogoods'):
+    with settings.stats.duration('constrain.add_nogoods'):
         for nogood in nogoods:
             model.context.add_nogood(nogood)
 
