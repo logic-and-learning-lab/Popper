@@ -5,7 +5,7 @@ Popper is still a work-in-progress, so please notify us of bugs or usability iss
 
 If you use Popper, please cite the paper: 
 
-Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259). Mach. Learn. 110(4): 801-856 (2021) and
+Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259). Mach. Learn. 110(4): 801-856 (2021)
 
 ## Installation
 ```pip install popper-ilp```
