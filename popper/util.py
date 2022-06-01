@@ -23,14 +23,14 @@ MAX_BODY=6
 MAX_EXAMPLES=10000
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Popper, an ILP engine based on learning from failures')
+    parser = argparse.ArgumentParser(description='Popper is an ILP system based on learning from failures')
     parser.add_argument('kbpath', help = 'Path to the knowledge base one wants to learn on')
     # parser.add_argument('--info', default=False, action='store_true', help='Print best programs so ')
-    parser.add_argument('--quiet', default=False, action='store_true', help='Hide ou')
+    parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
 
-    parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {timeout})')
+    parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {TIMEOUT})')
     parser.add_argument('--eval-timeout', type=float, default=EVAL_TIMEOUT, help=f'Prolog evaluation timeout in seconds (default: {EVAL_TIMEOUT})')
     parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help=f'Maximum number of literals allowed in program (default: {MAX_LITERALS})')
     parser.add_argument('--max-body', type=int, default=MAX_BODY, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
@@ -40,14 +40,14 @@ def parse_args():
 
     # parser.add_argument('--threads', type=int, default=MAX_LITERALS, help=f'Maximum number of threads (default: 1)')
 
-    parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
-    parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')
-    parser.add_argument('--functional-test', default=False, action='store_true', help='Run custom functional test')
-    parser.add_argument('--clingo-args', type=str, default=CLINGO_ARGS, help='Arguments to pass to Clingo')
+    # parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
+    # parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')
+    parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
+    # parser.add_argument('--clingo-args', type=str, default=CLINGO_ARGS, help='Arguments to pass to Clingo')
     parser.add_argument('--ex-file', type=str, default='', help='Filename for the examples')
     parser.add_argument('--bk-file', type=str, default='', help='Filename for the background knowledge')
     parser.add_argument('--bias-file', type=str, default='', help='Filename for the bias')
-    parser.add_argument('--bkcons', default=False, action='store_true', help='do bk cons')
+    parser.add_argument('--bkcons', default=False, action='store_true', help='EXPERIMENTAL FEATURE: deduce background constraints from Datalog background')
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
@@ -253,7 +253,6 @@ class Settings:
         self.logger = logging.getLogger("popper")
 
         if quiet:
-            print('quiet')
             pass
         elif debug:
             log_level = logging.DEBUG
