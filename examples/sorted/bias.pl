@@ -1,10 +1,6 @@
-%% f(A) :- tail(A,B),empty(B).
-%% f(A) :- head(A,C),tail(A,D),head(D,B),geq(B,C),f(D).
-%% python3 popper.py examples/sorted  35.38s user 1.58s system 100% cpu 36.861 total
-
-max_vars(5).
+%% speed up example
 max_body(5).
-max_clauses(2).
+max_body(5).
 enable_recursion.
 
 head_pred(f,1).

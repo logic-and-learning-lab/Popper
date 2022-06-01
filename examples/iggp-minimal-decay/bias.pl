@@ -1,8 +1,3 @@
-max_body(6).
-max_vars(6).
-%% max_clauses(6).
-
-%% #show size/1.
 head_pred(next_value,2).
 body_pred(does,3).
 body_pred(true_value,2).
@@ -33,5 +28,3 @@ type(c5,(int,)).
 :-
     clause(C),
     #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
-
-%% :- body_literal(0, true_value, 2, (0, 1)), head_literal(0, next_value, 2, (0, 1)), not clause(1).

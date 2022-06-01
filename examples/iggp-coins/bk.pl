@@ -1,7 +1,4 @@
-different(A,B):- ground(A), ground(B), A\=B.
-%% different(A,B):- A\=B.
-%% different(A,B):- my_pos(A), my_pos(B), A \= B.
-%% different(A,B):- my_pos(A), my_pos(B), A != B.
+different(A,B):- A\=B.
 c_zerocoins(zerocoins).
 c_onecoin(onecoin).
 c_twocoins(twocoins).

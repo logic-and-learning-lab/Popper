@@ -1,13 +1,3 @@
-%% python3 popper.py examples/trains
-%% S f(A):- has_car(A,B),has_car(A,C),roof_closed(B),three_wheels(C),long(B).
-%% 0.83s user 0.03s system 99% cpu 0.860 total
-
-%% :- not body_size(_,4).
-
-max_vars(6).
-max_body(5).
-max_clauses(1).
-
 head_pred(f,1).
 body_pred(has_car,2).
 body_pred(has_load,2).
@@ -58,53 +48,3 @@ direction(three_load,(in,)).
 direction(circle,(in,)).
 direction(triangle,(in,)).
 direction(rectangle,(in,)).
-
-prop(unique_b_a,has_car).
-prop(unique_b_a,has_load).
-prop(count_a_b,has_car,4).
-prop(count_a_b,has_load,3).
-prop(unsat_pair,three_wheels,short).
-prop(unsat_pair,short,long).
-prop(unsat_pair,two_wheels,three_wheels).
-prop(unsat_pair,roof_open,roof_flat).
-prop(unsat_pair,roof_open,roof_closed).
-prop(unsat_pair,zero_load,one_load).
-prop(unsat_pair,two_load,one_load).
-prop(unsat_pair,three_load,one_load).
-prop(unsat_pair,zero_load,two_load).
-prop(unsat_pair,zero_load,three_load).
-prop(unsat_pair,two_load,three_load).
-prop(unsat_pair,triangle,three_load).
-prop(unsat_pair,triangle,circle).
-prop(unsat_pair,rectangle,circle).
-prop(unsat_pair,diamond,circle).
-prop(unsat_pair,hexagon,circle).
-prop(unsat_pair,inverted_triangle,circle).
-prop(unsat_pair,zero_load,triangle).
-prop(unsat_pair,triangle,rectangle).
-prop(unsat_pair,zero_load,diamond).
-prop(unsat_pair,three_load,diamond).
-prop(unsat_pair,triangle,diamond).
-prop(unsat_pair,rectangle,diamond).
-prop(unsat_pair,hexagon,diamond).
-prop(unsat_pair,inverted_triangle,diamond).
-prop(unsat_pair,triangle,hexagon).
-prop(unsat_pair,rectangle,hexagon).
-prop(unsat_pair,inverted_triangle,hexagon).
-prop(unsat_pair,triangle,inverted_triangle).
-prop(unsat_pair,rectangle,inverted_triangle).
-
-
-%% :- head_literal(0,f,1,(A,)), body_literal(0,long,1,(B,)), body_literal(0,has_car,2,(A,B)), body_size(0,2), A!=B.
-%% :- head_literal(0,f,1,(A,)), body_literal(0,three_wheels,1,(B,)), body_literal(0,has_car,2,(A,B)), body_size(0,2), A!=B.
-%% :- head_literal(0,f,1,(A,)), body_literal(0,roof_closed,1,(B,)), body_literal(0,has_car,2,(A,B)), body_size(0,2), A!=B.
-%% :- head_literal(0,f,1,(A,)), body_literal(0,three_wheels,1,(B,)), body_literal(0,long,1,(B,)), body_literal(0,has_car,2,(A,B)), body_size(0,3), A!=B.
-%% :- head_literal(0,f,1,(A,)), body_literal(0,roof_closed,1,(B,)), body_literal(0,three_wheels,1,(B,)), body_literal(0,has_car,2,(A,B)), body_size(0,3), A!=B.
-%% :- head_literal(0,f,1,(A,)), body_literal(0,roof_closed,1,(B,)), body_literal(0,long,1,(B,)), body_literal(0,has_car,2,(A,B)), body_size(0,3), A!=B.
-%% :- head_literal(0,f,1,(A,)), body_literal(0,has_car,2,(A,C)), body_literal(0,roof_closed,1,(C,)), body_literal(0,long,1,(B,)), body_literal(0,has_car,2,(A,B)), body_size(0,4), A!=B, A!=C, B!=C.
-%% :- head_literal(0,f,1,(A,)), body_literal(0,has_car,2,(A,C)), body_literal(0,roof_closed,1,(C,)), body_literal(0,has_car,2,(A,B)), body_literal(0,three_wheels,1,(B,)), body_size(0,4), A!=B, A!=C, B!=C.
-%% :- head_literal(0,f,1,(A,)), body_literal(0,has_car,2,(A,C)), body_literal(0,roof_closed,1,(B,)), body_literal(0,roof_closed,1,(C,)), body_literal(0,has_car,2,(A,B)), body_size(0,4), A!=B, A!=C, B!=C.
-%% :- head_literal(0,f,1,(A,)), body_literal(0,has_car,2,(A,C)), body_literal(0,long,1,(B,)), body_literal(0,has_car,2,(A,B)), body_literal(0,long,1,(C,)), body_size(0,4), A!=B, A!=C, B!=C.
-%% :- head_literal(0,f,1,(A,)), body_literal(0,has_car,2,(A,C)), body_literal(0,long,1,(B,)), body_literal(0,three_wheels,1,(C,)), body_literal(0,has_car,2,(A,B)), body_size(0,4), A!=B, A!=C, B!=C.
-%% :- head_literal(0,f,1,(A,)), body_literal(0,has_car,2,(A,C)), body_literal(0,three_wheels,1,(B,)), body_literal(0,three_wheels,1,(C,)), body_literal(0,has_car,2,(A,B)), body_size(0,4), A!=B, A!=C, B!=C.
-%% :- head_literal(0,f,1,(A,)), body_literal(0,three_wheels,1,(B,)), body_literal(0,has_car,2,(A,B)), body_literal(0,long,1,(B,)), body_literal(0,roof_closed,1,(B,)), body_size(0,4), A!=B.

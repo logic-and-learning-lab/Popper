@@ -2,21 +2,20 @@ from collections import namedtuple, defaultdict
 
 ConstVar = namedtuple('ConstVar', ['name', 'type'])
 
-class Constrainer:
-    def __init__(self, settings):
-        self.elim_cons = set()
-        self.gen_cons = set()
-        self.spec_cons = {x: set() for x in settings.pos}
+# class Constrainer:
+#     def __init__(self, settings):
+#         self.elim_cons = set()
+#         self.gen_cons = set()
+#         self.spec_cons = {x: set() for x in settings.pos}
 
-    def add_elimination(self, con):
-        self.elim_cons.add(con)
+#     def add_elimination(self, con):
+#         self.elim_cons.add(con)
 
-    def add_generalisation(self, con):
-        self.gen_cons.add(con)
+#     def add_generalisation(self, con):
+#         self.gen_cons.add(con)
 
-    def add_specialisation(self, con, e):
-        self.spec_cons[e].add(con)
-
+#     def add_specialisation(self, con, e):
+#         self.spec_cons[e].add(con)
 
 class Literal:
     def __init__(self, predicate, arguments, directions = [], positive = True, meta=False):
@@ -29,7 +28,7 @@ class Literal:
         self.inputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
         self.outputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
 
-    # AC: TODO - REFACTOR
+    # TODO: REFACTOR
     def __str__(self):
         if self.directions:
             vdirections = (var_dir + var for var, var_dir in zip(self.arguments, self.directions))

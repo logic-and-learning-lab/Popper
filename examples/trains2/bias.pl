@@ -1,10 +1,3 @@
-%% S f(A):- has_car(A,B),has_car(A,C),roof_closed(C),two_wheels(B),roof_open(B).
-%% S f(A):- has_car(A,B),has_load(B,C),triangle(C),roof_open(B).
-
-max_vars(6).
-max_body(6).
-%% max_clauses(6).
-
 head_pred(f,1).
 body_pred(has_car,2).
 body_pred(has_load,2).
@@ -55,25 +48,3 @@ direction(three_load,(in,)).
 direction(circle,(in,)).
 direction(triangle,(in,)).
 direction(rectangle,(in,)).
-
-prop(pre_postcon,(long,has_load,triangle)).
-prop(pre_postcon,(short,has_load,three_load)).
-prop(pre_postcon,(short,has_load,zero_load)).
-prop(pre_postcon,(three_wheels,has_load,triangle)).
-prop(unique_b_a,has_car).
-prop(unique_b_a,has_load).
-prop(unsat_pair,rectangle,circle).
-prop(unsat_pair,roof_open,roof_closed).
-prop(unsat_pair,short,long).
-prop(unsat_pair,three_load,one_load).
-prop(unsat_pair,three_wheels,short).
-prop(unsat_pair,triangle,circle).
-prop(unsat_pair,triangle,rectangle).
-prop(unsat_pair,triangle,three_load).
-prop(unsat_pair,two_load,one_load).
-prop(unsat_pair,two_load,three_load).
-prop(unsat_pair,two_wheels,three_wheels).
-prop(unsat_pair,zero_load,one_load).
-prop(unsat_pair,zero_load,three_load).
-prop(unsat_pair,zero_load,triangle).
-prop(unsat_pair,zero_load,two_load).

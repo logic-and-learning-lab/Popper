@@ -1,10 +1,3 @@
-%% f(A,B) :- empty(A),zero(B).
-%% f(A,B) :- tail(A,D),f(D,C),succ(C,B).
-%% python3 popper.py examples/length  0.28s user 0.03s system 99% cpu 0.314 total
-
-max_vars(5).
-max_body(5).
-max_clauses(2).
 enable_recursion.
 
 head_pred(f,2).

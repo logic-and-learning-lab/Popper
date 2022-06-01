@@ -1,22 +1,10 @@
-%% goal(A,B,C):- my_true_step(A,D),role(B),score_100(C),pos_5(D).
-%% goal(A,B,C):- c_onecoin(F),my_true_cell(A,D,F),role(B),c_onecoin(E),score_0(C),my_true_cell(A,D,E).
-
-max_vars(5).
-%% max_vars(6). AC
-max_body(6).
-
-%% (<= (goal you 100)
-%%     (true (step 5)))
-%% (<= (goal you 0)
-%%     (true (cell ?x onecoin)))
+max_vars(5). % helps make the example a little quicker to run
 
 head_pred(goal,3).
 body_pred(does_jump,4).
-%% body_pred(my_succ,2).
 body_pred(my_true_cell,3).
 body_pred(role,1).
 body_pred(my_pos,1).
-%% body_pred(different,2).
 body_pred(c_zerocoins,1).
 body_pred(c_onecoin,1).
 body_pred(c_twocoins,1).

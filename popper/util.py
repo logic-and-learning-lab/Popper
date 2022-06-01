@@ -25,7 +25,8 @@ MAX_EXAMPLES=10000
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper, an ILP engine based on learning from failures')
     parser.add_argument('kbpath', help = 'Path to the knowledge base one wants to learn on')
-    parser.add_argument('--info', default=False, action='store_true', help='Print best programs so far to stderr')
+    # parser.add_argument('--info', default=False, action='store_true', help='Print best programs so ')
+    parser.add_argument('--quiet', default=False, action='store_true', help='Hide ou')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
 
@@ -84,7 +85,6 @@ def load_kbpath(kbpath):
 class Stats:
     def __init__(self, info = False, debug = False):
         self.exec_start = perf_counter()
-
         self.total_programs = 0
         self.durations = {}
 
@@ -106,7 +106,8 @@ class Stats:
 
     def duration_summary(self):
         summary = []
-        for operation, durations in self.durations.items():
+        stats = sorted(self.durations.items(), key = lambda x: sum(x[1]), reverse=True)
+        for operation, durations in stats:
             called = len(durations)
             total = sum(durations)
             mean = sum(durations)/len(durations)
@@ -226,19 +227,16 @@ class DurationSummary:
         self.mean = mean
         self.maximum = maximum
 
-# def chunk_list(xs, size):
-#     for i in range(0, len(xs), size):
-#         yield xs[i:i+size]
-
 def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, kbpath=False, info=False, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False):
+    def __init__(self, kbpath=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False):
 
         if kbpath == False:
             args = parse_args()
-            info = args.info
+            # info = args.info
+            quiet = args.quiet
             debug = args.debug
             kbpath = args.kbpath
             show_stats = args.stats
@@ -254,13 +252,18 @@ class Settings:
 
         self.logger = logging.getLogger("popper")
 
-        if debug:
+        if quiet:
+            print('quiet')
+            pass
+        elif debug:
             log_level = logging.DEBUG
             logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
         elif info:
             log_level = logging.INFO
             logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
 
+        self.info = info
+        self.debug = debug
         self.stats = Stats(info=info, debug=debug)
         self.stats.logger = self.logger
         self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)

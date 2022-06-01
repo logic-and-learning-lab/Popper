@@ -1,8 +1,4 @@
 %% The training examples are for the relation droplast/2 but Popper learns the relation f/2
-
-max_vars(5).
-max_body(5).
-max_clauses(2).
 enable_recursion.
 
 head_pred(f,2).

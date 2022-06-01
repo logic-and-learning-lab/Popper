@@ -1,11 +1,4 @@
-%% python3 popper.py examples/robots-recursion
-%% f(A,B) :- move_up(A,B),at_top(B).
-%% f(A,B) :- move_up(A,C),f(C,B).
-%% 1.51s user 0.06s system 99% cpu 1.583 total
-
-max_vars(4).
-max_body(3).
-max_clauses(3).
+max_body(3). % speed up the example
 enable_recursion.
 
 head_pred(f,2).

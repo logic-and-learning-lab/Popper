@@ -6,7 +6,6 @@ from . tester import Tester
 from . generate import Generator, Grounder
 from . bkcons import deduce_bk_cons
 from clingo import Function, Number, Tuple_
-from . core import Constrainer
 import numbers
 
 def prog_size(prog):
@@ -27,15 +26,15 @@ def atom_to_symbol(pred, args):
 
 cached_clingo_atoms = {}
 def constrain(settings, generator, cons, model):
-
-    with settings.stats.duration('constrain.ground'):
+    with settings.stats.duration('constrain'):
+    # with settings.stats.duration('constrain.ground'):
         ground_bodies = set()
         for con in cons:
             for ground_rule in generator.get_ground_rules((None, con)):
                 ground_head, ground_body = ground_rule
                 ground_bodies.add(ground_body)
 
-    with settings.stats.duration('constrain.build_nogoods'):
+    # with settings.stats.duration('constrain.build_nogoods'):
         nogoods = []
         for ground_body in ground_bodies:
             nogood = []
@@ -49,9 +48,8 @@ def constrain(settings, generator, cons, model):
                     cached_clingo_atoms[k] = x
             nogoods.append(nogood)
 
-    with settings.stats.duration('constrain.add_nogoods'):
+    # with settings.stats.duration('constrain.add_nogoods'):
         for nogood in nogoods:
-            # settings.num_nogoods += 1
             model.context.add_nogood(nogood)
 
 def popper(settings):
@@ -59,7 +57,6 @@ def popper(settings):
         deduce_bk_cons(settings)
 
     tester = Tester(settings)
-    cons = Constrainer(settings)
     grounder = Grounder()
     selector = Selector(settings, tester)
     generator = Generator(settings, grounder, settings.max_literals)
@@ -78,10 +75,9 @@ def popper(settings):
         for model in handle:
             new_cons = set()
 
-            atoms = model.symbols(shown = True)
-            # prog = generator.parse_model(atoms)
-            prog, rule_ordering = generator.parse_model(atoms)
-            # print(rule_ordering)
+            with settings.stats.duration('gen'):
+                atoms = model.symbols(shown = True)
+                prog, rule_ordering = generator.parse_model(atoms)
 
             with settings.stats.duration('test'):
                 pos_covered, inconsistent = tester.test_prog(prog)
@@ -104,7 +100,7 @@ def popper(settings):
             if inconsistent:
                 # if inconsistent, prune generalisations
                 add_gen = True
-                # if the program has multiple rules, test the consistency of each non-recursive rule as it might not have been before
+                # if the program has multiple rules, test the consistency of each non-recursive rule as we might not have seen it before
                 if len(prog) > 1:
                     for rule in prog:
                         if rule_is_recursive(rule):
@@ -121,17 +117,12 @@ def popper(settings):
             if not inconsistent and settings.functional_test and len(pos_covered) > 0 and tester.is_non_functional(prog):
                 # if not functional, rule out generalisations and set as inconsistent
                 add_gen = True
+                # v.important: do not prune specialisations!
+                add_spec = False
                 inconsistent = True
-                cons.add_generalisation(prog)
 
             # if it does not cover any example, prune specialisations
             if len(pos_covered) == 0:
-                add_spec = True
-
-            # HACKY
-            # TMP IDEA
-            # if we already have a solution, a new rule must cover at least two examples
-            if not add_spec and selector.solution_found and len(pos_covered) == 1:
                 add_spec = True
 
             # check whether subsumed by an already seen program
@@ -142,39 +133,42 @@ def popper(settings):
                 if subsumed:
                     add_spec = True
 
-            # if add_spec == False and selector.solution_found and len(selector.best_prog) == 1 and len(chunk_pos_covered) != len(pos):
-            #     print('prune baby prune')
+            # HACKY TMP IDEAS
+            if not settings.recursion_enabled:
 
-            # TMP!! THIS IS A BACKTRACKING IDEA
-            # WE KEEP TRACK OF PROGRAMS SEEN THUS FAR THAT ONLY COVER ONE EXAMPLE
-            # ONCE WE FIND A SOLUTION, WE THEN APPLY SPECIALISATION OR/AND GENERALISATION CONSTRAINTS
-            if len(pos_covered) == 1:
-                if not add_gen:
-                    seen_covers_only_one_gen.add(prog)
-                if not add_spec:
-                    seen_covers_only_one_spec.add(prog)
-            if len(pos_covered) != len(pos):
-                if not add_gen:
-                    seen_incomplete_gen.add(prog)
-                if not add_spec:
-                    seen_incomplete_spec.add(prog)
+                # if we already have a solution, a new rule must cover at least two examples
+                if not add_spec and selector.solution_found and len(pos_covered) == 1:
+                    add_spec = True
 
-            if selector.solution_found:
-                # TMP MORE PRUNE TMP
-                for x in seen_covers_only_one_gen:
-                    new_cons.add(generator.build_generalisation_constraint(x))
-                seen_covers_only_one_gen = set()
-                for x in seen_covers_only_one_spec:
-                    new_cons.add(generator.build_specialisation_constraint(x))
-                seen_covers_only_one_spec = set()
+                # backtracking idea
+                # keep track of programs that only cover one example
+                # once we find a solution, we apply specialisation/generalisation constraints
+                if len(pos_covered) == 1:
+                    if not add_gen:
+                        seen_covers_only_one_gen.add(prog)
+                    if not add_spec:
+                        seen_covers_only_one_spec.add(prog)
+                if len(pos_covered) != len(pos):
+                    if not add_gen:
+                        seen_incomplete_gen.add(prog)
+                    if not add_spec:
+                        seen_incomplete_spec.add(prog)
 
-                if len(selector.best_prog) <= 2:
-                    for x in seen_incomplete_gen:
+                if selector.solution_found:
+                    for x in seen_covers_only_one_gen:
                         new_cons.add(generator.build_generalisation_constraint(x))
-                    for x in seen_incomplete_spec:
+                    seen_covers_only_one_gen = set()
+                    for x in seen_covers_only_one_spec:
                         new_cons.add(generator.build_specialisation_constraint(x))
-                    seen_incomplete_gen = set()
-                    seen_incomplete_spec = set()
+                    seen_covers_only_one_spec = set()
+
+                    if len(selector.best_prog) <= 2:
+                        for x in seen_incomplete_gen:
+                            new_cons.add(generator.build_generalisation_constraint(x))
+                        for x in seen_incomplete_spec:
+                            new_cons.add(generator.build_specialisation_constraint(x))
+                        seen_incomplete_gen = set()
+                        seen_incomplete_spec = set()
 
             # if consistent, covers at least one example, and is not subsumed, try to find a solution
             if not inconsistent and not subsumed and len(pos_covered) > 0:
@@ -189,7 +183,6 @@ def popper(settings):
                             model.context.add_nogood(size_con)
                         settings.max_literals = selector.max_size-1
 
-
             # if it covers all examples, stop
             if not inconsistent and len(pos_covered) == len(pos):
                 return
@@ -203,8 +196,5 @@ def popper(settings):
             constrain(settings, generator, new_cons, model)
 
 def learn_solution(settings):
-    # settings.num_nogoods = 0
     timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)
-    # print('SETTINGS.NUM_NOGOODS')
-    # print(settings.num_nogoods)
     return settings.solution, settings.best_prog_score, settings.stats

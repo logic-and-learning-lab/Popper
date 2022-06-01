@@ -135,5 +135,3 @@ class Selector:
         self.best_prog = new_solution
         self.settings.best_prog_score = (self.tester.num_pos, 0, tn, fp, size)
         return True
-
-# % Precision:0.71, Recall:1.00, TP:5, FN:0, TN:3, FP:2

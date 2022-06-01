@@ -1,17 +1,3 @@
-%% WITH MUCH BIAS
-%% python3 popper.py examples/filter --eval-timeout=0.01
-%% f(A,B) :- empty(B),empty(A).
-%% f(A,B) :- tail(A,D),head(A,C),odd(C),f(D,B).
-%% f(A,B) :- tail(A,D),head(A,C),even(C),f(D,E),prepend(C,E,B).
-%% 90.26s user 0.49s system 100% cpu 1:30.60 total
-
-%% WITH LITTLE BIAS
-%% python3 /Users/andrew/icloud/code/popper/popper.py examples/filter
-%% f(A,B) :- empty(A),empty(B).
-%% f(A,B) :- head(A,D),odd(D),tail(A,C),f(C,B).
-%% f(A,B) :- tail(A,C),head(A,E),even(E),f(C,D),prepend(E,D,B).
-%% 933.52s user 4.18s system 100% cpu 15:35.98 total
-
 max_vars(5).
 max_body(5).
 max_clauses(3).
@@ -41,7 +27,7 @@ direction(odd,(in,)).
 direction(even,(in,)).
 direction(prepend,(in,in,out)).
 
-%% EXTRA BIAS TO REDUCE LEARNING TIM
+%% EXTRA BIAS TO REDUCE LEARNING TIME
 only_once(head).
 only_once(tail).
 only_once(prepend).

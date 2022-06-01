@@ -56,3 +56,6 @@ odd(A):-
     nonvar(A),
     \+ is_list(A),
     1 is A mod 2.
+
+my_append(A,B,C):-
+    append([A],B,C).

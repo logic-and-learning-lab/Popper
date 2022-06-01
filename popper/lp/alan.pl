@@ -1,20 +1,8 @@
 %% ##################################################
 %% THIS FILE CONTAINS THE ASP PROGRAM GENERATOR
 %% IT IS CALLED ALAN
-%% VERSION 15
 %% ##################################################
 
-%% bfr(C,(P,PArgs),(Q,QArgs)) :- head_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs).
-%% bfr(C,(P,PArgs),(Q,QArgs)) :- body_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs),P<Q.
-%% bfr(C,(P,PArgs1),(P,PArgs2)) :- body_literal(C,P,PA,PArgs1),body_literal(C,P,PA,PArgs2),PArgs1<PArgs2.
-
-%% not_var_first_lit(C,V,(P,PArgs)) :- bfr(C,(Q,QArgs),(P,PArgs)),var_member(V,QArgs),var_member(V,PArgs).
-%% var_first_lit(C,V,(P,PArgs)) :- body_literal(C,P,_,PArgs),var_member(V,PArgs),not not_var_first_lit(C,V,(P,PArgs)).
-%% pruned:-var_first_lit(C,V,(P,PArgs)),var_first_lit(C,W,(Q,QArgs)),bfr(C,(P,PArgs),(Q,QArgs)),W<V.
-%% :-pruned.
-
-%% #defined functional/2.
-%% #defined irreflexive/2.
 #defined direction/2.
 #defined type/2.
 #defined size/1.
@@ -64,11 +52,6 @@ size(N):-
 #heuristic size(18). [84,true]
 #heuristic size(19). [83,true]
 #heuristic size(20). [82,true]
-
-%% #heuristic size(K). [-K,true]
-%% #heuristic size(K). [K,true]
-
-%% :~ #sum{K+1,C : body_size(C,K)} == N. [N@1]
 
 pi_or_rec:- recursive.
 pi_or_rec:- pi.
@@ -337,45 +320,20 @@ head_connected(C,Var1):-
     body_var(C,Var),
     not head_connected(C,Var).
 
-%% %% IRREFLEXIVE
-%% %% prevents: head:-q(A,B),q(B,A)
-%% :-
-%%     irreflexive(P,2),
-%%     body_literal(C,P,2,Vars1),
-%%     body_literal(C,P,2,Vars2),
-%%     Vars1 = (Var1,Var2),
-%%     Vars2 = (Var2,Var1),
-%%     Vars1 < Vars2.
 
-%% %% AC TODO: GENERALISE THE BELOW
-%% %% DYADIC FUNCTIONAL
-%% %% CAN REPLICATE RECALL
-%% %% prevents: head:- q(+A,-B),q(+A,-C)
-%% :-
-%%     functional(P,2),
-%%     body_literal(C,P,2,(V1,_)),
-%%     #count{V2 : body_literal(C,P,2,(V1,V2))} > 1.
+%% ##################################################
+%% ROLF MOREL'S ORDERING CONSTRAINT
+%% IT REDUCES THE NUMBER OF MODELS BUT DRASTICALLY INCREASES GROUNDING AND SOLVING TIME
+%% ##################################################
+%% bfr(C,(P,PArgs),(Q,QArgs)) :- head_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs).
+%% bfr(C,(P,PArgs),(Q,QArgs)) :- body_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs),P<Q.
+%% bfr(C,(P,PArgs1),(P,PArgs2)) :- body_literal(C,P,PA,PArgs1),body_literal(C,P,PA,PArgs2),PArgs1<PArgs2.
 
-%% %% TRIADIC FUNCTIONAL
-%% %% prevents: head:- q(+A,+B,-C),q(+A,+B,-D)
-%% :-
-%%     functional(P,3),
-%%     direction_(P,0,in),
-%%     direction_(P,1,in),
-%%     direction_(P,2,out),
-%%     body_literal(C,P,_,(V1,V2,_)),
-%%     #count{V3 : body_literal(C,P,_,(V1,V2,V3))} > 1.
+%% not_var_first_lit(C,V,(P,PArgs)) :- bfr(C,(Q,QArgs),(P,PArgs)),var_member(V,QArgs),var_member(V,PArgs).
+%% var_first_lit(C,V,(P,PArgs)) :- body_literal(C,P,_,PArgs),var_member(V,PArgs),not not_var_first_lit(C,V,(P,PArgs)).
+%% pruned:-var_first_lit(C,V,(P,PArgs)),var_first_lit(C,W,(Q,QArgs)),bfr(C,(P,PArgs),(Q,QArgs)),W<V.
+%% :-pruned.
 
-%% TETRADIC (fancy) FUNCTIONAL
-%% prevents: head:- q(+A,+B,-C,-D),q(+A,+B,-D,-E)
-%% :-
-%%     functional(P,4),
-%%     direction_(P,0,in),
-%%     direction_(P,1,in),
-%%     direction_(P,2,out),
-%%     direction_(P,3,out),
-%%     body_literal(C,P,_,(V1,V2,_,_)),
-%%     #count{(V3,V4) : body_literal(C,P,_,(V1,V2,V3,V4))} > 1.
 
 %% ##################################################
 %% SUBSUMPTION
@@ -512,27 +470,6 @@ base_clause(C,P,A):-
     direction_(P,Pos1,in),
     direction_(P,Pos2,in).
 
-%% TODO: REFACTOR
-%% @RM - what is this??
-%% :-
-%%     Clause > 0,
-%%     num_in_args(P,2),
-%%     %% get the head input vars
-%%     head_literal(Clause,P,A,HeadVars),
-%%     var_pos(HeadVar1,HeadVars,Pos1),
-%%     var_pos(HeadVar1,HeadVars,Pos2),
-%%     HeadPos1 != HeadPos2,
-%%     direction_(P,HeadPos1,in),
-%%     direction_(P,HeadPos2,in),
-%%     %% get the body input vars
-%%     body_literal(Clause,P,A,BodyVars),
-%%     var_pos(HeadVar1,BodyVars,BodyPos1),
-%%     var_pos(HeadVar2,BodyVars,BodyPos2),
-%%     BodyPos1 != BodyPos2,
-%%     direction_(P,BodyPos1,in),
-%%     direction_(P,BodyPos2,in).
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% ENSURES INPUT VARS ARE GROUND
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -597,6 +534,8 @@ safe_literal(C,P,Vars):-
 %% ########################################
 %% CLAUSES SPECIFIC TO PREDICATE INVENTION
 %% ########################################
+%% IDEAS FROM THE PAPER:
+%% Predicate invention by learning from failures. A. Cropper and R. Morel
 
 #script (python)
 from itertools import permutations
@@ -833,103 +772,14 @@ only_once(P,A):-
     max_body(MaxN),
     N1 + N2 - 1 <= MaxN.
 
-%% a:-
-%%     invented(P,A),
-%%     head_literal(C1,P,A,_),
-%%     not multiclause(P,A),
-%%     only_once(P,A).
-
-
-
-
-
-%% %% =========
-
-%% %% HEAD VARS ARE VALID
-%% valid_vars(C,(V0,V1)):-
-%%     head_literal(C,_,_,(V0,V1)).
-%% valid_vars(C,(V1,V0)):-
-%%     head_literal(C,_,_,(V0,V1)).
-
-%% %% ab | bc | cd | de
-%% valid_vars(C,Vars):-
-%%     body_literal(C,_,_,Vars),
-%%     Vars = (V0,V0+1).
-%% valid_vars(C,Vars):-
-%%     body_literal(C,_,_,Vars),
-%%     Vars = (V0+1,V0).
-
-%% %% ac -> ab
-%% %% ad -> ac
-%% %% bd -> bc | ac
-%% %% be -> bd | ad
-%% %% df -> de | ce | be | ae
-%% valid_vars(C,Vars):-
-%%     body_literal(C,_,_,Vars),
-%%     Vars = (V1,V2), % (d,f)
-%%     V2 > V1+1,      % (f > d+1)
-%%     V3 <= V1,       % v3 is less than d, so {a,b,c}
-%%     valid_vars(C,(V3,V2-1)).
-
-%% %% ac -> ba
-%% %% ad -> ca
-%% %% bd -> cb | ca
-%% %% be -> db | da
-%% %% cf -> ec | eb | ea
-%% valid_vars(C,Vars):-
-%%     body_literal(C,_,_,Vars),
-%%     Vars = (V1,V2),
-%%     V2 > V1+1,
-%%     V3 <= V1,
-%%     valid_vars(C,(V2-1,V3)).
-
-%% %% ca -> ab
-%% %% da -> ac
-%% %% db -> bc | ac
-%% %% eb -> bd | ad
-%% %% fc -> ce | be | ae
-%% valid_vars(C,Vars):-
-%%     body_literal(C,_,_,Vars),
-%%     Vars = (V1,V2), % (f,c)
-%%     V1 > V2+1,
-%%     V3 <= V2,
-%%     valid_vars(C,(V3,V1-1)).
-
-%% %% ca -> ba
-%% %% da -> ca
-%% %% db -> cb | ca
-%% %% eb -> db | da
-%% %% fc -> ec | eb | ea
-%% valid_vars(C,Vars):-
-%%     body_literal(C,_,_,Vars),
-%%     Vars = (V1,V2), % (f,c)
-%%     V1 > V2+1,
-%%     V3 <= V2,
-%%     valid_vars(C,(V1-1,V3)).
-
-
-%% %% valid_vars(C,(V0,V1)):-
-%%     %% valid_vars(C,(V1,V0)).
-%% %% #show valid_vars/2.
-
-%% a:-
-%%     body_literal(C,_,2,Vars),
-%%     not valid_vars(C,Vars).
-%% :- a.
-
-
 %% %% ==========================================================================================
 %% %% BK BIAS CONSTRAINTS
 %% %% ==========================================================================================
+%% IDEAS FROM THE PAPER:
+%% Learning logic programs by discovering where not to search. A. Cropper and C. Hocquette
 
 #defined prop/2.
 #defined prop/3.
-%% %% #defined prop/4.
-
-%% %% :-
-%% %%     unique_pA(P),
-%% %%     body_literal(R,P,_,_),
-%% %%     #count{A : body_literal(R,P,_,(A,))} > 1.
 
 
 %% :- prop(singleton,P), body_literal(Rule,P,1,_), #count{A : body_literal(Rule,P,A,(A,))} > 1.

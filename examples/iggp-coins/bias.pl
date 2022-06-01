@@ -1,11 +1,3 @@
-%% next_cell(A,B,C):-does_jump(A,E,B,D),my_pos(F),c_zerocoins(C),does_jump(A,E,F,D).
-%% next_cell(A,B,C):-role(E),does_jump(A,E,D,B),c_twocoins(C),different(D,B).
-%% next_cell(A,B,C):-role(D),different(B,E),my_true_cell(A,B,C),different(B,F),does_jump(A,D,E,F).
-
-max_vars(6).
-max_body(6).
-max_clauses(1).
-
 head_pred(next_cell,3).
 body_pred(does_jump,4).
 body_pred(my_succ,2).
@@ -32,8 +24,6 @@ type(c_twocoins,(cell_value,)).
 :-
     clause(C),
     #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
-
-
 
 prop(unique_b_a,my_succ).
 prop(unique_abd_c,does_jump).
