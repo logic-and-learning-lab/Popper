@@ -1,4 +1,4 @@
-%% ##################################################
+fbe%% ##################################################
 %% THIS FILE CONTAINS THE ASP PROGRAM GENERATOR
 %% IT IS CALLED ALAN
 %% ##################################################
@@ -20,7 +20,6 @@
 #show before/2.
 
 %% BOUND FROM ABOVE
-
 max_size(K):-
     max_body(M),
     max_clauses(N),
@@ -33,25 +32,7 @@ size(N):-
     #sum{K+1,C : body_size(C,K)} == N.
 
 #show size/1.
-#heuristic size(1). [100,true]
-#heuristic size(2). [99,true]
-#heuristic size(3). [98,true]
-#heuristic size(4). [97,true]
-#heuristic size(5). [96,true]
-#heuristic size(6). [95,true]
-#heuristic size(7). [94,true]
-#heuristic size(8). [93,true]
-#heuristic size(9). [92,true]
-#heuristic size(10). [91,true]
-#heuristic size(11). [90,true]
-#heuristic size(12). [89,true]
-#heuristic size(13). [88,true]
-#heuristic size(14). [87,true]
-#heuristic size(16). [86,true]
-#heuristic size(17). [85,true]
-#heuristic size(18). [84,true]
-#heuristic size(19). [83,true]
-#heuristic size(20). [82,true]
+#heuristic size(N). [1000-N,true]
 
 pi_or_rec:- recursive.
 pi_or_rec:- pi.
@@ -236,7 +217,7 @@ before(C1,C2):-
     not recursive_clause(C2,P,A),
     body_size(C1,K1),
     body_size(C2,K2),
-    K2 < K1.
+    K1 < K2.
 
 before(C1,C2):-
     C1 < C2,
@@ -246,7 +227,7 @@ before(C1,C2):-
     recursive_clause(C2,P,A),
     body_size(C1,K1),
     body_size(C2,K2),
-    K2 < K1.
+    K1 < K2.
 
 %% count_lower(P,N):-
 %%     head_literal(_,P,_,_),
@@ -581,6 +562,7 @@ inv_symbol(P):-
     #count{A : invented(P,A)} != 1.
 
 inv_lower(P,Q):-
+    enable_pi,
     inv_symbol(P),
     inv_symbol(Q),
     I < J,

@@ -75,7 +75,7 @@ def popper(settings):
         for model in handle:
             new_cons = set()
 
-            with settings.stats.duration('gen'):
+            with settings.stats.duration('generate'):
                 atoms = model.symbols(shown = True)
                 prog, rule_ordering = generator.parse_model(atoms)
 
@@ -175,7 +175,7 @@ def popper(settings):
                 # update success sets
                 success_sets[pos_covered] = prog
 
-                with settings.stats.duration('select'):
+                with settings.stats.duration('combine'):
                     new_solution_found = selector.update_best_prog(prog, pos_covered)
                     if new_solution_found:
                         for i in range(selector.max_size, settings.max_literals+1):
@@ -187,11 +187,10 @@ def popper(settings):
             if not inconsistent and len(pos_covered) == len(pos):
                 return
 
-            with settings.stats.duration('build_cons'):
-                if add_spec:
-                    new_cons.add(generator.build_specialisation_constraint(prog, rule_ordering))
-                if add_gen:
-                    new_cons.add(generator.build_generalisation_constraint(prog, rule_ordering))
+            # if add_spec:
+            #     new_cons.add(generator.build_specialisation_constraint(prog, rule_ordering))
+            # if add_gen:
+            #     new_cons.add(generator.build_generalisation_constraint(prog, rule_ordering))
 
             constrain(settings, generator, new_cons, model)
 
