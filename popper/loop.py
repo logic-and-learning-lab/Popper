@@ -187,10 +187,10 @@ def popper(settings):
             if not inconsistent and len(pos_covered) == len(pos):
                 return
 
-            # if add_spec:
-            #     new_cons.add(generator.build_specialisation_constraint(prog, rule_ordering))
-            # if add_gen:
-            #     new_cons.add(generator.build_generalisation_constraint(prog, rule_ordering))
+            if add_spec:
+                new_cons.add(generator.build_specialisation_constraint(prog, rule_ordering))
+            if add_gen:
+                new_cons.add(generator.build_generalisation_constraint(prog, rule_ordering))
 
             constrain(settings, generator, new_cons, model)
 
