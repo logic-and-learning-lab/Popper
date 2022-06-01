@@ -3,7 +3,9 @@
 Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) (ILP) system. 
 Popper is still a work-in-progress, so please notify us of bugs or usability issues.
 
-If you use Popper, please cite the paper: Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259). Mach. Learn. 110(4): 801-856 (2021) and
+If you use Popper, please cite the paper: 
+
+Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259). Mach. Learn. 110(4): 801-856 (2021) and
 
 ## Installation
 ```pip install popper-ilp```
@@ -11,7 +13,9 @@ If you use Popper, please cite the paper: Andrew Cropper and Rolf Morel. [Learni
 ## Requirements
 
 [SWI-Prolog](https://www.swi-prolog.org)
+
 [Clingo 5.5.0](https://potassco.org/clingo/)
+
 [pyswip](https://github.com/yuce/pyswip) **you must install the latest version from the master branch**
 
 # Command line usage
@@ -101,16 +105,18 @@ grandparent(A,B):-mother(A,C),mother(C,B).
 % Precision:1.00, Recall:1.00, TP:5, FN:0, TN:1, FP:0
 ```
 
-# Bias
+## Bias
 Popper has three main bias settings:
 
 - `max_vars(N).` sets the maximum number of variables in a rule to `N` (default: 6)
 - `max_body(N).` sets the maximum number of body literals in a rule to `N` (default: 6)
 - `max_clauses(N).` sets the maximum number of rules/clauses to `N` (default: 1 or 2 if `enable_recursion` is set)
 
-These parameters are important as they greatly influence the search space. If the values are too high then Popper will might struggle to learn a solution. If the settings are too low then the search space might be too small to contain a good solution. We are currently working on method to automatically set these settings, but in the meantime finding the correct values can often be a process of trial and error.
+These parameters are important as they greatly influence the search space. If the values are too high then Popper might struggle to learn a solution. If the settings are too low then the search space might be too small to contain a good solution. We are currently working on method to automatically set these settings. In the meantime finding the correct values can often be a process of trial and error.
 
-# Anytime
+You can set these settings in the bias file or through the command line (see `--help`).
+
+## Anytime
 
 Popper is an anytime algorithm.
 By default, it shows intermediate solutions.
@@ -147,10 +153,11 @@ Precision:1.00 Recall:1.00 TP:10 FN:0 TN:10 FP:0 Size:7
 f(A,B,C):- tail(A,C),one(B).
 f(A,B,C):- decrement(B,E),f(A,E,D),tail(D,C).
 ******************************
-
 ```
 
-# Recursion
+To hide this information, run Popper with the `--quiet` flag.
+
+## Recursion
 To enable recursion add `enable_recursion.` to the bias file.
 This flag allows Popper to learn programs where a predicate symbol appears in both the head and body of a rule, such as to find a duplicate element (`python popper.py examples/find-dupl`) in a list:
 
@@ -167,7 +174,7 @@ f(A,B):-head(A,E),even(E),tail(A,C),f(C,D),prepend(E,D,B).
 
 ```
 
-# Types
+## Types
 Popper supports **optional** type annotations, which can be added to a bias file.
 A type annotation is of the form `type(p,(t1,t2,...,tk)` for a predicate symbol `p` with arity `k`, such as:
 
@@ -180,8 +187,9 @@ type(odd,(element,)).
 type(even,(element,)).
 type(prepend,(element,list,list)).
 ```
+To be clear, these types are **optional** but can substantially reduce learning times.
 
-# Directions 
+## Directions 
 Prolog often requires arguments to be ground.
 For instance, when asking Prolog to answer the query:
 ```prolog
@@ -208,7 +216,7 @@ direction(prepend,(in,in,out)).
 direction(geq,(in,in)).
 ```
 
-# Predicate invention
+## Predicate invention
 
 Popper supports [automatic predicate invention](https://arxiv.org/pdf/2104.14426.pdf) (PI). To enable PI, add the setting `enable_pi.` to the bias file.
 With PI enabled, Popper (`python popper.py examples/kinship-pi`) learns the following program:
@@ -222,25 +230,23 @@ inv1(A,B):-father(A,B).
 
 Predicate invention is currently very expensive so it is best to avoid it if possible.
 
-# Functional test
+<!-- # Functional test
 TODO
-
-# Non-observational predicate learning
+ -->
+<!-- # Non-observational predicate learning
 
 Popper supports non-observational predicate learning, where it must learn definitions for relations not given as examples.
 See the example 'non-OPL'.
+ -->
 
-# Bias discover
-[Coming soon](https://arxiv.org/pdf/2202.09806.pdf)
-
-# Parallelisation
+## Parallelisation
 [Coming soon](https://arxiv.org/pdf/2109.07132.pdf)
 
-# Failure explanation
-[Coming soon](https://arxiv.org/pdf/2102.12551.pdf)
+## Bias discovery
+[Coming soon](https://arxiv.org/pdf/2202.09806.pdf)
 
-# Very large programs
-[Coming soon](https://arxiv.org/pdf/2109.07818.pdf)
+## Failure explanation
+[Coming soon](https://arxiv.org/pdf/2102.12551.pdf)
 
 # Popper settings
 
@@ -254,8 +260,16 @@ To run in quiet mode use the flag `--quiet` (default: False)
 
 To run with a maximum learning time use the flag `--timeout` (default: 600 seconds)
 
-To run with a maximum example testing time use the flag `--eval-timeout` (default: 0.01 seconds)
+To run with a maximum example testing time use the flag `--eval-timeout` (default: 0.001 seconds)
 
 To allow non-Datalog clauses, where a variable in the head need not appear in the body, add ``non_datalog.` to your bias file.
 
 To allow singleton variables (variables that only appear once in a clause), add `allow_singletons.` to your bias file.
+
+To set the maximum number of literals allow in a program use the flag  `--max-literals` (default: 40)
+
+To set the maximum number of body literals allowed in the body of a rule use the flag `--max-body` (default: 6)
+
+To set the maximum number of variables allowed in a rule use the flag `--max-vars` (default: 6)
+
+To set the maximum number of examples to learn from use the flag `--max-examples` (default: 10000)
