@@ -267,7 +267,7 @@ To run in quiet mode use the flag `--quiet` (default: False)
 
 To run with a maximum learning time use the flag `--timeout` (default: 600 seconds)
 
-To run with a maximum example testing (only when learning non-recursive programs) time use the flag `--eval-timeout` (default: 0.001 seconds)
+To run with a maximum example testing (only applies when learning recursive programs) time use the flag `--eval-timeout` (default: 0.001 seconds)
 
 To allow non-Datalog clauses, where a variable in the head need not appear in the body, add ``non_datalog.` to your bias file.
 
