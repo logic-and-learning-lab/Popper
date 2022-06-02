@@ -34,10 +34,9 @@ class Generator:
         self.settings = settings
         self.grounder = grounder
 
-        # build generator program
         encoding = []
-        with open('popper/lp/alan.pl') as f:
-            encoding.append(f.read())
+        alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
+        encoding.append(alan)
         with open(settings.bias_file) as f:
             encoding.append(f.read())
         encoding.append(f'max_clauses({settings.max_rules}).')
