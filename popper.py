@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from popper.util import Settings, print_prog_score
 from popper.loop import learn_solution
 
