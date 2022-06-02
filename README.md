@@ -7,7 +7,8 @@ If you use Popper, please cite the paper:
 Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259). Mach. Learn. 110(4): 801-856 (2021)
 
 ## Installation
-```pip install popper-ilp```
+To install the latest version, run the command:
+```pip install git+https://github.com/logic-and-learning-lab/Popper@main``` 
 
 ## Requirements
 
