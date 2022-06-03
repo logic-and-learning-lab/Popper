@@ -12,11 +12,13 @@ To install the latest version, run the command:
 
 ## Requirements
 
-[SWI-Prolog](https://www.swi-prolog.org)
+- [pyswip](https://github.com/yuce/pyswip) (**YOU MUST INSTALL PYSWIP FROM THE MASTER BRANCH!**)
+    -  use the command: `pip install git+https://github.com/yuce/pyswip@master#egg=pyswip`
 
-[Clingo 5.5.0](https://potassco.org/clingo/)
 
-[pyswip](https://github.com/yuce/pyswip) **you _must_ install the latest version from the master branch**
+- [SWI-Prolog](https://www.swi-prolog.org) (8.4.2 or above)
+
+- [Clingo](https://potassco.org/clingo/) (5.5.0 or above)
 
 # Command line usage
 
