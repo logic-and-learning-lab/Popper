@@ -119,6 +119,8 @@ Popper has three main bias settings:
 
 These parameters are important as they greatly influence the search space. If the values are too high then Popper might struggle to learn a solution. If the settings are too low then the search space might be too small to contain a good solution. We are currently working on method to automatically set these settings. In the meantime finding the correct values can often be a process of trial and error.
 
+**You do not need to supply max_clauses. If you are learning non-recursive programs, do not supply this value.**
+
 You can set these settings in the bias file or through the command line (see `--help`).
 
 ## Anytime
