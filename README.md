@@ -6,19 +6,19 @@ If you use Popper, please cite the paper:
 
 Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259). Mach. Learn. 110(4): 801-856 (2021)
 
-## Installation
-To install the latest version, run the command:
-```pip install git+https://github.com/logic-and-learning-lab/Popper@main``` 
-
 ## Requirements
 
-- [pyswip](https://github.com/yuce/pyswip) (**YOU MUST INSTALL PYSWIP FROM THE MASTER BRANCH!**)
+- [pyswip](https://github.com/yuce/pyswip) (**You _must_ install pyswip from the master branch!**)
     -  use the command: `pip install git+https://github.com/yuce/pyswip@master#egg=pyswip`
 
 
-- [SWI-Prolog](https://www.swi-prolog.org) (8.4.2 or above)
+- [SWI-Prolog](https://www.swi-prolog.org) (**8.4.2 or above**)
 
-- [Clingo](https://potassco.org/clingo/) (5.5.0 or above)
+- [Clingo](https://potassco.org/clingo/) (**5.5.0 or above**)
+
+## Installation
+To install the latest version, run the command:
+```pip install git+https://github.com/logic-and-learning-lab/Popper@main``` 
 
 # Command line usage
 
