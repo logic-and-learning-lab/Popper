@@ -17,7 +17,8 @@ Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](htt
 - [Clingo](https://potassco.org/clingo/) (**5.5.0 or above**)
 
 ## Installation
-To install the latest version, run the command:
+You can download the latest release of Popper [here](https://github.com/logic-and-learning-lab/Popper/releases). 
+Alternatively, to install the master branch, run the command:
 ```pip install git+https://github.com/logic-and-learning-lab/Popper@main``` 
 
 # Command line usage
