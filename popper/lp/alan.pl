@@ -1,11 +1,9 @@
 %% ##################################################
-%% THIS FILE CONTAINS THE ASP PROGRAM GENERATOR
-%% IT IS CALLED ALAN
+%% THIS FILE CONTAINS THE ASP PROGRAM GENERATOR, CALLED ALAN
 %% ##################################################
 
 #defined direction/2.
 #defined type/2.
-#defined size/1.
 #defined invented/2.
 #defined lower/2.
 
@@ -18,8 +16,10 @@
 #show body_literal/4.
 #show direction_/3.
 #show before/2.
+#show size/1.
 
-%% BOUND FROM ABOVE
+#heuristic size(N). [1000-N,true]
+
 max_size(K):-
     max_body(M),
     max_clauses(N),
@@ -27,27 +27,36 @@ max_size(K):-
 
 size(N):-
     max_size(MaxSize),
-    N > 0,
-    N <= MaxSize,
+    N = 2..MaxSize,
     #sum{K+1,C : body_size(C,K)} == N.
 
-#show size/1.
-#heuristic size(N). [1000-N,true]
-
-pi_or_rec:- recursive.
-pi_or_rec:- pi.
+pi_or_rec:-
+    recursive.
+pi_or_rec:-
+    pi.
+pi_or_rec_enabled:-
+    enable_pi.
+pi_or_rec_enabled:-
+    enable_recursion.
 
 :-
     clause(1),
     not pi_or_rec.
 
-%% HEAD PRED SYMBOL IF GIVEN BY USER OR INVENTED
+:-
+    enable_recursion,
+    clause(Rule),
+    Rule > 0,
+    not recursive_clause(Rule,_,_).
+
+
+%% head pred symbol if given by user or invented
 head_aux(P,A):-
     head_pred(P,A).
 head_aux(P,A):-
     invented(P,A).
 
-%% BODY PRED SYMBOL IF GIVEN BY USER OR INVENTED
+%% body pred symbol if given by user or invented
 body_aux(P,A):-
     body_pred(P,A).
 body_aux(P,A):-
@@ -56,21 +65,70 @@ body_aux(P,A):-
     head_aux(P,A),
     enable_recursion.
 
-%% GUESS HEAD LITERALS
-%% THE SYMBOL INV_K CANNOT APPEAR IN THE HEAD OF CLAUSE C < K
-{head_literal(C,P,A,Vars)}:-
-    head_vars(A,Vars),
-    head_aux(P,A),
-    index(P,I),
-    C >= I,
-    C = 0..N-1,
-    max_clauses(N).
+%% ********** BASE CASE (RULE 0) **********
+head_literal(0,P,A,Vars):-
+    head_pred(P,A),
+    head_vars(A,Vars).
 
-%% GUESS BODY LITERALS
-{body_literal(C,P,A,Vars)}:-
-    body_aux(P,A),
+1 {body_literal(0,P,A,Vars): body_aux(P,A), vars(A,Vars), not type_mismatch(P,Vars), not bad_body(P,A,Vars)} M :-
+    max_body(M).
+
+%% ********** RECURSIVE CASE (RULE > 0) **********
+%% THE SYMBOL INV_K CANNOT APPEAR IN THE HEAD OF CLAUSE C < K
+0 {head_literal(Rule,P,A,Vars): head_vars(A,Vars), head_aux(P,A), index(P,I), Rule >= I} 1:-
+    Rule = 1..N-1,
+    max_clauses(N),
+    pi_or_rec_enabled.
+
+1 {body_literal(Rule,P,A,Vars): body_aux(P,A), vars(A,Vars), not bad_body(P,A,Vars), not type_mismatch(P,Vars)} M :-
+    clause(Rule),
+    Rule > 0,
+    max_body(M),
+    enable_recursion,
+    not enable_pi.
+
+%% ********** INVENTED RULES **********
+1 {body_literal(Rule,P,A,Vars): body_aux(P,A), vars(A,Vars), not bad_body(P,A,Vars)} M :-
+    clause(Rule),
+    Rule > 0,
+    max_body(M),
+    enable_pi.
+
+bad_body(P,A,Vars):-
+    head_pred(P,A),
     vars(A,Vars),
-    clause(C).
+    not good_vars(A,Vars).
+good_vars(A,Vars1):-
+    head_vars(A,Vars2),
+    var_member(V,Vars1),
+    not var_member(V,Vars2).
+bad_body(P,A,Vars2):-
+    num_in_args(P,1),
+    head_pred(P,A),
+    head_vars(A,Vars1),
+    vars(A,Vars2),
+    var_pos(Var,Vars1,Pos1),
+    var_pos(Var,Vars2,Pos2),
+    direction_(P,Pos1,in),
+    direction_(P,Pos2,in).
+
+type_mismatch(P,Vars):-
+    var_pos(Var,Vars,Pos),
+    type(P,Types),
+    pred_arg_type(P,Pos,T1),
+    fixed_var_type(Var,T2),
+    T1 != T2.
+
+calls_invented(Rule):-
+    invented(P,A),
+    body_literal(Rule,P,A,_).
+:-
+    pi,
+    not recursive,
+    head_literal(Rule,P,A,_),
+    head_pred(P,A),
+    not calls_invented(Rule).
+
 
 %% THERE IS A CLAUSE IF THERE IS A HEAD LITERAL
 clause(C):-
@@ -86,26 +144,6 @@ body_size(C,N):-
     N <= MaxN,
     #count{P,Vars : body_literal(C,P,_,Vars)} == N.
 
-%% AT LEAST ONE HEAD LITERAL
-:-
-    not clause(0).
-
-%% AT MOST ONE HEAD LITERAL PER CLAUSE
-:-
-    clause(C),
-    #count{P,A : head_literal(C,P,A,_)} > 1.
-
-%% AT LEAST 1 AND MOST MAX_N BODY LITERALS PER CLAUSE
-%% THIS CONSTRAINT IS A BIT SNEAKY: WE SAY IT IS IMPOSSIBLE TO HAVE A CLAUSE WITHOUT A SIZE
-:-
-    clause(C),
-    not body_size(C,_).
-
-%% HEAD LITERAL CANNOT BE IN THE BODY
-:-
-    head_literal(C,P,_,Vars),
-    body_literal(C,P,_,Vars).
-
 %% USE CLAUSES IN ORDER
 :-
     clause(C1),
@@ -117,7 +155,7 @@ body_size(C,N):-
 :-
     clause_var(C,Var1),
     Var1 > 1,
-    Var2 = 0..Var1-1,
+    Var2 = Var1-1,
     not clause_var(C,Var2).
 
 %% ##################################################
@@ -325,20 +363,17 @@ same_head(C1,C2):-
     head_literal(C2,P,A,Vars).
 
 not_body_subset(C1,C2):-
-    clause(C1),
     clause(C2),
     C1 < C2,
     body_literal(C1,P,A,Vars),
     not body_literal(C2,P,A,Vars).
 
 body_subset(C1,C2):-
-    clause(C1),
     clause(C2),
     C1 < C2,
     not not_body_subset(C1,C2),
     body_literal(C1,P,A,Vars),
     body_literal(C2,P,A,Vars).
-
 :-
     C1 < C2,
     same_head(C1,C2),
@@ -351,6 +386,17 @@ body_subset(C1,C2):-
 def pytype(pos, types):
     return types.arguments[pos.number]
 #end.
+
+fixed_var_type(Var,@pytype(Pos,Types)):-
+    head_literal(_,P,A,Vars),
+    var_pos(Var,Vars,Pos),
+    type(P,Types),
+    head_vars(A,Vars).
+
+pred_arg_type(P,Pos,@pytype(Pos,Types)):-
+    Pos = 0..A-1,
+    body_pred(P,A),
+    type(P,Types).
 
 var_type(C,Var,@pytype(Pos,Types)):-
     var_in_literal(C,P,Vars,Var),
@@ -543,7 +589,7 @@ multiclause(P,A):-
 index(P,0):-
     head_pred(P,_).
 index(@py_gen_invsym(I),I):-
-    I=1..N,
+    I=1..N-1,
     max_clauses(N).
 
 inv_symbol(P):-
@@ -828,3 +874,14 @@ only_once(P,A):-
 
 :- prop(precon,P,Q), body_literal(Rule,P,_,(A,)), body_literal(Rule,Q,_,(A,B)).
 :- prop(postcon,P,Q), body_literal(Rule,P,_,(A,B)), body_literal(Rule,Q,_,(B,)).
+
+
+
+
+%% DEBUGGING
+
+%% {body_literal(0,P,A,Vars)}:-
+%%     body_aux(P,A),
+%%     vars(A,Vars),
+%%     not head_pred(P,A),
+%%     not type_mismatch(P,Vars).
