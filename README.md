@@ -1,6 +1,6 @@
 # Popper
 
-Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) (ILP) system. Please notify us of bugs or usability issues.
+Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) (ILP) system. 
 
 If you use Popper, please cite the paper: 
 
@@ -17,8 +17,8 @@ Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](htt
 - [Clingo](https://potassco.org/clingo/) (**5.5.0 or above**)
 
 ## Installation
-You can download the latest release of Popper [here](https://github.com/logic-and-learning-lab/Popper/releases). 
-Alternatively, to install the master branch, run the command:
+The latest release of Popper is [here](https://github.com/logic-and-learning-lab/Popper/releases). 
+To install the master branch, run the command:
 ```pip install git+https://github.com/logic-and-learning-lab/Popper@main``` 
 
 # Command line usage
@@ -92,8 +92,7 @@ father(andy,spongebob).
 ```
 
 A bias file contains information necessary to restrict the search space of Popper.
-The first key thing thing to add to this file are *predicate declarations*.
-These tell Popper which predicate symbols it can use in the head or body of a rule, such as:
+**Predicate declarations** tell Popper which predicate symbols it can use in the head or body of a rule, such as:
 
 ```prolog
 head_pred(grandparent,2).
@@ -114,15 +113,16 @@ grandparent(A,B):-mother(A,C),mother(C,B).
 ## Bias
 Popper has three main bias settings:
 
-- `max_vars(N).` sets the maximum number of variables in a rule to `N` (default: 6)
-- `max_body(N).` sets the maximum number of body literals in a rule to `N` (default: 6)
-- `max_clauses(N).` sets the maximum number of rules/clauses to `N` (default: 1 or 2 if `enable_recursion` is set)
+- `max_vars(N)` sets the maximum number of variables in a rule to `N` (default: 6)
+- `max_body(N)` sets the maximum number of body literals in a rule to `N` (default: 6)
+- `max_clauses(N)` sets the maximum number of rules/clauses to `N` (default: 1 or 2 if `enable_recursion` is set)
 
-These parameters are important as they greatly influence the search space. If the values are too high then Popper might struggle to learn a solution. If the settings are too low then the search space might be too small to contain a good solution. We are currently working on method to automatically set these settings. In the meantime finding the correct values can often be a process of trial and error.
-
-**You do not need to supply max_clauses. If you are learning non-recursive programs, do not supply this value.**
-
+These parameters are important. They greatly influence the search space. If the values are too high then Popper might struggle to learn a solution. If the settings are too low then the search space might be too small to contain a good solution. 
 You can set these settings in the bias file or through the command line (see `--help`).
+
+Finding suitable values can often be a process of trial and error. We are trying to automatically set these settings. 
+
+**Do not supply max_clauses if you are learning non-recursive programs.**
 
 ## Anytime
 
@@ -184,7 +184,7 @@ f(A,B):-head(A,E),even(E),tail(A,C),f(C,D),prepend(E,D,B).
 Recursion is expensive, so it is best to try without it first.
 
 ## Types
-Popper supports **optional** type annotations, which can be added to a bias file.
+Popper supports **optional** type annotations in the bias file.
 A type annotation is of the form `type(p,(t1,t2,...,tk)` for a predicate symbol `p` with arity `k`, such as:
 
 ```prolog
@@ -208,10 +208,9 @@ It throws an error:
 ```prolog
 ERROR: Arguments are not sufficiently instantiated
 ```
-Moreover, there are often cases where we want to reduce the number of answers from a query.
-For instance, calling the `length` predicate with only variables leads to an infinite set of answers.
+Moreover, we want to reduce the number of answers from a query. For instance, calling the `length` predicate with only variables leads to an infinite set of answers.
 
-To make things easier, Popper supports **optional** direction annotations.
+To avoid this issues, Popper supports **optional** direction annotations.
 A direction annotation is of the form `direction(p,(d1,d2,...,dk)` for a predicate symbol `p` with arity `k`, where each `di` is either `in` or `out`.
 An `in` variable must be ground when calling the relation.
 By contrast, an `out` variable need not be ground.
