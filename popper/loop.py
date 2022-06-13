@@ -72,10 +72,16 @@ def popper(settings):
     seen_incomplete_spec = set()
 
     with generator.solver.solve(yield_ = True) as handle:
-        for model in handle:
+        handle = iter(handle)
+        while True:
+            model = None
+            with settings.stats.duration('get_model'):
+                model = next(handle, None)
+                if model is None: break
+
             new_cons = set()
 
-            with settings.stats.duration('generate'):
+            with settings.stats.duration('parse_model'):
                 atoms = model.symbols(shown = True)
                 prog, rule_ordering = generator.parse_model(atoms)
 
