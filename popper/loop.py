@@ -73,17 +73,18 @@ def popper(settings):
 
     with generator.solver.solve(yield_ = True) as handle:
         handle = iter(handle)
+
         while True:
             model = None
-            with settings.stats.duration('get_model'):
+
+            with settings.stats.duration('generate'):
                 model = next(handle, None)
-                if model is None: break
-
-            new_cons = set()
-
-            with settings.stats.duration('parse_model'):
+                if model is None:
+                    break
                 atoms = model.symbols(shown = True)
                 prog, rule_ordering = generator.parse_model(atoms)
+
+            new_cons = set()
 
             with settings.stats.duration('test'):
                 pos_covered, inconsistent = tester.test_prog(prog)
