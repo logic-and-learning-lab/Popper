@@ -224,7 +224,7 @@ direction(prepend,(in,in,out)).
 direction(geq,(in,in)).
 ```
 
-Again, directions are **optional** but can substantially reduce learning times.
+Again, directions are **optional** but can substantially reduce learning times.  Note that currently Popper does not support partial directions.  If one predicate is given a direction, then they all must be.
 
 ## Predicate invention
 
