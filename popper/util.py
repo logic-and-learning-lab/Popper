@@ -92,7 +92,7 @@ class Stats:
         return perf_counter() - self.exec_start
 
     def show(self):
-        message = f'Total programs: {self.total_programs}\n'
+        message = f'Num. programs: {self.total_programs}\n'
         total_op_time = 0
         for summary in self.duration_summary():
             message += f'{summary.operation}:\n\tCalled: {summary.called} times \t ' + \
