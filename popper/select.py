@@ -14,7 +14,7 @@ incomplete:- example(E), not covered(E).
 :- same(R1,R2), size(R1,K1), size(R2,K2), K1 >= K2, rule(R1).
 :- dominates(R1,R2), size(R1,K1), size(R2,K2), K1 <= K2, rule(R2).
 :~ example(E), not covered(E). [1@2, (E,)]
-:~ rule(R),size(R,K). [K@1]
+:~ rule(R),size(R,K). [K@1, (R,)]
 """
 
 class Selector:
