@@ -1,7 +1,7 @@
-max_vars(5). % helps make the example a little quicker to run
+%% max_vars(5). % helps make the example a little quicker to run
 
 head_pred(goal,3).
-body_pred(does_jump,4).
+%% body_pred(does_jump,4).
 body_pred(my_true_cell,3).
 body_pred(role,1).
 body_pred(my_pos,1).
