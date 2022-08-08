@@ -127,7 +127,7 @@ class Selector:
                 if inconsistent:
                     con = ':-' + ','.join(f'rule({i})' for i in out) + '.'
                     self.constraints.append(con)
-                    return self.select_solution(settings)
+                    return self.select_solution()
         return flatten([self.index_to_prog[k] for k in out]), incomplete
 
     def update_best_prog(self, prog, pos_covered):
