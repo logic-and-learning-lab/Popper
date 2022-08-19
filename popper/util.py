@@ -1,7 +1,5 @@
-import sys
 import clingo
 import clingo.script
-import time
 import signal
 import argparse
 import os
@@ -63,7 +61,7 @@ def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
     signal.alarm(timeout_duration)
     try:
         result = func(*args, **kwargs)
-    except TimeoutError as exc:
+    except TimeoutError as _exc:
         settings.logger.warn(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
         return result
     except AttributeError as moo:
@@ -158,7 +156,11 @@ def print_prog_score(prog, score):
     print('*'*30)
 
 def prog_size(prog):
-    return sum(1 + len(body) for head, body in prog)
+    return sum(rule_size(rule) for rule in prog)
+
+def rule_size(rule):
+    head, body = rule
+    return 1 + len(body)
 
 def reduce_prog(prog):
     def f(literal):
@@ -180,6 +182,9 @@ def rule_is_recursive(rule):
     if not head:
         return False
     return any(head.predicate  == literal.predicate for literal in body if isinstance(literal, Literal))
+
+def prog_is_recursive(prog):
+    return any(rule_is_recursive(rule) for rule in prog)
 
 def rule_is_invented(rule):
     head, body = rule
@@ -204,7 +209,6 @@ def order_rule(rule):
                 if literal.predicate != head.predicate:
                     # find the first ground non-recursive body literal and stop
                     selected_literal = literal
-                    break
                 else:
                     # otherwise use the recursive body literal
                     selected_literal = literal
@@ -312,7 +316,7 @@ class Settings:
 
         self.pi_enabled = False
         for x in solver.symbolic_atoms.by_signature('enable_pi', arity=0):
-            pi_or_recursion = True
+            self.pi_enabled = True
 
         if self.max_rules == None:
             if self.recursion_enabled or self.pi_enabled:
@@ -327,8 +331,8 @@ class Settings:
     def print_incomplete_solution(self, prog, tp, fn, size):
         # self.logger.info(self.hypothesis_output(prog, tp, fn, size))
         self.logger.info('*'*20)
-        self.logger.info(f'New best hypothesis:')
+        self.logger.info('New best hypothesis:')
         self.logger.info(f'tp:{tp} fn:{fn} size:{size}')
         for rule in order_prog(prog):
-            self.logger.info(format_rule(rule))
+            self.logger.info(format_rule(order_rule(rule)))
         self.logger.info('*'*20)

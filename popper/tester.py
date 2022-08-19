@@ -1,12 +1,9 @@
 import os
-import sys
-import time
 import numpy as np
 import pkg_resources
 from pyswip import Prolog
 from contextlib import contextmanager
-from . core import Literal
-from . util import format_rule, order_rule, order_prog
+from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog
 
 class Tester():
 
@@ -100,7 +97,7 @@ class Tester():
         current_clauses = set()
         try:
             for rule in prog:
-                head, body = rule
+                head, _body = rule
                 x = format_rule(order_rule(rule))[:-1]
                 self.prolog.assertz(x)
                 current_clauses.add((head.predicate, head.arity))
@@ -114,6 +111,40 @@ class Tester():
         with self.using(prog):
             return self.bool_query('non_functional')
 
-    # def is_functional(self, program):
-    #     with self.using(program):
-    #         return len(list(self.prolog.query(f'functional.'))) > 0
+    def reduce_inconsistent(self, program):
+        if len(program) < 3:
+            return program
+        for i in range(len(program)):
+            subprog = program[:i] + program[i+1:]
+            if not prog_is_recursive(subprog):
+                continue
+            with self.using(subprog):
+                if self.is_inconsistent(subprog):
+                    return self.reduce_inconsistent(subprog)
+        return program
+
+    def reduce_solution(self, prog):
+        if len(prog) < 3:
+            return prog
+        pos_covered, _inconsistent = self.test_prog(prog)
+        return self.reduce_solution_aux(prog, pos_covered)
+
+    def reduce_solution_aux(self, prog, orignal_covered):
+        if len(prog) < 3:
+            return prog
+        # print('HELLO')
+        for i in range(len(prog)):
+            subprog = prog[:i] + prog[i+1:]
+            if not prog_is_recursive(subprog):
+                continue
+            # for rule in subprog:
+                # print('\t', format_rule(rule))
+            with self.using(subprog):
+                pos_covered, inconsistent = self.test_prog(subprog)
+                # print(inconsistent, len(pos_covered), len(orignal_covered))
+                if inconsistent:
+                    continue
+                if pos_covered == orignal_covered:
+                    return self.reduce_solution_aux(subprog, orignal_covered)
+
+        return prog

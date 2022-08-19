@@ -1,15 +1,8 @@
-import time
 import clingo
 import clingo.script
-import numbers
-import itertools
-import operator
 import pkg_resources
 from . core import Literal, ConstVar
-from . util import format_rule, format_prog, rule_is_recursive, rule_is_invented
 from collections import defaultdict
-from clingo import Function, Number, Tuple_
-import clingo.script
 clingo.script.enable_python()
 
 arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
@@ -30,7 +23,7 @@ class Generator:
             rule = rule.replace('not clause(1,)','not clause(1)')
             yield rule
 
-    def __init__(self, settings, grounder, bootstrap_cons):
+    def __init__(self, settings, grounder):
         self.settings = settings
         self.grounder = grounder
 
@@ -48,8 +41,8 @@ class Generator:
 
         encoding = '\n'.join(encoding)
 
-        # solver = clingo.Control(["--heuristic=Domain","-t3"])
         solver = clingo.Control(["--heuristic=Domain"])
+        # solver = clingo.Control(["-t2"])
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
@@ -249,26 +242,6 @@ def body_size_literal(clause_var, body_size):
 
 def alldiff(args):
     return Literal('AllDifferent', args, meta=True)
-
-def lt(a, b):
-    return Literal('<', (a,b), meta=True)
-
-def eq(a, b):
-    return Literal('==', (a,b), meta=True)
-
-def gteq(a, b):
-    return Literal('>=', (a,b), meta=True)
-
-def vo_clause(variable):
-    return ConstVar(f'C{variable}', 'Clause')
-
-def vo_variable(variable):
-    return ConstVar(f'{variable}', 'Variable')
-
-# restrict a clause id to have a specific body size
-def body_size_literal(clause_var, body_size):
-    return Literal('body_size', (clause_var, body_size))
-
 
 class Grounder():
     def __init__(self):
