@@ -178,12 +178,12 @@ class Combiner:
 
         if len(self.inconsistent) > 0:
             # TODO: improve as there is no need to build the constraints each time
-            with self.settings.stats.duration('inconsistent thingy'):
-                for prog in self.inconsistent:
-                    if all(get_rule_hash(rule) in self.rulehash_to_id for rule in prog):
-                        ids = [self.rulehash_to_id[get_rule_hash(rule)] for rule in prog]
-                        con = ':-' + ','.join(f'rule({x})' for x in ids) + '.'
-                        encoding.add(con)
+            # with self.settings.stats.duration('inconsistent thingy'):
+            for prog in self.inconsistent:
+                if all(get_rule_hash(rule) in self.rulehash_to_id for rule in prog):
+                    ids = [self.rulehash_to_id[get_rule_hash(rule)] for rule in prog]
+                    con = ':-' + ','.join(f'rule({x})' for x in ids) + '.'
+                    encoding.add(con)
 
         model_rules, model_incomplete = self.find_combination(encoding)
 
