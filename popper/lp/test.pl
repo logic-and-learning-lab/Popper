@@ -55,6 +55,10 @@ inconsistent:-
     neg_index(_,Atom),
     test_ex(Atom),!.
 
+sat:-
+    pos_index(_,Atom),
+    test_ex(Atom),!.
+
 %% ========== FUNCTIONAL CHECKS ==========
 non_functional:-
     pos(Atom),

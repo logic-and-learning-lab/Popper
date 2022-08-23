@@ -55,6 +55,7 @@ class Combiner:
         self.ruleid_to_size = {}
 
         self.inconsistent = set()
+        self.debug_count = 0
 
     def build_example_encoding(self):
         example_prog = []
@@ -77,13 +78,20 @@ class Combiner:
     def add_inconsistent(self, prog):
         self.inconsistent.add(prog)
 
+    @profile
     def find_combination(self, encoding):
+
+        # print('find_combination')
+        # self.debug_count +=1
         str_encoding = '\n'.join(encoding)
+        # with open(f'sat/{self.debug_count}') as f:
+            # f.write(str_encoding)
 
         best_prog = []
         best_incomplete = False
 
         while True:
+            # print('while_true')
             solver = clingo.Control([])
             solver.add('base', [], str_encoding)
             solver.ground([('base', [])])
@@ -94,6 +102,7 @@ class Combiner:
 
             with solver.solve(yield_=True) as handle:
                 for m in handle:
+                    # print('model', m.cost)
                     model_found = True
                     model_incomplete = False
                     atoms = m.symbols(shown = True)
@@ -108,6 +117,7 @@ class Combiner:
                     if not self.settings.recursion_enabled and not self.settings.pi_enabled:
                         best_prog = rules
                         best_incomplete = model_incomplete
+                        # print(prog_size(best_prog))
                         continue
 
                     # check whether recursive program is inconsistent
@@ -132,6 +142,7 @@ class Combiner:
                 return best_prog, best_incomplete
         return best_prog, best_incomplete
 
+    @profile
     def select_solution(self, new_prog):
         encoding = set()
 
@@ -189,6 +200,7 @@ class Combiner:
 
         return [self.ruleid_to_rule[k] for k in model_rules], model_incomplete
 
+    @profile
     def update_best_prog(self, prog, pos_covered):
         self.update_prog_index(prog, pos_covered)
         new_solution, incomplete = self.select_solution(prog)
@@ -205,6 +217,7 @@ class Combiner:
         fp = 0
 
         if incomplete:
+            # TODO: CHANGE TO ONLY TEST POSITIVES
             covered, _ = self.tester.test_prog(new_solution)
             tp = len(covered)
             fn = self.tester.num_pos - tp

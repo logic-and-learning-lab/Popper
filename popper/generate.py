@@ -7,6 +7,79 @@ clingo.script.enable_python()
 
 arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
 
+# TODO: COULD CACHE TUPLES OF ARGS FOR TINY OPTIMISATION
+def parse_model(model):
+    directions = defaultdict(lambda: defaultdict(lambda: '?'))
+    rule_index_to_body = defaultdict(set)
+    rule_index_to_head = {}
+    rule_index_ordering = defaultdict(set)
+
+    for atom in model:
+        args = atom.arguments
+
+        if atom.name == 'body_literal':
+            rule_index = args[0].number
+            predicate = args[1].name
+            atom_args = args[3].arguments
+            atom_args = tuple(arg_lookup[arg] for arg in atom_args)
+            arity = len(atom_args)
+            body_literal = (predicate, atom_args, arity)
+            rule_index_to_body[rule_index].add(body_literal)
+
+        elif atom.name == 'head_literal':
+            rule_index = args[0].number
+            predicate = args[1].name
+            atom_args = args[3].arguments
+            atom_args = tuple(arg_lookup[arg] for arg in atom_args)
+            arity = len(atom_args)
+            head_literal = (predicate, atom_args, arity)
+            rule_index_to_head[rule_index] = head_literal
+
+        elif atom.name == 'direction_':
+            pred_name = args[0].name
+            arg_index = args[1].number
+            arg_dir_str = args[2].name
+
+            if arg_dir_str == 'in':
+                arg_dir = '+'
+            elif arg_dir_str == 'out':
+                arg_dir = '-'
+            else:
+                raise Exception(f'Unrecognised argument direction "{arg_dir_str}"')
+            directions[pred_name][arg_index] = arg_dir
+
+        elif atom.name == 'before':
+            rule1 = args[0].number
+            rule2 = args[1].number
+            rule_index_ordering[rule1].add(rule2)
+
+    prog = []
+    rule_lookup = {}
+
+    # rules = set(rule_index_to_head.keys()).union(set(rule_index_to_body.keys()))
+    # for rule_index in rules:
+    #     head = None
+    #     if rule_index in rule_index_to_head:
+    for rule_index in rule_index_to_head:
+        head_pred, head_args, head_arity = rule_index_to_head[rule_index]
+        head_modes = tuple(directions[head_pred][i] for i in range(head_arity))
+        head = Literal(head_pred, head_args, head_modes)
+        body = set()
+        for (body_pred, body_args, body_arity) in rule_index_to_body[rule_index]:
+            body_modes = tuple(directions[body_pred][i] for i in range(body_arity))
+            body.add(Literal(body_pred, body_args, body_modes))
+        body = frozenset(body)
+        rule = head, body
+        prog.append((rule))
+        rule_lookup[rule_index] = rule
+
+    rule_ordering = defaultdict(set)
+    for r1_index, lower_rule_indices in rule_index_ordering.items():
+        r1 = rule_lookup[r1_index]
+        rule_ordering[r1] = set(rule_lookup[r2_index] for r2_index in lower_rule_indices)
+
+    return frozenset(prog), rule_ordering
+
 class Generator:
 
     def con_to_strings(self, con):
@@ -42,81 +115,13 @@ class Generator:
         encoding = '\n'.join(encoding)
 
         solver = clingo.Control(["--heuristic=Domain"])
+        # solver = clingo.Control([])
         # solver = clingo.Control(["-t2"])
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver
 
-
-    # TODO: COULD CACHE TUPLES OF ARGS FOR TINY OPTIMISATION
-    def parse_model(self, model):
-        # print('model', model)
-        directions = defaultdict(lambda: defaultdict(lambda: '?'))
-        rule_index_to_body = defaultdict(set)
-        rule_index_to_head = {}
-        rule_index_ordering = defaultdict(set)
-
-        for atom in model:
-            args = atom.arguments
-
-            if atom.name == 'body_literal':
-                rule_index = args[0].number
-                predicate = args[1].name
-                atom_args = args[3].arguments
-                atom_args = tuple(arg_lookup[arg] for arg in atom_args)
-                arity = len(atom_args)
-                body_literal = (predicate, atom_args, arity)
-                rule_index_to_body[rule_index].add(body_literal)
-
-            elif atom.name == 'head_literal':
-                rule_index = args[0].number
-                predicate = args[1].name
-                atom_args = args[3].arguments
-                atom_args = tuple(arg_lookup[arg] for arg in atom_args)
-                arity = len(atom_args)
-                head_literal = (predicate, atom_args, arity)
-                rule_index_to_head[rule_index] = head_literal
-
-            elif atom.name == 'direction_':
-                pred_name = args[0].name
-                arg_index = args[1].number
-                arg_dir_str = args[2].name
-
-                if arg_dir_str == 'in':
-                    arg_dir = '+'
-                elif arg_dir_str == 'out':
-                    arg_dir = '-'
-                else:
-                    raise Exception(f'Unrecognised argument direction "{arg_dir_str}"')
-                directions[pred_name][arg_index] = arg_dir
-            elif atom.name == 'before':
-                rule1 = args[0].number
-                rule2 = args[1].number
-                rule_index_ordering[rule1].add(rule2)
-
-        prog = []
-        rule_lookup = {}
-
-        for rule_index in rule_index_to_head:
-            head_pred, head_args, head_arity = rule_index_to_head[rule_index]
-            head_modes = tuple(directions[head_pred][i] for i in range(head_arity))
-            head = Literal(head_pred, head_args, head_modes)
-            body = set()
-            for (body_pred, body_args, body_arity) in rule_index_to_body[rule_index]:
-                body_modes = tuple(directions[body_pred][i] for i in range(body_arity))
-                body.add(Literal(body_pred, body_args, body_modes))
-            body = frozenset(body)
-            rule = head, body
-            prog.append((rule))
-            rule_lookup[rule_index] = rule
-
-        rule_ordering = defaultdict(set)
-        for r1_index, lower_rule_indices in rule_index_ordering.items():
-            r1 = rule_lookup[r1_index]
-            rule_ordering[r1] = set(rule_lookup[r2_index] for r2_index in lower_rule_indices)
-
-        return frozenset(prog), rule_ordering
 
     def get_ground_rules(self, rule):
         head, body = rule
@@ -130,39 +135,6 @@ class Generator:
         # ground the rule for each variable assignment
         return set(self.grounder.ground_rule((head, body), assignment) for assignment in assignments)
 
-    # def orderings(self, prog):
-    #     prog = list(prog)
-    #     headpred = {}
-    #     for i in range(len(prog))
-    #         head, body = prog[i]
-
-    #     lower = set()
-    #     for i in range(1,10):
-    #         p1 = f'inv{i}'
-    #         lower.add(settings.headpred, p1)
-    #         for j in range(i+1,10):
-    #             p2 = f'inv{j}'
-    #             x = (p1,p2)
-    #             lower.add(x)
-
-    #     def before(r1, r2):
-
-    #         for i
-
-    # h1 = headpred(r1)
-    # h2 = headpred(r2)
-
-    # if (h1, h2) in lower:
-    #     return True
-
-    # if h1 == h2:
-    #     if not recursive(r1) and recursive(r2):
-    #         return True
-
-    #     if (not recursive(r1) and not recursive(r2)) or (recursive(r1) and recursive(r2)):
-    #         if size(r1) < size(r2):
-    #             return True
-    # return False
 
     def build_generalisation_constraint(self, prog, rule_ordering={}):
         prog = list(prog)

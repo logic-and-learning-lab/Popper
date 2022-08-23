@@ -3,7 +3,7 @@ import numbers
 from . combine import Combiner
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive
 from . tester import Tester
-from . generate import Generator, Grounder
+from . generate import Generator, Grounder, parse_model
 from . bkcons import deduce_bk_cons
 from clingo import Function, Number, Tuple_
 
@@ -79,7 +79,7 @@ def popper(settings):
                 if model is None:
                     break
                 atoms = model.symbols(shown = True)
-                prog, rule_ordering = generator.parse_model(atoms)
+                prog, rule_ordering = parse_model(atoms)
 
             new_cons = set()
 
@@ -90,6 +90,29 @@ def popper(settings):
             settings.logger.debug(f'Program {settings.stats.total_programs}:')
             for rule in order_prog(prog):
                 settings.logger.debug(format_rule(rule))
+
+            if settings.explain:
+                tester.add_seen_prog(prog)
+                if len(pos_covered) == 0:
+                # with settings.stats.duration('explain1'):
+                #     t1 = time.time()
+                #     for subprog in tester.explain_totally_incomplete(prog):
+                #         # pass
+                #         # print('\t', 'subprog',f'{t2-t1:0.3f}')
+                #         # for rule in subprog:
+                #             # print('\t', format_rule(rule))
+                #         new_cons.add(generator.build_specialisation_constraint(subprog, rule_ordering))
+                #     t2 = time.time()
+                #     d1 = t2-t1
+
+                    t1 = time.time()
+                    with settings.stats.duration('explain2'):
+                        for subprog in tester.explain_totally_incomplete2(prog):
+                            new_cons.add(generator.build_specialisation_constraint(subprog, rule_ordering))
+                    t2 = time.time()
+                    d2 = t2-t1
+                    # print(f'{d1:0.3f} - {d2:0.3f}')
+                    # print(d1, d2)
 
             if inconsistent and prog_is_recursive(prog):
                 combiner.add_inconsistent(prog)

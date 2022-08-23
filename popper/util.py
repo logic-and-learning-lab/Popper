@@ -38,6 +38,7 @@ def parse_args():
 
     # parser.add_argument('--threads', type=int, default=MAX_LITERALS, help=f'Maximum number of threads (default: 1)')
 
+    parser.add_argument('--explain', default=False, action='store_true', help='explain')
     # parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
     # parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
@@ -235,7 +236,8 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, kbpath=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False):
+    def __init__(self, kbpath=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, explain=False):
+
 
         if kbpath == False:
             args = parse_args()
@@ -253,6 +255,7 @@ class Settings:
             max_vars = args.max_vars
             max_rules = args.max_rules
             functional_test = args.functional_test
+            explain = args.explain
 
         self.logger = logging.getLogger("popper")
 
@@ -275,6 +278,7 @@ class Settings:
         self.max_literals = max_literals
         # self.clingo_args = [] if not args.clingo_args else args.clingo_args.split(' ')
         self.functional_test = functional_test
+        self.explain = explain
         self.timeout = timeout
         self.eval_timeout = eval_timeout
         self.max_examples = max_examples
