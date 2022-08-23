@@ -3,18 +3,6 @@ import time
 import itertools
 from . util import format_rule, prog_size, format_prog, flatten, reduce_prog, prog_is_recursive, rule_size, rule_is_recursive, order_rule
 
-# for when we do not yet have a complete solution
-FIND_SUBSET_PROG1 = """
-#defined recursive/0.
-#show rule/1.
-#show incomplete/0.
-{rule(R)}:-size(R,_).
-incomplete:- example(E), not covered(E).
-:~ example(E), not covered(E). [1@2, (E,)]
-:~ rule(R),size(R,K). [K@1, (R,)]
-:- recursive, not base.
-:- not uses_new.
-"""
 
 # for when we have a complete solution
 # same as above but no weak constraint over examples covered
@@ -26,6 +14,11 @@ FIND_SUBSET_PROG2 = """
 :~ rule(R),size(R,K). [K@1, (R,)]
 :- recursive, not base.
 :- not uses_new.
+"""
+
+# for when we do not yet have a complete solution
+FIND_SUBSET_PROG1 = FIND_SUBSET_PROG2 + """
+:~ example(E), not covered(E). [1@2, (E,)]
 """
 
 def get_rule_hash(rule):
@@ -80,44 +73,39 @@ class Combiner:
 
     @profile
     def find_combination(self, encoding):
-
-        # print('find_combination')
-        # self.debug_count +=1
         str_encoding = '\n'.join(encoding)
         # with open(f'sat/{self.debug_count}') as f:
             # f.write(str_encoding)
 
         best_prog = []
-        best_incomplete = False
+        best_fn = False
 
         while True:
-            # print('while_true')
             solver = clingo.Control([])
             solver.add('base', [], str_encoding)
             solver.ground([('base', [])])
 
             model_found = False
             model_inconsistent = False
-            model_incomplete = None
 
             with solver.solve(yield_=True) as handle:
                 for m in handle:
-                    # print('model', m.cost)
                     model_found = True
                     model_incomplete = False
-                    atoms = m.symbols(shown = True)
 
-                    rules = []
-                    for atom in atoms:
-                        if atom.name == 'rule':
-                            rules.append(atom.arguments[0].number)
-                        elif atom.name == 'incomplete':
-                            model_incomplete = True
+                    # cost has two elements when we have not yet found a complete model
+                    if len(m.cost) == 2:
+                        fn = m.cost[0]
+                    # once we have a complete model, the cost is only the size of the solution
+                    else:
+                        fn = 0
+
+                    atoms = m.symbols(shown = True)
+                    rules = [atom.arguments[0].number for atom in atoms]
 
                     if not self.settings.recursion_enabled and not self.settings.pi_enabled:
                         best_prog = rules
-                        best_incomplete = model_incomplete
-                        # print(prog_size(best_prog))
+                        best_fn = fn
                         continue
 
                     # check whether recursive program is inconsistent
@@ -125,7 +113,7 @@ class Combiner:
                     model_inconsistent = self.tester.is_inconsistent(model_prog)
                     if not model_inconsistent:
                         best_prog = rules
-                        best_incomplete = model_incomplete
+                        best_fn = fn
                         continue
 
                     with self.settings.stats.duration('subcheck'):
@@ -139,8 +127,8 @@ class Combiner:
                     break
 
             if not model_found or not model_inconsistent:
-                return best_prog, best_incomplete
-        return best_prog, best_incomplete
+                return best_prog, best_fn
+        return best_prog, best_fn
 
     @profile
     def select_solution(self, new_prog):
@@ -196,14 +184,14 @@ class Combiner:
                     con = ':-' + ','.join(f'rule({x})' for x in ids) + '.'
                     encoding.add(con)
 
-        model_rules, model_incomplete = self.find_combination(encoding)
+        model_rules, fn = self.find_combination(encoding)
 
-        return [self.ruleid_to_rule[k] for k in model_rules], model_incomplete
+        return [self.ruleid_to_rule[k] for k in model_rules], fn
 
     @profile
     def update_best_prog(self, prog, pos_covered):
         self.update_prog_index(prog, pos_covered)
-        new_solution, incomplete = self.select_solution(prog)
+        new_solution, fn = self.select_solution(prog)
 
         # if there is no new better solution, do nothing
         if len(new_solution) == 0:
@@ -216,11 +204,8 @@ class Combiner:
         tn = self.tester.num_neg
         fp = 0
 
-        if incomplete:
-            # TODO: CHANGE TO ONLY TEST POSITIVES
-            covered, _ = self.tester.test_prog(new_solution)
-            tp = len(covered)
-            fn = self.tester.num_pos - tp
+        if fn > 0:
+            tp = self.tester.num_pos - fn
             self.num_covered = tp
             self.settings.print_incomplete_solution(new_solution, tp, fn, size)
             self.settings.best_prog_score = (tp, fn, tn, fp, size)
