@@ -26,15 +26,49 @@ prop(p).
 prop(q).
 prop(r).
 
-not_my_true(A,B):-
-    %% prop(B),
-    ground(B),
-    \+ my_true(A,B).
-
-%% not_my_true(A,B):-
-%%     prop(B),
-%%     my_true(A,_),
-%%     \+ my_true(A,B).
+not_my_true(1,p).
+not_my_true(1,q).
+not_my_true(1,r).
+not_my_true(10,p).
+not_my_true(10,r).
+not_my_true(11,p).
+not_my_true(11,q).
+not_my_true(11,r).
+not_my_true(12,q).
+not_my_true(13,p).
+not_my_true(13,q).
+not_my_true(14,q).
+not_my_true(14,r).
+not_my_true(15,p).
+not_my_true(15,q).
+not_my_true(15,r).
+not_my_true(16,p).
+not_my_true(16,q).
+not_my_true(16,r).
+not_my_true(17,q).
+not_my_true(17,r).
+not_my_true(18,p).
+not_my_true(18,q).
+not_my_true(18,r).
+not_my_true(19,p).
+not_my_true(2,q).
+not_my_true(2,r).
+not_my_true(20,p).
+not_my_true(20,q).
+not_my_true(21,q).
+not_my_true(3,p).
+not_my_true(3,r).
+not_my_true(4,p).
+not_my_true(4,q).
+not_my_true(4,r).
+not_my_true(5,r).
+not_my_true(6,p).
+not_my_true(6,q).
+not_my_true(7,q).
+not_my_true(7,r).
+not_my_true(8,p).
+not_my_true(8,q).
+not_my_true(9,r).
 
 role(robot).
 my_input(robot,a).

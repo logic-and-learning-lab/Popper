@@ -151,14 +151,14 @@ prop(countk,P,K):-
 %% prop(symmetric_ab_ba,P):- not type(P,_), holds(P,(A,B)), not holds(P,(B,A)).
 
 
-prop(symmetric_ab,P):-
-    type(P,(Ta,Tb)),
-    type(P,(Tb,Ta)),
-    body_pred(P,_),
-    not symmetric_ab_sat(P).
-symmetric_ab_sat(P):-
-    holds(P,(A,B)),
-    not holds(P,(B,A)).
+%% prop(symmetric_ab,P):-
+%%     type(P,(Ta,Tb)),
+%%     type(P,(Tb,Ta)),
+%%     body_pred(P,_),
+%%     not symmetric_ab_sat(P).
+%% symmetric_ab_sat(P):-
+%%     holds(P,(A,B)),
+%%     not holds(P,(B,A)).
 
 
 prop(symmetric_xab,P):-

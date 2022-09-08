@@ -865,23 +865,20 @@ only_once(P,A):-
 :- prop(unique_c_abd,P), body_literal(Rule,P,_,(_,_,C,_)), #count{A,B,D : body_literal(Rule,P,_,(A,B,C,D))} > 1.
 :- prop(unique_cd_ab,P), body_literal(Rule,P,_,(_,_,C,D)), #count{A,B : body_literal(Rule,P,_,(A,B,C,D))} > 1.
 :- prop(unique_d_abc,P), body_literal(Rule,P,_,(_,_,_,D)), #count{A,B,C : body_literal(Rule,P,_,(A,B,C,D))} > 1.
-
 :- prop(antitransitive,P), body_literal(Rule,P,_,(A,B)), body_literal(Rule,P,_,(B,C)), body_literal(Rule,P,_,(A,C)).
-
 :- prop(antitriangular,P), body_literal(Rule,P,_,(A,B)), body_literal(Rule,P,_,(B,C)), body_literal(Rule,P,_,(C,A)).
-
 :- prop(unsat_pair,P,Q), body_literal(Rule,P,_,Vars), body_literal(Rule,Q,_,Vars).
-
 :- prop(precon,P,Q), body_literal(Rule,P,_,(A,)), body_literal(Rule,Q,_,(A,B)).
 :- prop(postcon,P,Q), body_literal(Rule,P,_,(A,B)), body_literal(Rule,Q,_,(B,)).
-
-
-
+:- prop(pre_postcon,(P,Q,R)), body_literal(Rule,P,_,(A,)),body_literal(Rule,Q,_,(A,B)),body_literal(Rule,R,_,(B,)).
+:- prop(chain,(P,Q)), body_literal(Rule,P,_,(_,A)),body_literal(Rule,Q,_,(A,_)).
+:- prop(countk,P,K), K > 1, body_pred(P,_), clause(Rule), #count{Vars : body_literal(Rule,P,_,Vars)} > K.
 
 %% DEBUGGING
 
-%% {body_literal(0,P,A,Vars)}:-
-%%     body_aux(P,A),
-%%     vars(A,Vars),
-%%     not head_pred(P,A),
-%%     not type_mismatch(P,Vars).
+{body_literal(0,P,A,Vars)}:-
+    body_aux(P,A),
+    vars(A,Vars),
+    not head_pred(P,A),
+    not type_mismatch(P,Vars),
+    not bad_body(P,A,Vars).

@@ -12,7 +12,6 @@ FIND_SUBSET_PROG2 = """
 {rule(R)}:-size(R,_).
 :- example(E), not covered(E).
 :~ rule(R),size(R,K). [K@1, (R,)]
-:- recursive, not base.
 :- not uses_new.
 """
 
@@ -71,10 +70,11 @@ class Combiner:
     def add_inconsistent(self, prog):
         self.inconsistent.add(prog)
 
-    @profile
+    # @profile
     def find_combination(self, encoding):
         str_encoding = '\n'.join(encoding)
-        # with open(f'sat/{self.debug_count}') as f:
+        self.debug_count += 1
+        # with open(f'sat/{self.debug_count}', 'w') as f:
             # f.write(str_encoding)
 
         best_prog = []
@@ -88,8 +88,14 @@ class Combiner:
             model_found = False
             model_inconsistent = False
 
+            # print('HELLO!!!')
+
             with solver.solve(yield_=True) as handle:
+                # print('calling')
+                t1 = time.time()
                 for m in handle:
+                    t2 = time.time()
+                    # print('COMBINE TIME', self.debug_count, t2-t1)
                     model_found = True
                     model_incomplete = False
 
@@ -125,12 +131,14 @@ class Combiner:
                         self.constraints.add(con)
                     # break to not consider no more models as we need to take into account the new constraint
                     break
+                t2 = time.time()
+                # print('COMBINE TIME', self.debug_count, t2-t1)
 
             if not model_found or not model_inconsistent:
                 return best_prog, best_fn
         return best_prog, best_fn
 
-    @profile
+    # @profile
     def select_solution(self, new_prog):
         encoding = set()
 
@@ -151,6 +159,9 @@ class Combiner:
             rule_id = self.rulehash_to_id[rule_hash]
             encoding.add(f'uses_new:- rule({rule_id}).')
 
+        if self.settings.recursion_enabled or self.settings.pi_enabled:
+            encoding.add(':- recursive, not base.')
+
         for prog, examples_covered in self.prog_coverage.items():
             prog_rules = set()
             for rule in prog:
@@ -159,10 +170,11 @@ class Combiner:
                 rule_size = self.ruleid_to_size[rule_id]
                 prog_rules.add(rule_id)
                 encoding.add(f'size({rule_id},{rule_size}).')
-                if rule_is_recursive(rule):
-                    encoding.add(f'recursive:- rule({rule_id}).')
-                else:
-                    encoding.add(f'base:- rule({rule_id}).')
+                if self.settings.recursion_enabled or self.settings.pi_enabled:
+                    if rule_is_recursive(rule):
+                        encoding.add(f'recursive:- rule({rule_id}).')
+                    else:
+                        encoding.add(f'base:- rule({rule_id}).')
 
             prog_rules = ','.join(f'rule({i})' for i in prog_rules)
             for ex in self.prog_coverage[prog]:
@@ -188,7 +200,7 @@ class Combiner:
 
         return [self.ruleid_to_rule[k] for k in model_rules], fn
 
-    @profile
+    # @profile
     def update_best_prog(self, prog, pos_covered):
         self.update_prog_index(prog, pos_covered)
         new_solution, fn = self.select_solution(prog)

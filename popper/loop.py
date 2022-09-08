@@ -1,6 +1,7 @@
 import time
 import numbers
 from . combine import Combiner
+from . explain import Explainer
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive
 from . tester import Tester
 from . generate import Generator, Grounder, parse_model
@@ -54,6 +55,7 @@ def popper(settings):
         deduce_bk_cons(settings)
 
     tester = Tester(settings)
+    explainer = Explainer(settings, tester)
     grounder = Grounder()
     combiner = Combiner(settings, tester)
     generator = Generator(settings, grounder)
@@ -92,27 +94,13 @@ def popper(settings):
                 settings.logger.debug(format_rule(rule))
 
             if settings.explain:
-                tester.add_seen_prog(prog)
+                explainer.add_seen_prog(prog)
                 if len(pos_covered) == 0:
-                # with settings.stats.duration('explain1'):
-                #     t1 = time.time()
-                #     for subprog in tester.explain_totally_incomplete(prog):
-                #         # pass
-                #         # print('\t', 'subprog',f'{t2-t1:0.3f}')
-                #         # for rule in subprog:
-                #             # print('\t', format_rule(rule))
-                #         new_cons.add(generator.build_specialisation_constraint(subprog, rule_ordering))
-                #     t2 = time.time()
-                #     d1 = t2-t1
-
-                    t1 = time.time()
-                    with settings.stats.duration('explain2'):
-                        for subprog in tester.explain_totally_incomplete2(prog):
-                            new_cons.add(generator.build_specialisation_constraint(subprog, rule_ordering))
-                    t2 = time.time()
-                    d2 = t2-t1
-                    # print(f'{d1:0.3f} - {d2:0.3f}')
-                    # print(d1, d2)
+                    with settings.stats.duration('explain'):
+                        for subprog in explainer.explain_totally_incomplete2(prog):
+                            # TODO: ADD RULE ORDERING
+                            tmp = generator.build_specialisation_constraint(subprog)
+                            new_cons.add(tmp)
 
             if inconsistent and prog_is_recursive(prog):
                 combiner.add_inconsistent(prog)
@@ -166,6 +154,7 @@ def popper(settings):
 
                 # if we already have a solution, a new rule must cover at least two examples
                 if not add_spec and combiner.solution_found and len(pos_covered) == 1:
+                    # print('HACKY1')
                     add_spec = True
 
                 # backtracking idea
@@ -176,12 +165,15 @@ def popper(settings):
                         seen_covers_only_one_gen.add(prog)
                     if not add_spec:
                         seen_covers_only_one_spec.add(prog)
+                # keep track of programs that do not cover all the examples
                 if len(pos_covered) != len(pos):
                     if not add_gen:
                         seen_incomplete_gen.add(prog)
                     if not add_spec:
                         seen_incomplete_spec.add(prog)
 
+                # if we found a solution, then prune programs that only cover one example
+                # reset the sets to avoid adding duplicate constraints
                 if combiner.solution_found:
                     for x in seen_covers_only_one_gen:
                         new_cons.add(generator.build_generalisation_constraint(x))
