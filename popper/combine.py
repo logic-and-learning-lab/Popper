@@ -16,8 +16,14 @@ FIND_SUBSET_PROG2 = """
 """
 
 # for when we do not yet have a complete solution
-FIND_SUBSET_PROG1 = FIND_SUBSET_PROG2 + """
+FIND_SUBSET_PROG1 = """
+#defined recursive/0.
+#show rule/1.
+{rule(R)}:-size(R,_).
 :~ example(E), not covered(E). [1@2, (E,)]
+:~ rule(R),size(R,K). [K@1, (R,)]
+:- recursive, not base.
+:- not uses_new.
 """
 
 def get_rule_hash(rule):
