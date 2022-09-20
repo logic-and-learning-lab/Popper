@@ -3,7 +3,6 @@ import time
 import itertools
 from . util import format_rule, prog_size, format_prog, flatten, reduce_prog, prog_is_recursive, rule_size, rule_is_recursive, order_rule
 
-
 # for when we have a complete solution
 # same as above but no weak constraint over examples covered
 FIND_SUBSET_PROG2 = """
@@ -12,13 +11,20 @@ FIND_SUBSET_PROG2 = """
 {rule(R)}:-size(R,_).
 :- example(E), not covered(E).
 :~ rule(R),size(R,K). [K@1, (R,)]
+:- recursive, not base.
 :- not uses_new.
 """
 
 # for when we do not yet have a complete solution
-FIND_SUBSET_PROG1 = FIND_SUBSET_PROG2 + """
+FIND_SUBSET_PROG1 = """
+#defined recursive/0.
+#show rule/1.
+{rule(R)}:-size(R,_).
 :~ example(E), not covered(E). [1@2, (E,)]
+:~ rule(R),size(R,K). [K@1, (R,)]
+:- not uses_new.
 """
+
 
 def get_rule_hash(rule):
     head, body = rule
@@ -73,7 +79,7 @@ class Combiner:
     # @profile
     def find_combination(self, encoding):
         str_encoding = '\n'.join(encoding)
-        self.debug_count += 1
+        # self.debug_count += 1
         # with open(f'sat/{self.debug_count}', 'w') as f:
             # f.write(str_encoding)
 
@@ -87,8 +93,6 @@ class Combiner:
 
             model_found = False
             model_inconsistent = False
-
-            # print('HELLO!!!')
 
             with solver.solve(yield_=True) as handle:
                 # print('calling')
