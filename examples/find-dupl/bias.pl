@@ -11,7 +11,7 @@ enable_recursion.
 head_pred(f,2).
 body_pred(head,2).
 body_pred(tail,2).
-%% body_pred(element,2).
+body_pred(element,2).
 body_pred(increment,2).
 body_pred(decrement,2).
 body_pred(geq,2).

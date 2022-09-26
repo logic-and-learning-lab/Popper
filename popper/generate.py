@@ -3,6 +3,7 @@ import clingo.script
 import pkg_resources
 from . core import Literal, ConstVar
 from collections import defaultdict
+from . util import rule_is_recursive
 clingo.script.enable_python()
 
 arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
@@ -78,12 +79,13 @@ def parse_model(model):
         r1 = rule_lookup[r1_index]
         rule_ordering[r1] = set(rule_lookup[r2_index] for r2_index in lower_rule_indices)
 
-    return frozenset(prog), rule_ordering
+    return frozenset(prog), rule_ordering, directions
 
 class Generator:
 
     def con_to_strings(self, con):
          for grule in self.get_ground_rules((None, con)):
+            # print('grule', grule)
             h, b = grule
             rule = []
             for sign, pred, args in b:
@@ -186,6 +188,94 @@ class Generator:
                 r2v = rule_index[r2]
                 literals.append(lt(r1v, r2v))
         return tuple(literals)
+
+    # DOES NOT WORK WITH PI!!!
+    def redundancy_constraint1(self, prog, rule_ordering={}):
+        prog = list(prog)
+        num_rec = 0
+        for rule in prog:
+            head, _body = rule
+            if rule_is_recursive(rule):
+                num_rec += 1
+
+        rule_index = {}
+        literals = []
+
+        for rule_number, rule in enumerate(prog):
+            rule_index[rule] = vo_clause(rule_number)
+            head, body = rule
+            rule_number = vo_clause(rule_number)
+            literals.append(Literal('head_literal', (rule_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
+
+            for body_literal in body:
+                literals.append(Literal('body_literal', (rule_number, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+
+            for idx, var in enumerate(head.arguments):
+                literals.append(eq(vo_variable(var), idx))
+            literals.append(gteq(rule_number, 1))
+
+            literals.append(Literal('recursive_clause',(rule_number, head.predicate, head.arity)))
+            literals.append(Literal('num_recursive', (head.predicate, 1)))
+
+        for r1, higher_rules in rule_ordering.items():
+            r1v = rule_index[r1]
+            for r2 in higher_rules:
+                r2v = rule_index[r2]
+                literals.append(lt(r1v, r2v))
+        return tuple(literals)
+
+
+    def redundancy_constraint2(self, prog, rule_ordering={}):
+        prog = list(prog)
+        rule_index = {}
+        # literals = []
+        lits_num_rules = defaultdict(int)
+        lits_num_recursive_rules = defaultdict(int)
+        for rule in prog:
+            head, _ = rule
+            lits_num_rules[head.predicate] += 1
+            if rule_is_recursive(rule):
+                lits_num_recursive_rules[head.predicate] += 1
+
+        recursively_called = set()
+        while True:
+            something_added = False
+            for rule in prog:
+                head, body = rule
+                is_rec = rule_is_recursive(rule)
+                for body_literal in body:
+                    if body_literal.predicate not in lits_num_rules:
+                        continue
+                    if (body_literal.predicate != head.predicate and is_rec) or (head.predicate in recursively_called):
+                        something_added |= not body_literal.predicate in recursively_called
+                        recursively_called.add(body_literal.predicate)
+            if not something_added:
+                break
+
+        for lit in lits_num_rules.keys() - recursively_called:
+            literals = []
+
+            for clause_number, rule in enumerate(prog):
+                rule_index[rule] = vo_clause(clause_number)
+                head, body = rule
+                clause_number = vo_clause(clause_number)
+                literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
+
+                for body_literal in body:
+                    literals.append(Literal('body_literal', (clause_number, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+
+                for idx, var in enumerate(head.arguments):
+                    literals.append(eq(vo_variable(var), idx))
+
+            for other_lit, num_clauses in lits_num_rules.items():
+                if other_lit == lit:
+                    continue
+                literals.append(Literal('num_clauses', (other_lit, num_clauses)))
+            num_recursive = lits_num_recursive_rules[lit]
+
+            literals.append(Literal('num_recursive', (lit, num_recursive)))
+
+            return tuple(literals)
 
 
 def vo_variable(variable):

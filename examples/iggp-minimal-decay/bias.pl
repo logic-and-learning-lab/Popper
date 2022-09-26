@@ -34,17 +34,17 @@ type(c5,(int,)).
     clause(C),
     #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
 
-bad_body(P,3,Vars):-
-    vars(3,Vars),
-    P = does,
-    Vars = (V0,_,_),
-    V0 != 0.
+%% bad_body(P,3,Vars):-
+%%     vars(3,Vars),
+%%     P = does,
+%%     Vars = (V0,_,_),
+%%     V0 != 0.
 
-bad_body(P,2,Vars):-
-    vars(2,Vars),
-    P = true_value,
-    Vars = (V0,_),
-    V0 != 0.
+%% bad_body(P,2,Vars):-
+%%     vars(2,Vars),
+%%     P = true_value,
+%%     Vars = (V0,_),
+%%     V0 != 0.
 
 %% type(next_value,(ex,int)).
 %% type(does,(ex,agent,action)).
