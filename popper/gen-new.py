@@ -81,6 +81,7 @@ def parse_model(model):
 
     return frozenset(prog), rule_ordering, directions
 
+
 class Generator:
 
     def con_to_strings(self, con):
@@ -137,25 +138,24 @@ class Generator:
         # ground the rule for each variable assignment
         return set(self.grounder.ground_rule((head, body), assignment) for assignment in assignments)
 
-    def build_rule_literals(self, rule, rule_id, rule_var):
-        head, body = rule
-        yield Literal('head_literal', (rule_var, head.predicate, head.arity, tuple(vo_variable2(rule_id, v) for v in head.arguments)))
-
-        for body_literal in body:
-            yield Literal('body_literal', (rule_var, body_literal.predicate, body_literal.arity, tuple(vo_variable2(rule_id, v) for v in body_literal.arguments)))
-        for idx, var in enumerate(head.arguments):
-            yield eq(vo_variable2(rule_id, var), idx)
 
     def build_generalisation_constraint(self, prog, rule_ordering={}):
         prog = list(prog)
         rule_index = {}
         literals = []
-        for rule_id, rule in enumerate(prog):
+        for clause_number, rule in enumerate(prog):
+            rule_index[rule] = vo_clause(clause_number)
             head, body = rule
-            rule_var = vo_clause(rule_id)
-            rule_index[rule] = rule_var
-            literals.extend(self.build_rule_literals(rule, rule_id, rule_var))
-            literals.append(body_size_literal(rule_var, len(body)))
+            clause_number = vo_clause(clause_number)
+            literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
+
+            for body_literal in body:
+                literals.append(Literal('body_literal', (clause_number, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+
+            for idx, var in enumerate(head.arguments):
+                literals.append(eq(vo_variable(var), idx))
+
+            literals.append(body_size_literal(clause_number, len(body)))
 
         for r1, higher_rules in rule_ordering.items():
             r1v = rule_index[r1]
@@ -169,12 +169,18 @@ class Generator:
         prog = list(prog)
         rule_index = {}
         literals = []
-        for rule_id, rule in enumerate(prog):
+        for clause_number, rule in enumerate(prog):
+            rule_index[rule] = vo_clause(clause_number)
             head, body = rule
-            rule_var = vo_clause(rule_id)
-            rule_index[rule] = rule_var
-            literals.extend(self.build_rule_literals(rule, rule_id, rule_var))
-            literals.append(lt(rule_var, len(prog)))
+            clause_number = vo_clause(clause_number)
+            literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
+
+            for body_literal in body:
+                literals.append(Literal('body_literal', (clause_number, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+
+            for idx, var in enumerate(head.arguments):
+                literals.append(eq(vo_variable(var), idx))
+            literals.append(lt(clause_number, len(prog)))
         literals.append(Literal('clause', (len(prog), ), positive = False))
 
         for r1, higher_rules in rule_ordering.items():
@@ -281,7 +287,7 @@ def vo_variable(variable):
 def vo_variable2(rule, variable):
     # print(type(rule))
     # return ConstVar(f'{rule}_{variable}', 'Variable')
-    key = f'R{rule}_{variable}'
+    key = f'V_{rule}_{variable}'
     # return ConstVar(key, 'Variable')
     # print(key, rule, variable)
     # return ConstVar(f'{variable}', 'Variable')
@@ -290,14 +296,16 @@ def vo_variable2(rule, variable):
 def alldiff(args):
     return Literal('AllDifferent', args, meta=True)
 
+# def lt(rule, var, value):
+#     return Literal('<', (rule, var, value), meta=True)
 def lt(a, b):
-    return Literal('<', (a,b), meta=True)
+    return Literal('<', (a, b), meta=True)
 
-def eq(a, b):
-    return Literal('==', (a,b), meta=True)
+def eq(rule, var, value):
+    return Literal('==', (rule, var, value), meta=True)
 
-def gteq(a, b):
-    return Literal('>=', (a,b), meta=True)
+# def gteq(rule, var, value):
+    # return Literal('>=', (rule, var, value), meta=True)
 
 def vo_clause(variable):
     return ConstVar(f'Rule{variable}', 'Clause')
@@ -308,77 +316,125 @@ def body_size_literal(clause_var, body_size):
 def alldiff(args):
     return Literal('AllDifferent', args, meta=True)
 
+def find_all_vars(body):
+    all_vars = set()
+    for literal in body:
+        for arg in literal.arguments:
+            if isinstance(arg, ConstVar):
+                all_vars.add(arg)
+            elif isinstance(arg, tuple):
+                for t_arg in arg:
+                    if isinstance(t_arg, ConstVar):
+                        all_vars.add(t_arg)
+    return all_vars
+
+# AC: When grounding constraint rules, we only care about the vars and the constraints, not the actual literals
+def grounding_hash(body, all_vars):
+    cons = set()
+    for lit in body:
+        if lit.meta:
+            cons.add((lit.predicate, lit.arguments))
+    return hash((frozenset(all_vars), frozenset(cons)))
+
 class Grounder():
     def __init__(self):
         self.seen_assignments = {}
 
-    def find_bindings(self, clause, max_clauses, max_vars):
-        _, body = clause
-        all_vars = self.find_all_vars(body)
+    # function to ground first-order constraints
+    def find_bindings(self, rule, max_rules, max_vars):
+        _, body = rule
+        # TODO: add back
+        all_vars = find_all_vars(body)
         if len(all_vars) == 0:
             return [{}]
 
-        k = self.grounding_hash(body, all_vars)
+        k = grounding_hash(body, all_vars)
         if k in self.seen_assignments:
             return self.seen_assignments[k]
 
-        # map each clause_var and var_var in the program to an integer
-        c_vars = {v:i for i,v in enumerate(var for var in all_vars if var.type == 'Clause')}
-        v_vars = {v:i for i,v in enumerate(var for var in all_vars if var.type == 'Variable')}
-
-        # transpose for return lookup
-        c_vars_ = {v:k for k,v in c_vars.items()}
-        v_vars_ = {v:k for k,v in v_vars.items()}
-
-        c_var_count = len(c_vars)
-        v_var_count = len(v_vars)
-        if c_var_count == 0 and v_var_count == 0:
-            return [{}]
+        # map each rule and var_var in the program to an integer
+        rule_id_to_var = {v:i for i,v in enumerate(var for var in all_vars if var.type == 'Clause')}
 
         encoding = []
+        encoding.add(f'#const max_rules={max_rules}.')
+        encoding.add(f'#const max_vars={max_vars}.')
+
+        # find all variables for each rule
+        rule_vars = defaultdict(set)
+        for var in all_vars:
+            if var.type == 'Variable':
+                _k, rule_id, _ = var.name.split('_')
+                rule_vars[rule_id].add(var)
+
+        rule_var_to_int = {}
+        rule_var_lookup = {}
+        for rule_id, xs in rule_vars.items():
+            rule_var = rule_to_var[rule_id]
+            for i, var in enumerate(xs):
+                encoding.add(f'rule_var({rule_var},{i}).')
+                rule_var_lookup[(rule_var, i)] = var
+                rule_var_to_int[var] = i
+
         encoding.append(
         """\
-            #show v_var/2.
-            #show c_var/2.
-            c_val(0..num_c_vals-1).
-            v_val(0..num_v_vals-1).
-            1 {c_var(V,X): c_val(X)} 1:- V=0..num_c_vars-1.
-            1 {v_var(V,X): v_val(X)} 1:- V=0..num_v_vars-1.
-            :- c_val(X), #count{I : c_var(I,X)} > 1.
-            :- v_val(X), #count{I : v_var(I,X)} > 1."""
-            +
-            f"""\
-            #const num_c_vars={c_var_count}.
-            #const num_c_vals={max_clauses}.
-            #const num_v_vars={v_var_count}.
-            #const num_v_vals={max_vars}.
+            #show bind_rule/2.
+            #show bind_var/3.
+
+            % bind a rule_id to a value
+            {bind_rule(Rule,Value)}:-
+                rule_var(Rule,_),
+                Value=0..max_rules-1.
+            {bind_var(Rule,Var,Value)}:-
+                rule_var(Rule,Var),
+                Value=0..max_vars-1.
+
+            % every rule must be bound to exactly one value
+            :-
+                rule_var(Rule,_),
+                #count{Value: bind_rule(Rule,Value} != 1.
+            % for each rule, each var must be bound to exactly one value
+            :-
+                rule_var(Rule,Var),
+                #count{Value: bind_var(Rule,Var,Value} != 1.
+            % a rule value cannot be bound to more than one rule
+            :-
+                Value=0..num_rules-1.
+                #count{Rule : bind_rule(Rule,Value)} > 1.
+            % a var value cannot be bound to more than one var per rule
+            :-
+                rule_var(Rule,_),
+                Value=0..max_vars-1,
+                #count{Var : bind_var(Rule,Var,Value)} > 1.
         """)
 
+        # rule_var_lookup[(rule_var, i)] = var
+        # rule_var_to_int[var] = i
         # add constraints to the ASP program based on the AST thing
         for lit in body:
             if not lit.meta:
                 continue
             if lit.predicate == '==':
-                var, val = lit.arguments
-                var = v_vars[var]
-                encoding.append(f':- not v_var({var},{val}).')
-            elif lit.predicate == '>=':
-                var, val = lit.arguments
-                var = c_vars[var]
-                for i in range(val):
-                    encoding.append(f':- c_var({var},{i}).')
+                ruleid, varid, val = lit.arguments
+                var_var = ruleid_and_varid_to_var[(ruleid, varid)]
+                encoding.append(f':- not bind_var({rule_var},{var_var},{val}).')
+            # elif lit.predicate == '>=':
+            #     var, val = lit.arguments
+            #     var = c_vars[var]
+            #     for i in range(val):
+            #         encoding.append(f':- c_var({var},{i}).')
             elif lit.predicate == '<':
-                a = lit.arguments[0]
-                b = lit.arguments[1]
-                if type(lit.arguments[1]) == int:
+                # rule, var, val = lit.arguments
+                a, b = lit.arguments
+                # b = lit.arguments[1]
+                if type(val) == int:
                 # ABSOLUTE HACK
                     var1 = c_vars[a]
-                    encoding.append(f':- c_var({var1},Val1), Val1 >= {b}.')
+                    encoding.append(f':- bind_rule({var1},Val1), Val1 >= {b}.')
                     # pass
                 else:
                     var1 = c_vars[a]
                     var2 = c_vars[b]
-                    encoding.append(f':- c_var({var1},Val1), c_var({var2},Val2), Val1>=Val2.')
+                    encoding.append(f':- bind_rule({var1},Val1), bind_rule({var2},Val2), Val1>=Val2.')
 
         encoding = '\n'.join(encoding)
         solver = clingo.Control()
@@ -394,12 +450,17 @@ class Grounder():
             # map a variable to a program variable
             assignment = {}
             for x in xs:
-                var = x.arguments[0].number
-                val = x.arguments[1].number
-                if x.name == 'c_var':
-                    assignment[c_vars_[var]] = val
-                elif x.name == 'v_var':
-                    assignment[v_vars_[var]] = val
+                name = x.name
+                args = x.arguments
+                if name == 'bind_var':
+                    rule = args[0].number
+                    var = args[1].number
+                    val = args[2].number
+                    assignment[var_var_lookup[var]] = val
+                else:
+                    rule = args[0].number
+                    val = args[1].number
+                    assignment[rule_var_lookup[rule]] = val
             out.append(assignment)
 
         solver.solve(on_model=on_model)
@@ -434,22 +495,3 @@ class Grounder():
         ground_body = frozenset(self.ground_literal(literal, assignment) for literal in body)
         return ground_head, ground_body
 
-    # AC: When grounding constraint rules, we only care about the vars and the constraints, not the actual literals
-    def grounding_hash(self, body, all_vars):
-        cons = set()
-        for lit in body:
-            if lit.meta:
-                cons.add((lit.predicate, lit.arguments))
-        return hash((frozenset(all_vars), frozenset(cons)))
-
-    def find_all_vars(self, body):
-        all_vars = set()
-        for literal in body:
-            for arg in literal.arguments:
-                if isinstance(arg, ConstVar):
-                    all_vars.add(arg)
-                elif isinstance(arg, tuple):
-                    for t_arg in arg:
-                        if isinstance(t_arg, ConstVar):
-                            all_vars.add(t_arg)
-        return all_vars
