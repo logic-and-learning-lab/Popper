@@ -85,9 +85,7 @@ def popper(settings):
                 prog, rule_ordering, directions = parse_model(atoms)
 
             settings.stats.total_programs += 1
-            # settings.logger.debug(f'Program {settings.stats.total_programs}:')
-            # for rule in order_prog(prog):
-            #     settings.logger.debug(format_rule(rule))
+
 
             with settings.stats.duration('test'):
                 pos_covered, inconsistent = tester.test_prog(prog)
@@ -106,21 +104,16 @@ def popper(settings):
                             new_cons.add(generator.build_specialisation_constraint(subprog))
                             if not settings.pi_enabled and settings.recursion_enabled and len(subprog) == 1:
                                 if settings.test:
-                                    new_cons.add(generator.redundancy_constraint1(subprog))
+                                    # new_cons.add(generator.redundancy_constraint1(subprog))
+                                    pass
                             if not settings.pi_enabled and settings.recursion_enabled and len(subprog) > 1:
                                 if settings.test:
                                     new_cons.add(generator.redundancy_constraint2(subprog))
-                                # print('A')
-                                # con = generator.redundancy_constraint2(subprog)
-                                # for x in con:
-                                    # print(x)
-                                # print('X', con)
-                                # for y in generator.con_to_strings(con):
-                                    # print('C')
-                                    # print(y)
-
-                                    # for y in
-                                        # pass
+                                for con in generator.redundancy_constraint2(subprog):
+                                    print(con)
+                                xs = generator.con_to_strings(generator.redundancy_constraint2(subprog))
+                                for x in xs:
+                                    print(x)
 
 
             if inconsistent and prog_is_recursive(prog):
@@ -238,7 +231,8 @@ def popper(settings):
 
             if len(pos_covered) == 0 and not settings.pi_enabled and settings.recursion_enabled and settings.test:
                 if len(prog) == 1:
-                    new_cons.add(generator.redundancy_constraint1(prog))
+                    # new_cons.add(generator.redundancy_constraint1(prog))
+                    pass
                 else:
                     new_cons.add(generator.redundancy_constraint2(prog))
             if add_spec:

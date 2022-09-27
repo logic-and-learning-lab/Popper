@@ -189,40 +189,41 @@ class Generator:
                 literals.append(lt(r1v, r2v))
         return tuple(literals)
 
-    # DOES NOT WORK WITH PI!!!
-    def redundancy_constraint1(self, prog, rule_ordering={}):
-        prog = list(prog)
-        num_rec = 0
-        for rule in prog:
-            head, _body = rule
-            if rule_is_recursive(rule):
-                num_rec += 1
+    # # DOES NOT WORK WITH PI!!!
+    # def redundancy_constraint1(self, prog, rule_ordering={}):
+    #     prog = list(prog)
+    #     num_rec = 0
+    #     for rule in prog:
+    #         head, _body = rule
+    #         if rule_is_recursive(rule):
+    #             num_rec += 1
 
-        rule_index = {}
-        literals = []
+    #     rule_index = {}
+    #     literals = []
 
-        for rule_number, rule in enumerate(prog):
-            rule_index[rule] = vo_clause(rule_number)
-            head, body = rule
-            rule_number = vo_clause(rule_number)
-            literals.append(Literal('head_literal', (rule_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
+    #     for rule_number, rule in enumerate(prog):
+    #         k = rule_number
+    #         rule_index[rule] = vo_clause(rule_number)
+    #         head, body = rule
+    #         rule_number = vo_clause(rule_number)
+    #         literals.append(Literal('head_literal', (rule_number, head.predicate, head.arity, tuple(vo_variable2(k, v) for v in head.arguments))))
 
-            for body_literal in body:
-                literals.append(Literal('body_literal', (rule_number, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+    #         for body_literal in body:
+    #             literals.append(Literal('body_literal', (rule_number, body_literal.predicate, body_literal.arity, tuple(vo_variable2(k, v) for v in body_literal.arguments))))
 
-            for idx, var in enumerate(head.arguments):
-                literals.append(eq(vo_variable(var), idx))
-            literals.append(gteq(rule_number, 1))
+    #         for idx, var in enumerate(head.arguments):
+    #             literals.append(eq(vo_variable2(k, var), idx))
+    #         literals.append(gteq(rule_number, 1))
 
-            literals.append(Literal('recursive_clause',(rule_number, head.predicate, head.arity)))
-            literals.append(Literal('num_recursive', (head.predicate, 1)))
+    #         literals.append(Literal('recursive_clause',(rule_number, head.predicate, head.arity)))
+    #         literals.append(Literal('num_recursive', (head.predicate, 1)))
 
-        for r1, higher_rules in rule_ordering.items():
-            r1v = rule_index[r1]
-            for r2 in higher_rules:
-                r2v = rule_index[r2]
-                literals.append(lt(r1v, r2v))
-        return tuple(literals)
+    #     for r1, higher_rules in rule_ordering.items():
+    #         r1v = rule_index[r1]
+    #         for r2 in higher_rules:
+    #             r2v = rule_index[r2]
+    #             literals.append(lt(r1v, r2v))
+    #     return tuple(literals)
 
 
     def redundancy_constraint2(self, prog, rule_ordering={}):
@@ -256,16 +257,17 @@ class Generator:
             literals = []
 
             for clause_number, rule in enumerate(prog):
+                k = clause_number
                 rule_index[rule] = vo_clause(clause_number)
                 head, body = rule
                 clause_number = vo_clause(clause_number)
-                literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable(v) for v in head.arguments))))
+                literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable2(k, v) for v in head.arguments))))
 
                 for body_literal in body:
-                    literals.append(Literal('body_literal', (clause_number, body_literal.predicate, body_literal.arity, tuple(vo_variable(v) for v in body_literal.arguments))))
+                    literals.append(Literal('body_literal', (clause_number, body_literal.predicate, body_literal.arity, tuple(vo_variable2(k,v) for v in body_literal.arguments))))
 
                 for idx, var in enumerate(head.arguments):
-                    literals.append(eq(vo_variable(var), idx))
+                    literals.append(eq(vo_variable2(k,var), idx))
 
             for other_lit, num_clauses in lits_num_rules.items():
                 if other_lit == lit:
@@ -281,6 +283,15 @@ class Generator:
 def vo_variable(variable):
     return ConstVar(f'{variable}', 'Variable')
 
+def vo_variable2(rule, variable):
+    # print(type(rule))
+    # return ConstVar(f'{rule}_{variable}', 'Variable')
+    key = f'R{rule}_{variable}'
+    # return ConstVar(key, 'Variable')
+    # print(key, rule, variable)
+    # return ConstVar(f'{variable}', 'Variable')
+    return ConstVar(key, 'Variable')
+
 def alldiff(args):
     return Literal('AllDifferent', args, meta=True)
 
@@ -294,10 +305,7 @@ def gteq(a, b):
     return Literal('>=', (a,b), meta=True)
 
 def vo_clause(variable):
-    return ConstVar(f'C{variable}', 'Clause')
-
-def vo_variable(variable):
-    return ConstVar(f'{variable}', 'Variable')
+    return ConstVar(f'Rule{variable}', 'Clause')
 
 def body_size_literal(clause_var, body_size):
     return Literal('body_size', (clause_var, body_size))
@@ -332,13 +340,9 @@ class Grounder():
         if c_var_count == 0 and v_var_count == 0:
             return [{}]
 
-        solver = clingo.Control()
-
-        # ask for all models
-        solver.configuration.solve.models = 0
-
-        # add the base reasoning
-        solver.add('base', [], """\
+        encoding = []
+        encoding.append(
+        """\
             #show v_var/2.
             #show c_var/2.
             c_val(0..num_c_vals-1).
@@ -362,25 +366,31 @@ class Grounder():
             if lit.predicate == '==':
                 var, val = lit.arguments
                 var = v_vars[var]
-                solver.add('base', [], f':- not v_var({var},{val}).')
+                encoding.append(f':- not v_var({var},{val}).')
+                # solver.add('base', [], f':- not v_var({var},{val}).')
             elif lit.predicate == '>=':
                 var, val = lit.arguments
                 var = c_vars[var]
                 for i in range(val):
-                    solver.add('base', [], f':- c_var({var},{i}).')
+                    encoding.append(f':- c_var({var},{i}).')
             elif lit.predicate == '<':
                 a = lit.arguments[0]
                 b = lit.arguments[1]
                 if type(lit.arguments[1]) == int:
                 # ABSOLUTE HACK
                     var1 = c_vars[a]
-                    solver.add('base', [], f':- c_var({var1},Val1), Val1 >= {b}.')
+                    encoding.append(f':- c_var({var1},Val1), Val1 >= {b}.')
                     # pass
                 else:
                     var1 = c_vars[a]
                     var2 = c_vars[b]
-                    solver.add('base', [], f':- c_var({var1},Val1), c_var({var2},Val2), Val1>=Val2.')
+                    encoding.append(f':- c_var({var1},Val1), c_var({var2},Val2), Val1>=Val2.')
 
+        encoding = '\n'.join(encoding)
+        solver = clingo.Control()
+        # ask for all models
+        solver.configuration.solve.models = 0
+        solver.add('base', [], encoding)
         solver.ground([("base", [])])
 
         out = []
