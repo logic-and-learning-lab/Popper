@@ -9,7 +9,7 @@ from . util import format_rule, order_rule, order_prog, prog_is_recursive, forma
 import clingo
 import clingo.script
 import pkg_resources
-from . core import Literal, ConstVar
+from . core import Literal
 from . generate import parse_model
 from collections import defaultdict
 

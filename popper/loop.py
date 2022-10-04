@@ -8,7 +8,6 @@ from . generate import Generator, Grounder, parse_model
 from . bkcons import deduce_bk_cons
 from clingo import Function, Number, Tuple_
 
-
 def prog_size(prog):
     return sum(1 + len(body) for head, body in prog)
 
@@ -101,19 +100,21 @@ def popper(settings):
                             for rule in subprog:
                                 print(format_rule(rule))
                             # TODO: ADD RULE ORDERING
+                            pass
                             new_cons.add(generator.build_specialisation_constraint(subprog))
                             if not settings.pi_enabled and settings.recursion_enabled and len(subprog) == 1:
                                 if settings.test:
-                                    # new_cons.add(generator.redundancy_constraint1(subprog))
+                                    new_cons.add(generator.redundancy_constraint1(subprog))
                                     pass
                             if not settings.pi_enabled and settings.recursion_enabled and len(subprog) > 1:
                                 if settings.test:
-                                    new_cons.add(generator.redundancy_constraint2(subprog))
-                                for con in generator.redundancy_constraint2(subprog):
-                                    print(con)
-                                xs = generator.con_to_strings(generator.redundancy_constraint2(subprog))
-                                for x in xs:
-                                    print(x)
+                                    # new_cons.add(generator.redundancy_constraint2(subprog))
+                                    pass
+                                # for con in generator.redundancy_constraint2(subprog):
+                                    # print(con)
+                                # xs = generator.con_to_strings(generator.redundancy_constraint2(subprog))
+                                # for x in xs:
+                                    # print(x)
 
 
             if inconsistent and prog_is_recursive(prog):
@@ -231,10 +232,11 @@ def popper(settings):
 
             if len(pos_covered) == 0 and not settings.pi_enabled and settings.recursion_enabled and settings.test:
                 if len(prog) == 1:
-                    # new_cons.add(generator.redundancy_constraint1(prog))
                     pass
+                    new_cons.add(generator.redundancy_constraint1(prog))
                 else:
-                    new_cons.add(generator.redundancy_constraint2(prog))
+                    # new_cons.add(generator.redundancy_constraint2(prog))
+                    pass
             if add_spec:
                 new_cons.add(generator.build_specialisation_constraint(prog, rule_ordering))
             if add_gen:

@@ -1,6 +1,31 @@
 from collections import namedtuple
+# from dataclasses import dataclass
+import dataclasses
 
-ConstVar = namedtuple('ConstVar', ['name', 'type'])
+
+# ConstVar = namedtuple('ConstVar', ['name', 'type'])
+# ConstVar2 = namedtuple('ConstVar2', ['rule', 'name', 'type'])
+# ConstVar = namedtuple('ConstVar', ['name', 'type'])
+
+@dataclasses.dataclass(frozen=True)
+class Var:
+    name: str
+    pass
+
+@dataclasses.dataclass(frozen=True)
+class RuleVar(Var):
+    pass
+    # name: str
+    # def __init__(self, name):
+        # self.name = name
+
+@dataclasses.dataclass(frozen=True)
+class VarVar(Var):
+    # pass
+    rule: RuleVar
+    # def __init__(self, rule, name):
+        # self.rule = rule
+        # self.name = name
 
 class Literal:
     def __init__(self, predicate, arguments, directions = [], positive = True, meta=False):
@@ -24,17 +49,18 @@ class Literal:
 
         args = []
         for arg in self.arguments:
-            if isinstance(arg, ConstVar):
+            if isinstance(arg, Var):
                 args.append(arg.name)
             elif isinstance(arg, tuple):
                 t_args = []
                 for t_arg in arg:
-                    if isinstance(t_arg, ConstVar):
+                    if isinstance(t_arg, Var):
                         t_args.append(t_arg.name)
                     else:
                         t_args.append(str(t_arg))
                 if len(t_args) > 1:
-                    args.append(f'({",".join(t_args)})')
+                    args.append(f'({",".join(str(x) for x in t_args)})')
+
                 else:
                     args.append(f'({",".join(t_args)},)')
             else:
