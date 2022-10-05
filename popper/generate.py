@@ -28,6 +28,33 @@ def grounding_hash(body, all_vars):
             cons.add((lit.predicate, lit.arguments))
     return hash((frozenset(all_vars), frozenset(cons)))
 
+cached_grounded = {}
+def ground_literal(literal, assignment, tmp):
+    k = hash((literal.predicate, literal.arguments, tmp))
+    if k in cached_grounded:
+        v = cached_grounded[k]
+        return literal.positive, literal.predicate, v
+    ground_args = []
+    for arg in literal.arguments:
+        if isinstance(arg, tuple):
+            ground_args.append(tuple(assignment[t_arg] for t_arg in arg))
+        elif arg in assignment:
+            ground_args.append(assignment[arg])
+        else:
+            ground_args.append(arg)
+    ground_args = tuple(ground_args)
+    cached_grounded[k] = ground_args
+    return literal.positive, literal.predicate, ground_args
+
+def ground_rule(rule, assignment):
+    k = hash(frozenset(assignment.items()))
+
+    head, body = rule
+    ground_head = None
+    if head:
+        ground_head = ground_literal(head, assignment, k)
+    ground_body = frozenset(ground_literal(literal, assignment, k) for literal in body)
+    return ground_head, ground_body
 
 # TODO: COULD CACHE TUPLES OF ARGS FOR TINY OPTIMISATION
 def parse_model(model):
@@ -121,7 +148,7 @@ def build_rule_ordering_literals(rule_index, rule_ordering):
 class Generator:
 
     def con_to_strings(self, con):
-         for grule in self.get_ground_rules((None, con)):
+         for grule in get_ground_rules((None, con)):
             # print('grule', grule)
             h, b = grule
             rule = []
@@ -153,14 +180,14 @@ class Generator:
 
         encoding = '\n'.join(encoding)
 
-        solver = clingo.Control(["--heuristic=Domain"])
         # solver = clingo.Control([])
         # solver = clingo.Control(["-t2"])
+        solver = clingo.Control(["--heuristic=Domain"])
+        # solver = clingo.Control(["--heuristic=Domain","-t2"])
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver
-
 
     def get_ground_rules(self, rule):
         head, body = rule
@@ -169,7 +196,7 @@ class Generator:
         # keep only standard literals
         body = tuple(literal for literal in body if not literal.meta)
         # ground the rule for each variable assignment
-        return set(self.grounder.ground_rule((head, body), assignment) for assignment in assignments)
+        return set(ground_rule((head, body), assignment) for assignment in assignments)
 
     def build_generalisation_constraint(self, prog, rule_ordering={}):
         prog = list(prog)
@@ -199,17 +226,10 @@ class Generator:
         return tuple(literals)
 
     # # DOES NOT WORK WITH PI!!!
+    # only works with single rule programs
     def redundancy_constraint1(self, prog, rule_ordering={}):
-        prog = list(prog)
-        num_rec = 0
-        for rule in prog:
-            head, _body = rule
-            if rule_is_recursive(rule):
-                num_rec += 1
-
         rule_index = {}
         literals = []
-
         for rule_id, rule in enumerate(prog):
             head, body = rule
             rule_var = vo_clause(rule_id)
@@ -218,14 +238,12 @@ class Generator:
             literals.append(gteq(rule_var, 1))
             literals.append(Literal('recursive_clause',(rule_var, head.predicate, head.arity)))
             literals.append(Literal('num_recursive', (head.predicate, 1)))
-
         literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
         return tuple(literals)
 
-
     def redundancy_constraint2(self, prog, rule_ordering={}):
         prog = list(prog)
-        rule_index = {}
+        # rule_index = {}
         # literals = []
         lits_num_rules = defaultdict(int)
         lits_num_recursive_rules = defaultdict(int)
@@ -250,7 +268,9 @@ class Generator:
             if not something_added:
                 break
 
+
         for lit in lits_num_rules.keys() - recursively_called:
+            rule_index = {}
             literals = []
 
             for rule_id, rule in enumerate(prog):
@@ -258,30 +278,14 @@ class Generator:
                 rule_var = vo_clause(rule_id)
                 rule_index[rule] = rule_var
                 literals.extend(build_rule_literals(rule, rule_var))
-                literals.append(body_size_literal(rule_var, len(body)))
-
-            # for clause_number, rule in enumerate(prog):
-            #     k = clause_number
-            #     rule_index[rule] = vo_clause(clause_number)
-            #     head, body = rule
-            #     clause_number = vo_clause(clause_number)
-            #     literals.append(Literal('head_literal', (clause_number, head.predicate, head.arity, tuple(vo_variable2(k, v) for v in head.arguments))))
-
-            #     for body_literal in body:
-            #         literals.append(Literal('body_literal', (clause_number, body_literal.predicate, body_literal.arity, tuple(vo_variable2(k,v) for v in body_literal.arguments))))
-
-                # TODO! REDADD!!
-                # for idx, var in enumerate(head.arguments):
-                    # literals.append(eq(vo_variable2(k,var), idx))
 
             for other_lit, num_clauses in lits_num_rules.items():
                 if other_lit == lit:
                     continue
                 literals.append(Literal('num_clauses', (other_lit, num_clauses)))
             num_recursive = lits_num_recursive_rules[lit]
-
             literals.append(Literal('num_recursive', (lit, num_recursive)))
-
+            literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
             return tuple(literals)
 
 BINDING_ENCODING = """\
@@ -347,27 +351,6 @@ class Grounder():
     def __init__(self):
         self.seen_assignments = {}
 
-
-    def ground_literal(self, literal, assignment):
-        ground_args = []
-        for arg in literal.arguments:
-            if arg in assignment:
-                ground_args.append(assignment[arg])
-            # handles tuples of ConstVars
-            # TODO: AC: EXPLAIN BETTER
-            elif isinstance(arg, tuple):
-                ground_t_args = []
-                # AC: really messy
-                for t_arg in arg:
-                    if t_arg in assignment:
-                        ground_t_args.append(assignment[t_arg])
-                    else:
-                        ground_t_args.append(t_arg)
-                ground_args.append(tuple(ground_t_args))
-            else:
-                ground_args.append(arg)
-        return literal.positive, literal.predicate, tuple(ground_args)
-
     def find_bindings(self, rule, max_rules, max_vars):
         _, body = rule
         # TODO: add back
@@ -375,7 +358,8 @@ class Grounder():
         # print('rule', rule)
         # for x in body:
             # print(x)
-        # if len(all_vars) == 0:
+        if len(all_vars) == 0:
+            assert(False)
         #     return [{}]
 
         k = grounding_hash(body, all_vars)
@@ -494,12 +478,3 @@ class Grounder():
         solver.solve(on_model=on_model)
         self.seen_assignments[k] = out
         return out
-
-    def ground_rule(self, rule, assignment):
-        head, body = rule
-        ground_head = None
-        if head:
-            ground_head = self.ground_literal(head, assignment)
-        ground_body = frozenset(self.ground_literal(literal, assignment) for literal in body)
-        # print('ground_body', ground_body)
-        return ground_head, ground_body

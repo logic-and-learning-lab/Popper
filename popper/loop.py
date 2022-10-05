@@ -25,13 +25,13 @@ def atom_to_symbol(pred, args):
     return Function(name = pred, arguments = xs)
 
 cached_clingo_atoms = {}
+# @profile
 def constrain(settings, generator, cons, model):
     with settings.stats.duration('constrain'):
         ground_bodies = set()
         for con in cons:
             for ground_rule in generator.get_ground_rules((None, con)):
                 _ground_head, ground_body = ground_rule
-                # print(ground_body)
                 ground_bodies.add(ground_body)
 
         nogoods = []
@@ -85,9 +85,16 @@ def popper(settings):
 
             settings.stats.total_programs += 1
 
+            settings.logger.debug(f'Program {settings.stats.total_programs}:')
+            for rule in order_prog(prog):
+                settings.logger.debug(format_rule(rule))
 
             with settings.stats.duration('test'):
                 pos_covered, inconsistent = tester.test_prog(prog)
+
+            # if len(pos_covered) == 0:
+                # print('TOTALLY INCOMPLETE')
+
 
             new_cons = set()
 
@@ -100,21 +107,18 @@ def popper(settings):
                             for rule in subprog:
                                 print(format_rule(rule))
                             # TODO: ADD RULE ORDERING
-                            pass
                             new_cons.add(generator.build_specialisation_constraint(subprog))
                             if not settings.pi_enabled and settings.recursion_enabled and len(subprog) == 1:
                                 if settings.test:
                                     new_cons.add(generator.redundancy_constraint1(subprog))
-                                    pass
                             if not settings.pi_enabled and settings.recursion_enabled and len(subprog) > 1:
                                 if settings.test:
-                                    # new_cons.add(generator.redundancy_constraint2(subprog))
-                                    pass
+                                    new_cons.add(generator.redundancy_constraint2(subprog))
                                 # for con in generator.redundancy_constraint2(subprog):
                                     # print(con)
                                 # xs = generator.con_to_strings(generator.redundancy_constraint2(subprog))
                                 # for x in xs:
-                                    # print(x)
+                                #     print(x)
 
 
             if inconsistent and prog_is_recursive(prog):
@@ -156,9 +160,9 @@ def popper(settings):
             if len(pos_covered) == 0:
                 # print('\tTOTALLY INCOMPLETE')
                 add_spec = True
-                settings.logger.debug(f'Program {settings.stats.total_programs}:')
-                for rule in order_prog(prog):
-                    settings.logger.debug(format_rule(rule))
+                # settings.logger.debug(f'Program {settings.stats.total_programs}:')
+                # for rule in order_prog(prog):
+                    # settings.logger.debug(format_rule(rule))
                 # TODO: ADD REDUNDANCY CONSTRAINT
 
             # check whether subsumed by an already seen program
@@ -232,11 +236,17 @@ def popper(settings):
 
             if len(pos_covered) == 0 and not settings.pi_enabled and settings.recursion_enabled and settings.test:
                 if len(prog) == 1:
-                    pass
                     new_cons.add(generator.redundancy_constraint1(prog))
                 else:
-                    # new_cons.add(generator.redundancy_constraint2(prog))
-                    pass
+                    new_cons.add(generator.redundancy_constraint2(prog))
+
+                    # tmp = generator.redundancy_constraint2(prog, rule_ordering)
+                    # for ground_rule in generator.get_ground_rules((None, tmp)):
+                    #     _ground_head, ground_body = ground_rule
+                    #     print('--')
+                    #     for x in ground_body:
+                            # print(x)
+
             if add_spec:
                 new_cons.add(generator.build_specialisation_constraint(prog, rule_ordering))
             if add_gen:

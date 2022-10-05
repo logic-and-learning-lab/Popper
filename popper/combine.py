@@ -7,6 +7,7 @@ from . util import format_rule, prog_size, format_prog, flatten, reduce_prog, pr
 # same as above but no weak constraint over examples covered
 FIND_SUBSET_PROG2 = """
 #defined recursive/0.
+#defined base/0.
 #show rule/1.
 {rule(R)}:-size(R,_).
 :- example(E), not covered(E).
