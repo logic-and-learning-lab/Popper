@@ -29,6 +29,7 @@ def grounding_hash(body, all_vars):
     return hash((frozenset(all_vars), frozenset(cons)))
 
 cached_grounded = {}
+# @profile
 def ground_literal(literal, assignment, tmp):
     k = hash((literal.predicate, literal.arguments, tmp))
     if k in cached_grounded:
@@ -46,9 +47,9 @@ def ground_literal(literal, assignment, tmp):
     cached_grounded[k] = ground_args
     return literal.positive, literal.predicate, ground_args
 
+# @profile
 def ground_rule(rule, assignment):
     k = hash(frozenset(assignment.items()))
-
     head, body = rule
     ground_head = None
     if head:
@@ -147,20 +148,20 @@ def build_rule_ordering_literals(rule_index, rule_ordering):
 
 class Generator:
 
-    def con_to_strings(self, con):
-         for grule in get_ground_rules((None, con)):
-            # print('grule', grule)
-            h, b = grule
-            rule = []
-            for sign, pred, args in b:
-                if not sign:
-                    rule.append(f'not {pred}{args}')
-                else:
-                    rule.append(f'{pred}{args}')
-            rule = ':- ' + ', '.join(sorted(rule)) + '.'
-            rule = rule.replace("'","")
-            rule = rule.replace('not clause(1,)','not clause(1)')
-            yield rule
+    # def con_to_strings(self, con):
+    #      for grule in get_ground_rules((None, con)):
+    #         # print('grule', grule)
+    #         h, b = grule
+    #         rule = []
+    #         for sign, pred, args in b:
+    #             if not sign:
+    #                 rule.append(f'not {pred}{args}')
+    #             else:
+    #                 rule.append(f'{pred}{args}')
+    #         rule = ':- ' + ', '.join(sorted(rule)) + '.'
+    #         rule = rule.replace("'","")
+    #         rule = rule.replace('not clause(1,)','not clause(1)')
+    #         yield rule
 
     def __init__(self, settings, grounder):
         self.settings = settings
@@ -189,6 +190,7 @@ class Generator:
         solver.ground([('base', [])])
         self.solver = solver
 
+    # @profile
     def get_ground_rules(self, rule):
         head, body = rule
         # find bindings for variables in the rule

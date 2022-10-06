@@ -1,3 +1,4 @@
+max_body(5).
 head_pred(legal_move,4).
 body_pred(true_cell,4).
 body_pred(true_step,2).

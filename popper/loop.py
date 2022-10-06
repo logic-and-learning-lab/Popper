@@ -24,13 +24,12 @@ def atom_to_symbol(pred, args):
     xs = tuple(arg_to_symbol(arg) for arg in args)
     return Function(name = pred, arguments = xs)
 
-cached_clingo_atoms = {}
-# @profile
-def constrain(settings, generator, cons, model):
+def constrain(settings, generator, cons, model, cached_clingo_atoms):
     with settings.stats.duration('constrain'):
         ground_bodies = set()
         for con in cons:
-            for ground_rule in generator.get_ground_rules((None, con)):
+            ground_rules = generator.get_ground_rules((None, con))
+            for ground_rule in ground_rules:
                 _ground_head, ground_body = ground_rule
                 ground_bodies.add(ground_body)
 
@@ -64,6 +63,9 @@ def popper(settings):
     success_sets = {}
     last_size = None
 
+    # caching
+    cached_clingo_atoms = {}
+
     # TMP SETS
     seen_covers_only_one_gen = set()
     seen_covers_only_one_spec = set()
@@ -76,7 +78,9 @@ def popper(settings):
         while True:
             model = None
 
+            # GENERATE A PROGRAM
             with settings.stats.duration('generate'):
+                # get the next model from the solver
                 model = next(handle, None)
                 if model is None:
                     break
@@ -84,46 +88,36 @@ def popper(settings):
                 prog, rule_ordering, directions = parse_model(atoms)
 
             settings.stats.total_programs += 1
-
             settings.logger.debug(f'Program {settings.stats.total_programs}:')
             for rule in order_prog(prog):
                 settings.logger.debug(format_rule(rule))
 
+            # TEST A PROGRAM
             with settings.stats.duration('test'):
                 pos_covered, inconsistent = tester.test_prog(prog)
-
-            # if len(pos_covered) == 0:
-                # print('TOTALLY INCOMPLETE')
-
 
             new_cons = set()
 
             if settings.explain:
-                explainer.add_seen_prog(prog)
-                if len(pos_covered) == 0:
-                    with settings.stats.duration('explain'):
+                with settings.stats.duration('explain'):
+                    explainer.add_seen_prog(prog)
+                    if len(pos_covered) == 0:
                         for subprog in explainer.explain_totally_incomplete2(prog, directions):
-                            print('subprog')
-                            for rule in subprog:
-                                print(format_rule(rule))
+                            # print('subprog')
+                            # for rule in subprog:
+                            #     print(format_rule(rule))
                             # TODO: ADD RULE ORDERING
                             new_cons.add(generator.build_specialisation_constraint(subprog))
-                            if not settings.pi_enabled and settings.recursion_enabled and len(subprog) == 1:
-                                if settings.test:
+                            if not settings.pi_enabled and settings.recursion_enabled:
+                                if len(subprog) == 1:
                                     new_cons.add(generator.redundancy_constraint1(subprog))
-                            if not settings.pi_enabled and settings.recursion_enabled and len(subprog) > 1:
-                                if settings.test:
+                                else:
                                     new_cons.add(generator.redundancy_constraint2(subprog))
-                                # for con in generator.redundancy_constraint2(subprog):
-                                    # print(con)
-                                # xs = generator.con_to_strings(generator.redundancy_constraint2(subprog))
-                                # for x in xs:
-                                #     print(x)
-
 
             if inconsistent and prog_is_recursive(prog):
                 combiner.add_inconsistent(prog)
 
+            # messy way to track program size
             k = prog_size(prog)
             if last_size == None or k != last_size:
                 last_size = k
@@ -131,6 +125,8 @@ def popper(settings):
 
             add_spec = False
             add_gen = False
+            add_redund1 = False
+            add_redund2 = False
 
             if inconsistent:
                 # if inconsistent, prune generalisations
@@ -158,12 +154,13 @@ def popper(settings):
 
             # if it does not cover any example, prune specialisations
             if len(pos_covered) == 0:
-                # print('\tTOTALLY INCOMPLETE')
                 add_spec = True
-                # settings.logger.debug(f'Program {settings.stats.total_programs}:')
-                # for rule in order_prog(prog):
-                    # settings.logger.debug(format_rule(rule))
-                # TODO: ADD REDUNDANCY CONSTRAINT
+                # if recursion and no PI, then apply redundancy constraints
+                if settings.recursion_enabled and not settings.pi_enabled and settings.test:
+                    if len(prog) == 1:
+                        add_redund1 = True
+                    else:
+                        add_redund2 = True
 
             # check whether subsumed by an already seen program
             subsumed = False
@@ -234,25 +231,16 @@ def popper(settings):
             if not inconsistent and len(pos_covered) == len(pos):
                 return
 
-            if len(pos_covered) == 0 and not settings.pi_enabled and settings.recursion_enabled and settings.test:
-                if len(prog) == 1:
-                    new_cons.add(generator.redundancy_constraint1(prog))
-                else:
-                    new_cons.add(generator.redundancy_constraint2(prog))
-
-                    # tmp = generator.redundancy_constraint2(prog, rule_ordering)
-                    # for ground_rule in generator.get_ground_rules((None, tmp)):
-                    #     _ground_head, ground_body = ground_rule
-                    #     print('--')
-                    #     for x in ground_body:
-                            # print(x)
-
             if add_spec:
                 new_cons.add(generator.build_specialisation_constraint(prog, rule_ordering))
             if add_gen:
                 new_cons.add(generator.build_generalisation_constraint(prog, rule_ordering))
+            if add_redund1:
+                new_cons.add(generator.redundancy_constraint1(prog, rule_ordering))
+            if add_redund2:
+                new_cons.add(generator.redundancy_constraint2(prog, rule_ordering))
 
-            constrain(settings, generator, new_cons, model)
+            constrain(settings, generator, new_cons, model, cached_clingo_atoms)
 
 def learn_solution(settings):
     timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)
