@@ -1,7 +1,9 @@
 import os
 import copy
 import time
+import numbers
 import numpy as np
+from clingo import Function, Number, Tuple_
 import pkg_resources
 from pyswip import Prolog
 from contextlib import contextmanager
@@ -133,6 +135,8 @@ class Explainer:
         self.directions = self.load_directions()
         self.has_directions = len(self.directions) > 0
 
+        self.tmp_count = 0
+
     # @profile
     def add_seen_prog(self, prog):
         k = prog_hash(prog)
@@ -171,21 +175,19 @@ class Explainer:
 
         encoding = '\n'.join(encoding)
 
-        with self.settings.stats.duration('explain_clingo'):
-            subprogs = tuple(self.find_subprogs(literal_index, encoding))
+        # with self.settings.stats.duration('explain_clingo'):
+        # subprogs =
 
         unsat_count = 0
-
         # print('TOTALLY INCOMPLETE')
         # for rule in prog:
             # print(format_rule(order_rule(rule)))
 
-        for subprog in subprogs:
-            k1 = prog_hash(subprog)
+        for selected_literals, model in self.find_subprogs(literal_index, encoding):
+            # print(selected_literals)
+            subprog = parse_model4(literal_index, selected_literals)
 
-            # print('k1', k1)
-            # for rule in subprog:
-            #     print(format_rule(rule))
+            k1 = prog_hash(subprog)
 
             # Q. Is it better to push this check to the solver? I think not
             if k1 in self.seen_prog:
@@ -215,9 +217,9 @@ class Explainer:
                 # print('\tmoo3')
                 continue
 
-            # print('\t', 'TESTING SUBPROG1')
-            # for rule in order_prog(subprog):
-            #     print('\t', format_rule(order_rule(rule)))
+            print('\t', 'TESTING SUBPROG1')
+            for rule in order_prog(subprog):
+                print('\t', format_rule(order_rule(rule)))
 
             with self.settings.stats.duration('explain_prolog'):
                 test_prog = []
@@ -238,27 +240,62 @@ class Explainer:
                 #     print('\t', format_rule(order_rule(rule)))
 
                 if self.tester.is_sat(test_prog):
-                    # print('\tSAT')
                     self.cached_sat.add(k1)
                     self.cached_sat.add(k2)
                 else:
-                    # print('\tUNSAT')
                     self.cached_unsat.add(k1)
                     self.cached_unsat.add(k2)
-                    unsat_count+=1
-                    # if unsat_count > 1:
-                    # print('\t','unsat_count',unsat_count)
-                    # print('--- UNSAT ---')
-                    # print('prog')
-                    # print(format_prog(prog))
-                    # print('unsat')
-                    # print(format_prog(subprog))
+                    # unsat_count+=1
+
+
+                    # ADD NOGOOD!!!!!!
+
+
+                    def arg_to_symbol(arg):
+                        if isinstance(arg, numbers.Number):
+                            return Number(arg)
+                        # if isinstance(arg, tuple):
+                            # return Tuple_(tuple(arg_to_symbol(a) for a in arg))
+                        if isinstance(arg, str):
+                            return Function(arg)
+                        assert False, f'Unhandled argtype({type(arg)}) in aspsolver.py arg_to_symbol()'
+
+                    def atom_to_symbol(pred, args):
+                        xs = tuple(arg_to_symbol(arg) for arg in args)
+                        return Function(name = pred, arguments = xs)
+
+                    nogood = []
+                    for idx in selected_literals:
+                        x = (atom_to_symbol('selected', (idx,)), True)
+                        nogood.append(x)
+                    # print('X', nogood)
+
+                    model.context.add_nogood(nogood)
+                    unsat_count +=1
+                    # if unsat_count > 0:
+                    print('PRUNE', unsat_count, selected_literals)
+                        # exit()
+
                     yield subprog
+
+
+                    # for rule_id, rule in enumerate(prog):
+                    # head, body = rule
+                    # rule_var = vo_clause(rule_id)
+                    # rule_index[rule] = rule_var
+                    # literals.extend(build_rule_literals(rule, rule_var))
+                    # literals.append(lt(rule_var, len(prog)))
+                    # literals.append(Literal('clause', (len(prog), ), positive = False))
+
+                    # for nogood in nogoods:
+                    # model.context.add_nogood(nogood)
+
 
     # @profile
     def find_subprogs(self, literal_index, encoding):
-        # with open('dbg-clingo-explain.pl', 'w') as f:
-            # f.write(encoding)
+        self.tmp_count +=1
+        with open(f'DBG/explain-{self.tmp_count}.pl', 'w') as f:
+            f.write(encoding)
         # solver = clingo.Control(["--heuristic=Domain"])
         solver = clingo.Control([])
         solver.configuration.solve.models = 0
@@ -266,35 +303,24 @@ class Explainer:
         solver.ground([('base', [])])
 
         with solver.solve(yield_=True) as handle:
-            for m in handle:
-                atoms = m.symbols(shown = True)
+            for model in handle:
+                atoms = model.symbols(shown = True)
+                yield [atom.arguments[0].number for atom in atoms], model
                 # x1 = parse_model3(literal_index, atoms)
-                x1 = parse_model4(literal_index, atoms)
-                yield x1
+                # selected_literals =
+                # x1 = parse_model4(literal_index, atoms)
+                # yield x1, model
 
-from itertools import chain, combinations
-def powerset(iterable):
-    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
-    s = list(iterable)
-    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+# from itertools import chain, combinations
+# def powerset(iterable):
+#     "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+#     s = list(iterable)
+#     return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
 
-# @profile
-# def parse_model3(literal_index, atoms):
-#     rules = {}
-#     for atom in atoms:
-#         if atom.name == 'selected':
-#             head_literal, body_literal = literal_index[atom.arguments[0].number]
-#             if head_literal not in rules:
-#                 rules[head_literal] = set()
-#             rules[head_literal].add(body_literal)
-#     return tuple((head, frozenset(body)) for head, body in rules.items())
-
-# @profile
-def parse_model4(literal_index, atoms):
+def parse_model4(literal_index, selected_literals):
     rules = {}
-    for atom in atoms:
-        x = atom.arguments[0].number
-        head_literal, body_literal = literal_index[x]
+    for idx in selected_literals:
+        head_literal, body_literal = literal_index[idx]
         if head_literal not in rules:
             rules[head_literal] = set()
         rules[head_literal].add(body_literal)

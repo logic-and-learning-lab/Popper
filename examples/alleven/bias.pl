@@ -20,6 +20,7 @@ direction(f,(in,)).
 direction(tail,(in,out)).
 direction(head,(in,out)).
 direction(last,(in,out)).
-direction(empty,(in,)).
+%% direction(empty,(in,)).
+direction(empty,(out,)).
 direction(zero,(in,)).
 direction(even,(in,)).

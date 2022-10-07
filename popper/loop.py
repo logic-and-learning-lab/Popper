@@ -2,7 +2,7 @@ import time
 import numbers
 from . combine import Combiner
 from . explain import Explainer
-from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive
+from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, order_rule
 from . tester import Tester
 from . generate import Generator, Grounder, parse_model
 from . bkcons import deduce_bk_cons
@@ -24,6 +24,7 @@ def atom_to_symbol(pred, args):
     xs = tuple(arg_to_symbol(arg) for arg in args)
     return Function(name = pred, arguments = xs)
 
+# @profile
 def constrain(settings, generator, cons, model, cached_clingo_atoms):
     with settings.stats.duration('constrain'):
         ground_bodies = set()
@@ -47,11 +48,15 @@ def constrain(settings, generator, cons, model, cached_clingo_atoms):
             nogoods.append(nogood)
 
         for nogood in nogoods:
+            settings.nogoods += 1
+            # print('ASDA', nogood)
             model.context.add_nogood(nogood)
 
 def popper(settings):
     if settings.bkcons:
         deduce_bk_cons(settings)
+
+    settings.nogoods = 0
 
     tester = Tester(settings)
     explainer = Explainer(settings, tester)
@@ -98,14 +103,17 @@ def popper(settings):
 
             new_cons = set()
 
+            pruned_subprog = False
+
             if settings.explain:
                 with settings.stats.duration('explain'):
                     explainer.add_seen_prog(prog)
                     if len(pos_covered) == 0:
                         for subprog in explainer.explain_totally_incomplete2(prog, directions):
-                            # print('subprog')
-                            # for rule in subprog:
-                            #     print(format_rule(rule))
+                            pruned_subprog = True
+                            print('\tsubprog')
+                            for rule in order_prog(subprog):
+                                print('\t',format_rule(order_rule(rule)))
                             # TODO: ADD RULE ORDERING
                             new_cons.add(generator.build_specialisation_constraint(subprog))
                             if not settings.pi_enabled and settings.recursion_enabled:
@@ -231,17 +239,22 @@ def popper(settings):
             if not inconsistent and len(pos_covered) == len(pos):
                 return
 
-            if add_spec:
+
+
+            # print(f'add_spec: {add_spec} add_gen:{add_gen} add_redund1:{add_redund1} add_redund2:{add_redund2} skipping:{pruned_subprog}')
+
+            if add_spec and not pruned_subprog:
                 new_cons.add(generator.build_specialisation_constraint(prog, rule_ordering))
             if add_gen:
                 new_cons.add(generator.build_generalisation_constraint(prog, rule_ordering))
-            if add_redund1:
+            if add_redund1 and not pruned_subprog:
                 new_cons.add(generator.redundancy_constraint1(prog, rule_ordering))
-            if add_redund2:
+            if add_redund2 and not pruned_subprog:
                 new_cons.add(generator.redundancy_constraint2(prog, rule_ordering))
 
             constrain(settings, generator, new_cons, model, cached_clingo_atoms)
 
 def learn_solution(settings):
     timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)
+    print('SETTINGS.NOGOODS',settings.nogoods)
     return settings.solution, settings.best_prog_score, settings.stats
