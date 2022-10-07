@@ -81,7 +81,8 @@ def build_explain_encoding(prog, with_directions=False):
         head, body = rule
         rule_vars = set()
         rule_vars.add(vars_to_ints(head.arguments))
-        encoding.add(f'head_literal({rule_id},{head.predicate},{head.arity},{vars_to_ints(head.arguments)}).')
+        # encoding.add(f'head_literal({rule_id},{head.predicate},{head.arity},{vars_to_ints(head.arguments)}).')
+        encoding.add(f'{{head_literal({rule_id},{head.predicate},{head.arity},{vars_to_ints(head.arguments)})}}.')
         encoding.add(f'arity({head.predicate},{head.arity}).')
         for literal in body:
             rule_vars.add(vars_to_ints(literal.arguments))
