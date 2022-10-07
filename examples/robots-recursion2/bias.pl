@@ -1,4 +1,4 @@
-max_body(3). % speed up the example
+max_body(5). % speed up the example
 max_clauses(3).
 enable_recursion.
 
@@ -10,7 +10,7 @@ body_pred(at_right,1).
 body_pred(move_left,2).
 %% body_pred(move_right,2).
 %% body_pred(move_up,2).
-%% body_pred(move_down,2).
+body_pred(move_down,2).
 
 direction(f,(in,out)).
 direction(move_left,(in,out)).
