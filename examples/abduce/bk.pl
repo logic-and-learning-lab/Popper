@@ -1,0 +1,12 @@
+father(dbob,bob).
+father(ddbob,dbob).
+father(dmbob,mbob).
+father(djoe,joe).
+father(ddjoe,djoe).
+father(dmjoe,mjoe).
+mother(mbob,bob).
+mother(mdbob,dbob).
+mother(mmbob,mbob).
+mother(mjoe,joe).
+mother(mdjoe,djoe).
+mother(mmjoe,mjoe).
