@@ -1,0 +1,16 @@
+pos(mammal(dog)).
+pos(mammal(dolphin)).
+pos(mammal(platypus)).
+pos(mammal(bat)).
+neg(mammal(trout)).
+neg(mammal(herring)).
+neg(mammal(shark)).
+neg(mammal(eel)).
+neg(mammal(lizard)).
+neg(mammal(crocodile)).
+neg(mammal(t_rex)).
+neg(mammal(snake)).
+neg(mammal(turtle)).
+neg(mammal(eagle)).
+neg(mammal(ostrich)).
+neg(mammal(penguin)).

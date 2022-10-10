@@ -1,0 +1,9 @@
+child(1,c1,1).
+child(2,c2,1).
+child(3,c3,2).
+child(4,c4,2).
+child(5,c5,3).
+child(6,c6,3).
+parent(1,p1,u1).
+parent(2,p2,u2).
+parent(3,p3,u3).
