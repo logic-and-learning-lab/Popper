@@ -1,5 +1,5 @@
 max_body(5). % speed up the example
-max_clauses(4).
+max_clauses(3).
 max_vars(6).
 enable_recursion.
 

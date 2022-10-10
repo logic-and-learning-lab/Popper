@@ -186,10 +186,39 @@ class Generator:
     #         rule = rule.replace('not clause(1,)','not clause(1)')
     #         yield rule
 
+
+    def update_solver(self, size, handles, bad_handles, ground_cons):
+        encoding = []
+        for handle, rule in handles:
+            if handle in self.seen_handles:
+                continue
+            self.seen_handles.add(handle)
+            rule = rule.replace("'","")
+            encoding.append(rule)
+
+        for con in ground_cons:
+            if con in self.seen_cons:
+                continue
+            self.seen_cons.add(con)
+            encoding.append(con)
+        # encoding.extend(ground_cons)
+
+        for handle in bad_handles:
+            encoding.append(f"bad_handle({handle}).")
+
+        encoding = '\n'.join(encoding)
+        # print(encoding)
+        k = f'base-{size}'
+        self.solver.add(k, [], encoding)
+        self.solver.ground([(k, [])])
+
+    # def __init__(self, settings, grounder):
     def __init__(self, settings, grounder, size, handles, bad_handles, ground_cons):
         self.settings = settings
         self.grounder = grounder
-
+        self.seen_handles = set()
+        # self.assigned = {}
+        # self.seen_cons = set()
 
         encoding = []
         alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
@@ -201,18 +230,31 @@ class Generator:
         encoding.append(f'max_vars({settings.max_vars}).')
         encoding.append(f':- not size({size}).')
 
-        self.seen_handles = set()
+
+        # encoding = []
         for handle, rule in handles:
+            # if handle in self.seen_handles:
+                # continue
             self.seen_handles.add(handle)
             rule = rule.replace("'","")
             encoding.append(rule)
 
-        # for x in ground_cons:
-            # print(x)
+        # for con in ground_cons:
+            # if con in self.seen_cons:
+                # continue
+            # self.seen_cons.add(con)
+            # encoding.append(con)
         encoding.extend(ground_cons)
 
         for handle in bad_handles:
             encoding.append(f"bad_handle({handle}).")
+
+        # encoding = '\n'.join(encoding)
+        # print(encoding)
+        # k = f'base'
+        # self.solver.add(k, [], encoding)
+        # self.solver.ground([(k, [])])
+
 
         if self.settings.bkcons:
             encoding.append(self.settings.bkcons)
@@ -220,13 +262,40 @@ class Generator:
         encoding = '\n'.join(encoding)
 
         solver = clingo.Control([])
-        # solver = clingo.Control(["-t2"])
-        # solver = clingo.Control(["--heuristic=Domain"])
-        # solver = clingo.Control(["--heuristic=Domain","-t2"])
         solver.configuration.solve.models = 0
+
+
+        # NUM_OF_LITERALS = """
+        # %%% External atom for number of literals in the program %%%%%
+        # #external size_in_literals(n).
+        # :-
+        #     size_in_literals(n),
+        #     #sum{K+1,Clause : body_size(Clause,K)} != n.
+        # """
+
+        # solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver
+
+    def update_number_of_literals(self, size):
+        # 1. Release those that have already been assigned
+        for atom, truth_value in self.assigned.items():
+            if atom[0] == 'size_in_literals' and truth_value:
+                self.assigned[atom] = False
+                symbol = clingo.Function('size_in_literals', [clingo.Number(atom[1])])
+                self.solver.release_external(symbol)
+
+        # 2. Ground the new size
+        self.solver.ground([('number_of_literals', [clingo.Number(size)])])
+
+        # 3. Assign the new size
+        self.assigned[('size_in_literals', size)] = True
+
+        # @NOTE: Everything passed to Clingo must be Symbol. Refactor after
+        # Clingo updates their cffi API
+        symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
+        self.solver.assign_external(symbol, True)
 
     # @profile
     def get_ground_rules(self, rule):

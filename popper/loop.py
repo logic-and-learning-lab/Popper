@@ -63,14 +63,20 @@ def popper(settings):
     bad_handles = set()
     all_ground_cons = set()
 
+
+
     max_size = (1 + settings.max_body) * settings.max_rules
     for size in range(1, max_size+1):
-
-        print('SIZE', size, max_size)
+        # generator = Generator(settings, grounder)
         with settings.stats.duration('init'):
             generator = Generator(settings, grounder, size, all_handles, bad_handles, all_ground_cons)
-        nogoods_added = False
+        # generator.update_number_of_literals(size)
 
+        # print('SIZE', size, max_size)
+        # with settings.stats.duration('init'):
+            # generator.update_solver(size, all_handles, bad_handles, all_ground_cons)
+
+        nogoods_added = False
         # for h,b in set(all_handles):
             # print(h)
 
