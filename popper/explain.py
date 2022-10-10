@@ -218,9 +218,9 @@ class Explainer:
                 # print('\tmoo3')
                 continue
 
-            print('\t', 'TESTING SUBPROG1')
-            for rule in order_prog(subprog):
-                print('\t', format_rule(order_rule(rule)))
+            # print('\t', 'TESTING SUBPROG1')
+            # for rule in order_prog(subprog):
+            #     print('\t', format_rule(order_rule(rule)))
 
             with self.settings.stats.duration('explain_prolog'):
                 test_prog = []
@@ -274,7 +274,7 @@ class Explainer:
                     model.context.add_nogood(nogood)
                     unsat_count +=1
                     # if unsat_count > 0:
-                    print('PRUNE', unsat_count, selected_literals)
+                    # print('PRUNE', unsat_count, selected_literals)
                         # exit()
 
                     yield subprog

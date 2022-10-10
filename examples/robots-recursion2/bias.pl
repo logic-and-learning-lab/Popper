@@ -1,5 +1,6 @@
 max_body(5). % speed up the example
-max_clauses(3).
+max_clauses(4).
+max_vars(6).
 enable_recursion.
 
 head_pred(f,2).
@@ -21,3 +22,14 @@ direction(at_top,(in,)).
 direction(at_bottom,(in,)).
 direction(at_left,(in,)).
 direction(at_right,(in,)).
+
+%% :- not size(2).
+
+%% seen_rule(fABmove_leftAB, 2):-body_literal(2, move_left, 2, (0, 1)),head_literal(2, f, 2, (0, 1)).
+%% seen_rule(fABmove_leftAB, 1):-head_literal(1, f, 2, (0, 1)),body_literal(1, move_left, 2, (0, 1)).
+%% seen_rule(fABmove_downAB, 2):-head_literal(2, f, 2, (0, 1)),body_literal(2, move_down, 2, (0, 1)).
+%% seen_rule(fABmove_downAB, 0):-head_literal(0, f, 2, (0, 1)),body_literal(0, move_down, 2, (0, 1)).
+%% seen_rule(fABmove_leftAB, 0):-body_literal(0, move_left, 2, (0, 1)),head_literal(0, f, 2, (0, 1)).
+%% seen_rule(fABmove_downAB, 1):-head_literal(1, f, 2, (0, 1)),body_literal(1, move_down, 2, (0, 1)).
+%% bad_handle(fABmove_downAB).
+%% bad_handle(fABmove_leftAB).
