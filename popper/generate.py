@@ -186,25 +186,83 @@ class Generator:
     #         rule = rule.replace('not clause(1,)','not clause(1)')
     #         yield rule
 
+     # def gen_symbol(self, literal, backend):
+     #    (sign, pred, args) = literal
+     #    k = hash(literal)
+     #    if k in self.seen_symbols:
+     #        symbol = self.seen_symbols[k]
+     #    else:
+     #        symbol = backend.add_atom(atom_to_symbol(pred, args))
+     #        self.seen_symbols[k] = symbol
+     #    return symbol
+
+    def add_ground_clauses(self, clauses):
+        with self.solver.backend() as backend:
+            for (head, body) in clauses:
+                head_literal = []
+                if head:
+                    head_literal = [self.gen_symbol(head, backend)]
+                body_lits = []
+                for literal in body:
+                    (sign, _pred, _args) = literal
+                    symbol = self.gen_symbol(literal, backend)
+                    body_lits.append(symbol if sign else -symbol)
+                backend.add_rule(head_literal, body_lits)
 
     def update_solver(self, size, handles, bad_handles, ground_cons):
+        print('handles', len(handles))
+        print('bad_handles', len(bad_handles))
+        print('ground_cons', len(ground_cons))
+
         encoding = []
         for handle, rule in handles:
-            if handle in self.seen_handles:
+            if rule in self.seen_handle_rules:
                 continue
-            self.seen_handles.add(handle)
+            if handle in self.seen_handles and rule not in self.seen_handle_rules:
+                print('WTF', handle, rule)
+                exit()
+
+            self.seen_handle_rules.add(rule)
+            (h_p, h_args), b = rule
+            rule = f'{h_p}{h_args}:-' + ','.join(f'{b_pred}{b_args}' for b_pred, b_args in b) + '.'
             rule = rule.replace("'","")
             encoding.append(rule)
+
+        for x in set(handle for handle, rule in handles):
+            self.seen_handles.add(x)
 
         for con in ground_cons:
             if con in self.seen_cons:
                 continue
             self.seen_cons.add(con)
             encoding.append(con)
-        # encoding.extend(ground_cons)
+        encoding.extend(ground_cons)
+
 
         for handle in bad_handles:
             encoding.append(f"bad_handle({handle}).")
+            if handle in self.seen_bad_rules:
+                continue
+            # print(handle)
+            self.seen_bad_rules.add(handle)
+            r1 = f'bad_rule({handle},R):- seen_rule({handle},R).'
+            r2 = f':- clause(R1), clause(R2), R1 != R2, seen_rule({handle},R1), bad_rule(_,R2), R1 > 0, R2 > 0.'
+            # print(r1)
+            # print(r2)
+            encoding.append(r1)
+            encoding.append(r2)
+            # print(rule)
+
+        # for handle in bad_handles:
+
+
+        # %% bad_rule(Handle,R):-
+# %%     bad_handle(Handle),
+# %%     seen_rule(Handle,R).
+
+        encoding.append(f"")
+
+
 
         encoding = '\n'.join(encoding)
         # print(encoding)
@@ -213,12 +271,78 @@ class Generator:
         self.solver.ground([(k, [])])
 
     # def __init__(self, settings, grounder):
-    def __init__(self, settings, grounder, size, handles, bad_handles, ground_cons):
+    # def __init__(self, settings, grounder, size, handles, bad_handles, ground_cons):
+    #     self.settings = settings
+    #     self.grounder = grounder
+    #     self.seen_handles = set()
+    #     self.assigned = {}
+    #     self.seen_cons = set()
+
+    #     encoding = []
+    #     alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
+    #     encoding.append(alan)
+    #     with open(settings.bias_file) as f:
+    #         encoding.append(f.read())
+    #     encoding.append(f'max_clauses({settings.max_rules}).')
+    #     encoding.append(f'max_body({settings.max_body}).')
+    #     encoding.append(f'max_vars({settings.max_vars}).')
+    #     encoding.append(f':- not size({size}).')
+
+    #     # encoding = []
+    #     for handle, rule in handles:
+    #         # if handle in self.seen_handles:
+    #             # continue
+    #         self.seen_handles.add(handle)
+    #         rule = rule.replace("'","")
+    #         encoding.append(rule)
+
+    #     for con in ground_cons:
+    #         if con in self.seen_cons:
+    #             continue
+    #         self.seen_cons.add(con)
+    #         encoding.append(con)
+    #     encoding.extend(ground_cons)
+
+    #     for handle in bad_handles:
+    #         encoding.append(f"bad_handle({handle}).")
+
+    #     # encoding = '\n'.join(encoding)
+    #     # print(encoding)
+    #     # k = f'base'
+    #     # self.solver.add(k, [], encoding)
+    #     # self.solver.ground([(k, [])])
+
+
+    #     if self.settings.bkcons:
+    #         encoding.append(self.settings.bkcons)
+
+    #     encoding = '\n'.join(encoding)
+
+    #     solver = clingo.Control([])
+    #     solver.configuration.solve.models = 0
+
+
+    #     # NUM_OF_LITERALS = """
+    #     # %%% External atom for number of literals in the program %%%%%
+    #     # #external size_in_literals(n).
+    #     # :-
+    #     #     size_in_literals(n),
+    #     #     #sum{K+1,Clause : body_size(Clause,K)} != n.
+    #     # """
+
+    #     # solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
+    #     solver.add('base', [], encoding)
+    #     solver.ground([('base', [])])
+    #     self.solver = solver
+
+    def __init__(self, settings, grounder):
         self.settings = settings
         self.grounder = grounder
         self.seen_handles = set()
-        # self.assigned = {}
-        # self.seen_cons = set()
+        self.seen_handle_rules = set()
+        self.seen_bad_rules = set()
+        self.assigned = {}
+        self.seen_cons = set()
 
         encoding = []
         alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
@@ -228,33 +352,7 @@ class Generator:
         encoding.append(f'max_clauses({settings.max_rules}).')
         encoding.append(f'max_body({settings.max_body}).')
         encoding.append(f'max_vars({settings.max_vars}).')
-        encoding.append(f':- not size({size}).')
-
-
-        # encoding = []
-        for handle, rule in handles:
-            # if handle in self.seen_handles:
-                # continue
-            self.seen_handles.add(handle)
-            rule = rule.replace("'","")
-            encoding.append(rule)
-
-        # for con in ground_cons:
-            # if con in self.seen_cons:
-                # continue
-            # self.seen_cons.add(con)
-            # encoding.append(con)
-        encoding.extend(ground_cons)
-
-        for handle in bad_handles:
-            encoding.append(f"bad_handle({handle}).")
-
-        # encoding = '\n'.join(encoding)
-        # print(encoding)
-        # k = f'base'
-        # self.solver.add(k, [], encoding)
-        # self.solver.ground([(k, [])])
-
+        # encoding.append(f':- not size({size}).')
 
         if self.settings.bkcons:
             encoding.append(self.settings.bkcons)
@@ -265,15 +363,15 @@ class Generator:
         solver.configuration.solve.models = 0
 
 
-        # NUM_OF_LITERALS = """
-        # %%% External atom for number of literals in the program %%%%%
-        # #external size_in_literals(n).
-        # :-
-        #     size_in_literals(n),
-        #     #sum{K+1,Clause : body_size(Clause,K)} != n.
-        # """
+        NUM_OF_LITERALS = """
+        %%% External atom for number of literals in the program %%%%%
+        #external size_in_literals(n).
+        :-
+            size_in_literals(n),
+            #sum{K+1,Clause : body_size(Clause,K)} != n.
+        """
 
-        # solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
+        solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver

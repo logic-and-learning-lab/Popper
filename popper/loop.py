@@ -26,10 +26,17 @@ def atom_to_symbol(pred, args):
 
 def parse_handles(generator, new_handles):
     for x, rule in new_handles:
+        # print(x, rule
+        head, body = rule
+        # print('X1', x, head, ','.join(map(str,body)))
+        # TODO: add cachcing
         for h, b in generator.get_ground_rules(rule):
             _, p, args = h
-            z = f'{p}{args}:-' + ','.join(f'{b_pred}{b_args}' for _, b_pred, b_args in b) + '.'
-            yield (x, z)
+            # z = f'{p}{args}:-' + ','.join(f'{b_pred}{b_args}' for _, b_pred, b_args in b) + '.'
+
+            out_h = (p, args)
+            out_b = frozenset((b_pred, b_args) for _, b_pred, b_args in b)
+            yield (x, (out_h, out_b))
 
 # @profile
 def popper(settings):
@@ -63,18 +70,27 @@ def popper(settings):
     bad_handles = set()
     all_ground_cons = set()
 
-
+    generator = Generator(settings, grounder)
 
     max_size = (1 + settings.max_body) * settings.max_rules
+    max_size = 14
+    # max_size = 9
+    # max_size = 3
     for size in range(1, max_size+1):
-        # generator = Generator(settings, grounder)
-        with settings.stats.duration('init'):
-            generator = Generator(settings, grounder, size, all_handles, bad_handles, all_ground_cons)
-        # generator.update_number_of_literals(size)
+
+        print('SIZE', size)
+
+        # with settings.stats.duration('init'):
+            # generator = Generator(settings, grounder, size, all_handles, bad_handles, all_ground_cons)
+        generator.update_number_of_literals(size)
 
         # print('SIZE', size, max_size)
-        # with settings.stats.duration('init'):
-            # generator.update_solver(size, all_handles, bad_handles, all_ground_cons)
+        with settings.stats.duration('init'):
+            generator.update_solver(size, all_handles, bad_handles, all_ground_cons)
+
+        all_ground_cons = set()
+        all_handles = set()
+        bad_handles = set()
 
         nogoods_added = False
         # for h,b in set(all_handles):
@@ -298,11 +314,14 @@ def popper(settings):
                 with settings.stats.duration('constrain'):
                     ground_bodies = set()
                     for con in new_cons:
-                        # print('A',', '.join(str(x) for x in sorted(con, key=lambda x: x.predicate)))
+
                         ground_rules = generator.get_ground_rules((None, con))
+                        # if any(x.predicate == 'seen_rule' for x in con):
+                            # print('A',', '.join(str(x) for x in sorted(con, key=lambda x: x.predicate)))
                         for ground_rule in ground_rules:
                             _ground_head, ground_body = ground_rule
-                            # print('B',ground_body)
+                            # if any(x.predicate == 'seen_rule' for x in con):
+                                # print('B',ground_body)
                             ground_bodies.add(ground_body)
                             ground_con = []
                             for sign, pred, args in ground_body:

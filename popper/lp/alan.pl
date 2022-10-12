@@ -883,16 +883,16 @@ only_once(P,A):-
 %%     not type_mismatch(P,Vars),
 %%     not bad_body(P,A,Vars).
 
-bad_rule(Handle,R):-
-    bad_handle(Handle),
-    seen_rule(Handle,R).
+%% bad_rule(Handle,R):-
+%%     bad_handle(Handle),
+%%     seen_rule(Handle,R).
 
-#defined seen_rule/2.
-#defined bad_handle/1.
-#defined bad_rule/2.
-has_new_rule:-
-    clause(R),
-    not bad_rule(_,R).
-:-
-    not has_new_rule.
+%% #defined seen_rule/2.
+%% #defined bad_handle/1.
+%% #defined bad_rule/2.
+%% has_new_rule:-
+%%     clause(R),
+%%     not bad_rule(_,R).
+%% :-
+%%     not has_new_rule.
 
