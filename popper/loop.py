@@ -138,9 +138,9 @@ def popper(settings):
                         if len(pos_covered) == 0:
                             for subprog in explainer.explain_totally_incomplete2(prog, directions):
                                 pruned_subprog = True
-                                print('\tTOTALLY INCOMPLETE')
-                                for rule in order_prog(subprog):
-                                    print('\t',format_rule(order_rule(rule)))
+                                # print('\tTOTALLY INCOMPLETE')
+                                # for rule in order_prog(subprog):
+                                #     print('\t',format_rule(order_rule(rule)))
                                 # TODO: ADD RULE ORDERING
                                 new_handles, con = generator.build_specialisation_constraint(subprog)
                                 new_cons.add(con)
@@ -202,9 +202,9 @@ def popper(settings):
 
                 # if it does not cover any example, prune specialisations
                 if len(pos_covered) == 0:
-                    print('\tTOTALLY INCOMPLETE')
-                    for rule in order_prog(prog):
-                        print('\t',format_rule(order_rule(rule)))
+                    # print('\tTOTALLY INCOMPLETE')
+                    # for rule in order_prog(prog):
+                        # print('\t',format_rule(order_rule(rule)))
                     add_spec = True
                     # if recursion and no PI, then apply redundancy constraints
                     if settings.recursion_enabled and not settings.pi_enabled and settings.test:
@@ -301,18 +301,20 @@ def popper(settings):
                     new_handles, con = generator.build_specialisation_constraint(prog, rule_ordering)
                     new_cons.add(con)
                     all_handles.update(parse_handles(generator, new_handles))
+                # if add_gen and settings.recursion_enabled:
                 if add_gen:
+                    # print('MOO')
                     # pass
                     new_handles, con = generator.build_generalisation_constraint(prog, rule_ordering)
                     new_cons.add(con)
                     all_handles.update(parse_handles(generator, new_handles))
-                if add_redund1 and not pruned_subprog:
+                if add_redund1 and not pruned_subprog and settings.test:
                     # pass
                     bad_handle, new_handles, con = generator.redundancy_constraint1(prog)
                     new_cons.add(con)
                     bad_handles.add(bad_handle)
                     all_handles.update(parse_handles(generator, new_handles))
-                if add_redund2 and not pruned_subprog:
+                if add_redund2 and not pruned_subprog and settings.test:
                     # pass
                     new_cons.add(generator.redundancy_constraint2(prog))
                     new_handles, con = generator.redundancy_constraint3(prog)

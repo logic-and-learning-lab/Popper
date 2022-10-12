@@ -227,8 +227,8 @@ class Generator:
 
         # print('bad_handles', len(bad_handles))
 
-        # for x in bad_handles:
-            # print(x)
+        for x in bad_handles:
+            print(x)
 
         to_add = []
         to_add.extend(([], x) for x in ground_cons)
@@ -270,39 +270,42 @@ class Generator:
                             if i == j:
                                 continue
                             b2 = (True, 'bad_stuff', (j, s))
-                            moo.append((h, (b1, b2)))
+                            x = (h, (b1, b2))
+                            print(x)
+                            moo.append(x)
+
                             # print()
             to_add.extend(moo)
 
-        if bad_progs:
-            moo = []
-            for xs in bad_progs:
-                if len(xs) != 2:
-                    continue
-                xs = list(xs)
-                r1 = xs[0]
-                r2 = xs[1]
-                for i in range(0, self.settings.max_rules):
-                    for j in range(0, self.settings.max_rules):
-                        if j == i:
-                            continue
-                        h = (True, 'bad_prog', (i, j, size))
-                        b1 = (True, 'seen_rule', (r1, i))
-                        b2 = (True, 'seen_rule', (r2, j))
-                        moo.append((h, (b1, b2)))
+        # if bad_progs:
+        #     moo = []
+        #     for xs in bad_progs:
+        #         if len(xs) != 2:
+        #             continue
+        #         xs = list(xs)
+        #         r1 = xs[0]
+        #         r2 = xs[1]
+        #         for i in range(0, self.settings.max_rules):
+        #             for j in range(0, self.settings.max_rules):
+        #                 if j == i:
+        #                     continue
+        #                 h = (True, 'bad_prog', (i, j, size))
+        #                 b1 = (True, 'seen_rule', (r1, i))
+        #                 b2 = (True, 'seen_rule', (r2, j))
+        #                 moo.append((h, (b1, b2)))
 
-                        for s2 in range(1, size+1):
-                            for k in range(0, self.settings.max_rules):
-                                if k == i:
-                                    continue
-                                if k == j:
-                                    continue
-                                con_b1 = (True, 'bad_prog', (i, j, s2))
-                                con_b2 = (True, 'bad_stuff', (k, s2))
-                                moo.append(([], (con_b1, con_b2)))
-            to_add.extend(moo)
-            for x in moo:
-                print(x)
+        #                 for s2 in range(1, size+1):
+        #                     for k in range(0, self.settings.max_rules):
+        #                         if k == i:
+        #                             continue
+        #                         if k == j:
+        #                             continue
+        #                         con_b1 = (True, 'bad_prog', (i, j, s2))
+        #                         con_b2 = (True, 'bad_stuff', (k, s2))
+        #                         moo.append(([], (con_b1, con_b2)))
+            # to_add.extend(moo)
+            # for x in moo:
+                # print(x)
 
 
 
