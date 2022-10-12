@@ -1,13 +1,28 @@
 import clingo
 import operator
+import numbers
 import clingo.script
 import pkg_resources
 from . core import Literal, RuleVar, VarVar, Var
 from collections import defaultdict
 from . util import rule_is_recursive
 clingo.script.enable_python()
+from clingo import Function, Number, Tuple_
 
 arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
+
+def arg_to_symbol(arg):
+    if isinstance(arg, tuple):
+        return Tuple_(tuple(arg_to_symbol(a) for a in arg))
+    if isinstance(arg, numbers.Number):
+        return Number(arg)
+    if isinstance(arg, str):
+        return Function(arg)
+    assert False, f'Unhandled argtype({type(arg)}) in aspsolver.py arg_to_symbol()'
+
+def atom_to_symbol(pred, args):
+    xs = tuple(arg_to_symbol(arg) for arg in args)
+    return Function(name = pred, arguments = xs)
 
 def find_all_vars(body):
     # print(','.join(str(x) for x in body))
@@ -196,20 +211,130 @@ class Generator:
      #        self.seen_symbols[k] = symbol
      #    return symbol
 
-    def add_ground_clauses(self, clauses):
+
+    def gen_symbol(self, literal, backend):
+        (sign, pred, args) = literal
+        k = hash(literal)
+        if k in self.seen_symbols:
+            symbol = self.seen_symbols[k]
+        else:
+            symbol = backend.add_atom(atom_to_symbol(pred, args))
+            self.seen_symbols[k] = symbol
+        return symbol
+
+    # def add_ground_clauses(self, clauses):
+    def update_solver(self, size, handles, bad_handles, ground_cons, bad_progs = []):
+
+        # print('bad_handles', len(bad_handles))
+
+        # for x in bad_handles:
+            # print(x)
+
+        to_add = []
+        to_add.extend(([], x) for x in ground_cons)
+
+        # to_add = set()
+
+        for handle, rule in handles:
+            if rule in self.seen_handle_rules:
+                continue
+            self.seen_handle_rules.add(rule)
+            (h_p, h_args), b = rule
+            new_h = (True, h_p, h_args)
+            new_b = frozenset((True, b_p, b_args) for b_p, b_args in b)
+            # rule = f'{h_p}{h_args}:-' + ','.join(f'{b_pred}{b_args}' for b_pred, b_args in b) + '.'
+            # rule = rule.replace("'","")
+            to_add.append((new_h, new_b))
+
+
+        if bad_handles:
+            moo = []
+            for handle in bad_handles:
+                # encoding.append(f"bad_handle({handle}).")
+                if handle in self.seen_bad_rules:
+                    continue
+                # print('BAD', handle)
+                # self.seen_bad_rules.add(handle)
+                for i in range(0, self.settings.max_rules):
+                    # h = (True, 'bad_rule', (handle, i))
+                    h = (True, 'bad_stuff', (i, size))
+                    b = (True, 'seen_rule', (handle, i))
+                    # print(h, b)
+                    moo.append((h, (b,)))
+
+                for s in range(1, size+1):
+                    for i in range(1, self.settings.max_rules):
+                        h = []
+                        b1 = (True, 'seen_rule', (handle, i))
+                        for j in range(1, self.settings.max_rules):
+                            if i == j:
+                                continue
+                            b2 = (True, 'bad_stuff', (j, s))
+                            moo.append((h, (b1, b2)))
+                            # print()
+            to_add.extend(moo)
+
+        if bad_progs:
+            moo = []
+            for xs in bad_progs:
+                if len(xs) != 2:
+                    continue
+                xs = list(xs)
+                r1 = xs[0]
+                r2 = xs[1]
+                for i in range(0, self.settings.max_rules):
+                    for j in range(0, self.settings.max_rules):
+                        if j == i:
+                            continue
+                        h = (True, 'bad_prog', (i, j, size))
+                        b1 = (True, 'seen_rule', (r1, i))
+                        b2 = (True, 'seen_rule', (r2, j))
+                        moo.append((h, (b1, b2)))
+
+                        for s2 in range(1, size+1):
+                            for k in range(0, self.settings.max_rules):
+                                if k == i:
+                                    continue
+                                if k == j:
+                                    continue
+                                con_b1 = (True, 'bad_prog', (i, j, s2))
+                                con_b2 = (True, 'bad_stuff', (k, s2))
+                                moo.append(([], (con_b1, con_b2)))
+            to_add.extend(moo)
+            for x in moo:
+                print(x)
+
+
+
+
+                # r1 = f'bad_rule({handle},R):- seen_rule({handle},R).'
+                # r2 = f':- clause(R1), clause(R2), R1 != R2, seen_rule({handle},R1), bad_rule(_,R2), R1 > 0, R2 > 0.'
+                # r2 = f':- clause(R1), clause(R2), R1 != R2, seen_rule({handle},R1), bad_rule(_,R2)'
+                # encoding.append(r1)
+                # encoding.append(r2)
+            # encoding = '\n'.join(encoding)
+            # k = f'base-{size}'
+            # self.solver.add(k, [], encoding)
+            # self.solver.ground([(k, [])])
+
+
+
         with self.solver.backend() as backend:
-            for (head, body) in clauses:
+            for head, body in to_add:
                 head_literal = []
                 if head:
                     head_literal = [self.gen_symbol(head, backend)]
                 body_lits = []
+                # print(head, body)
                 for literal in body:
                     (sign, _pred, _args) = literal
                     symbol = self.gen_symbol(literal, backend)
                     body_lits.append(symbol if sign else -symbol)
                 backend.add_rule(head_literal, body_lits)
 
-    def update_solver(self, size, handles, bad_handles, ground_cons):
+
+
+    def update_solver_old(self, size, handles, bad_handles, ground_cons):
         print('handles', len(handles))
         print('bad_handles', len(bad_handles))
         print('ground_cons', len(ground_cons))
@@ -260,13 +385,14 @@ class Generator:
 # %%     bad_handle(Handle),
 # %%     seen_rule(Handle,R).
 
-        encoding.append(f"")
+        # encoding.append(f"")
 
 
 
         encoding = '\n'.join(encoding)
         # print(encoding)
         k = f'base-{size}'
+        # k = f'base'
         self.solver.add(k, [], encoding)
         self.solver.ground([(k, [])])
 
@@ -343,6 +469,7 @@ class Generator:
         self.seen_bad_rules = set()
         self.assigned = {}
         self.seen_cons = set()
+        self.seen_symbols = {}
 
         encoding = []
         alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
@@ -468,6 +595,27 @@ class Generator:
             literals.append(Literal('num_recursive', (head.predicate, 1)))
             literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
             return handle, new_handles, tuple(literals)
+
+
+    def redundancy_constraint3(self, prog, rule_ordering={}):
+        new_handles = set()
+        rule_index = {}
+        out = []
+        for rule_id, rule in enumerate(prog):
+            head, body = rule
+            rule_var = vo_clause(rule_id)
+            rule_index[rule] = rule_var
+            handle = make_rule_handle(rule)
+
+            if handle not in self.seen_handles:
+                out.append(handle)
+            # literals.append(build_seen_rule_literal(handle, rule_var))
+            # literals.extend(build_rule_literals(rule, rule_var))
+            # literals.append(gteq(rule_var, 1))
+            # literals.append(Literal('recursive_clause',(rule_var, head.predicate, head.arity)))
+            # literals.append(Literal('num_recursive', (head.predicate, 1)))
+            # literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
+        return new_handles, frozenset(out)
 
     def redundancy_constraint2(self, prog, rule_ordering={}):
         prog = list(prog)

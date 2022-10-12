@@ -68,6 +68,7 @@ def popper(settings):
     all_nogoods = []
     all_handles = set()
     bad_handles = set()
+    bad_progs = set()
     all_ground_cons = set()
 
     generator = Generator(settings, grounder)
@@ -86,11 +87,12 @@ def popper(settings):
 
         # print('SIZE', size, max_size)
         with settings.stats.duration('init'):
-            generator.update_solver(size, all_handles, bad_handles, all_ground_cons)
+            generator.update_solver(size, all_handles, bad_handles, all_ground_cons, bad_progs)
 
         all_ground_cons = set()
         all_handles = set()
         bad_handles = set()
+        bad_progs = set()
 
         nogoods_added = False
         # for h,b in set(all_handles):
@@ -136,9 +138,9 @@ def popper(settings):
                         if len(pos_covered) == 0:
                             for subprog in explainer.explain_totally_incomplete2(prog, directions):
                                 pruned_subprog = True
-                                # print('\tsubprog')
-                                # for rule in order_prog(subprog):
-                                #     print('\t',format_rule(order_rule(rule)))
+                                print('\tTOTALLY INCOMPLETE')
+                                for rule in order_prog(subprog):
+                                    print('\t',format_rule(order_rule(rule)))
                                 # TODO: ADD RULE ORDERING
                                 new_handles, con = generator.build_specialisation_constraint(subprog)
                                 new_cons.add(con)
@@ -153,6 +155,10 @@ def popper(settings):
                                         all_handles.update(parse_handles(generator, new_handles))
                                     else:
                                         new_cons.add(generator.redundancy_constraint2(subprog))
+
+                                        new_handles, con = generator.redundancy_constraint3(prog)
+                                        all_handles.update(parse_handles(generator, new_handles))
+                                        bad_progs.add(con)
 
                 if inconsistent and prog_is_recursive(prog):
                     combiner.add_inconsistent(prog)
@@ -196,6 +202,9 @@ def popper(settings):
 
                 # if it does not cover any example, prune specialisations
                 if len(pos_covered) == 0:
+                    print('\tTOTALLY INCOMPLETE')
+                    for rule in order_prog(prog):
+                        print('\t',format_rule(order_rule(rule)))
                     add_spec = True
                     # if recursion and no PI, then apply redundancy constraints
                     if settings.recursion_enabled and not settings.pi_enabled and settings.test:
@@ -304,8 +313,11 @@ def popper(settings):
                     bad_handles.add(bad_handle)
                     all_handles.update(parse_handles(generator, new_handles))
                 if add_redund2 and not pruned_subprog:
-                    pass
-                    # new_cons.add(generator.redundancy_constraint2(prog, rule_ordering))
+                    # pass
+                    new_cons.add(generator.redundancy_constraint2(prog))
+                    new_handles, con = generator.redundancy_constraint3(prog)
+                    all_handles.update(parse_handles(generator, new_handles))
+                    bad_progs.add(con)
 
                 all_cons.update(new_cons)
 
@@ -336,7 +348,8 @@ def popper(settings):
                                 ground_con.append(x)
                             y = ':-' + ', '.join(sorted(ground_con)) + '.'
                             # print('B', y)
-                            all_ground_cons.add(y)
+                            # all_ground_cons.add(y)
+                            all_ground_cons.add(frozenset(ground_body))
 
                     nogoods = []
                     for ground_body in ground_bodies:
