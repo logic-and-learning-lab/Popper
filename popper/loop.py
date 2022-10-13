@@ -128,6 +128,11 @@ def popper(settings):
     bad_progs = set()
     all_ground_cons = set()
 
+    num_gen=0
+    num_red1=0
+    num_red2=0
+    num_specs=0
+
     generator = Generator(settings, grounder)
 
     max_size = (1 + settings.max_body) * settings.max_rules
@@ -161,6 +166,7 @@ def popper(settings):
             handle = iter(handle)
 
             while True:
+                print(num_gen, num_specs, num_red1, num_red2)
                 model = None
 
                 # GENERATE A PROGRAM
@@ -361,12 +367,16 @@ def popper(settings):
 
                 # print(f'add_spec: {add_spec} add_gen:{add_gen} add_redund1:{add_redund1} add_redund2:{add_redund2} skipping:{pruned_subprog}')
 
+
                 if add_spec and not pruned_subprog:
                     # pass
                     # print('ADD_SPEC')
                     new_handles, con = generator.build_specialisation_constraint(prog, rule_ordering)
                     new_cons.add(con)
                     all_handles.update(parse_handles(generator, new_handles))
+                    num_specs += len(generator.get_ground_rules((None, con)))
+                    # for _, x in generator.get_ground_rules((None, con)):
+                        # print(','.join(sorted(map(str,x))))
                 # if add_gen and settings.recursion_enabled:
                 if add_gen:
                     # print('MOO')
@@ -374,18 +384,27 @@ def popper(settings):
                     new_handles, con = generator.build_generalisation_constraint(prog, rule_ordering)
                     new_cons.add(con)
                     all_handles.update(parse_handles(generator, new_handles))
+                    # try:
+                    num_gen += len(generator.get_ground_rules((None, con)))
+                    # except:
+                        # print(','.join(map(str,con)))
+                        # exit()
                 if add_redund1 and not pruned_subprog and settings.test:
                     # pass
                     bad_handle, new_handles, con = generator.redundancy_constraint1(prog)
                     new_cons.add(con)
                     bad_handles.add(bad_handle)
                     all_handles.update(parse_handles(generator, new_handles))
+                    num_red1 += len(generator.get_ground_rules((None, con)))
                 if add_redund2 and not pruned_subprog and settings.test:
-                    pass
-                    # new_cons.add(generator.redundancy_constraint2(prog))
-                    # new_handles, con = generator.redundancy_constraint3(prog)
-                    # all_handles.update(parse_handles(generator, new_handles))
-                    # bad_progs.add(con)
+                    # pass
+                    con = generator.redundancy_constraint2(prog)
+                    num_red2 += len(generator.get_ground_rules((None, con)))
+                    new_cons.add(con)
+                    new_handles, con = generator.redundancy_constraint3(prog)
+                    all_handles.update(parse_handles(generator, new_handles))
+                    bad_progs.add(con)
+
 
                 all_cons.update(new_cons)
 

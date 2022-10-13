@@ -88,11 +88,17 @@ def build_seen_rule(rule):
     rule_var = vo_clause('l')
     handle = make_rule_handle(rule)
     head = Literal('seen_rule', (handle, rule_var))
-    body = tuple(build_rule_literals(rule, rule_var))
-    return head, body
+    body = []
+    body.extend(build_rule_literals(rule, rule_var))
+    # if rule_is_recursive(rule):
+        # body.append(gteq(rule_var, 1))
+    return head, tuple(body)
 
 def build_seen_rule_literal(handle, rule_var):
     return Literal('seen_rule', (handle, rule_var))
+
+# literals.append(gteq(rule_var, 1))
+# literals.append(Literal('recursive_clause',(rule_var, head.predicate, head.arity)))
 
 # TODO: COULD CACHE TUPLES OF ARGS FOR TINY OPTIMISATION
 def parse_model(model):
@@ -335,6 +341,8 @@ class Generator:
                     body_lits.append(symbol if sign else -symbol)
                 backend.add_rule(head_literal, body_lits)
 
+        for x in set(handle for handle, rule in handles):
+            self.seen_handles.add(x)
 
 
     def update_solver_old(self, size, handles, bad_handles, ground_cons):
@@ -546,11 +554,12 @@ class Generator:
             rule_var = vo_clause(rule_id)
             rule_index[rule] = rule_var
             handle = make_rule_handle(rule)
-            if handle in self.seen_handles:
-                literals.append(build_seen_rule_literal(rule, rule_var))
-            else:
-                new_handles.add((handle, build_seen_rule(rule)))
-                literals.extend(tuple(build_rule_literals(rule, rule_var)))
+            # if handle in self.seen_handles:
+            #     literals.append(build_seen_rule_literal(handle, rule_var))
+            #     print('yes!!!')
+            # else:
+            new_handles.add((handle, build_seen_rule(rule)))
+            literals.extend(tuple(build_rule_literals(rule, rule_var)))
             literals.append(body_size_literal(rule_var, len(body)))
         literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
 
@@ -568,9 +577,12 @@ class Generator:
             handle = make_rule_handle(rule)
             if handle in self.seen_handles:
                 literals.append(build_seen_rule_literal(handle, rule_var))
+                # print('yes!!!')
             else:
                 new_handles.add((handle, build_seen_rule(rule)))
                 literals.extend(tuple(build_rule_literals(rule, rule_var)))
+            # new_handles.add((handle, build_seen_rule(rule)))
+            # literals.extend(build_rule_literals(rule, rule_var))
             literals.append(lt(rule_var, len(prog)))
         literals.append(Literal('clause', (len(prog), ), positive = False))
         literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
@@ -593,6 +605,8 @@ class Generator:
             else:
                 new_handles.add((handle, build_seen_rule(rule)))
                 literals.extend(build_rule_literals(rule, rule_var))
+            # new_handles.add((handle, build_seen_rule(rule)))
+            # literals.extend(build_rule_literals(rule, rule_var))
             literals.append(gteq(rule_var, 1))
             literals.append(Literal('recursive_clause',(rule_var, head.predicate, head.arity)))
             literals.append(Literal('num_recursive', (head.predicate, 1)))
@@ -656,7 +670,15 @@ class Generator:
                 head, body = rule
                 rule_var = vo_clause(rule_id)
                 rule_index[rule] = rule_var
-                literals.extend(build_rule_literals(rule, rule_var))
+                # literals.extend(build_rule_literals(rule, rule_var))
+                handle = make_rule_handle(rule)
+
+                if handle in self.seen_handles:
+                    literals.append(build_seen_rule_literal(handle, rule_var))
+                else:
+                    # new_handles.add((handle, build_seen_rule(rule)))
+                    literals.extend(build_rule_literals(rule, rule_var))
+                # literals.extend(build_rule_literals(rule, rule_var))
 
             for other_lit, num_clauses in lits_num_rules.items():
                 if other_lit == lit:
