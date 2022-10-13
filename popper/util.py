@@ -201,19 +201,20 @@ def order_rule(rule):
     body_literals = set(body)
 
     if head.inputs == []:
-        return clause
+        return rule
 
     while body_literals:
         selected_literal = None
         for literal in body_literals:
-            # AC: could cache for a micro-optimisation
-            if literal.inputs.issubset(grounded_variables):
-                if literal.predicate != head.predicate:
-                    # find the first ground non-recursive body literal and stop
-                    selected_literal = literal
-                else:
-                    # otherwise use the recursive body literal
-                    selected_literal = literal
+            if not literal.inputs.issubset(grounded_variables):
+                continue
+            if literal.predicate != head.predicate:
+                # find the first ground non-recursive body literal and stop
+                selected_literal = literal
+                break
+            elif selected_literal == None:
+                # otherwise use the recursive body literal
+                selected_literal = literal
 
         if selected_literal == None:
             message = f'{selected_literal} in clause {format_rule(rule)} could not be grounded'

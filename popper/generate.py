@@ -227,8 +227,8 @@ class Generator:
 
         # print('bad_handles', len(bad_handles))
 
-        for x in bad_handles:
-            print(x)
+        # for x in bad_handles:
+            # print(x)
 
         to_add = []
         to_add.extend(([], x) for x in ground_cons)
@@ -271,7 +271,7 @@ class Generator:
                                 continue
                             b2 = (True, 'bad_stuff', (j, s))
                             x = (h, (b1, b2))
-                            print(x)
+                            # print(x)
                             moo.append(x)
 
                             # print()
@@ -330,7 +330,7 @@ class Generator:
                 body_lits = []
                 # print(head, body)
                 for literal in body:
-                    (sign, _pred, _args) = literal
+                    sign, _pred, _args = literal
                     symbol = self.gen_symbol(literal, backend)
                     body_lits.append(symbol if sign else -symbol)
                 backend.add_rule(head_literal, body_lits)

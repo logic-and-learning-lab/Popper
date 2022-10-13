@@ -74,12 +74,14 @@ def popper(settings):
     generator = Generator(settings, grounder)
 
     max_size = (1 + settings.max_body) * settings.max_rules
-    max_size = 14
+    # max_size = 14
     # max_size = 9
     # max_size = 3
     for size in range(1, max_size+1):
 
-        print('SIZE', size)
+        print('SIZE', size, 'MAX_SIZE', settings.max_literals)
+        if size > settings.max_literals:
+            break
 
         # with settings.stats.duration('init'):
             # generator = Generator(settings, grounder, size, all_handles, bad_handles, all_ground_cons)
@@ -122,7 +124,14 @@ def popper(settings):
                 settings.stats.total_programs += 1
                 settings.logger.debug(f'Program {settings.stats.total_programs}:')
                 for rule in order_prog(prog):
-                    settings.logger.debug(format_rule(rule))
+                    settings.logger.debug(format_rule(order_rule(rule)))
+                    # if rule_is_recursive(rule):
+                        # r1 = order_rule(rule)
+                        # r2 = order_rule2(rule)
+                        # if r1 != r2:
+                        #     print('--')
+                        #     print('R1', format_rule(r1))
+                        #     print('R2', format_rule(r2))
 
                 # TEST A PROGRAM
                 with settings.stats.duration('test'):

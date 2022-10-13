@@ -97,6 +97,11 @@ class Tester():
         with self.using(prog):
             return len(list(self.prolog.query("inconsistent"))) > 0
 
+    def is_complete(self, prog):
+        with self.using(prog):
+            pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
+            return len(pos_covered) == self.num_pos
+
     @contextmanager
     def using(self, prog):
         if self.settings.recursion_enabled:

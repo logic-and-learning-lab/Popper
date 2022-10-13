@@ -26,7 +26,6 @@ FIND_SUBSET_PROG1 = """
 :- not uses_new.
 """
 
-
 def get_rule_hash(rule):
     head, body = rule
     head = (head.predicate, head.arguments)
@@ -77,10 +76,9 @@ class Combiner:
     def add_inconsistent(self, prog):
         self.inconsistent.add(prog)
 
-    # @profile
     def find_combination(self, encoding):
         str_encoding = '\n'.join(encoding)
-        # self.debug_count += 1
+        self.debug_count += 1
         # with open(f'sat/{self.debug_count}', 'w') as f:
             # f.write(str_encoding)
 
@@ -125,6 +123,8 @@ class Combiner:
                     if not model_inconsistent:
                         best_prog = rules
                         best_fn = fn
+                        if fn > 0 and self.tester.is_complete(model_prog):
+                            best_fn = 0
                         continue
 
                     with self.settings.stats.duration('subcheck'):
@@ -134,6 +134,9 @@ class Combiner:
                         con = ':-' + ','.join(f'rule({self.rulehash_to_id[get_rule_hash(rule)]})' for rule in smaller) + '.'
                         str_encoding += con + '\n'
                         self.constraints.add(con)
+                        print('-RUBBISH-', self.debug_count)
+                        for rule in smaller:
+                            print('\t',format_rule(rule))
                     # break to not consider no more models as we need to take into account the new constraint
                     break
                 t2 = time.time()
