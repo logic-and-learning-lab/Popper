@@ -24,6 +24,8 @@ def atom_to_symbol(pred, args):
     xs = tuple(arg_to_symbol(arg) for arg in args)
     return Function(name = pred, arguments = xs)
 
+
+
 def parse_handles(generator, new_handles):
     for x, rule in new_handles:
         # print(x, rule
@@ -37,6 +39,61 @@ def parse_handles(generator, new_handles):
             out_h = (p, args)
             out_b = frozenset((b_pred, b_args) for _, b_pred, b_args in b)
             yield (x, (out_h, out_b))
+
+
+tmp_seen = set()
+
+# @profile
+def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, all_nogoods):
+    with settings.stats.duration('constrain'):
+        ground_bodies = set()
+        for con in new_cons:
+            if con in tmp_seen:
+                print('shit')
+            tmp_seen.add(con)
+
+            ground_rules = generator.get_ground_rules((None, con))
+            # if any(x.predicate == 'seen_rule' for x in con):
+                # print('A',', '.join(str(x) for x in sorted(con, key=lambda x: x.predicate)))
+            for ground_rule in ground_rules:
+                _ground_head, ground_body = ground_rule
+                # if any(x.predicate == 'seen_rule' for x in con):
+                    # print('B',ground_body)
+                ground_bodies.add(ground_body)
+                ground_con = []
+                for sign, pred, args in ground_body:
+                    x = ''
+                    if len(args) == 1:
+                        x = f'{pred}({args[0]})'
+                    else:
+                        x = f'{pred}{args}'
+                    x = x.replace("'","")
+                    if sign == False:
+                        x = 'not ' + x
+                    ground_con.append(x)
+                y = ':-' + ', '.join(sorted(ground_con)) + '.'
+                # print('B', y)
+                # all_ground_cons.add(y)
+                all_ground_cons.add(frozenset(ground_body))
+
+        nogoods = []
+        for ground_body in ground_bodies:
+            nogood = []
+            for sign, pred, args in ground_body:
+                k = hash((sign, pred, args))
+                if k in cached_clingo_atoms:
+                    nogood.append(cached_clingo_atoms[k])
+                else:
+                    x = (atom_to_symbol(pred, args), sign)
+                    nogood.append(x)
+                    cached_clingo_atoms[k] = x
+            nogoods.append(nogood)
+
+        for nogood in nogoods:
+            settings.nogoods += 1
+            model.context.add_nogood(nogood)
+            all_nogoods.append(nogood)
+
 
 # @profile
 def popper(settings):
@@ -324,61 +381,17 @@ def popper(settings):
                     bad_handles.add(bad_handle)
                     all_handles.update(parse_handles(generator, new_handles))
                 if add_redund2 and not pruned_subprog and settings.test:
-                    # pass
-                    new_cons.add(generator.redundancy_constraint2(prog))
-                    new_handles, con = generator.redundancy_constraint3(prog)
-                    all_handles.update(parse_handles(generator, new_handles))
-                    bad_progs.add(con)
+                    pass
+                    # new_cons.add(generator.redundancy_constraint2(prog))
+                    # new_handles, con = generator.redundancy_constraint3(prog)
+                    # all_handles.update(parse_handles(generator, new_handles))
+                    # bad_progs.add(con)
 
                 all_cons.update(new_cons)
 
-                # constrain(settings, generator, new_cons, model, cached_clingo_atoms)
+                constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, all_nogoods)
 
-                with settings.stats.duration('constrain'):
-                    ground_bodies = set()
-                    for con in new_cons:
 
-                        ground_rules = generator.get_ground_rules((None, con))
-                        # if any(x.predicate == 'seen_rule' for x in con):
-                            # print('A',', '.join(str(x) for x in sorted(con, key=lambda x: x.predicate)))
-                        for ground_rule in ground_rules:
-                            _ground_head, ground_body = ground_rule
-                            # if any(x.predicate == 'seen_rule' for x in con):
-                                # print('B',ground_body)
-                            ground_bodies.add(ground_body)
-                            ground_con = []
-                            for sign, pred, args in ground_body:
-                                x = ''
-                                if len(args) == 1:
-                                    x = f'{pred}({args[0]})'
-                                else:
-                                    x = f'{pred}{args}'
-                                x = x.replace("'","")
-                                if sign == False:
-                                    x = 'not ' + x
-                                ground_con.append(x)
-                            y = ':-' + ', '.join(sorted(ground_con)) + '.'
-                            # print('B', y)
-                            # all_ground_cons.add(y)
-                            all_ground_cons.add(frozenset(ground_body))
-
-                    nogoods = []
-                    for ground_body in ground_bodies:
-                        nogood = []
-                        for sign, pred, args in ground_body:
-                            k = hash((sign, pred, args))
-                            if k in cached_clingo_atoms:
-                                nogood.append(cached_clingo_atoms[k])
-                            else:
-                                x = (atom_to_symbol(pred, args), sign)
-                                nogood.append(x)
-                                cached_clingo_atoms[k] = x
-                        nogoods.append(nogood)
-
-                    for nogood in nogoods:
-                        settings.nogoods += 1
-                        model.context.add_nogood(nogood)
-                        all_nogoods.append(nogood)
 
 def learn_solution(settings):
     timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)

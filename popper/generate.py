@@ -546,7 +546,7 @@ class Generator:
             rule_var = vo_clause(rule_id)
             rule_index[rule] = rule_var
             handle = make_rule_handle(rule)
-            if rule in self.seen_handles:
+            if handle in self.seen_handles:
                 literals.append(build_seen_rule_literal(rule, rule_var))
             else:
                 new_handles.add((handle, build_seen_rule(rule)))

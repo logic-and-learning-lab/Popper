@@ -76,6 +76,7 @@ class Combiner:
     def add_inconsistent(self, prog):
         self.inconsistent.add(prog)
 
+    # @profile
     def find_combination(self, encoding):
         str_encoding = '\n'.join(encoding)
         self.debug_count += 1
@@ -134,9 +135,12 @@ class Combiner:
                         con = ':-' + ','.join(f'rule({self.rulehash_to_id[get_rule_hash(rule)]})' for rule in smaller) + '.'
                         str_encoding += con + '\n'
                         self.constraints.add(con)
-                        print('-RUBBISH-', self.debug_count)
+                        print('-- RUBBISH --', self.debug_count, best_fn, prog_size(model_prog))
+                        for rule in model_prog:
+                            print('\t',format_rule(order_rule(rule)))
+                        print('subprog')
                         for rule in smaller:
-                            print('\t',format_rule(rule))
+                            print('\t',format_rule(order_rule(rule)))
                     # break to not consider no more models as we need to take into account the new constraint
                     break
                 t2 = time.time()
@@ -169,6 +173,7 @@ class Combiner:
 
         if self.settings.recursion_enabled or self.settings.pi_enabled:
             encoding.add(':- recursive, not base.')
+            encoding.add(':- recursive, #count{R : rule(R)} > ' + f'{self.settings.max_rules}.')
 
         for prog, examples_covered in self.prog_coverage.items():
             prog_rules = set()
