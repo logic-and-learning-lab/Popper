@@ -2,8 +2,8 @@ head_pred(counteven,2).
 type(counteven,(list,int)).
 direction(counteven,(in,out)).
 
-max_vars(5).
-max_body(5).
+max_vars(6).
+max_body(6).
 max_clauses(3).
 
 enable_recursion.

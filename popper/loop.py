@@ -136,7 +136,7 @@ def popper(settings):
     generator = Generator(settings, grounder)
 
     max_size = (1 + settings.max_body) * settings.max_rules
-    # max_size = 14
+    max_size = 11
     # max_size = 9
     # max_size = 3
     for size in range(1, max_size+1):

@@ -554,12 +554,11 @@ class Generator:
             rule_var = vo_clause(rule_id)
             rule_index[rule] = rule_var
             handle = make_rule_handle(rule)
-            # if handle in self.seen_handles:
-            #     literals.append(build_seen_rule_literal(handle, rule_var))
-            #     print('yes!!!')
-            # else:
-            new_handles.add((handle, build_seen_rule(rule)))
-            literals.extend(tuple(build_rule_literals(rule, rule_var)))
+            if handle in self.seen_handles:
+                literals.append(build_seen_rule_literal(handle, rule_var))
+            else:
+                new_handles.add((handle, build_seen_rule(rule)))
+                literals.extend(tuple(build_rule_literals(rule, rule_var)))
             literals.append(body_size_literal(rule_var, len(body)))
         literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
 
@@ -577,12 +576,9 @@ class Generator:
             handle = make_rule_handle(rule)
             if handle in self.seen_handles:
                 literals.append(build_seen_rule_literal(handle, rule_var))
-                # print('yes!!!')
             else:
                 new_handles.add((handle, build_seen_rule(rule)))
                 literals.extend(tuple(build_rule_literals(rule, rule_var)))
-            # new_handles.add((handle, build_seen_rule(rule)))
-            # literals.extend(build_rule_literals(rule, rule_var))
             literals.append(lt(rule_var, len(prog)))
         literals.append(Literal('clause', (len(prog), ), positive = False))
         literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
@@ -605,14 +601,11 @@ class Generator:
             else:
                 new_handles.add((handle, build_seen_rule(rule)))
                 literals.extend(build_rule_literals(rule, rule_var))
-            # new_handles.add((handle, build_seen_rule(rule)))
-            # literals.extend(build_rule_literals(rule, rule_var))
             literals.append(gteq(rule_var, 1))
             literals.append(Literal('recursive_clause',(rule_var, head.predicate, head.arity)))
             literals.append(Literal('num_recursive', (head.predicate, 1)))
             literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
             return handle, new_handles, tuple(literals)
-
 
     def redundancy_constraint3(self, prog, rule_ordering={}):
         new_handles = set()
@@ -661,7 +654,6 @@ class Generator:
             if not something_added:
                 break
 
-
         for lit in lits_num_rules.keys() - recursively_called:
             rule_index = {}
             literals = []
@@ -670,7 +662,6 @@ class Generator:
                 head, body = rule
                 rule_var = vo_clause(rule_id)
                 rule_index[rule] = rule_var
-                # literals.extend(build_rule_literals(rule, rule_var))
                 handle = make_rule_handle(rule)
 
                 if handle in self.seen_handles:
@@ -678,7 +669,6 @@ class Generator:
                 else:
                     # new_handles.add((handle, build_seen_rule(rule)))
                     literals.extend(build_rule_literals(rule, rule_var))
-                # literals.extend(build_rule_literals(rule, rule_var))
 
             for other_lit, num_clauses in lits_num_rules.items():
                 if other_lit == lit:
