@@ -136,7 +136,7 @@ def popper(settings):
     generator = Generator(settings, grounder)
 
     max_size = (1 + settings.max_body) * settings.max_rules
-    max_size = 11
+    # max_size = 11
     # max_size = 9
     # max_size = 3
     for size in range(1, max_size+1):
@@ -166,7 +166,7 @@ def popper(settings):
             handle = iter(handle)
 
             while True:
-                print(num_gen, num_specs, num_red1, num_red2)
+                # print(num_gen, num_specs, num_red1, num_red2)
                 model = None
 
                 # GENERATE A PROGRAM

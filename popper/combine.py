@@ -65,6 +65,7 @@ class Combiner:
     def update_prog_index(self, prog, pos_covered):
         self.prog_coverage[prog] = pos_covered
 
+        # added = False
         for rule in prog:
             rule_hash = get_rule_hash(rule)
             if rule_hash not in self.rulehash_to_id:
@@ -72,6 +73,10 @@ class Combiner:
                 self.rulehash_to_id[rule_hash] = k
                 self.ruleid_to_rule[k] = rule
                 self.ruleid_to_size[k] = rule_size(rule)
+                # added = True
+        # if not added:
+            # print('WTF!!?')
+            # exit()
 
     def add_inconsistent(self, prog):
         self.inconsistent.add(prog)
@@ -80,8 +85,8 @@ class Combiner:
     def find_combination(self, encoding):
         str_encoding = '\n'.join(encoding)
         self.debug_count += 1
-        # with open(f'sat/{self.debug_count}', 'w') as f:
-            # f.write(str_encoding)
+        with open(f'sat/{self.debug_count}', 'w') as f:
+            f.write(str_encoding)
 
         best_prog = []
         best_fn = False
@@ -144,7 +149,7 @@ class Combiner:
                     # break to not consider no more models as we need to take into account the new constraint
                     break
                 t2 = time.time()
-                # print('COMBINE TIME', self.debug_count, t2-t1)
+                print('COMBINE TIME', self.debug_count, t2-t1)
 
             if not model_found or not model_inconsistent:
                 return best_prog, best_fn
