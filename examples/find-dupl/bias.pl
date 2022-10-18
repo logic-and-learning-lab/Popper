@@ -7,6 +7,7 @@ max_vars(5).
 max_body(5).
 %% max_clauses(3).
 enable_recursion.
+allow_singletons.
 
 head_pred(f,2).
 body_pred(head,2).

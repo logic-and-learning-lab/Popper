@@ -24,8 +24,6 @@ def atom_to_symbol(pred, args):
     xs = tuple(arg_to_symbol(arg) for arg in args)
     return Function(name = pred, arguments = xs)
 
-
-
 def parse_handles(generator, new_handles):
     for x, rule in new_handles:
         # print(x, rule
@@ -355,9 +353,9 @@ def popper(settings):
                     # if we find a new solution, update the maximum program size
                     if new_solution_found:
                         # exit()
-                        for i in range(combiner.max_size, settings.max_literals+1):
-                            size_con = [(atom_to_symbol("size", (i,)), True)]
-                            model.context.add_nogood(size_con)
+                        # for i in range(combiner.max_size, settings.max_literals+1):
+                        #     size_con = [(atom_to_symbol("size", (i,)), True)]
+                        #     model.context.add_nogood(size_con)
                         settings.max_literals = combiner.max_size-1
 
                 # if it covers all examples, stop

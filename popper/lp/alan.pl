@@ -16,19 +16,6 @@
 #show body_literal/4.
 #show direction_/3.
 #show before/2.
-#show size/1.
-
-#heuristic size(N). [1000-N,true]
-
-max_size(K):-
-    max_body(M),
-    max_clauses(N),
-    K = (M+1)*N.
-
-size(N):-
-    max_size(MaxSize),
-    N = 2..MaxSize,
-    #sum{K+1,C : body_size(C,K)} == N.
 
 pi_or_rec:-
     recursive.
@@ -344,13 +331,13 @@ head_connected(C,Var1):-
 %% %% ROLF MOREL'S ORDERING CONSTRAINT
 %% %% IT REDUCES THE NUMBER OF MODELS BUT DRASTICALLY INCREASES GROUNDING AND SOLVING TIME
 %% %% ##################################################
-bfr(C,(P,PArgs),(Q,QArgs)) :- head_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs).
-bfr(C,(P,PArgs),(Q,QArgs)) :- body_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs),P<Q.
-bfr(C,(P,PArgs1),(P,PArgs2)) :- body_literal(C,P,PA,PArgs1),body_literal(C,P,PA,PArgs2),PArgs1<PArgs2.
+%% bfr(C,(P,PArgs),(Q,QArgs)) :- head_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs).
+%% bfr(C,(P,PArgs),(Q,QArgs)) :- body_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs),P<Q.
+%% bfr(C,(P,PArgs1),(P,PArgs2)) :- body_literal(C,P,PA,PArgs1),body_literal(C,P,PA,PArgs2),PArgs1<PArgs2.
 
-not_var_first_lit(C,V,(P,PArgs)) :- bfr(C,(Q,QArgs),(P,PArgs)),var_member(V,QArgs),var_member(V,PArgs).
-var_first_lit(C,V,(P,PArgs)) :- body_literal(C,P,_,PArgs),var_member(V,PArgs),not not_var_first_lit(C,V,(P,PArgs)).
-:-var_first_lit(C,V,(P,PArgs)),var_first_lit(C,W,(Q,QArgs)),bfr(C,(P,PArgs),(Q,QArgs)),W<V.
+%% not_var_first_lit(C,V,(P,PArgs)) :- bfr(C,(Q,QArgs),(P,PArgs)),var_member(V,QArgs),var_member(V,PArgs).
+%% var_first_lit(C,V,(P,PArgs)) :- body_literal(C,P,_,PArgs),var_member(V,PArgs),not not_var_first_lit(C,V,(P,PArgs)).
+%% :-var_first_lit(C,V,(P,PArgs)),var_first_lit(C,W,(Q,QArgs)),bfr(C,(P,PArgs),(Q,QArgs)),W<V.
 %% %% :-pruned.
 
 
@@ -358,23 +345,27 @@ var_first_lit(C,V,(P,PArgs)) :- body_literal(C,P,_,PArgs),var_member(V,PArgs),no
 %% SUBSUMPTION
 %% ##################################################
 same_head(C1,C2):-
+    C1 > 0,
     C1 < C2,
     head_literal(C1,P,A,Vars),
     head_literal(C2,P,A,Vars).
 
 not_body_subset(C1,C2):-
+    C1 > 0,
     clause(C2),
     C1 < C2,
     body_literal(C1,P,A,Vars),
     not body_literal(C2,P,A,Vars).
 
 body_subset(C1,C2):-
+    C1 > 0,
     clause(C2),
     C1 < C2,
     not not_body_subset(C1,C2),
     body_literal(C1,P,A,Vars),
     body_literal(C2,P,A,Vars).
 :-
+    C1 > 0,
     C1 < C2,
     same_head(C1,C2),
     body_subset(C1,C2).
@@ -896,3 +887,33 @@ only_once(P,A):-
 %% :-
 %%     not has_new_rule.
 
+
+
+
+%% :-
+%%     clause(C),
+%%     not separable(C).
+
+%% separable(C) :-
+%%     Var1 < Var2,
+%%     body_var(C,Var1),
+%%     body_var(C,Var2),
+%%     not head_var(C,Var1),
+%%     not head_var(C,Var2),
+%%     not path(C,Var1,Var2).
+
+%% path(C,Var1,Var2) :-
+%%     Var1 < Var2,
+%%     body_literal(C,_,_,Vars),
+%%     not head_var(C,Var1),
+%%     not head_var(C,Var2),
+%%     var_member(Var1,Vars),
+%%     var_member(Var2,Vars).
+%% path(C,Var1,Var2) :-
+%%     Var1 < Var2,
+%%     body_literal(C,_,_,Vars),
+%%     var_member(Var1,Vars),
+%%     not head_var(C,Var1),
+%%     not head_var(C,Var3),
+%%     var_member(Var3,Vars),
+%%     path(C,Var3,Var2).

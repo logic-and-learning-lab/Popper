@@ -5,7 +5,7 @@ import clingo.script
 import pkg_resources
 from . core import Literal, RuleVar, VarVar, Var
 from collections import defaultdict
-from . util import rule_is_recursive
+from . util import rule_is_recursive, format_rule
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 
@@ -498,6 +498,7 @@ class Generator:
         encoding = '\n'.join(encoding)
 
         solver = clingo.Control([])
+        # solver = clingo.Control(["-t6"])
         solver.configuration.solve.models = 0
 
 
@@ -680,6 +681,7 @@ class Generator:
             return tuple(literals)
 
 BINDING_ENCODING = """\
+#defined rule_var/2.
 #show bind_rule/2.
 #show bind_var/3.
 
@@ -783,11 +785,13 @@ class Grounder():
                 rule_vars[var.rule].add(var)
 
 
+
         int_lookup = {}
         tmp_lookup = {}
         for rule_var, xs in rule_vars.items():
             rule_var_int = rule_var_to_int[rule_var]
             encoding.append(f'rule({rule_var_int}).')
+
             for var_var_int, var_var in enumerate(xs):
                 encoding.append(f'rule_var({rule_var_int},{var_var_int}).')
                 int_lookup[(rule_var_int, var_var_int)] = var_var
@@ -832,6 +836,7 @@ class Grounder():
 
         # print('ASDASDA')
         solver = clingo.Control()
+        # solver = clingo.Control(["-t4"])
         # ask for all models
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)

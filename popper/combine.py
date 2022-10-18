@@ -149,7 +149,7 @@ class Combiner:
                     # break to not consider no more models as we need to take into account the new constraint
                     break
                 t2 = time.time()
-                print('COMBINE TIME', self.debug_count, t2-t1)
+                # print('COMBINE TIME', self.debug_count, t2-t1)
 
             if not model_found or not model_inconsistent:
                 return best_prog, best_fn
