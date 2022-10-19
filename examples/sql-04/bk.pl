@@ -1,0 +1,9 @@
+in(1,d1,google,facebook).
+in(2,d1,non,linkedin).
+in(3,d2,google,non).
+in(4,d2,non,yahoo).
+in(5,d3,google,non).
+not_null(google).
+not_null(facebook).
+not_null(linkedin).
+not_null(yahoo).

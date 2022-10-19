@@ -1,0 +1,11 @@
+active(isactive).
+correct(true).
+input1(1,a,name,aaa).
+input1(2,a,class,p).
+input1(3,a,isactive,true).
+input1(4,b,name,bbb).
+input1(5,b,class,q).
+input1(6,b,isactive,false).
+input1(7,c,name,ccc).
+input1(8,c,class,r).
+input1(9,c,isactive,true).
