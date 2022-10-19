@@ -331,14 +331,14 @@ head_connected(C,Var1):-
 %% %% ROLF MOREL'S ORDERING CONSTRAINT
 %% %% IT REDUCES THE NUMBER OF MODELS BUT DRASTICALLY INCREASES GROUNDING AND SOLVING TIME
 %% %% ##################################################
-%% bfr(C,(P,PArgs),(Q,QArgs)) :- head_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs).
-%% bfr(C,(P,PArgs),(Q,QArgs)) :- body_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs),P<Q.
-%% bfr(C,(P,PArgs1),(P,PArgs2)) :- body_literal(C,P,PA,PArgs1),body_literal(C,P,PA,PArgs2),PArgs1<PArgs2.
+bfr(C,(P,PArgs),(Q,QArgs)) :- head_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs).
+bfr(C,(P,PArgs),(Q,QArgs)) :- body_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs),P<Q.
+bfr(C,(P,PArgs1),(P,PArgs2)) :- body_literal(C,P,PA,PArgs1),body_literal(C,P,PA,PArgs2),PArgs1<PArgs2.
 
-%% not_var_first_lit(C,V,(P,PArgs)) :- bfr(C,(Q,QArgs),(P,PArgs)),var_member(V,QArgs),var_member(V,PArgs).
-%% var_first_lit(C,V,(P,PArgs)) :- body_literal(C,P,_,PArgs),var_member(V,PArgs),not not_var_first_lit(C,V,(P,PArgs)).
-%% :-var_first_lit(C,V,(P,PArgs)),var_first_lit(C,W,(Q,QArgs)),bfr(C,(P,PArgs),(Q,QArgs)),W<V.
-%% %% :-pruned.
+not_var_first_lit(C,V,(P,PArgs)) :- bfr(C,(Q,QArgs),(P,PArgs)),var_member(V,QArgs),var_member(V,PArgs).
+var_first_lit(C,V,(P,PArgs)) :- body_literal(C,P,_,PArgs),var_member(V,PArgs),not not_var_first_lit(C,V,(P,PArgs)).
+:-var_first_lit(C,V,(P,PArgs)),var_first_lit(C,W,(Q,QArgs)),bfr(C,(P,PArgs),(Q,QArgs)),W<V.
+%% :-pruned.
 
 
 %% ##################################################

@@ -188,6 +188,10 @@ class Explainer:
             # print(selected_literals)
             subprog = parse_model4(literal_index, selected_literals)
 
+            # print('raw_sub')
+            # for rule in subprog:
+            #     print(format_rule(order_rule(rule)))
+
             k1 = prog_hash(subprog)
 
             # Q. Is it better to push this check to the solver? I think not
@@ -248,6 +252,9 @@ class Explainer:
                     self.cached_unsat.add(k2)
                     # unsat_count+=1
 
+                    print('\t', 'UNSAT')
+                    for rule in order_prog(test_prog):
+                        print('\t', format_rule(order_rule(rule)))
 
                     # ADD NOGOOD!!!!!!
 
@@ -295,8 +302,8 @@ class Explainer:
     # @profile
     def find_subprogs(self, literal_index, encoding):
         self.tmp_count +=1
-        with open(f'DBG/explain-{self.tmp_count}.pl', 'w') as f:
-            f.write(encoding)
+        # with open(f'DBG/explain-{self.tmp_count}.pl', 'w') as f:
+            # f.write(encoding)
         # solver = clingo.Control(["--heuristic=Domain"])
         solver = clingo.Control([])
         solver.configuration.solve.models = 0

@@ -198,6 +198,13 @@ def popper(settings):
                 with settings.stats.duration('test'):
                     pos_covered, inconsistent = tester.test_prog(prog)
 
+                # print(len(pos_covered), inconsistent)
+
+                # if len(pos_covered) == 0 and inconsistent:
+                #     print('moop')
+                #     for rule in prog:
+                #         print(format_rule(rule))
+
                 new_cons = set()
 
                 pruned_subprog = False

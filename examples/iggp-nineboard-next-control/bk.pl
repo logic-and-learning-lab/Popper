@@ -1158,6 +1158,8 @@ symbol(o).
 symbol(x).
 symbol_o(o).
 symbol_x(x).
+not_true_control(A,B):-
+    \+ true_control(A,B).
 true_control(1,xplayer).
 true_control(10,oplayer).
 true_control(100,xplayer).

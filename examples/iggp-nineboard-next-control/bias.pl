@@ -16,6 +16,7 @@ head_pred(next_control,2).
 body_pred(true_mark,6).
 body_pred(true_currentboard,3).
 body_pred(true_control,2).
+body_pred(not_true_control,2).
 body_pred(input,2).
 body_pred(input_play,6).
 body_pred(does,3).
@@ -25,6 +26,7 @@ body_pred(index,1).
 type(true_mark,(ex,mypos,mypos,mypos,mypos,symbol)).
 type(true_currentboard,(ex,mypos,mypos)).
 type(true_control,(ex,agent)).
+type(not_true_control,(ex,agent)).
 type(next_control,(ex,agent)).
 type(input,(agent,action)).
 type(input_play,(agent,mypos,mypos,mypos,mypos,symbol)).
@@ -45,25 +47,25 @@ type(P,(T,)):-
 
 
 
-moo(true_control,2).
-moo(next_control,2).
-moo(true_currentboard,3).
-moo(does,3).
-moo(true_mark,6).
-moo(does_play,7).
+%% moo(true_control,2).
+%% moo(next_control,2).
+%% moo(true_currentboard,3).
+%% moo(does,3).
+%% moo(true_mark,6).
+%% moo(does_play,7).
 
 
-%% bad_body(P,2,Vars):-
-%%     vars(2,Vars),
-%%     moo(P,2),
-%%     Vars = (V0,_),
-%%     V0 != 0.
+%% %% bad_body(P,2,Vars):-
+%% %%     vars(2,Vars),
+%% %%     moo(P,2),
+%% %%     Vars = (V0,_),
+%% %%     V0 != 0.
 
-bad_body(P,A,Vars):-
-    vars(A,Vars),
-    moo(P,A),
-    var_pos(Var,Vars,0),
-    Var != 0.
+%% bad_body(P,A,Vars):-
+%%     vars(A,Vars),
+%%     moo(P,A),
+%%     var_pos(Var,Vars,0),
+%%     Var != 0.
 
 %% type(true_mark,(ex,mypos,mypos,mypos,mypos,symbol)).
 %% type(true_currentboard,(ex,mypos,mypos)).
