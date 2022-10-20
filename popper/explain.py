@@ -77,6 +77,8 @@ def build_explain_encoding(prog, with_directions=False):
     body_count = 0
     size = 0
 
+    # TODO: IF NO DIRECTIONS AND NO RECURSION, THEN CONSIDER ONLY BODIES TOO
+
     for rule_id, rule in enumerate(prog):
         head, body = rule
         rule_vars = set()
@@ -161,7 +163,7 @@ class Explainer:
     #   if r1 is UNSAT, then r2 in UNSAT
 
     # @profile
-    def explain_totally_incomplete2(self, prog, directions):
+    def explain_totally_incomplete2(self, prog, directions, tmp_cnt):
         encoding = set()
         encoding.add(self.explain_encoding)
         if self.has_directions:
@@ -170,9 +172,12 @@ class Explainer:
         literal_index, prog_encoding = build_explain_encoding(prog, self.has_directions)
         encoding.update(prog_encoding)
 
-        # with open('DBG-explain.pl','w') as f:
-        #     tmp = '\n'.join(sorted(list(encoding)))
-        #     f.write(tmp)
+        with open(f'dbg/explain-{tmp_cnt}.pl','w') as f:
+
+            for rule in order_prog(prog):
+                f.write('% ' + format_rule(order_rule(rule)) + '\n')
+            tmp = '\n'.join(sorted(list(encoding)))
+            f.write(tmp)
 
         encoding = '\n'.join(encoding)
 
@@ -229,6 +234,7 @@ class Explainer:
             with self.settings.stats.duration('explain_prolog'):
                 test_prog = []
                 for head, body in subprog:
+
                     head_modes = tuple(directions[head.predicate][i] for i in range(head.arity))
                     # print(head_modes)
                     head_literal = Literal(head.predicate, head.arguments, head_modes)
@@ -252,9 +258,9 @@ class Explainer:
                     self.cached_unsat.add(k2)
                     # unsat_count+=1
 
-                    print('\t', 'UNSAT')
-                    for rule in order_prog(test_prog):
-                        print('\t', format_rule(order_rule(rule)))
+                    # print('\t', 'UNSAT')
+                    # for rule in order_prog(test_prog):
+                    #     print('\t', format_rule(order_rule(rule)))
 
                     # ADD NOGOOD!!!!!!
 
@@ -304,8 +310,8 @@ class Explainer:
         self.tmp_count +=1
         # with open(f'DBG/explain-{self.tmp_count}.pl', 'w') as f:
             # f.write(encoding)
-        # solver = clingo.Control(["--heuristic=Domain"])
-        solver = clingo.Control([])
+        solver = clingo.Control(["--heuristic=Domain"])
+        # solver = clingo.Control([])
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
         solver.ground([('base', [])])

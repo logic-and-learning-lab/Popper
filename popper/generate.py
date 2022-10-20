@@ -497,10 +497,15 @@ class Generator:
 
         encoding = '\n'.join(encoding)
 
-        solver = clingo.Control([])
-        # solver = clingo.Control(["-t6"])
-        solver.configuration.solve.models = 0
+        if self.settings.recursion_enabled or self.settings.pi_enabled:
+            print('not using heuristic')
+            solver = clingo.Control([])
+            # solver = clingo.Control(["-t6"])
+        else:
+            print('using heuristic')
+            solver = clingo.Control(["--heuristic=Domain"])
 
+        solver.configuration.solve.models = 0
 
         NUM_OF_LITERALS = """
         %%% External atom for number of literals in the program %%%%%

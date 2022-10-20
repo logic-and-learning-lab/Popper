@@ -1,3 +1,4 @@
+from z3 import *
 import clingo
 import time
 import itertools
@@ -38,7 +39,7 @@ class Combiner:
         self.tester = tester
 
         self.example_to_id = {}
-        self.build_example_encoding()
+        # self.build_example_encoding()
 
         self.prog_coverage = {}
 
@@ -55,12 +56,29 @@ class Combiner:
         self.inconsistent = set()
         self.debug_count = 0
 
-    def build_example_encoding(self):
-        example_prog = []
-        for i, x in enumerate(self.settings.pos):
-            self.example_to_id[x] = i
-            example_prog.append(f'example({i}).')
-        self.example_prog = '\n'.join(example_prog)
+        # encoding = []
+        # encoding.append(FIND_SUBSET_PROG1)
+
+        # if self.settings.recursion_enabled or self.settings.pi_enabled:
+        #     encoding.add(':- recursive, not base.')
+        #     # encoding.add(':- recursive, #count{R : rule(R)} > ' + f'{self.settings.max_rules}.')
+
+        # for i, x in enumerate(self.settings.pos):
+        #     self.example_to_id[x] = i
+        #     encoding.append(f'example({i}).')
+
+        # encoding = '\n'.join(encoding)
+
+
+        # self.sol = Solver()
+        self.solver = Optimize()
+        self.solver_vars = {}
+        self.covered_buy = {}
+        self.rule_id = 0
+
+        # self.solver = clingo.Control([])
+        # self.solver.add('base', [], encoding)
+        # self.solver.ground([('base', [])])
 
     def update_prog_index(self, prog, pos_covered):
         self.prog_coverage[prog] = pos_covered
@@ -85,70 +103,76 @@ class Combiner:
     def find_combination(self, encoding):
         str_encoding = '\n'.join(encoding)
         self.debug_count += 1
-        with open(f'sat/{self.debug_count}', 'w') as f:
-            f.write(str_encoding)
+        # with open(f'sat/{self.debug_count}', 'w') as f:
+            # f.write(str_encoding)
 
         best_prog = []
         best_fn = False
 
         while True:
-            solver = clingo.Control([])
-            solver.add('base', [], str_encoding)
-            solver.ground([('base', [])])
+
 
             model_found = False
             model_inconsistent = False
 
-            with solver.solve(yield_=True) as handle:
-                # print('calling')
-                t1 = time.time()
-                for m in handle:
-                    t2 = time.time()
-                    # print('COMBINE TIME', self.debug_count, t2-t1)
-                    model_found = True
-                    model_incomplete = False
 
-                    # cost has two elements when we have not yet found a complete model
-                    if len(m.cost) == 2:
-                        fn = m.cost[0]
-                    # once we have a complete model, the cost is only the size of the solution
-                    else:
-                        fn = 0
+            with solver.solve(yield_ = True) as handle:
+                handle = iter(handle)
 
-                    atoms = m.symbols(shown = True)
-                    rules = [atom.arguments[0].number for atom in atoms]
+                while True:
 
-                    if not self.settings.recursion_enabled and not self.settings.pi_enabled:
-                        best_prog = rules
-                        best_fn = fn
-                        continue
+                    # GENERATE A PROGRAM
+                    with self.settings.stats.duration('combine_solve'):
+                        # get the next model from the solver
+                        m = next(handle, None)
+                        if m is None:
+                            break
 
-                    # check whether recursive program is inconsistent
-                    model_prog = [self.ruleid_to_rule[k] for k in rules]
-                    model_inconsistent = self.tester.is_inconsistent(model_prog)
-                    if not model_inconsistent:
-                        best_prog = rules
-                        best_fn = fn
-                        if fn > 0 and self.tester.is_complete(model_prog):
-                            best_fn = 0
-                        continue
+                        # print('COMBINE TIME', self.debug_count, t2-t1)
+                        model_found = True
+                        model_incomplete = False
 
-                    with self.settings.stats.duration('subcheck'):
-                        # if program is inconsistent, then find the smallest inconsistent subprogram and prune it
-                        # TODO: we could add the constraints for the intermediate solutions
-                        smaller = self.tester.reduce_inconsistent(model_prog)
-                        con = ':-' + ','.join(f'rule({self.rulehash_to_id[get_rule_hash(rule)]})' for rule in smaller) + '.'
-                        str_encoding += con + '\n'
-                        self.constraints.add(con)
-                        print('-- RUBBISH --', self.debug_count, best_fn, prog_size(model_prog))
-                        for rule in model_prog:
-                            print('\t',format_rule(order_rule(rule)))
-                        print('subprog')
-                        for rule in smaller:
-                            print('\t',format_rule(order_rule(rule)))
-                    # break to not consider no more models as we need to take into account the new constraint
+                        # cost has two elements when we have not yet found a complete model
+                        if len(m.cost) == 2:
+                            fn = m.cost[0]
+                        # once we have a complete model, the cost is only the size of the solution
+                        else:
+                            fn = 0
+
+                        atoms = m.symbols(shown = True)
+                        rules = [atom.arguments[0].number for atom in atoms]
+
+                        if not self.settings.recursion_enabled and not self.settings.pi_enabled:
+                            best_prog = rules
+                            best_fn = fn
+                            continue
+
+                        # check whether recursive program is inconsistent
+                        model_prog = [self.ruleid_to_rule[k] for k in rules]
+                        model_inconsistent = self.tester.is_inconsistent(model_prog)
+                        if not model_inconsistent:
+                            best_prog = rules
+                            best_fn = fn
+                            if fn > 0 and self.tester.is_complete(model_prog):
+                                best_fn = 0
+                            continue
+
+                        with self.settings.stats.duration('subcheck'):
+                            # if program is inconsistent, then find the smallest inconsistent subprogram and prune it
+                            # TODO: we could add the constraints for the intermediate solutions
+                            smaller = self.tester.reduce_inconsistent(model_prog)
+                            con = ':-' + ','.join(f'rule({self.rulehash_to_id[get_rule_hash(rule)]})' for rule in smaller) + '.'
+                            str_encoding += con + '\n'
+                            self.constraints.add(con)
+                            print('-- RUBBISH --', self.debug_count, best_fn, prog_size(model_prog))
+                            for rule in model_prog:
+                                print('\t',format_rule(order_rule(rule)))
+                            print('subprog')
+                            for rule in smaller:
+                                print('\t',format_rule(order_rule(rule)))
+                        # break to not consider no more models as we need to take into account the new constraint
+                        break
                     break
-                t2 = time.time()
                 # print('COMBINE TIME', self.debug_count, t2-t1)
 
             if not model_found or not model_inconsistent:
@@ -157,66 +181,60 @@ class Combiner:
 
     # @profile
     def select_solution(self, new_prog):
-        encoding = set()
-
-        if self.solution_found:
-            # this encoding has a hard constraint to ensure the program is complete
-            encoding.add(FIND_SUBSET_PROG2)
-            # add size constraint to only find programs smaller than the best one so far
-            encoding.add(':- #sum{K,R : rule(R), size(R,K)} >= ' + f'{self.max_size}.')
-        else:
-            # this encoding has a soft constraint to cover as many positive examples as possible
-            encoding.add(FIND_SUBSET_PROG1)
-            # add a constraint to ensure more examples are covered than previously
-            encoding.add(':- #sum{1,E : covered(E)} <= ' + f'{self.num_covered}.')
-
-        # any better solution must use at least one new rule
+        covered = self.prog_coverage[new_prog]
         for rule in new_prog:
-            rule_hash = get_rule_hash(rule)
-            rule_id = self.rulehash_to_id[rule_hash]
-            encoding.add(f'uses_new:- rule({rule_id}).')
+            # rule_hash = get_rule_hash(rule)
+            self.rule_id += 1
+            rule_var = Bool(self.rule_id)
+            # self.solver_vars[rule_hash] = rule_var
+            # print(rule_size(rule))
+            self.solver.add_soft(rule_var, -rule_size(rule))
+            # prog_var = rule_var
 
-        if self.settings.recursion_enabled or self.settings.pi_enabled:
-            encoding.add(':- recursive, not base.')
-            encoding.add(':- recursive, #count{R : rule(R)} > ' + f'{self.settings.max_rules}.')
+        for ex in covered:
+            if ex not in self.covered_buy:
+                self.covered_buy[ex] = set()
+            self.covered_buy[ex].add(rule_var)
+            self.solver.add(Or(self.covered_buy[ex]))
 
-        for prog, examples_covered in self.prog_coverage.items():
-            prog_rules = set()
-            for rule in prog:
-                rule_hash = get_rule_hash(rule)
-                rule_id = self.rulehash_to_id[rule_hash]
-                rule_size = self.ruleid_to_size[rule_id]
-                prog_rules.add(rule_id)
-                encoding.add(f'size({rule_id},{rule_size}).')
-                if self.settings.recursion_enabled or self.settings.pi_enabled:
-                    if rule_is_recursive(rule):
-                        encoding.add(f'recursive:- rule({rule_id}).')
-                    else:
-                        encoding.add(f'base:- rule({rule_id}).')
+        print(self.solver.sexpr())
 
-            prog_rules = ','.join(f'rule({i})' for i in prog_rules)
-            for ex in self.prog_coverage[prog]:
-                i = self.example_to_id[ex]
-                encoding.add(f'covered({i}):- {prog_rules}.')
 
-        # add example atoms
-        encoding.add(self.example_prog)
+        print('asda')
+        t1 = time.time()
+        print(self.solver.check())
+        print(self.solver.model())
+        t2 = time.time()
+        print(t2-t1)
 
-        # add constraints to prune inconsistent recursive programs
-        encoding.update(self.constraints)
+        t1 = time.time()
+        print(self.solver.check())
+        print(self.solver.model())
+        t2 = time.time()
+        print(t2-t1)
 
-        if len(self.inconsistent) > 0:
-            # TODO: improve as there is no need to build the constraints each time
-            # with self.settings.stats.duration('inconsistent thingy'):
-            for prog in self.inconsistent:
-                if all(get_rule_hash(rule) in self.rulehash_to_id for rule in prog):
-                    ids = [self.rulehash_to_id[get_rule_hash(rule)] for rule in prog]
-                    con = ':-' + ','.join(f'rule({x})' for x in ids) + '.'
-                    encoding.add(con)
 
-        model_rules, fn = self.find_combination(encoding)
+        return [], 0
 
-        return [self.ruleid_to_rule[k] for k in model_rules], fn
+
+        # # add example atoms
+        # encoding.add(self.example_prog)
+
+        # # add constraints to prune inconsistent recursive programs
+        # encoding.update(self.constraints)
+
+        # if len(self.inconsistent) > 0:
+        #     # TODO: improve as there is no need to build the constraints each time
+        #     # with self.settings.stats.duration('inconsistent thingy'):
+        #     for prog in self.inconsistent:
+        #         if all(get_rule_hash(rule) in self.rulehash_to_id for rule in prog):
+        #             ids = [self.rulehash_to_id[get_rule_hash(rule)] for rule in prog]
+        #             con = ':-' + ','.join(f'rule({x})' for x in ids) + '.'
+        #             encoding.add(con)
+
+        # model_rules, fn = self.find_combination(encoding)
+
+        # return [self.ruleid_to_rule[k] for k in model_rules], fn
 
     # @profile
     def update_best_prog(self, prog, pos_covered):

@@ -1,3 +1,5 @@
+max_body(8).
+max_vars(8).
 head_pred(next,2).
 body_pred(does,3).
 body_pred(my_input,2).

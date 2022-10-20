@@ -22,7 +22,7 @@ MAX_EXAMPLES=10000
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper is an ILP system based on learning from failures')
-    parser.add_argument('kbpath', help = 'Path to the knowledge base one wants to learn on')
+    parser.add_argument('kbpath', default=False, help = 'Path to the knowledge base one wants to learn on')
     # parser.add_argument('--info', default=False, action='store_true', help='Print best programs so ')
     parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
@@ -240,13 +240,20 @@ def flatten(xs):
 class Settings:
     def __init__(self, kbpath=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, explain=False, test=False):
 
-
         if kbpath == False:
+            print('ASDA')
             args = parse_args()
             # info = args.info
             quiet = args.quiet
             debug = args.debug
             kbpath = args.kbpath
+            if kbpath:
+                self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
+            else:
+                self.bk_file = args.bk_file
+                self.ex_file = args.ex_file
+                self.bias_file = args.bias_file
+
             show_stats = args.stats
             bkcons = args.bkcons
             max_literals = args.max_literals
@@ -259,6 +266,7 @@ class Settings:
             functional_test = args.functional_test
             explain = args.explain
             test = args.test
+
 
         self.logger = logging.getLogger("popper")
 
@@ -275,7 +283,6 @@ class Settings:
         self.debug = debug
         self.stats = Stats(info=info, debug=debug)
         self.stats.logger = self.logger
-        self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
         self.show_stats = show_stats
         self.bkcons = bkcons
         self.max_literals = max_literals
