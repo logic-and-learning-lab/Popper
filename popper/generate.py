@@ -149,10 +149,6 @@ def parse_model(model):
     prog = []
     rule_lookup = {}
 
-    # rules = set(rule_index_to_head.keys()).union(set(rule_index_to_body.keys()))
-    # for rule_index in rules:
-    #     head = None
-    #     if rule_index in rule_index_to_head:
     for rule_index in rule_index_to_head:
         head_pred, head_args, head_arity = rule_index_to_head[rule_index]
         head_modes = tuple(directions[head_pred][i] for i in range(head_arity))
@@ -192,294 +188,11 @@ def build_rule_ordering_literals(rule_index, rule_ordering):
 
 class Generator:
 
-    # def con_to_strings(self, con):
-    #      for grule in get_ground_rules((None, con)):
-    #         # print('grule', grule)
-    #         h, b = grule
-    #         rule = []
-    #         for sign, pred, args in b:
-    #             if not sign:
-    #                 rule.append(f'not {pred}{args}')
-    #             else:
-    #                 rule.append(f'{pred}{args}')
-    #         rule = ':- ' + ', '.join(sorted(rule)) + '.'
-    #         rule = rule.replace("'","")
-    #         rule = rule.replace('not clause(1,)','not clause(1)')
-    #         yield rule
-
-     # def gen_symbol(self, literal, backend):
-     #    (sign, pred, args) = literal
-     #    k = hash(literal)
-     #    if k in self.seen_symbols:
-     #        symbol = self.seen_symbols[k]
-     #    else:
-     #        symbol = backend.add_atom(atom_to_symbol(pred, args))
-     #        self.seen_symbols[k] = symbol
-     #    return symbol
-
-
-    def gen_symbol(self, literal, backend):
-        (sign, pred, args) = literal
-        k = hash(literal)
-        if k in self.seen_symbols:
-            symbol = self.seen_symbols[k]
-        else:
-            symbol = backend.add_atom(atom_to_symbol(pred, args))
-            self.seen_symbols[k] = symbol
-        return symbol
-
-    # def add_ground_clauses(self, clauses):
-    def update_solver(self, size, handles, bad_handles, ground_cons, bad_progs = []):
-
-        # print('bad_handles', len(bad_handles))
-
-        # for x in bad_handles:
-            # print(x)
-
-        to_add = []
-        to_add.extend(([], x) for x in ground_cons)
-
-        # to_add = set()
-
-        for handle, rule in handles:
-            if rule in self.seen_handle_rules:
-                continue
-            self.seen_handle_rules.add(rule)
-            (h_p, h_args), b = rule
-            new_h = (True, h_p, h_args)
-            new_b = frozenset((True, b_p, b_args) for b_p, b_args in b)
-            # rule = f'{h_p}{h_args}:-' + ','.join(f'{b_pred}{b_args}' for b_pred, b_args in b) + '.'
-            # rule = rule.replace("'","")
-            to_add.append((new_h, new_b))
-
-
-        if bad_handles:
-            moo = []
-            for handle in bad_handles:
-                # encoding.append(f"bad_handle({handle}).")
-                if handle in self.seen_bad_rules:
-                    continue
-                # print('BAD', handle)
-                # self.seen_bad_rules.add(handle)
-                for i in range(0, self.settings.max_rules):
-                    # h = (True, 'bad_rule', (handle, i))
-                    h = (True, 'bad_stuff', (i, size))
-                    b = (True, 'seen_rule', (handle, i))
-                    # print(h, b)
-                    moo.append((h, (b,)))
-
-                for s in range(1, size+1):
-                    for i in range(1, self.settings.max_rules):
-                        h = []
-                        b1 = (True, 'seen_rule', (handle, i))
-                        for j in range(1, self.settings.max_rules):
-                            if i == j:
-                                continue
-                            b2 = (True, 'bad_stuff', (j, s))
-                            x = (h, (b1, b2))
-                            # print(x)
-                            moo.append(x)
-
-                            # print()
-            to_add.extend(moo)
-
-        # if bad_progs:
-        #     moo = []
-        #     for xs in bad_progs:
-        #         if len(xs) != 2:
-        #             continue
-        #         xs = list(xs)
-        #         r1 = xs[0]
-        #         r2 = xs[1]
-        #         for i in range(0, self.settings.max_rules):
-        #             for j in range(0, self.settings.max_rules):
-        #                 if j == i:
-        #                     continue
-        #                 h = (True, 'bad_prog', (i, j, size))
-        #                 b1 = (True, 'seen_rule', (r1, i))
-        #                 b2 = (True, 'seen_rule', (r2, j))
-        #                 moo.append((h, (b1, b2)))
-
-        #                 for s2 in range(1, size+1):
-        #                     for k in range(0, self.settings.max_rules):
-        #                         if k == i:
-        #                             continue
-        #                         if k == j:
-        #                             continue
-        #                         con_b1 = (True, 'bad_prog', (i, j, s2))
-        #                         con_b2 = (True, 'bad_stuff', (k, s2))
-        #                         moo.append(([], (con_b1, con_b2)))
-            # to_add.extend(moo)
-            # for x in moo:
-                # print(x)
-
-
-
-
-                # r1 = f'bad_rule({handle},R):- seen_rule({handle},R).'
-                # r2 = f':- clause(R1), clause(R2), R1 != R2, seen_rule({handle},R1), bad_rule(_,R2), R1 > 0, R2 > 0.'
-                # r2 = f':- clause(R1), clause(R2), R1 != R2, seen_rule({handle},R1), bad_rule(_,R2)'
-                # encoding.append(r1)
-                # encoding.append(r2)
-            # encoding = '\n'.join(encoding)
-            # k = f'base-{size}'
-            # self.solver.add(k, [], encoding)
-            # self.solver.ground([(k, [])])
-
-
-
-        with self.solver.backend() as backend:
-            for head, body in to_add:
-                head_literal = []
-                if head:
-                    head_literal = [self.gen_symbol(head, backend)]
-                body_lits = []
-                # print(head, body)
-                for literal in body:
-                    sign, _pred, _args = literal
-                    symbol = self.gen_symbol(literal, backend)
-                    body_lits.append(symbol if sign else -symbol)
-                backend.add_rule(head_literal, body_lits)
-
-        for x in set(handle for handle, rule in handles):
-            self.seen_handles.add(x)
-
-
-    def update_solver_old(self, size, handles, bad_handles, ground_cons):
-        print('handles', len(handles))
-        print('bad_handles', len(bad_handles))
-        print('ground_cons', len(ground_cons))
-
-        encoding = []
-        for handle, rule in handles:
-            if rule in self.seen_handle_rules:
-                continue
-            if handle in self.seen_handles and rule not in self.seen_handle_rules:
-                print('WTF', handle, rule)
-                exit()
-
-            self.seen_handle_rules.add(rule)
-            (h_p, h_args), b = rule
-            rule = f'{h_p}{h_args}:-' + ','.join(f'{b_pred}{b_args}' for b_pred, b_args in b) + '.'
-            rule = rule.replace("'","")
-            encoding.append(rule)
-
-        for x in set(handle for handle, rule in handles):
-            self.seen_handles.add(x)
-
-        for con in ground_cons:
-            if con in self.seen_cons:
-                continue
-            self.seen_cons.add(con)
-            encoding.append(con)
-        encoding.extend(ground_cons)
-
-
-        for handle in bad_handles:
-            encoding.append(f"bad_handle({handle}).")
-            if handle in self.seen_bad_rules:
-                continue
-            # print(handle)
-            self.seen_bad_rules.add(handle)
-            r1 = f'bad_rule({handle},R):- seen_rule({handle},R).'
-            r2 = f':- clause(R1), clause(R2), R1 != R2, seen_rule({handle},R1), bad_rule(_,R2), R1 > 0, R2 > 0.'
-            # print(r1)
-            # print(r2)
-            encoding.append(r1)
-            encoding.append(r2)
-            # print(rule)
-
-        # for handle in bad_handles:
-
-
-        # %% bad_rule(Handle,R):-
-# %%     bad_handle(Handle),
-# %%     seen_rule(Handle,R).
-
-        # encoding.append(f"")
-
-
-
-        encoding = '\n'.join(encoding)
-        # print(encoding)
-        k = f'base-{size}'
-        # k = f'base'
-        self.solver.add(k, [], encoding)
-        self.solver.ground([(k, [])])
-
-    # def __init__(self, settings, grounder):
-    # def __init__(self, settings, grounder, size, handles, bad_handles, ground_cons):
-    #     self.settings = settings
-    #     self.grounder = grounder
-    #     self.seen_handles = set()
-    #     self.assigned = {}
-    #     self.seen_cons = set()
-
-    #     encoding = []
-    #     alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
-    #     encoding.append(alan)
-    #     with open(settings.bias_file) as f:
-    #         encoding.append(f.read())
-    #     encoding.append(f'max_clauses({settings.max_rules}).')
-    #     encoding.append(f'max_body({settings.max_body}).')
-    #     encoding.append(f'max_vars({settings.max_vars}).')
-    #     encoding.append(f':- not size({size}).')
-
-    #     # encoding = []
-    #     for handle, rule in handles:
-    #         # if handle in self.seen_handles:
-    #             # continue
-    #         self.seen_handles.add(handle)
-    #         rule = rule.replace("'","")
-    #         encoding.append(rule)
-
-    #     for con in ground_cons:
-    #         if con in self.seen_cons:
-    #             continue
-    #         self.seen_cons.add(con)
-    #         encoding.append(con)
-    #     encoding.extend(ground_cons)
-
-    #     for handle in bad_handles:
-    #         encoding.append(f"bad_handle({handle}).")
-
-    #     # encoding = '\n'.join(encoding)
-    #     # print(encoding)
-    #     # k = f'base'
-    #     # self.solver.add(k, [], encoding)
-    #     # self.solver.ground([(k, [])])
-
-
-    #     if self.settings.bkcons:
-    #         encoding.append(self.settings.bkcons)
-
-    #     encoding = '\n'.join(encoding)
-
-    #     solver = clingo.Control([])
-    #     solver.configuration.solve.models = 0
-
-
-    #     # NUM_OF_LITERALS = """
-    #     # %%% External atom for number of literals in the program %%%%%
-    #     # #external size_in_literals(n).
-    #     # :-
-    #     #     size_in_literals(n),
-    #     #     #sum{K+1,Clause : body_size(Clause,K)} != n.
-    #     # """
-
-    #     # solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
-    #     solver.add('base', [], encoding)
-    #     solver.ground([('base', [])])
-    #     self.solver = solver
-
     def __init__(self, settings, grounder):
         self.settings = settings
         self.grounder = grounder
         self.seen_handles = set()
-        self.seen_handle_rules = set()
-        self.seen_bad_rules = set()
         self.assigned = {}
-        self.seen_cons = set()
         self.seen_symbols = {}
 
         encoding = []
@@ -490,7 +203,6 @@ class Generator:
         encoding.append(f'max_clauses({settings.max_rules}).')
         encoding.append(f'max_body({settings.max_body}).')
         encoding.append(f'max_vars({settings.max_vars}).')
-        # encoding.append(f':- not size({size}).')
 
         if self.settings.bkcons:
             encoding.append(self.settings.bkcons)
@@ -498,11 +210,8 @@ class Generator:
         encoding = '\n'.join(encoding)
 
         if self.settings.recursion_enabled or self.settings.pi_enabled:
-            print('not using heuristic')
             solver = clingo.Control([])
-            # solver = clingo.Control(["-t6"])
         else:
-            print('using heuristic')
             solver = clingo.Control(["--heuristic=Domain"])
 
         solver.configuration.solve.models = 0
@@ -519,6 +228,67 @@ class Generator:
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver
+
+    def gen_symbol(self, literal, backend):
+        sign, pred, args = literal
+        k = hash(literal)
+        if k in self.seen_symbols:
+            symbol = self.seen_symbols[k]
+        else:
+            symbol = backend.add_atom(atom_to_symbol(pred, args))
+            self.seen_symbols[k] = symbol
+        return symbol
+
+    def update_solver(self, size, handles, bad_handles, ground_cons):
+        # rules to add via Clingo's backend interface
+        to_add = []
+        to_add.extend(([], x) for x in ground_cons)
+
+        # add handles for newly seen rules
+        for handle, rule in handles:
+            head, body = rule
+            head_pred, head_args = head
+            new_head = (True, head_pred, head_args)
+            new_body = frozenset((True, pred, args) for pred, args in body)
+            to_add.append((new_head, new_body))
+
+        # bad_handles = []
+        if bad_handles:
+            for handle in bad_handles:
+                # if we know that rule_xyz is bad
+                # we add the groundings of bad_stuff(R,ThisSize):- seen_rule(rule_xyz, R), R=0..MaxRules.
+                for rule_id in range(0, self.settings.max_rules):
+                    h = (True, 'bad_stuff', (rule_id, size))
+                    b = (True, 'seen_rule', (handle, rule_id))
+                    new_rule = (h, (b,))
+                    to_add.append(new_rule)
+
+                # we now eliminate bad stuff
+                # :- seen_rule(rule_xyz,R1), bad_stuff(R2,Size), R1=0..MaxRules, R2=0..MaxRules, Size=0..ThisSize.
+                for smaller_size in range(1, size+1):
+                    for r1 in range(1, self.settings.max_rules):
+                        atom1 = (True, 'seen_rule', (handle, r1))
+                        for r2 in range(1, self.settings.max_rules):
+                            if r1 == r2:
+                                continue
+                            atom2 = (True, 'bad_stuff', (r2, smaller_size))
+                            new_rule = ([], (atom1, atom2))
+                            to_add.append(new_rule)
+
+        with self.solver.backend() as backend:
+            for head, body in to_add:
+                head_literal = []
+                if head:
+                    head_literal = [self.gen_symbol(head, backend)]
+                body_lits = []
+                for literal in body:
+                    sign, _pred, _args = literal
+                    symbol = self.gen_symbol(literal, backend)
+                    body_lits.append(symbol if sign else -symbol)
+                backend.add_rule(head_literal, body_lits)
+
+        for x in set(handle for handle, rule in handles):
+            self.seen_handles.add(x)
 
     def update_number_of_literals(self, size):
         # 1. Release those that have already been assigned
@@ -539,7 +309,6 @@ class Generator:
         symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
         self.solver.assign_external(symbol, True)
 
-    # @profile
     def get_ground_rules(self, rule):
         head, body = rule
         # find bindings for variables in the rule
@@ -548,7 +317,6 @@ class Generator:
         body = tuple(literal for literal in body if not literal.meta)
         # ground the rule for each variable assignment
         return set(ground_rule((head, body), assignment) for assignment in assignments)
-
 
     def build_generalisation_constraint(self, prog, rule_ordering={}):
         new_handles = set()
@@ -567,6 +335,8 @@ class Generator:
                 literals.extend(tuple(build_rule_literals(rule, rule_var)))
             literals.append(body_size_literal(rule_var, len(body)))
         literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
+
+        # print(':- ' + ', '.join(map(str,literals)))
 
         return new_handles, tuple(literals)
 
@@ -590,51 +360,78 @@ class Generator:
         literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
         return new_handles, tuple(literals)
 
-    # # DOES NOT WORK WITH PI!!!
     # only works with single rule programs
+    # if a single rule R is unsatisfiable, then for R to appear in an optimal solution H it must be the case that H has a recursive rule that does not specialise R
     def redundancy_constraint1(self, prog, rule_ordering={}):
+        assert(len(prog) == 1)
         new_handles = set()
-        rule_index = {}
         literals = []
-        for rule_id, rule in enumerate(prog):
-            head, body = rule
-            rule_var = vo_clause(rule_id)
-            rule_index[rule] = rule_var
-            handle = make_rule_handle(rule)
 
-            if handle in self.seen_handles:
-                literals.append(build_seen_rule_literal(handle, rule_var))
-            else:
-                new_handles.add((handle, build_seen_rule(rule)))
-                literals.extend(build_rule_literals(rule, rule_var))
-            literals.append(gteq(rule_var, 1))
-            literals.append(Literal('recursive_clause',(rule_var, head.predicate, head.arity)))
-            literals.append(Literal('num_recursive', (head.predicate, 1)))
-            literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
-            return handle, new_handles, tuple(literals)
+        rule_id = 0
+        rule = list(prog)[0]
+        head, body = rule
+        rule_var = vo_clause(rule_id)
+        handle = make_rule_handle(rule)
 
-    def redundancy_constraint3(self, prog, rule_ordering={}):
+        if handle in self.seen_handles:
+            literals.append(build_seen_rule_literal(handle, rule_var))
+        else:
+            new_handles.add((handle, build_seen_rule(rule)))
+            literals.extend(build_rule_literals(rule, rule_var))
+        literals.append(gteq(rule_var, 1))
+        literals.append(Literal('recursive_clause',(rule_var, head.predicate, head.arity)))
+        literals.append(Literal('num_recursive', (head.predicate, 1)))
+        # print('RED1', format_rule(rule))
+        # print('\n'.join(str(x) for x in literals))
+        return handle, new_handles, tuple(literals)
+
+    def redundancy_constraint4(self, program, rule_ordering={}):
         new_handles = set()
-        rule_index = {}
-        out = []
-        for rule_id, rule in enumerate(prog):
-            head, body = rule
-            rule_var = vo_clause(rule_id)
-            rule_index[rule] = rule_var
+        new_rules = []
+
+        prog_handle = "prog"
+        for clause in program:
+            clause_handle = make_rule_handle(clause)
+            prog_handle += '_' + clause_handle
+        clause_variable = vo_clause('')
+
+        # rules encoding which clauses specialises any clause of the program
+        for rule in program:
             handle = make_rule_handle(rule)
 
             if handle not in self.seen_handles:
-                out.append(handle)
-            # literals.append(build_seen_rule_literal(handle, rule_var))
-            # literals.extend(build_rule_literals(rule, rule_var))
-            # literals.append(gteq(rule_var, 1))
-            # literals.append(Literal('recursive_clause',(rule_var, head.predicate, head.arity)))
-            # literals.append(Literal('num_recursive', (head.predicate, 1)))
-            # literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
-        return new_handles, frozenset(out)
+                new_handles.add((handle, build_seen_rule(rule)))
+
+            h = Literal('specialises', (clause_variable, prog_handle))
+            b = [build_seen_rule_literal(handle, clause_variable)]
+            new_rules.append((h, b))
+
+        # # rules exhaustively checking for all cases where a clause is not redundant
+        clause_var1 = vo_clause('1')
+        clause_var2 = vo_clause('2')
+        r1 = (Literal('not_redundant', (clause_variable, prog_handle)), (Literal('specialises', (clause_variable, prog_handle), positive = False),))
+        r2 = (Literal('not_redundant', (clause_var1, prog_handle)), (Literal('specialises', (clause_var1, prog_handle)),Literal('depends_on', (clause_var1, clause_var2)), Literal('specialises', (clause_var2, prog_handle), positive = False)))
+        r3 = (Literal('not_redundant', (clause_var1, prog_handle)), (Literal('specialises', (clause_var1, prog_handle)), Literal('depends_on', (clause_var2, clause_var1)), Literal('specialises', (clause_var2, prog_handle), positive = False)))
+        r4 = (None, (Literal('not_redundant', (clause_variable, prog_handle), positive = False),))
+        new_rules.extend([r1,r2,r3,r4])
+        # new_rules.extend([r1])
+
+        for x in new_rules:
+            h, b = x
+            print(h, ', '.join(map(str,b)))
+            # print(x, type(x))
+            # h,b = x
+            # print(h, ','.join(str(y) for y in b))
+        # a rule is redundant iff it is not not redundant - if there is a redundant rule, we prune
+
+        # yield (None, (Literal('not_redundant', (clause_variable, prog_handle), positive = False),))
+
 
     def redundancy_constraint2(self, prog, rule_ordering={}):
         prog = list(prog)
+        # print('RED2')
+        # for rule in prog:
+            # print(format_rule(rule))
         # rule_index = {}
         # literals = []
         lits_num_rules = defaultdict(int)
@@ -660,6 +457,8 @@ class Generator:
             if not something_added:
                 break
 
+        new_handles = set()
+        out_cons = []
         for lit in lits_num_rules.keys() - recursively_called:
             rule_index = {}
             literals = []
@@ -673,8 +472,9 @@ class Generator:
                 if handle in self.seen_handles:
                     literals.append(build_seen_rule_literal(handle, rule_var))
                 else:
-                    # new_handles.add((handle, build_seen_rule(rule)))
-                    literals.extend(build_rule_literals(rule, rule_var))
+                    new_handles.add((handle, build_seen_rule(rule)))
+                    # literals.extend(build_rule_literals(rule, rule_var))
+                    literals.append(build_seen_rule_literal(handle, rule_var))
 
             for other_lit, num_clauses in lits_num_rules.items():
                 if other_lit == lit:
@@ -683,7 +483,11 @@ class Generator:
             num_recursive = lits_num_recursive_rules[lit]
             literals.append(Literal('num_recursive', (lit, num_recursive)))
             literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
-            return tuple(literals)
+            out_cons.append(tuple(literals))
+
+            # print(':- ' + ', '.join(map(str,literals)))
+
+        return new_handles, out_cons
 
 BINDING_ENCODING = """\
 #defined rule_var/2.
@@ -751,37 +555,18 @@ class Grounder():
 
     def find_bindings(self, rule, max_rules, max_vars):
         _, body = rule
-        # TODO: add back
-        all_vars = find_all_vars(body)
 
-        if len(all_vars) == 0:
-            assert(False)
-        #     return [{}]
+        all_vars = find_all_vars(body)
 
         k = grounding_hash(body, all_vars)
         if k in self.seen_assignments:
             return self.seen_assignments[k]
 
-        # print('ASDA!!')
-
         # map each rule and var_var in the program to an integer
         rule_var_to_int = {v:i for i, v in enumerate(var for var in all_vars if isinstance(var, RuleVar))}
-        # var_var_to_int = {v:i for i,v in enumerate(var for var in all_vars if isinstance(var, VarVar))}
 
+        # transpose for later lookup
         int_to_rule_var = {i:v for v,i in rule_var_to_int.items()}
-        # int_to_var_var = {i:v for v,i in var_var_to_int.items()}
-
-        # print('HERE!!!')
-        # print('all_vars1\t', all_vars)
-        # print('rule_var_to_int\t', rule_var_to_int)
-        # print('var_var_to_int', len(var_var_to_int), var_var_to_int)
-        # print('int_to_rule_var', int_to_rule_var)
-        # print('int_to_var_var', int_to_var_var)
-
-        encoding = []
-        encoding.append(BINDING_ENCODING)
-        encoding.append(f'#const max_rules={max_rules}.')
-        encoding.append(f'#const max_vars={max_vars}.')
 
         # find all variables for each rule
         rule_vars = {k:set() for k in rule_var_to_int}
@@ -789,7 +574,10 @@ class Grounder():
             if isinstance(var, VarVar):
                 rule_vars[var.rule].add(var)
 
-
+        encoding = []
+        encoding.append(BINDING_ENCODING)
+        encoding.append(f'#const max_rules={max_rules}.')
+        encoding.append(f'#const max_vars={max_vars}.')
 
         int_lookup = {}
         tmp_lookup = {}

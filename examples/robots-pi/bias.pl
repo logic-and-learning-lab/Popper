@@ -1,6 +1,6 @@
 max_vars(3).
 max_body(2).
-max_clauses(6).
+max_clauses(2).
 enable_pi.
 
 :- recursive.

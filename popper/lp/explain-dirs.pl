@@ -92,3 +92,21 @@ body_subset(R1,R2):-
     %% R2 > 0,
     body_subset(R1,R2),
     body_subset(R2,R1).
+
+
+%% MUST BE CONNECTED
+head_connected(C,Var):-
+    head_var(C,Var).
+head_connected(C,Var1):-
+    head_literal(C,_,A,_),
+    Var1 >= A,
+    head_connected(C,Var2),
+    body_literal(C,_,_,Vars),
+    var_member(Var1,Vars),
+    var_member(Var2,Vars),
+    Var1 != Var2.
+:-
+    head_literal(C,_,A,_),
+    Var >= A,
+    body_var(C,Var),
+    not head_connected(C,Var).

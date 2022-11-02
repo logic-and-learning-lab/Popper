@@ -1,6 +1,3 @@
-max_vars(10).
-max_body(10).
-
 head_pred(goal,3).
 %% body_pred(does_jump,4).
 body_pred(my_true_cell,3).

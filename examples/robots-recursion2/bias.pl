@@ -1,6 +1,6 @@
-max_body(6). % speed up the example
-max_clauses(3).
-max_vars(6).
+max_body(4). % speed up the example
+max_clauses(5).
+max_vars(5).
 enable_recursion.
 
 head_pred(f,2).

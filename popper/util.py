@@ -241,7 +241,6 @@ class Settings:
     def __init__(self, kbpath=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, explain=False, test=False):
 
         if kbpath == False:
-            print('ASDA')
             args = parse_args()
             # info = args.info
             quiet = args.quiet
