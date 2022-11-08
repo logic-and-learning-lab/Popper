@@ -1,16 +1,6 @@
-var_pos(Var,Vars,Pos):- var_pos_(Pos,Var,Vars).
-var_pos_(0,V,Vars):- vars(1,Vars), Vars = (V,).
-var_pos_(0,V,Vars):- vars(2,Vars), Vars = (V,_).
-var_pos_(0,V,Vars):- vars(3,Vars), Vars = (V,_,_).
-var_pos_(0,V,Vars):- vars(4,Vars), Vars = (V,_,_,_).
-var_pos_(1,V,Vars):- vars(2,Vars), Vars = (_,V).
-var_pos_(1,V,Vars):- vars(3,Vars), Vars = (_,V,_).
-var_pos_(1,V,Vars):- vars(4,Vars), Vars = (_,V,_,_).
-var_pos_(2,V,Vars):- vars(3,Vars), Vars = (_,_,V).
-var_pos_(2,V,Vars):- vars(4,Vars), Vars = (_,_,V,_).
-var_pos_(3,V,Vars):- vars(4,Vars), Vars = (_,_,_,V).
-
-var_member(Var,Vars):- Pos = 0..3, var_pos(Var,Vars,Pos).
+#defined direction/3.
+#defined vars/2.
+#defined var_pos/3.
 
 %% CLAUSE VAR
 rule_var(C,Var):- head_var(C,Var).
@@ -40,6 +30,22 @@ safe_literal(Rule,P,Vars):- num_in_args(P,N), body_literal(Rule,P,_,Vars), #coun
 :- body_var(C,Var), not safe_var(C,Var).
 :- body_literal(Rule,P,_,Vars), not safe_literal(Rule,P,Vars).
 
+%% MUST BE CONNECTED
+head_connected(C,Var):-
+    head_var(C,Var).
+head_connected(C,Var1):-
+    head_literal(C,_,A,_),
+    Var1 >= A,
+    head_connected(C,Var2),
+    body_literal(C,_,_,Vars),
+    var_member(Var1,Vars),
+    var_member(Var2,Vars),
+    Var1 != Var2.
+:-
+    head_literal(C,_,A,_),
+    Var >= A,
+    body_var(C,Var),
+    not head_connected(C,Var).
 
 recursive:-
     head_literal(Rule,P,A,_),
@@ -52,17 +58,8 @@ base:-
     recursive,
     not base.
 
-
-%% :-
-%%     recursive,
-%%     head_var(Rule,Var),
-%%     not body_var(Rule,Var).
-
 :-
     not head_literal(0,_,_,_).
-
-
-
 
 rule(R):-
     body_literal(R,_,_,_).
@@ -94,19 +91,19 @@ body_subset(R1,R2):-
     body_subset(R2,R1).
 
 
-%% MUST BE CONNECTED
-head_connected(C,Var):-
-    head_var(C,Var).
-head_connected(C,Var1):-
-    head_literal(C,_,A,_),
-    Var1 >= A,
-    head_connected(C,Var2),
-    body_literal(C,_,_,Vars),
-    var_member(Var1,Vars),
-    var_member(Var2,Vars),
-    Var1 != Var2.
-:-
-    head_literal(C,_,A,_),
-    Var >= A,
-    body_var(C,Var),
-    not head_connected(C,Var).
+%% %% MUST BE CONNECTED
+%% head_connected(C,Var):-
+%%     head_var(C,Var).
+%% head_connected(C,Var1):-
+%%     head_literal(C,_,A,_),
+%%     Var1 >= A,
+%%     head_connected(C,Var2),
+%%     body_literal(C,_,_,Vars),
+%%     var_member(Var1,Vars),
+%%     var_member(Var2,Vars),
+%%     Var1 != Var2.
+%% :-
+%%     head_literal(C,_,A,_),
+%%     Var >= A,
+%%     body_var(C,Var),
+%%     not head_connected(C,Var).

@@ -4,7 +4,7 @@ import numpy as np
 import pkg_resources
 from pyswip import Prolog
 from contextlib import contextmanager
-from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog
+from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal
 
 import clingo
 import clingo.script
@@ -138,3 +138,13 @@ class Tester():
     def is_sat(self, prog):
         with self.using(prog):
             return self.bool_query('sat')
+
+
+    def is_body_sat(self, body):
+        try:
+            body_str = ','.join(format_literal(literal) for literal in body)
+            query = f'sat2:- {body_str}'
+            self.prolog.assertz(query)
+            return self.bool_query('sat2')
+        finally:
+            self.prolog.retractall('sat2')

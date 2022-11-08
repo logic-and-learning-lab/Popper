@@ -1,6 +1,6 @@
 %% allow_singletons.
-max_body(6).
-max_vars(6).
+%% max_body(7).
+%% max_vars(7).
 head_pred(next_value,2).
 body_pred(does,3).
 body_pred(true_value,2).

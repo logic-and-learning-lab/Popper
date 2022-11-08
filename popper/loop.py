@@ -25,16 +25,16 @@ def atom_to_symbol(pred, args):
     return Function(name = pred, arguments = xs)
 
 def parse_handles(generator, new_handles):
-    for x, rule in new_handles:
+    for rule in new_handles:
         head, body = rule
         # TODO: add caching
         for h, b in generator.get_ground_rules(rule):
             _, p, args = h
             out_h = (p, args)
             out_b = frozenset((b_pred, b_args) for _, b_pred, b_args in b)
-            yield (x, (out_h, out_b))
+            yield (out_h, out_b)
 
-def explain_failure(settings, generator, explainer, prog, directions, pos_covered, new_cons, all_handles, bad_handles):
+def explain_failure(settings, generator, explainer, prog, directions, pos_covered, new_cons, all_handles, bad_handles, new_ground_cons):
     pruned_subprog = False
     explainer.add_seen_prog(prog)
 
@@ -43,48 +43,68 @@ def explain_failure(settings, generator, explainer, prog, directions, pos_covere
 
     for subprog in explainer.explain_totally_incomplete2(prog, directions, settings.stats.total_programs):
         pruned_subprog = True
+        has_unsat_body = False
+
+        if len(subprog) == 1:
+            for subrule in explainer.deep_explain_unsat_body(subprog):
+                print('UNSAT BODY:')
+                print('\t', format_rule((False,subrule)))
+
+                con = generator.unsat_constraint(subrule)
+                for h, b in generator.get_ground_deep_rules(con, settings.head_types):
+                    new_ground_cons.add(b)
+                # TODO: CAN WE FEED THIS INFORMATION BACK INTO THE EXPLAINER?
+                has_unsat_body = True
+
+        if has_unsat_body:
+            continue
+
         new_rule_handles, con = generator.build_specialisation_constraint(subprog)
         new_cons.add(con)
         all_handles.update(parse_handles(generator, new_rule_handles))
 
-        # if not settings.recursion_enabled or settings.pi_enabled:
-        #     continue
+        if not settings.recursion_enabled or settings.pi_enabled:
+            continue
 
         if len(subprog) == 1:
             bad_handle, new_rule_handles, con = generator.redundancy_constraint1(subprog)
             bad_handles.add(bad_handle)
             new_cons.add(con)
             all_handles.update(parse_handles(generator, new_rule_handles))
-        # else:
+        else:
+            for rule in subprog:
+                if rule_is_recursive(rule):
+                    continue
+
+                for subrule in explainer.deep_explain_unsat_body([rule]):
+                    print('UNSAT BODY2:')
+                    print('\t', format_rule((False,subrule)))
+                    con = generator.unsat_constraint(subrule)
+                    for h, b in generator.get_ground_deep_rules(con, settings.head_types):
+                        new_ground_cons.add(b)
+                    has_unsat_body = True
+
+        if has_unsat_body:
+            continue
+
         handles, cons = generator.redundancy_constraint2(prog)
         new_cons.update(cons)
-        # new_cons.add(generator.redundancy_constraint2(subprog))
-        # new_handles, con = generator.redundancy_constraint3(prog)
         all_handles.update(parse_handles(generator, handles))
 
     return pruned_subprog
 
-def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model):
+def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons):
     with settings.stats.duration('constrain'):
         ground_bodies = set()
-        for con in new_cons:
 
+        all_ground_cons.update(new_ground_cons)
+        ground_bodies.update(new_ground_cons)
+
+        for con in new_cons:
             ground_rules = generator.get_ground_rules((None, con))
             for ground_rule in ground_rules:
                 _ground_head, ground_body = ground_rule
                 ground_bodies.add(ground_body)
-                ground_con = []
-                for sign, pred, args in ground_body:
-                    x = ''
-                    if len(args) == 1:
-                        x = f'{pred}({args[0]})'
-                    else:
-                        x = f'{pred}{args}'
-                    x = x.replace("'","")
-                    if sign == False:
-                        x = 'not ' + x
-                    ground_con.append(x)
-                y = ':-' + ', '.join(sorted(ground_con)) + '.'
                 all_ground_cons.add(frozenset(ground_body))
 
         nogoods = []
@@ -109,6 +129,8 @@ def popper(settings):
 
     tester = Tester(settings)
     explainer = Explainer(settings, tester)
+    settings.head_types, settings.body_types = explainer.load_types()
+
     grounder = Grounder()
     combiner = Combiner(settings, tester)
 
@@ -131,7 +153,9 @@ def popper(settings):
 
     # constraints generated
     all_ground_cons = set()
-    # rule handles, such as seen(id):- head_literal(...), body_literal(...)
+    # messy stuff
+    new_ground_cons = set()
+    # new rules added to the solver, such as: seen(id):- head_literal(...), body_literal(...)
     all_handles = set()
     # handles for rules that are minimal and unsatisfiable
     bad_handles = set()
@@ -165,6 +189,7 @@ def popper(settings):
             while True:
                 new_cons = set()
                 new_rule_handles = set()
+                new_ground_cons = set()
                 pruned_subprog = False
 
                 # GENERATE A PROGRAM
@@ -190,7 +215,7 @@ def popper(settings):
                 # EXPLAIN A FAILURE
                 if settings.explain:
                     with settings.stats.duration('explain'):
-                        pruned_subprog = explain_failure(settings, generator, explainer, prog, directions, pos_covered, new_cons, all_handles, bad_handles)
+                        pruned_subprog = explain_failure(settings, generator, explainer, prog, directions, pos_covered, new_cons, all_handles, bad_handles, new_ground_cons)
 
                 if inconsistent and prog_is_recursive(prog):
                     combiner.add_inconsistent(prog)
@@ -210,17 +235,16 @@ def popper(settings):
                     # if inconsistent, prune generalisations
                     add_gen = True
                     # if the program has multiple rules, test the consistency of each non-recursive rule as we might not have seen it before
-                    with settings.stats.duration('subcheck'):
-                        if len(prog) > 1:
-                            for rule in prog:
-                                if rule_is_recursive(rule):
-                                    continue
-                                subprog = frozenset([rule])
-                                # TODO: ADD CACHING BEFORE THE CALL TO TESTER
-                                if tester.is_inconsistent(subprog):
-                                    handles, con = generator.build_generalisation_constraint(subprog)
-                                    new_cons.add(con)
-                                    new_rule_handles.update(handles)
+                    if len(prog) > 1:
+                        for rule in prog:
+                            if rule_is_recursive(rule):
+                                continue
+                            subprog = frozenset([rule])
+                            # TODO: ADD CACHING BEFORE THE CALL TO TESTER
+                            if tester.is_inconsistent(subprog):
+                                handles, con = generator.build_generalisation_constraint(subprog)
+                                new_cons.add(con)
+                                new_rule_handles.update(handles)
                 else:
                     # if consistent, prune specialisations
                     add_spec = True
@@ -237,11 +261,10 @@ def popper(settings):
                 if num_pos_covered == 0:
                     add_spec = True
                     # if recursion and no PI, apply redundancy constraints
-                    # if settings.recursion_enabled and not settings.pi_enabled:
-                    # if settings.recursion_enabled and not settings.pi_enabled:
-                    if len(prog) == 1:
-                        add_redund1 = True
-                    add_redund2 = True
+                    if settings.recursion_enabled:
+                        if len(prog) == 1 and not settings.pi_enabled:
+                            add_redund1 = True
+                        add_redund2 = True
 
                 # check whether subsumed by a seen program
                 subsumed = False
@@ -312,7 +335,7 @@ def popper(settings):
                     # if we find a new solution, update the maximum program size
                     if new_solution_found:
 
-                        # no only adding nogoods, eliminate larger programs
+                        # if only adding nogoods, eliminate larger programs
                         if not pi_or_rec:
                             for i in range(combiner.max_size, settings.max_literals+1):
                                 size_con = [(atom_to_symbol("size", (i,)), True)]
@@ -322,10 +345,11 @@ def popper(settings):
                         if size >= settings.max_literals:
                             return
 
-                # if program covers all examples, stop
+                # if non-separable program covers all examples, stop
                 if not inconsistent and num_pos_covered == num_pos:
                     return
 
+                # BUILD CONSTRAINTS
                 if add_spec and not pruned_subprog:
                     handles, con = generator.build_specialisation_constraint(prog, rule_ordering)
                     new_rule_handles.update(handles)
@@ -343,20 +367,22 @@ def popper(settings):
                     new_cons.add(con)
 
                 if add_redund2 and not pruned_subprog:
-                    handles, cons = generator.redundancy_constraint2(prog)
+                    handles, cons = generator.redundancy_constraint2(prog, rule_ordering)
                     new_rule_handles.update(handles)
                     new_cons.update(cons)
 
-                    generator.redundancy_constraint4(prog)
+                    # handles, con = generator.redundancy_constraint4(prog)
+                    # new_rule_handles.update(handles)
+                    # new_cons.add(con)
 
-                # if pi or rec, we need to save the constraints and handles for the next program size
+                # if pi or rec, save the constraints and handles for the next program size
                 if pi_or_rec:
                     all_handles.update(parse_handles(generator, new_rule_handles))
 
                 # Q. For recursive programs, can we skip adding them?
 
                 # CONSTRAIN
-                constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model)
+                constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons)
 
         if not pi_or_rec:
             break

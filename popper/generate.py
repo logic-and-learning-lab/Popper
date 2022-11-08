@@ -1,3 +1,4 @@
+
 import clingo
 import operator
 import numbers
@@ -244,10 +245,18 @@ class Generator:
         to_add = []
         to_add.extend(([], x) for x in ground_cons)
 
+
+        new_seen_rules = set()
+
         # add handles for newly seen rules
-        for handle, rule in handles:
+        # for handle, rule in handles:
+        for rule in handles:
             head, body = rule
             head_pred, head_args = head
+
+            if head_pred == 'seen_rule':
+                new_seen_rules.add(head_args[0])
+
             new_head = (True, head_pred, head_args)
             new_body = frozenset((True, pred, args) for pred, args in body)
             to_add.append((new_head, new_body))
@@ -287,8 +296,8 @@ class Generator:
                     body_lits.append(symbol if sign else -symbol)
                 backend.add_rule(head_literal, body_lits)
 
-        for x in set(handle for handle, rule in handles):
-            self.seen_handles.add(x)
+        # for x in set(handle for handle, rule in handles):
+        self.seen_handles.update(new_seen_rules)
 
     def update_number_of_literals(self, size):
         # 1. Release those that have already been assigned
@@ -318,6 +327,12 @@ class Generator:
         # ground the rule for each variable assignment
         return set(ground_rule((head, body), assignment) for assignment in assignments)
 
+    def get_ground_deep_rules(self, body, head_types):
+        # find bindings for variables in the rule
+        assignments = self.grounder.find_deep_bindings(body, self.settings.head_types, self.settings.body_types, self.settings.max_rules, self.settings.max_vars)
+        # ground the rule for each variable assignment
+        return set(ground_rule((False, body), assignment) for assignment in assignments)
+
     def build_generalisation_constraint(self, prog, rule_ordering={}):
         new_handles = set()
         prog = list(prog)
@@ -331,7 +346,7 @@ class Generator:
             if handle in self.seen_handles:
                 literals.append(build_seen_rule_literal(handle, rule_var))
             else:
-                new_handles.add((handle, build_seen_rule(rule)))
+                new_handles.add(build_seen_rule(rule))
                 literals.extend(tuple(build_rule_literals(rule, rule_var)))
             literals.append(body_size_literal(rule_var, len(body)))
         literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
@@ -353,7 +368,8 @@ class Generator:
             if handle in self.seen_handles:
                 literals.append(build_seen_rule_literal(handle, rule_var))
             else:
-                new_handles.add((handle, build_seen_rule(rule)))
+                # new_handles.add((handle, build_seen_rule(rule)))
+                new_handles.add(build_seen_rule(rule))
                 literals.extend(tuple(build_rule_literals(rule, rule_var)))
             literals.append(lt(rule_var, len(prog)))
         literals.append(Literal('clause', (len(prog), ), positive = False))
@@ -376,7 +392,8 @@ class Generator:
         if handle in self.seen_handles:
             literals.append(build_seen_rule_literal(handle, rule_var))
         else:
-            new_handles.add((handle, build_seen_rule(rule)))
+            # new_handles.add((handle, build_seen_rule(rule)))
+            new_handles.add(build_seen_rule(rule))
             literals.extend(build_rule_literals(rule, rule_var))
         literals.append(gteq(rule_var, 1))
         literals.append(Literal('recursive_clause',(rule_var, head.predicate, head.arity)))
@@ -384,6 +401,11 @@ class Generator:
         # print('RED1', format_rule(rule))
         # print('\n'.join(str(x) for x in literals))
         return handle, new_handles, tuple(literals)
+
+    def unsat_constraint(self, body):
+        rule_var = vo_clause('X')
+        return tuple(Literal('body_literal', (rule_var, body_literal.predicate, body_literal.arity, tuple(vo_variable2(rule_var, v) for v in body_literal.arguments))) for body_literal in body)
+
 
     def redundancy_constraint4(self, program, rule_ordering={}):
         new_handles = set()
@@ -400,10 +422,11 @@ class Generator:
             handle = make_rule_handle(rule)
 
             if handle not in self.seen_handles:
-                new_handles.add((handle, build_seen_rule(rule)))
+                # new_handles.add((handle, build_seen_rule(rule)))
+                new_handles.add(build_seen_rule(rule))
 
             h = Literal('specialises', (clause_variable, prog_handle))
-            b = [build_seen_rule_literal(handle, clause_variable)]
+            b = tuple([build_seen_rule_literal(handle, clause_variable)])
             new_rules.append((h, b))
 
         # # rules exhaustively checking for all cases where a clause is not redundant
@@ -412,28 +435,23 @@ class Generator:
         r1 = (Literal('not_redundant', (clause_variable, prog_handle)), (Literal('specialises', (clause_variable, prog_handle), positive = False),))
         r2 = (Literal('not_redundant', (clause_var1, prog_handle)), (Literal('specialises', (clause_var1, prog_handle)),Literal('depends_on', (clause_var1, clause_var2)), Literal('specialises', (clause_var2, prog_handle), positive = False)))
         r3 = (Literal('not_redundant', (clause_var1, prog_handle)), (Literal('specialises', (clause_var1, prog_handle)), Literal('depends_on', (clause_var2, clause_var1)), Literal('specialises', (clause_var2, prog_handle), positive = False)))
-        r4 = (None, (Literal('not_redundant', (clause_variable, prog_handle), positive = False),))
-        new_rules.extend([r1,r2,r3,r4])
+        # r4 = (None, (Literal('not_redundant', (clause_variable, prog_handle), positive = False),))
+        # new_rules.extend([r1,r2,r3])
         # new_rules.extend([r1])
 
-        for x in new_rules:
-            h, b = x
-            print(h, ', '.join(map(str,b)))
+        # for x in new_rules:
+        #     h, b = x
+        #     print(h, ', '.join(map(str,b)))
             # print(x, type(x))
             # h,b = x
             # print(h, ','.join(str(y) for y in b))
         # a rule is redundant iff it is not not redundant - if there is a redundant rule, we prune
 
-        # yield (None, (Literal('not_redundant', (clause_variable, prog_handle), positive = False),))
-
+        con = [Literal('not_redundant', (clause_variable, prog_handle), positive = False)]
+        return new_rules, tuple(con)
 
     def redundancy_constraint2(self, prog, rule_ordering={}):
-        prog = list(prog)
-        # print('RED2')
-        # for rule in prog:
-            # print(format_rule(rule))
-        # rule_index = {}
-        # literals = []
+
         lits_num_rules = defaultdict(int)
         lits_num_recursive_rules = defaultdict(int)
         for rule in prog:
@@ -472,8 +490,7 @@ class Generator:
                 if handle in self.seen_handles:
                     literals.append(build_seen_rule_literal(handle, rule_var))
                 else:
-                    new_handles.add((handle, build_seen_rule(rule)))
-                    # literals.extend(build_rule_literals(rule, rule_var))
+                    new_handles.add(build_seen_rule(rule))
                     literals.append(build_seen_rule_literal(handle, rule_var))
 
             for other_lit, num_clauses in lits_num_rules.items():
@@ -521,6 +538,8 @@ BINDING_ENCODING = """\
     #count{Var : bind_var(Rule,Var,Value)} > 1.
 """
 
+
+
 # def vo_variable(variable):
     # return ConstVar(f'{variable}', 'Variable')
 
@@ -552,6 +571,7 @@ def alldiff(args):
 class Grounder():
     def __init__(self):
         self.seen_assignments = {}
+        self.seen_deep_assignments = {}
 
     def find_bindings(self, rule, max_rules, max_vars):
         _, body = rule
@@ -667,4 +687,107 @@ class Grounder():
                 # print(','.join(str(y) for y in body))
                 # for z in out:
                     # print(z)
+        return out
+
+
+    # find_deep_bindings(body, head_types, self.settings.max_vars)
+    def find_deep_bindings(self, body, head_types, body_types, max_rules, max_vars):
+        all_vars = find_all_vars(body)
+
+        body_hash = grounding_hash(body, all_vars)
+        # print(','.join(map(str,body)), all_vars, body_hash)
+        if body_hash in self.seen_deep_assignments:
+            # print('moo')
+            return self.seen_deep_assignments[body_hash]
+
+
+        encoding = set()
+        encoding.add("""\
+#show bind_var/2.
+% bind a rule_id to a value
+{bind_var(Var,Value)}:-
+    var(Var),
+    Value=0..max_vars-1.
+% a rule value cannot be bound to more than one rule
+
+:- var(Var), #count{Value : bind_var(Var,Value)} != 1.
+:- Value=0..max_vars-1, #count{Var : bind_var(Var,Value)} > 1.
+:- bind_var(Var,Value), type(Var,T1), type(Value,T2), T1 != T2.
+""")
+        encoding.add(f'#const max_vars={max_vars}.')
+        var_count = 0
+        # var_index = {}
+        var_lookup = {}
+        for i, head_type in enumerate(head_types):
+            encoding.add(f'type({i},{head_type}).')
+            encoding.add(f':- var({i}), not bind_var({i}, {i}).')
+
+        var_count = 0
+        var_index = {}
+        for lit in body:
+            pred = lit.arguments[1]
+            for i, x in enumerate(lit.arguments[3]):
+                var_name = x.name
+                v = var_name.split('_')[1][1:]
+                k = ord(v)- ord('A')
+                # print(v, k)
+                var_type = body_types[pred][i]
+                var_lookup[k] = x
+
+                encoding.add(f'var({k}).')
+                encoding.add(f'type({k},{var_type}).')
+
+
+        # for rule_var, xs in rule_vars.items():
+        #     rule_var_int = rule_var_to_int[rule_var]
+        #     encoding.append(f'rule({rule_var_int}).')
+
+        #     for var_var_int, var_var in enumerate(xs):
+        #         encoding.append(f'rule_var({rule_var_int},{var_var_int}).')
+        #         int_lookup[(rule_var_int, var_var_int)] = var_var
+        #         tmp_lookup[(rule_var, var_var)] = var_var_int
+
+        # for p, types in settings.body_types.items():
+        #     for i, t in enumerate(types):
+        #         encoding.append(f'arg_type({i},{head_type}'.)
+
+
+
+        encoding = '\n'.join(encoding)
+
+        # print('*'*10)
+        # print(encoding)
+
+        solver = clingo.Control()
+        solver.configuration.solve.models = 0
+        solver.add('base', [], encoding)
+        solver.ground([("base", [])])
+
+        out = []
+
+        def on_model(m):
+            xs = m.symbols(shown = True)
+            assignment = {}
+            for x in xs:
+                name = x.name
+                args = x.arguments
+                if name == 'bind_var':
+                    var_var_int = args[0].number
+                    value = args[1].number
+                    var_var = var_lookup[var_var_int]
+                    assignment[var_var] = value
+
+            for i in range(max_rules):
+                x = assignment.copy()
+                x[vo_clause('X')] = i
+                out.append(x)
+            # out.append(assignment)
+            # print(assignment)
+
+        solver.solve(on_model=on_model)
+        # for x in out:
+            # print(x)
+        # exit()
+
+        self.seen_deep_assignments[body_hash] = out
         return out

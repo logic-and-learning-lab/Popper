@@ -54,7 +54,7 @@ type(succ,(mypos,mypos)).
 %% magic_value_type(action).
 %% magic_value_type(score).
 
-asda:-
+:-
 	clause(C),
 	#count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
 
