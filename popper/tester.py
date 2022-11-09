@@ -4,7 +4,7 @@ import numpy as np
 import pkg_resources
 from pyswip import Prolog
 from contextlib import contextmanager
-from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal
+from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive
 
 import clingo
 import clingo.script
@@ -160,3 +160,82 @@ class Tester():
             res = list(self.prolog.query(f'redundant_literal({c})'))
             if res:
                 yield rule
+
+    def has_redundant_literal(self, prog):
+        for rule in prog:
+            head, body = rule
+            if head:
+                c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+            else:
+                c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
+            res = list(self.prolog.query(f'redundant_literal({c})'))
+            if res:
+                return True
+        return False
+
+
+    def has_redundant_rule_(self, prog):
+        prog_ = []
+        for head, body in prog:
+            c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+            prog_.append(c)
+        prog_ = f"[{','.join(prog_)}]"
+        # print(prog_)
+        return len(list(self.prolog.query(f'redundant_clause({prog_})'))) > 0
+            # print(prog_)
+            # return True
+        # return False
+
+
+    def has_redundant_rule(self, prog):
+        # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
+
+        base = []
+        step = []
+        for rule in prog:
+            if rule_is_recursive(rule):
+                step.append(rule)
+            else:
+                base.append(rule)
+        if len(base) > 1 and self.has_redundant_rule_(base):
+            return True
+        if len(step) > 1 and self.has_redundant_rule_(step):
+            return True
+        return False
+
+
+
+
+
+    # WE ASSUME THAT THERE IS A REUNDANT RULE
+    def find_redundant_rule_(self, prog):
+        prog_ = []
+        for i, (head, body) in enumerate(prog):
+            c = f"{i}-[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+            prog_.append(c)
+        prog_ = f"[{','.join(prog_)}]"
+        # print(prog_)
+        q = f'find_redundant_rule({prog_},K1,K2)'
+        res = list(self.prolog.query(q))
+        k1 = res[0]['K1']
+        k2 = res[0]['K2']
+        return prog[k1], prog[k2]
+        # return len(res) > 0
+
+
+    def find_redundant_rules(self, prog):
+        # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
+        base = []
+        step = []
+        for rule in prog:
+            if rule_is_recursive(rule):
+                step.append(rule)
+            else:
+                base.append(rule)
+        if len(base) > 1 and self.has_redundant_rule(base):
+            return self.find_redundant_rule_(base)
+        if len(step) > 1 and self.has_redundant_rule(step):
+            return self.find_redundant_rule_(step)
+        return None
+
+

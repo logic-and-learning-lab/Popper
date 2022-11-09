@@ -3,8 +3,8 @@
 #defined var_pos/3.
 
 
-with_directions:-
-    direction(_,_,_).
+with_directions:- direction(_,_,_).
+multiple_rules:- rule(R1), rule(R2), R1 < R2.
 
 head_var(C,Var):- head_literal(C,_,_,Vars), var_member(Var,Vars).
 body_var(C,Var):- body_literal(C,_,_,Vars), var_member(Var,Vars).
@@ -49,17 +49,21 @@ not_body_subset(R1,R2):- rule(R2), R1 != R2, body_literal(R1,P,A,Vars), not body
 body_subset(R1,R2):- rule(R1), rule(R2), R1 != R2, not not_body_subset(R1,R2), body_literal(R1,P,A,Vars), body_literal(R2,P,A,Vars).
 :- body_subset(R1,R2), body_subset(R2,R1).
 
+:- rule(R1), rule(R2), not recursive_rule(R1), not recursive_rule(R2), body_subset(R1,R2).
+:- recursive_rule(R1), recursive_rule(R2), body_subset(R1,R2).
 %% cannot have a recursive body literal without a head one
 :- recursive_rule(Rule), head_pred(P,A), not head_literal(Rule,P,_,_).
 
 %% cannot have multiple rules without recursion
-:- rule(R), R > 0, not recursive.
+:- multiple_rules, not recursive.
 
 %% a recursive rule must have at least two body literals
 :- head_pred(P,A), body_literal(Rule,P,A,_), #count{Q,Vars : body_literal(Rule,Q,_,Vars)} < 2.
 
 %% head input arg in a recursive rule must appear in the body
 :- with_directions, recursive_rule(Rule), head_input_var(Rule,Var), not body_var(Rule,Var).
+
+:- multiple_rules, body_literal(R,_,_,_), not head_literal(R,_,_,_).
 
 
 

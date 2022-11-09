@@ -7,7 +7,7 @@ from clingo import Function, Number, Tuple_
 import pkg_resources
 from pyswip import Prolog
 from contextlib import contextmanager
-from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal
+from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive
 from . core import Literal
 import clingo
 import clingo.script
@@ -230,8 +230,10 @@ class Explainer:
     def add_seen_prog(self, prog):
         k = prog_hash(prog)
         k2 = prog_hash4(prog)
-        self.seen_prog.add(k)
-        self.seen_prog.add(k2)
+        # self.seen_prog.add(k)
+        # self.seen_prog.add(k2)
+        self.cached_unsat.add(k)
+        self.cached_unsat.add(k2)
 
     def deep_explain_unsat_body(self, prog):
         rule = prog[0]
@@ -283,6 +285,10 @@ class Explainer:
             f.write(encoding)
         # print('TESTING PROG1', self.tmp_count)
 
+        # print('-------------')
+        # print('-------------')
+        # print('-------------')
+        # print('TESTING PROG1', self.tmp_count)
         # for rule in prog:
         #     print(format_rule(rule))
 
@@ -298,7 +304,7 @@ class Explainer:
             subprog = parse_model4(head_index, body_index, selected_literals)
             # print('\t' + '*'*10)
             # for rule in subprog:
-                # print('\t',format_rule(rule))
+            #     print('\t',format_rule(rule))
 
             k1 = prog_hash(subprog)
 
@@ -354,7 +360,10 @@ class Explainer:
                     if not connected(_body):
                         # print('SKIP!!!!')
                         # print('k3_not_connected')
-                        self.cached_satbody.add(k3)
+                        # self.cached_satbody.add(k3)
+                        self.seen_prog.add(k1)
+                        self.seen_prog.add(k2)
+                        self.seen_prog.add(k3)
                         continue
             # else:
 
@@ -373,37 +382,47 @@ class Explainer:
                 break
 
             # print('\t\t', 'TESTING SUBPROG1', self.tmp_count)
-            redundant = False
+            # redundant = False
             with self.settings.stats.duration('check_redundant_literal'):
                 if len(subprog) == 1 and len(list(self.tester.check_redundant_literal(subprog))) > 0:
-                    redundant = True
+                    # redundant = True
+                    # print('check_redundant_literal', self.tmp_count)
+                    # for rule in subprog:
+                    #     print(format_rule(rule))
                     self.seen_prog.add(k1)
                     self.seen_prog.add(k2)
                     self.seen_prog.add(k3)
-            if redundant:
-                continue
+                    continue
+            # if redundant:
+                # continue
                     # print('\t\tREDUNDNANT!!!')
 
-            print('\t***', self.tmp_count)
-            for rule in order_prog(subprog):
-                h, b = rule
+            with self.settings.stats.duration('check_redundant_rule'):
+                # if len(subprog) > 2 and self.tester.has_redundant_rule(subprog):
+                if len(subprog) > 1 and self.tester.has_redundant_rule(subprog):
+                    # print('check_redundant_rule', self.tmp_count)
+                    # for rule in subprog:
+                        # print(format_rule(rule))
+                    self.seen_prog.add(k1)
+                    self.seen_prog.add(k2)
+                    self.seen_prog.add(k3)
+                    continue
 
-                if h:
-                    # pass
-                    # a = tmp_get_new_body(set(h.arguments), len(h.arguments), b)
-                    # a = ','.join(map(str,a))
-                    print('\t', format_rule(order_rule(rule)))
-                    # print('\t\t', a)
-                    # print('\t\t', k1)
-                    # print('\t\t', k2)
-                    # print('\t\t', k3)
-                    # print(h)
-                    # print('****')
-                    # print'\t\t\t', k1, k2, k3, a)
-                    pass
-                else:
-                    print('\t:- ' + ', '.join(map(format_literal, b)))
-                    pass
+                    # print('REDUNDANT RULE!!!!!!!!!')
+                    # for rule in order_prog(subprog):
+                    #     # h, b = rule
+                    #     print('\t', format_rule(order_rule(rule)))
+                    # exit()
+
+            # print('\t***', self.tmp_count)
+            # for rule in order_prog(subprog):
+                # h, b = rule
+                # print('\t', format_rule(order_rule(rule)))
+                # if h:
+
+                # else:
+                #     print('\t:- ' + ', '.join(map(format_literal, b)))
+                #     pass
 
             with self.settings.stats.duration('explain_prolog'):
                 test_prog = []
@@ -430,8 +449,8 @@ class Explainer:
                         self.cached_satbody.add(k3)
                     else:
                         self.cached_unsatbody.add(k3)
-                        print('\t\tSHIT1')
-                        assert(redundant == False)
+                        # print('\t\tSHIT1')
+                        # assert(redundant == False)
                         # print(encoding)
                         prune = True
                         yield subprog, True
@@ -440,8 +459,13 @@ class Explainer:
                         self.cached_sat.add(k1)
                         self.cached_sat.add(k2)
                     else:
-                        print('\t\tSHIT2')
-                        assert(redundant == False)
+                        # print('\t\tSHIT2')
+                        if len(test_prog) ==3:
+                            if len([r for r in test_prog if rule_is_recursive(r)]) == 1:
+                                for rule in prog:
+                                    print(format_rule(rule))
+                                exit()
+                        # assert(redundant == False)
                         self.cached_unsat.add(k1)
                         self.cached_unsat.add(k2)
                         prune = True

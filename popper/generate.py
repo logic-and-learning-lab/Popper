@@ -91,8 +91,8 @@ def build_seen_rule(rule):
     head = Literal('seen_rule', (handle, rule_var))
     body = []
     body.extend(build_rule_literals(rule, rule_var))
-    # if rule_is_recursive(rule):
-        # body.append(gteq(rule_var, 1))
+    if rule_is_recursive(rule):
+        body.append(gteq(rule_var, 1))
     return head, tuple(body)
 
 def build_seen_rule_literal(handle, rule_var):
@@ -179,6 +179,9 @@ def build_rule_literals(rule, rule_var):
         yield Literal('body_literal', (rule_var, body_literal.predicate, body_literal.arity, tuple(vo_variable2(rule_var, v) for v in body_literal.arguments)))
     for idx, var in enumerate(head.arguments):
         yield eq(vo_variable2(rule_var, var), idx)
+
+    if rule_is_recursive(rule):
+        yield gteq(rule_var, 1)
 
 def build_rule_ordering_literals(rule_index, rule_ordering):
     for r1, higher_rules in rule_ordering.items():
@@ -345,6 +348,8 @@ class Generator:
             handle = make_rule_handle(rule)
             if handle in self.seen_handles:
                 literals.append(build_seen_rule_literal(handle, rule_var))
+                if rule_is_recursive(rule):
+                    literals.append(gteq(rule_var, 1))
             else:
                 new_handles.add(build_seen_rule(rule))
                 literals.extend(tuple(build_rule_literals(rule, rule_var)))
@@ -367,6 +372,8 @@ class Generator:
             handle = make_rule_handle(rule)
             if handle in self.seen_handles:
                 literals.append(build_seen_rule_literal(handle, rule_var))
+                if rule_is_recursive(rule):
+                    literals.append(gteq(rule_var, 1))
             else:
                 # new_handles.add((handle, build_seen_rule(rule)))
                 new_handles.add(build_seen_rule(rule))
@@ -401,6 +408,9 @@ class Generator:
         # print('RED1', format_rule(rule))
         # print('\n'.join(str(x) for x in literals))
         return handle, new_handles, tuple(literals)
+
+    # def redundant_rules_check(self, rule1, rule2):-
+
 
     def unsat_constraint(self, body):
         rule_var = vo_clause('X')
@@ -489,6 +499,8 @@ class Generator:
 
                 if handle in self.seen_handles:
                     literals.append(build_seen_rule_literal(handle, rule_var))
+                    if rule_is_recursive(rule):
+                        literals.append(gteq(rule_var, 1))
                 else:
                     new_handles.add(build_seen_rule(rule))
                     literals.append(build_seen_rule_literal(handle, rule_var))

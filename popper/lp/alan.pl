@@ -30,7 +30,6 @@ size(N):-
     N = 2..MaxSize,
     #sum{K+1,C : body_size(C,K)} == N.
 
-
 pi_or_rec:-
     recursive.
 pi_or_rec:-
@@ -352,7 +351,7 @@ head_connected(C,Var1):-
 %% not_var_first_lit(C,V,(P,PArgs)) :- bfr(C,(Q,QArgs),(P,PArgs)),var_member(V,QArgs),var_member(V,PArgs).
 %% var_first_lit(C,V,(P,PArgs)) :- body_literal(C,P,_,PArgs),var_member(V,PArgs),not not_var_first_lit(C,V,(P,PArgs)).
 %% :-var_first_lit(C,V,(P,PArgs)),var_first_lit(C,W,(Q,QArgs)),bfr(C,(P,PArgs),(Q,QArgs)),W<V.
-%% :-pruned.
+%% %% :-pruned.
 
 
 %% ##################################################
@@ -529,7 +528,7 @@ num_in_args(P,N):-
     direction_(P,_,_),
     #count{Pos : direction_(P,Pos,in)} == N.
 
-%% %% VAR SAFE IF HEAD INPUT VAR
+%% %% %% VAR SAFE IF HEAD INPUT VAR
 %% safe_var(C,Var):-
 %%     head_literal(C,P,_,Vars),
 %%     var_pos(Var,Vars,Pos),
@@ -581,17 +580,16 @@ safe_bvar(Rule,Var):-
     num_in_args(P,N),
     #count{Pos : var_pos(Var2,Vars,Pos), direction_(P,Pos,in), safe_bvar(Rule,Var2)} == N.
 
+:-
+    direction_(_,_,_),
+    body_var(Rule,Var),
+    not safe_bvar(Rule,Var).
 %% #show safe_bvar/2.
 %% #show tmp/1.
 %% tmp(Var):-
 %%     body_var(Rule,Var),
 %%     not safe_bvar(Rule,Var).
 
-a:-
-    direction_(_,_,_),
-    body_var(Rule,Var),
-    not safe_bvar(Rule,Var).
-:- a.
 %% ########################################
 %% CLAUSES SPECIFIC TO PREDICATE INVENTION
 %% ########################################
@@ -970,3 +968,33 @@ only_once(P,A):-
 %% depends_on(C1,C3) :-
 %%     depends_on(C1,C2),
 %%     depends_on(C2,C3).
+
+
+
+:-
+    Rule > 0,
+    head_literal(Rule,P,_,(A,_)),
+    body_literal(Rule,P,_,(_,A)).
+
+:-
+    Rule > 0,
+    head_literal(Rule,P,_,(_,A)),
+    body_literal(Rule,P,_,(A,_)).
+
+
+%% PREVENT LEFT RECURSION
+%% TODO: GENERALISE FOR ARITY > 3
+:-
+    C > 0,
+    num_in_args(P,2),
+    head_literal(C,P,A,Vars1),
+    body_literal(C,P,A,Vars2),
+    Var1 != Var2,
+    var_pos(Var1,Vars1,V1Pos1),
+    var_pos(Var1,Vars2,V1Pos2),
+    direction_(P,V1Pos1,in),
+    direction_(P,V1Pos2,in),
+    var_pos(Var2,Vars1,V2Pos1),
+    var_pos(Var2,Vars2,V2Pos2),
+    direction_(P,V2Pos1,in),
+    direction_(P,V2Pos2,in).

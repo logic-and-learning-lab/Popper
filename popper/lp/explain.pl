@@ -1,5 +1,4 @@
 #show selected/1.
-
 #heuristic size(N). [1000-N,true]
 
 size(N):- #count{ID : selected(ID)} == N.
@@ -8,4 +7,4 @@ size(N):- #count{ID : selected(ID)} == N.
 :- size(0).
 
 %% every head literal must have a body literal
-:- head_literal(Rule,_,_,_), #count{P,Vars : body_literal(Rule,P,_,Vars)} == 0.
+:- head_literal(Rule,_,_,_), not body_literal(Rule,_,_,_).

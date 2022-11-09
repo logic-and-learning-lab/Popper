@@ -47,6 +47,18 @@ direction(positive,(in,)).
 direction(tail,(in,out)).
 %% direction(zero,(out,)).
 
+
+:-
+    Rule > 0,
+    head_pred(P,_),
+    body_literal(Rule,empty,_,(A,)),
+    body_literal(Rule,P,_,(A,_)).
+
+:-
+    Rule > 0,
+    head_literal(Rule,P,_,(A,_)),
+    body_literal(Rule,P,_,(_,A)).
+
 type(cons,(element,list,list)).
 %% type(cons,(list,element,list)).
 type(decrement,(element,element)).
