@@ -345,13 +345,13 @@ head_connected(C,Var1):-
 %% %% ROLF MOREL'S ORDERING CONSTRAINT
 %% %% IT REDUCES THE NUMBER OF MODELS BUT DRASTICALLY INCREASES GROUNDING AND SOLVING TIME
 %% %% ##################################################
-bfr(C,(P,PArgs),(Q,QArgs)) :- head_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs).
-bfr(C,(P,PArgs),(Q,QArgs)) :- body_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs),P<Q.
-bfr(C,(P,PArgs1),(P,PArgs2)) :- body_literal(C,P,PA,PArgs1),body_literal(C,P,PA,PArgs2),PArgs1<PArgs2.
+%% bfr(C,(P,PArgs),(Q,QArgs)) :- head_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs).
+%% bfr(C,(P,PArgs),(Q,QArgs)) :- body_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs),P<Q.
+%% bfr(C,(P,PArgs1),(P,PArgs2)) :- body_literal(C,P,PA,PArgs1),body_literal(C,P,PA,PArgs2),PArgs1<PArgs2.
 
-not_var_first_lit(C,V,(P,PArgs)) :- bfr(C,(Q,QArgs),(P,PArgs)),var_member(V,QArgs),var_member(V,PArgs).
-var_first_lit(C,V,(P,PArgs)) :- body_literal(C,P,_,PArgs),var_member(V,PArgs),not not_var_first_lit(C,V,(P,PArgs)).
-:-var_first_lit(C,V,(P,PArgs)),var_first_lit(C,W,(Q,QArgs)),bfr(C,(P,PArgs),(Q,QArgs)),W<V.
+%% not_var_first_lit(C,V,(P,PArgs)) :- bfr(C,(Q,QArgs),(P,PArgs)),var_member(V,QArgs),var_member(V,PArgs).
+%% var_first_lit(C,V,(P,PArgs)) :- body_literal(C,P,_,PArgs),var_member(V,PArgs),not not_var_first_lit(C,V,(P,PArgs)).
+%% :-var_first_lit(C,V,(P,PArgs)),var_first_lit(C,W,(Q,QArgs)),bfr(C,(P,PArgs),(Q,QArgs)),W<V.
 %% :-pruned.
 
 
@@ -529,40 +529,69 @@ num_in_args(P,N):-
     direction_(P,_,_),
     #count{Pos : direction_(P,Pos,in)} == N.
 
+%% %% VAR SAFE IF HEAD INPUT VAR
+%% safe_var(C,Var):-
+%%     head_literal(C,P,_,Vars),
+%%     var_pos(Var,Vars,Pos),
+%%     direction_(P,Pos,in).
+
+%% %% VAR SAFE IF IN A LITERAL THAT ONLY HAS OUT VARS
+%% safe_var(C,Var):-
+%%     num_in_args(P,0),
+%%     body_literal(C,P,_,Vars),
+%%     var_member(Var,Vars).
+
+%% %% VAR SAFE IF IN SAFE LITERAL
+%% safe_var(C,Var):-
+%%     safe_literal(C,P,Vars),
+%%     var_member(Var,Vars).
+
+%% %% LITERAL WITH N INPUT VARS IS SAFE IF N VARS ARE SAFE
+%% safe_literal(C,P,Vars):-
+%%     num_in_args(P,N),
+%%     N > 0,
+%%     body_literal(C,P,_,Vars),
+%%     #count{Pos :
+%%         var_pos(Var,Vars,Pos),
+%%         direction_(P,Pos,in),
+%%         safe_var(C,Var)
+%%     } == N.
+
+%% %% SAFE VARS
+%% :-
+%%     direction_(_,_,_), % guard for when no direction_s are given
+%%     clause_var(C,Var),
+%%     not safe_var(C,Var).
+
+%% new!!!!!
 %% VAR SAFE IF HEAD INPUT VAR
-safe_var(C,Var):-
-    head_literal(C,P,_,Vars),
+safe_bvar(Rule,Var):-
+    head_literal(Rule,P,_,Vars),
     var_pos(Var,Vars,Pos),
     direction_(P,Pos,in).
 
-%% VAR SAFE IF IN A LITERAL THAT ONLY HAS OUT VARS
-safe_var(C,Var):-
+safe_bvar(Rule,Var):-
+    body_literal(Rule,P,_,Vars),
     num_in_args(P,0),
-    body_literal(C,P,_,Vars),
     var_member(Var,Vars).
 
-%% VAR SAFE IF IN SAFE LITERAL
-safe_var(C,Var):-
-    safe_literal(C,P,Vars),
-    var_member(Var,Vars).
-
-%% LITERAL WITH N INPUT VARS IS SAFE IF N VARS ARE SAFE
-safe_literal(C,P,Vars):-
+safe_bvar(Rule,Var):-
+    body_literal(Rule,P,_,Vars),
+    var_member(Var,Vars),
     num_in_args(P,N),
-    N > 0,
-    body_literal(C,P,_,Vars),
-    #count{Pos :
-        var_pos(Var,Vars,Pos),
-        direction_(P,Pos,in),
-        safe_var(C,Var)
-    } == N.
+    #count{Pos : var_pos(Var2,Vars,Pos), direction_(P,Pos,in), safe_bvar(Rule,Var2)} == N.
 
-%% SAFE VARS
-:-
-    direction_(_,_,_), % guard for when no direction_s are given
-    clause_var(C,Var),
-    not safe_var(C,Var).
+%% #show safe_bvar/2.
+%% #show tmp/1.
+%% tmp(Var):-
+%%     body_var(Rule,Var),
+%%     not safe_bvar(Rule,Var).
 
+a:-
+    direction_(_,_,_),
+    body_var(Rule,Var),
+    not safe_bvar(Rule,Var).
+:- a.
 %% ########################################
 %% CLAUSES SPECIFIC TO PREDICATE INVENTION
 %% ########################################

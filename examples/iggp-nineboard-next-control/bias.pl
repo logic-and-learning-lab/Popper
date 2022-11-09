@@ -16,7 +16,7 @@ head_pred(next_control,2).
 body_pred(true_mark,6).
 body_pred(true_currentboard,3).
 body_pred(true_control,2).
-body_pred(not_true_control,2).
+%% body_pred(not_true_control,2).
 body_pred(input,2).
 body_pred(input_play,6).
 body_pred(does,3).

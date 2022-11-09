@@ -34,30 +34,35 @@ def parse_handles(generator, new_handles):
             out_b = frozenset((b_pred, b_args) for _, b_pred, b_args in b)
             yield (out_h, out_b)
 
-def explain_failure(settings, generator, explainer, prog, directions, pos_covered, new_cons, all_handles, bad_handles, new_ground_cons):
+def explain_failure(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons):
     pruned_subprog = False
-    explainer.add_seen_prog(prog)
 
-    if len(pos_covered) > 0:
-        return
-
-    for subprog in explainer.explain_totally_incomplete2(prog, directions, settings.stats.total_programs):
+    for subprog, unsat_body in explainer.explain_totally_incomplete2(prog, directions, settings.stats.total_programs):
+        # print('subprog!!!')
         pruned_subprog = True
         has_unsat_body = False
 
-        if len(subprog) == 1:
-            for subrule in explainer.deep_explain_unsat_body(subprog):
-                print('UNSAT BODY:')
-                print('\t', format_rule((False,subrule)))
-
-                con = generator.unsat_constraint(subrule)
-                for h, b in generator.get_ground_deep_rules(con, settings.head_types):
-                    new_ground_cons.add(b)
-                # TODO: CAN WE FEED THIS INFORMATION BACK INTO THE EXPLAINER?
-                has_unsat_body = True
-
-        if has_unsat_body:
+        if unsat_body:
+            _, body = subprog[0]
+            # print(subrule)
+            con = generator.unsat_constraint(body)
+            for h, b in generator.get_ground_deep_rules(con, settings.head_types):
+                new_ground_cons.add(b)
+                # print(', '.join(map(str,b)))
             continue
+
+        # if len(subprog) == 1:
+        #     for subrule in explainer.deep_explain_unsat_body(subprog):
+        #         con = generator.unsat_constraint(subrule)
+        #         # print(','.join(map(str,con)))
+        #         for h, b in generator.get_ground_deep_rules(con, settings.head_types):
+        #             # print(b)
+        #             new_ground_cons.add(b)
+        #         # TODO: CAN WE FEED THIS INFORMATION BACK INTO THE EXPLAINER?
+        #         has_unsat_body = True
+
+        # if has_unsat_body:
+            # continue
 
         new_rule_handles, con = generator.build_specialisation_constraint(subprog)
         new_cons.add(con)
@@ -77,10 +82,14 @@ def explain_failure(settings, generator, explainer, prog, directions, pos_covere
                     continue
 
                 for subrule in explainer.deep_explain_unsat_body([rule]):
+                    print('PROG:')
+                    for rule in prog:
+                        print(format_rule(rule))
                     print('UNSAT BODY2:')
                     print('\t', format_rule((False,subrule)))
                     con = generator.unsat_constraint(subrule)
                     for h, b in generator.get_ground_deep_rules(con, settings.head_types):
+                        print(b)
                         new_ground_cons.add(b)
                     has_unsat_body = True
 
@@ -94,12 +103,11 @@ def explain_failure(settings, generator, explainer, prog, directions, pos_covere
     return pruned_subprog
 
 def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons):
-    with settings.stats.duration('constrain'):
-        ground_bodies = set()
+    all_ground_cons.update(new_ground_cons)
+    ground_bodies = set()
+    ground_bodies.update(new_ground_cons)
 
-        all_ground_cons.update(new_ground_cons)
-        ground_bodies.update(new_ground_cons)
-
+    with settings.stats.duration('ground'):
         for con in new_cons:
             ground_rules = generator.get_ground_rules((None, con))
             for ground_rule in ground_rules:
@@ -107,7 +115,7 @@ def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atom
                 ground_bodies.add(ground_body)
                 all_ground_cons.add(frozenset(ground_body))
 
-        nogoods = []
+    with settings.stats.duration('constrain'):
         for ground_body in ground_bodies:
             nogood = []
             for sign, pred, args in ground_body:
@@ -116,16 +124,15 @@ def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atom
                     nogood.append(cached_clingo_atoms[k])
                 else:
                     x = (atom_to_symbol(pred, args), sign)
-                    nogood.append(x)
                     cached_clingo_atoms[k] = x
-            nogoods.append(nogood)
-
-        for nogood in nogoods:
+                    nogood.append(x)
+            settings.nogoods +=1
             model.context.add_nogood(nogood)
 
 def popper(settings):
     if settings.bkcons:
         deduce_bk_cons(settings)
+    settings.nogoods = 0
 
     tester = Tester(settings)
     explainer = Explainer(settings, tester)
@@ -193,6 +200,7 @@ def popper(settings):
                 pruned_subprog = False
 
                 # GENERATE A PROGRAM
+                # print('HELLO')
                 with settings.stats.duration('generate'):
                     # get the next model from the solver
                     model = next(handle, None)
@@ -201,7 +209,11 @@ def popper(settings):
                     atoms = model.symbols(shown = True)
                     prog, rule_ordering, directions = parse_model(atoms)
 
+
+
                 settings.stats.total_programs += 1
+                # if settings.stats.total_programs == 5:
+                    # exit()
                 if settings.debug:
                     settings.logger.debug(f'Program {settings.stats.total_programs}:')
                     for rule in order_prog(prog):
@@ -213,9 +225,11 @@ def popper(settings):
                     num_pos_covered = len(pos_covered)
 
                 # EXPLAIN A FAILURE
-                if settings.explain:
+                if settings.explain and len(pos_covered) == 0:
+                    explainer.add_seen_prog(prog)
+                    # print('TOTALLY INCOMPLETE!!!')
                     with settings.stats.duration('explain'):
-                        pruned_subprog = explain_failure(settings, generator, explainer, prog, directions, pos_covered, new_cons, all_handles, bad_handles, new_ground_cons)
+                        pruned_subprog = explain_failure(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons)
 
                 if inconsistent and prog_is_recursive(prog):
                     combiner.add_inconsistent(prog)
@@ -332,18 +346,18 @@ def popper(settings):
                     with settings.stats.duration('combine'):
                         new_solution_found = combiner.update_best_prog(prog, pos_covered)
 
-                    # if we find a new solution, update the maximum program size
-                    if new_solution_found:
 
-                        # if only adding nogoods, eliminate larger programs
+                    # if we find a new solution, update the maximum program size
+                    # if only adding nogoods, eliminate larger programs
+                    if new_solution_found:
+                        settings.max_literals = combiner.max_size-1
+                        if size >= settings.max_literals:
+                            return
+
                         if not pi_or_rec:
                             for i in range(combiner.max_size, settings.max_literals+1):
                                 size_con = [(atom_to_symbol("size", (i,)), True)]
                                 model.context.add_nogood(size_con)
-
-                        settings.max_literals = combiner.max_size-1
-                        if size >= settings.max_literals:
-                            return
 
                 # if non-separable program covers all examples, stop
                 if not inconsistent and num_pos_covered == num_pos:
@@ -356,9 +370,10 @@ def popper(settings):
                     new_cons.add(con)
 
                 if add_gen:
-                    handles, con = generator.build_generalisation_constraint(prog, rule_ordering)
-                    new_rule_handles.update(handles)
-                    new_cons.add(con)
+                    if pi_or_rec or not pruned_subprog:
+                        handles, con = generator.build_generalisation_constraint(prog, rule_ordering)
+                        new_rule_handles.update(handles)
+                        new_cons.add(con)
 
                 if add_redund1 and not pruned_subprog:
                     bad_handle, handles, con = generator.redundancy_constraint1(prog)
@@ -371,15 +386,9 @@ def popper(settings):
                     new_rule_handles.update(handles)
                     new_cons.update(cons)
 
-                    # handles, con = generator.redundancy_constraint4(prog)
-                    # new_rule_handles.update(handles)
-                    # new_cons.add(con)
-
                 # if pi or rec, save the constraints and handles for the next program size
                 if pi_or_rec:
                     all_handles.update(parse_handles(generator, new_rule_handles))
-
-                # Q. For recursive programs, can we skip adding them?
 
                 # CONSTRAIN
                 constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons)
@@ -389,4 +398,5 @@ def popper(settings):
 
 def learn_solution(settings):
     timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)
+    print('settings.nogoods',settings.nogoods)
     return settings.solution, settings.best_prog_score, settings.stats

@@ -7,7 +7,7 @@ from clingo import Function, Number, Tuple_
 import pkg_resources
 from pyswip import Prolog
 from contextlib import contextmanager
-from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog
+from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal
 from . core import Literal
 import clingo
 import clingo.script
@@ -17,7 +17,10 @@ def prog_hash(prog):
     for rule in prog:
         head, body = rule
         body = frozenset((lit.predicate, lit.arguments) for lit in body)
-        new_rule = ((head.predicate, head.arguments), body)
+        if head:
+            new_rule = ((head.predicate, head.arguments), body)
+        else:
+            new_rule = (False, body)
         rules.add(new_rule)
     return hash(frozenset(rules))
 
@@ -56,15 +59,35 @@ def tmp_get_new_body(head_vars, next_var, body):
             new_args.append(lookup[var])
         new_body.append((body_literal.predicate, tuple(new_args)))
     return new_body
+
 def prog_hash4(prog):
     rules = []
     for rule in prog:
         head, body = rule
-        head_vars = set(head.arguments)
+        if head:
+            head_vars = set(head.arguments)
+        else:
+            head_vars = set()
+        next_var = len(head_vars)
+        new_body = frozenset(tmp_get_new_body(head_vars, next_var, body))
+        # print(new_body)
+        if head:
+            new_rule = ((head.predicate, head.arguments), new_body)
+        else:
+            new_rule = (False, new_body)
+
+        rules.append(new_rule)
+    k3 = hash(frozenset(rules))
+    return k3
+
+def rule_hash(prog):
+    rules = []
+    for rule in prog:
+        head, body = rule
+        head_vars = set()
         next_var = len(head_vars)
         new_body = tmp_get_new_body(head_vars, next_var, body)
-
-        new_rule = ((head.predicate, head.arguments), frozenset(new_body))
+        new_rule = frozenset(new_body)
         rules.append(new_rule)
     k3 = hash(frozenset(rules))
     return k3
@@ -87,34 +110,41 @@ def standardise_vars(rule):
             new_args.append(lookup[var])
         body_literal.arguments = tuple(new_args)
 
-def build_explain_encoding(prog, with_directions=False):
-    literal_index = {}
+def build_explain_encoding(prog, with_directions=False, recursion_enabled=False):
     encoding = set()
-
-    head_count = 0
-    body_count = 0
     size = 0
+    literal_count = 0
+    head_index = {}
+    body_index = {}
 
     for rule_id, rule in enumerate(prog):
         head, body = rule
         rule_vars = set()
         rule_vars.add(vars_to_ints(head.arguments))
+        head_index[literal_count] = head
+        # if recursion_enabled:
+        literal_enc = f'head_literal({rule_id},{head.predicate},{head.arity},{vars_to_ints(head.arguments)})'
+        encoding.add(f'{{{literal_enc}}}.')
+        encoding.add(f'selected({literal_count}):-{literal_enc}.')
+        literal_count +=1
 
-        # if self.settings.recursion_enabled:
-        encoding.add(f'{{head_literal({rule_id},{head.predicate},{head.arity},{vars_to_ints(head.arguments)})}}.')
+        encoding.add(f'head_pred({head.predicate},{head.arity}).')
+
+        # %% head_p(f,2).
         # else:
             # encoding.add(f'head_literal({rule_id},{head.predicate},{head.arity},{vars_to_ints(head.arguments)}).')
+        # encoding.add(f'selected({body_count}):-{literal_enc}.')
         encoding.add(f'arity({head.predicate},{head.arity}).')
         for literal in body:
             rule_vars.add(vars_to_ints(literal.arguments))
             literal_enc = f'body_literal({rule_id},{literal.predicate},{literal.arity},{vars_to_ints(literal.arguments)})'
             encoding.add(f'arity({literal.predicate},{literal.arity}).')
             encoding.add(f'{{{literal_enc}}}.')
-            encoding.add(f'selected({body_count}):-{literal_enc}.')
-            literal_index[body_count] = head, literal
-            if literal.predicate == head.predicate:
-                encoding.add(f':- not selected({body_count}).')
-            body_count += 1
+            encoding.add(f'selected({literal_count}):-{literal_enc}.')
+            body_index[literal_count] = head, literal
+            # if literal.predicate == head.predicate:
+                # encoding.add(f':- not selected({literal_count}).')
+            literal_count += 1
 
         size += len(body)
         if with_directions:
@@ -123,8 +153,8 @@ def build_explain_encoding(prog, with_directions=False):
                 for i, x in enumerate(xs):
                     encoding.add(f'var_pos({x},{xs},{i}).')
                     encoding.add(f'var_member({x},{xs}).')
-    encoding.add(f':- size({size}).')
-    return literal_index, encoding
+    # encoding.add(f':- size({size}).')
+    return head_index, body_index, encoding
 
 class Explainer:
 
@@ -184,6 +214,11 @@ class Explainer:
         self.cached_sat = set()
         self.cached_unsat = set()
 
+        self.cached_satbody = set()
+        self.cached_unsatbody = set()
+
+
+
         self.explain_encoding = pkg_resources.resource_string(__name__, "lp/explain.pl").decode()
         self.explain_dir_encoding = pkg_resources.resource_string(__name__, "lp/explain-dirs.pl").decode()
         self.directions = self.load_directions()
@@ -192,36 +227,18 @@ class Explainer:
         self.tmp_count = 0
         self.seen_body = set()
 
-    # @profile
     def add_seen_prog(self, prog):
         k = prog_hash(prog)
         k2 = prog_hash4(prog)
         self.seen_prog.add(k)
         self.seen_prog.add(k2)
 
-    # @profile
-    # TODO: PRUNE PROGRAMS KNOWN TO BE PARTIALLY COMPLETE
-    # TODO: PRUNE PROGRAMS KNOWN TO BE TOTALLY INCOMPLETE
-    # TODO: ADD CONSTRAINTS THE SOLVER WHILST ENUMERATING UNSAT RULES
-    # TODO: TRY RULES WITHOUT HEAD LITERALS
-    # TODO: CHECK SUBSUMPTION
-    #   r1 = f(A):-x(A) SAT
-    #   r2 = f(A):-x(B)
-    #   r3 = f(A):-x(C)
-    #   if r1 is SAT, then r2 and r3 are SAT
-    # ----------
-    #   r1 = f(A):-x(B) UNSAT
-    #   r2 = f(A):-x(A)
-    #   if r1 is UNSAT, then r2 in UNSAT
-
-    # @profile
     def deep_explain_unsat_body(self, prog):
         rule = prog[0]
         with self.settings.stats.duration('explain_deeeeep'):
             head, body = rule
             if len(body) < 2:
                 return
-            # print('A', format_rule(rule))
             for sub_body in hacky_powerset(body):
 
                 body_k2 = hash(frozenset(tmp_get_new_body(set(), 0, sub_body)))
@@ -231,21 +248,23 @@ class Explainer:
                 else:
                     self.seen_body.add(body_k2)
 
-
                 if not has_valid_directions((False, sub_body)):
                     continue
 
                 if not connected(sub_body):
                     continue
 
-                # print('\tB1', format_rule((False, sub_body)))
-
+                print('\tB1', format_rule((False, sub_body)))
                 with self.settings.stats.duration('explain_deeeeep_prolog'):
-                    if not self.tester.is_body_sat(sub_body):
+                    if not self.tester.is_body_sat(order_body(sub_body)):
+                        print('UNSAT')
                         # assert(len(sub_body) > 1)
                         # assert(connected(sub_body))
+                        # for rule in prog:
+                            # print(format_rule(rule))
                         # print('\tPRUNE!!', format_rule((False, sub_body)))
                         yield sub_body
+
 
     def explain_totally_incomplete2(self, prog, directions, tmp_cnt):
         encoding = set()
@@ -253,93 +272,185 @@ class Explainer:
         if self.has_directions:
             encoding.update(self.directions)
             encoding.add(self.explain_dir_encoding)
-        literal_index, prog_encoding = build_explain_encoding(prog, self.has_directions)
+        head_index, body_index, prog_encoding = build_explain_encoding(prog, self.has_directions, self.settings.recursion_enabled)
         encoding.update(prog_encoding)
 
-        with open(f'dbg/explain-{tmp_cnt}.pl','w') as f:
-
-            for rule in order_prog(prog):
-                f.write('% ' + format_rule(order_rule(rule)) + '\n')
-            tmp = '\n'.join(sorted(list(encoding)))
-            f.write(tmp)
-
         encoding = '\n'.join(encoding)
+        # print(encoding)
 
-        # with self.settings.stats.duration('explain_clingo'):
-        # subprogs =
+        self.tmp_count+=1
+        with open(f'tmp/{self.tmp_count}.pl', 'w') as f:
+            f.write(encoding)
+        # print('TESTING PROG1', self.tmp_count)
 
-        unsat_count = 0
-        # print('TOTALLY INCOMPLETE')
         # for rule in prog:
-            # print(format_rule(order_rule(rule)))
+        #     print(format_rule(rule))
 
-        for selected_literals, model in self.find_subprogs(literal_index, encoding):
-            subprog = parse_model4(literal_index, selected_literals)
+        for selected_literals, model in self.find_subprogs(encoding):
+
+            def build_nogood():
+                nogood = []
+                for idx in selected_literals:
+                    x = (atom_to_symbol('selected', (idx,)), True)
+                    nogood.append(x)
+                model.context.add_nogood(nogood)
+
+            subprog = parse_model4(head_index, body_index, selected_literals)
+            # print('\t' + '*'*10)
+            # for rule in subprog:
+                # print('\t',format_rule(rule))
+
             k1 = prog_hash(subprog)
 
             if k1 in self.seen_prog:
+                # print('k1_in_seen')
                 continue
 
             if k1 in self.cached_unsat:
+                # assert(False)
+                # print('k1_in_unsat')
+                build_nogood()
+                yield subprog, False
                 continue
 
             if k1 in self.cached_sat:
+                # print('k1_in_sat')
                 continue
 
             k2 = prog_hash4(subprog)
 
             if k2 in self.seen_prog:
+                # print('k2_in_seen')
                 continue
 
             if k2 in self.cached_unsat:
-                yield subprog
+                # assert(False)
+                # print('k2_in_unsat')
+                build_nogood()
+                yield subprog, False
                 continue
 
             if k2 in self.cached_sat:
+                # print('k2_in_sat')
                 continue
 
-            # print('\t', 'TESTING SUBPROG1')
-            # for rule in order_prog(subprog):
-            #     print('\t', format_rule(order_rule(rule)))
+            k3 = False
+            if len(subprog) == 1:
+                _head, _body = subprog[0]
+                if _head == None:
+                    k3 = hash(frozenset(tmp_get_new_body(set(), 0, _body)))
+                    if k3 in self.seen_prog:
+                        # print('k3_in_seen')
+                        continue
+                    if k3 in self.cached_satbody:
+                        # print('k3_in_sat')
+                        continue
+                    if k3 in self.cached_unsatbody:
+                        # print('k3_in_unsat')
+                        build_nogood()
+                        yield subprog, True
+                        continue
+                    # TODO: PUSH TO SOLVER!!
+                    if not connected(_body):
+                        # print('SKIP!!!!')
+                        # print('k3_not_connected')
+                        self.cached_satbody.add(k3)
+                        continue
+            # else:
+
+            skip = False
+            for _head, _body in subprog:
+                # TODO: PUSH TO SOLVER!!
+                if _head != None and not head_connected((_head, _body)):
+                    # print('SKIP!!!!')
+                    self.seen_prog.add(k1)
+                    self.seen_prog.add(k2)
+                    self.seen_prog.add(k3)
+                    skip = True
+                if skip:
+                    break
+            if skip:
+                break
+
+            # print('\t\t', 'TESTING SUBPROG1', self.tmp_count)
+            redundant = False
+            with self.settings.stats.duration('check_redundant_literal'):
+                if len(subprog) == 1 and len(list(self.tester.check_redundant_literal(subprog))) > 0:
+                    redundant = True
+                    self.seen_prog.add(k1)
+                    self.seen_prog.add(k2)
+                    self.seen_prog.add(k3)
+            if redundant:
+                continue
+                    # print('\t\tREDUNDNANT!!!')
+
+            print('\t***', self.tmp_count)
+            for rule in order_prog(subprog):
+                h, b = rule
+
+                if h:
+                    # pass
+                    # a = tmp_get_new_body(set(h.arguments), len(h.arguments), b)
+                    # a = ','.join(map(str,a))
+                    print('\t', format_rule(order_rule(rule)))
+                    # print('\t\t', a)
+                    # print('\t\t', k1)
+                    # print('\t\t', k2)
+                    # print('\t\t', k3)
+                    # print(h)
+                    # print('****')
+                    # print'\t\t\t', k1, k2, k3, a)
+                    pass
+                else:
+                    print('\t:- ' + ', '.join(map(format_literal, b)))
+                    pass
 
             with self.settings.stats.duration('explain_prolog'):
                 test_prog = []
-                for head, body in subprog:
 
-                    head_modes = tuple(directions[head.predicate][i] for i in range(head.arity))
-                    # print(head_modes)
-                    head_literal = Literal(head.predicate, head.arguments, head_modes)
+                for head, body in subprog:
+                    if head:
+                        head_modes = tuple(directions[head.predicate][i] for i in range(head.arity))
+                        head_literal = Literal(head.predicate, head.arguments, head_modes)
+                    else:
+                        head_literal = False
                     body_literals = set()
                     for body_literal in body:
                         body_modes = tuple(directions[body_literal.predicate][i] for i in range(body_literal.arity))
-                        # print(body_literal.predicate,body_modes)
                         body_literals.add(Literal(body_literal.predicate, body_literal.arguments, body_modes))
                     rule = head_literal, body_literals
                     test_prog.append(rule)
 
-                # print('\t', 'TESTING SUBPROG2')
-                # for rule in order_prog(test_prog):
-                #     print('\t', format_rule(order_rule(rule)))
 
-                if self.tester.is_sat(test_prog):
-                    self.cached_sat.add(k1)
-                    self.cached_sat.add(k2)
+                prune = False
+                # SPECIAL CASE WHEN THERE IS ONLY ONE HEADLESS RULE
+                if len(test_prog) == 1 and test_prog[0][0] == False:
+                    # pass
+                    if self.tester.is_body_sat(order_body(test_prog[0][1])):
+                        self.cached_satbody.add(k3)
+                    else:
+                        self.cached_unsatbody.add(k3)
+                        print('\t\tSHIT1')
+                        assert(redundant == False)
+                        # print(encoding)
+                        prune = True
+                        yield subprog, True
                 else:
-                    self.cached_unsat.add(k1)
-                    self.cached_unsat.add(k2)
-                    # unsat_count+=1
+                    if self.tester.is_sat(test_prog):
+                        self.cached_sat.add(k1)
+                        self.cached_sat.add(k2)
+                    else:
+                        print('\t\tSHIT2')
+                        assert(redundant == False)
+                        self.cached_unsat.add(k1)
+                        self.cached_unsat.add(k2)
+                        prune = True
+                        yield subprog, False
 
-                    nogood = []
-                    for idx in selected_literals:
-                        x = (atom_to_symbol('selected', (idx,)), True)
-                        nogood.append(x)
+                if prune:
+                    build_nogood()
 
-                    model.context.add_nogood(nogood)
-                    unsat_count +=1
-                    yield subprog
-
-
-    def find_subprogs(self, literal_index, encoding):
+    def find_subprogs(self, encoding):
         solver = clingo.Control(["--heuristic=Domain"])
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
@@ -350,66 +461,6 @@ class Explainer:
                 atoms = model.symbols(shown = True)
                 yield [atom.arguments[0].number for atom in atoms], model
 
-    def find_subprogs2(self, prog):
-        for rule in prog:
-            # print(rule)
-            head, body = rule
-            for sub_body in powerset(body):
-                subrule = (head, sub_body)
-
-                if len(sub_body) == 0:
-                    continue
-
-                if not head_connected(subrule):
-                    # print(format_rule(subrule))
-                    continue
-
-                if not has_valid_directions(subrule):
-                    continue
-                # print('asda2', format_rule(subrule))
-
-
-
-                subprog = frozenset([subrule])
-
-                k1 = prog_hash(subprog)
-
-                # Q. Is it better to push this check to the solver? I think not
-                if k1 in self.seen_prog:
-                    # print('k1 in seen')
-                    continue
-
-                if k1 in self.cached_unsat:
-                    # print('k1 in cached_unsat')
-                    continue
-
-                if k1 in self.cached_sat:
-                    # print('k1 in cached_sat')
-                    continue
-
-                k2 = prog_hash4(subprog)
-
-                if k2 in self.seen_prog:
-                    # print('\tmoo1')
-                    continue
-
-                if k2 in self.cached_unsat:
-                    # print('\tmoo2')
-                    yield subprog
-                    continue
-
-                if k2 in self.cached_sat:
-                    # print('\tmoo3')
-                    continue
-
-                if self.tester.is_sat(subprog):
-                    self.cached_sat.add(k1)
-                    self.cached_sat.add(k2)
-                else:
-                    self.cached_unsat.add(k1)
-                    self.cached_unsat.add(k2)
-
-                    yield subprog
 
 from itertools import chain, combinations
 def hacky_powerset(iterable):
@@ -417,14 +468,26 @@ def hacky_powerset(iterable):
     s = list(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(2, len(s)+1))
 
-def parse_model4(literal_index, selected_literals):
-    rules = {}
-    for idx in selected_literals:
-        head_literal, body_literal = literal_index[idx]
-        if head_literal not in rules:
-            rules[head_literal] = set()
-        rules[head_literal].add(body_literal)
-    return tuple((head, frozenset(body)) for head, body in rules.items())
+def parse_model4(head_index, body_index, selected_literals):
+    # print('parse_model4')
+    rules = {head_index[idx]:set() for idx in selected_literals if idx in head_index}
+
+    if len(rules) == 0:
+        # parsing a single headless rule
+        body = set()
+        for idx in selected_literals:
+            head_literal, body_literal = body_index[idx]
+            body.add(body_literal)
+        return tuple([(None, frozenset(body))])
+    else:
+        for idx in selected_literals:
+            if idx in head_index:
+                continue
+            head_literal, body_literal = body_index[idx]
+            if head_literal not in rules:
+                rules[head_literal] = set()
+            rules[head_literal].add(body_literal)
+        return tuple((head, frozenset(body)) for head, body in rules.items())
 
 
 
@@ -510,6 +573,30 @@ def has_valid_directions(rule):
 
         return True
 
+def order_body(body):
+    ordered_body = []
+    grounded_variables = set()
+    body_literals = set(body)
+
+    while body_literals:
+        selected_literal = None
+        for literal in body_literals:
+            if len(literal.outputs) == len(literal.arguments):
+                selected_literal = literal
+                break
+            if literal.inputs.issubset(grounded_variables):
+                selected_literal = literal
+                break
+
+        if selected_literal == None:
+            message = f'{selected_literal} in clause {format_rule(rule)} could not be grounded'
+            raise ValueError(message)
+
+        ordered_body.append(selected_literal)
+        grounded_variables = grounded_variables.union(selected_literal.arguments)
+        body_literals = body_literals.difference({selected_literal})
+
+    return tuple(ordered_body)
 
 def head_connected(rule):
     head, body = rule
@@ -549,3 +636,6 @@ def connected(body):
             return False
 
     return True
+
+
+

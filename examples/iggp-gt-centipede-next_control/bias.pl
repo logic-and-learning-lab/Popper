@@ -1,3 +1,6 @@
+max_body(7).
+max_vars(7).
+
 constant(agent_white, agent).
 constant(agent_black, agent).
 constant(int_0, int).

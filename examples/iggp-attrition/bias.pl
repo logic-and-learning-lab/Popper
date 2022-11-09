@@ -1,3 +1,6 @@
+max_body(7).
+max_vars(7).
+
 head_pred(next_score,3).
 body_pred(does,3).
 body_pred(my_true_claim_made_by,2).
@@ -21,26 +24,26 @@ constant(end_game,action).
 constant(noop,action).
 constant(white,agent).
 constant(black,agent).
-%% constant(c5,int).
-%% constant(c10,int).
-%% constant(c15,int).
-%% constant(c20,int).
-%% constant(c25,int).
-%% constant(c30,int).
-%% constant(c35,int).
-%% constant(c40,int).
-%% constant(c45,int).
-%% constant(c50,int).
-%% constant(c55,int).
-%% constant(c60,int).
-%% constant(c65,int).
-%% constant(c70,int).
-%% constant(c75,int).
-%% constant(c80,int).
-%% constant(c85,int).
-%% constant(c90,int).
-%% constant(c95,int).
-%% constant(c100,int).
+constant(c5,int).
+constant(c10,int).
+constant(c15,int).
+constant(c20,int).
+constant(c25,int).
+constant(c30,int).
+constant(c35,int).
+constant(c40,int).
+constant(c45,int).
+constant(c50,int).
+constant(c55,int).
+constant(c60,int).
+constant(c65,int).
+constant(c70,int).
+constant(c75,int).
+constant(c80,int).
+constant(c85,int).
+constant(c90,int).
+constant(c95,int).
+constant(c100,int).
 
 body_pred(P,1):-
     constant(P,_).

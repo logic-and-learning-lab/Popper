@@ -718,9 +718,10 @@ class Grounder():
         var_count = 0
         # var_index = {}
         var_lookup = {}
-        for i, head_type in enumerate(head_types):
-            encoding.add(f'type({i},{head_type}).')
-            encoding.add(f':- var({i}), not bind_var({i}, {i}).')
+        if head_types:
+            for i, head_type in enumerate(head_types):
+                encoding.add(f'type({i},{head_type}).')
+            # encoding.add(f':- var({i}), not bind_var({i}, {i}).')
 
         var_count = 0
         var_index = {}
@@ -731,11 +732,13 @@ class Grounder():
                 v = var_name.split('_')[1][1:]
                 k = ord(v)- ord('A')
                 # print(v, k)
-                var_type = body_types[pred][i]
                 var_lookup[k] = x
-
                 encoding.add(f'var({k}).')
-                encoding.add(f'type({k},{var_type}).')
+                if pred in body_types:
+                    var_type = body_types[pred][i]
+                    encoding.add(f'type({k},{var_type}).')
+
+
 
 
         # for rule_var, xs in rule_vars.items():

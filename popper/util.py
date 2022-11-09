@@ -197,18 +197,27 @@ def rule_is_invented(rule):
 def order_rule(rule):
     head, body = rule
     ordered_body = []
-    grounded_variables = head.inputs
+    grounded_variables = set()
+
+    if head:
+        if head.inputs == []:
+            return rule
+        grounded_variables.update(head.inputs)
+
     body_literals = set(body)
 
-    if head.inputs == []:
-        return rule
 
     while body_literals:
         selected_literal = None
         for literal in body_literals:
+            if len(literal.outputs) == len(literal.arguments):
+                selected_literal = literal
+                break
+
             if not literal.inputs.issubset(grounded_variables):
                 continue
-            if literal.predicate != head.predicate:
+
+            if head and literal.predicate != head.predicate:
                 # find the first ground non-recursive body literal and stop
                 selected_literal = literal
                 break

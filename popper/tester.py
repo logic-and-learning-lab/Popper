@@ -87,7 +87,7 @@ class Tester():
             pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
             pos_covered = frozenset(self.pos_index[i] for i in pos_covered)
             inconsistent = False
-            if len(self.neg_index):
+            if len(self.neg_index) > 0:
                 inconsistent = len(list(self.prolog.query("inconsistent"))) > 0
         return pos_covered, inconsistent
 
@@ -148,3 +148,15 @@ class Tester():
             return self.bool_query('sat2')
         finally:
             self.prolog.retractall('sat2')
+
+
+    def check_redundant_literal(self, prog):
+        for rule in prog:
+            head, body = rule
+            if head:
+                c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+            else:
+                c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
+            res = list(self.prolog.query(f'redundant_literal({c})'))
+            if res:
+                yield rule

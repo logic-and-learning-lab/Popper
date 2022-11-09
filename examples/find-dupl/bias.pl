@@ -3,11 +3,14 @@
 %% f(A,B) :- tail(A,D),tail(D,C),element(C,B),f(D,B).
 %% 30.24s user 1.40s system 100% cpu 31.431 total
 
-max_vars(5).
-max_body(5).
-%% max_clauses(3).
+%% max_vars(5).
+%% max_body(2).
+%% max_clauses(1).
 enable_recursion.
 allow_singletons.
+
+
+
 
 head_pred(f,2).
 body_pred(head,2).
