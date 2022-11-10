@@ -189,7 +189,10 @@ def popper(settings):
                     if len(pos_covered) == 0:
                         explainer.add_seen_unsat(prog)
                         with settings.stats.duration('explain'):
+                            # t1 = time.time()
                             pruned_subprog = explain_failure(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons)
+                            # t2 = time.time()
+                            # print(t2-t1)
                     else:
                         explainer.add_seen_sat(prog)
 
@@ -244,38 +247,38 @@ def popper(settings):
 
                 # remove generalisations of programs with redundant literals
                 if settings.recursion_enabled and not add_gen:
-                    with settings.stats.duration('check_redundant_literal'):
-                        for rule in prog:
-                            if tester.has_redundant_literal([rule]):
-                                print('REDUNDANT_LITERAL')
-                                print(format_rule(rule))
-                                add_gen = True
-                                if len(prog) > 1:
-                                    new_handles, con = generator.build_generalisation_constraint([rule])
-                                    new_cons.add(con)
-                                    all_handles.update(parse_handles(generator, new_handles))
+                    # with settings.stats.duration('check_redundant_literal'):
+                    for rule in prog:
+                        if tester.has_redundant_literal([rule]):
+                            # print('REDUNDANT_LITERAL')
+                            # print(format_rule(rule))
+                            add_gen = True
+                            if len(prog) > 1:
+                                new_handles, con = generator.build_generalisation_constraint([rule])
+                                new_cons.add(con)
+                                all_handles.update(parse_handles(generator, new_handles))
 
                 if settings.recursion_enabled and not add_gen and len(prog) > 2:
-                    with settings.stats.duration('check_redundant_rule'):
-                        if tester.has_redundant_rule(prog):
-                            add_gen = True
-                            r1, r2 = tester.find_redundant_rules(prog)
-                            # TODO: PRUNE THE SHIT RULES SUBSET!!!!!!!
-                            # print('REDUNDANT_RULE')
-                            # for rule in [r1,r2]:
-                            #     print(format_rule(order_rule(rule)))
-                            new_handles, con = generator.build_generalisation_constraint([r1,r2])
-                            new_cons.add(con)
-                            all_handles.update(parse_handles(generator, new_handles))
+                    # with settings.stats.duration('check_redundant_rule'):
+                    if tester.has_redundant_rule(prog):
+                        add_gen = True
+                        r1, r2 = tester.find_redundant_rules(prog)
+                        # TODO: PRUNE THE SHIT RULES SUBSET!!!!!!!
+                        # print('REDUNDANT_RULE')
+                        # for rule in [r1,r2]:
+                        #     print(format_rule(order_rule(rule)))
+                        new_handles, con = generator.build_generalisation_constraint([r1,r2])
+                        new_cons.add(con)
+                        all_handles.update(parse_handles(generator, new_handles))
 
                 # check whether subsumed by a seen program
                 subsumed = False
                 if num_pos_covered > 0 and not prog_is_recursive(prog):
-                    with settings.stats.duration('subsume_check'):
-                        subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets)
-                        # if so, prune specialisations
-                        if subsumed:
-                            add_spec = True
+                    # with settings.stats.duration('subsume_check'):
+                    subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets)
+                    # if so, prune specialisations
+                    if subsumed:
+                        add_spec = True
 
                 # micro-optimisiations
                 if not settings.recursion_enabled:

@@ -71,3 +71,22 @@ not_body_subset(R1,R2):-  recursive_rule(R1), recursive_rule(R2), R1 != R2,  bod
 
 
 
+
+
+
+%% shares_var(Rule,P1,Vars1,P2,Vars2):-
+%%     (P1,Vars1) != (P2,Vars2),
+%%     body_literal(Rule,P1,A,Vars1),
+%%     body_literal(Rule,P2,A,Vars2),
+%%     var_member(Var,Vars1),
+%%     var_member(Var,Vars2).
+
+%% has_shared(Rule,P1,Vars1):-
+%%     shares_var(Rule,P1,Vars1,_,_).
+%% has_shared(Rule,P1,Vars1):-
+%%     shares_var(Rule,_,_,P1,Vars1).
+
+%% :-
+%%     body_literal(Rule,P,A,Vars1),
+%%     not head_literal(Rule,_,_,_),
+%%     not has_shared(Rule,P,Vars1).
