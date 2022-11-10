@@ -93,4 +93,4 @@ redundant_clause(P1):-
 find_redundant_rule(P1,K1,K2):-
     select(K1-C1,P1,P2),
     member(K2-C2,P2),
-    subsumes(C1,C2).
+    subsumes(C1,C2),!.

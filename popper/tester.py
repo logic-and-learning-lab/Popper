@@ -102,6 +102,12 @@ class Tester():
             pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
             return len(pos_covered) == self.num_pos
 
+    def get_pos_covered(self, prog):
+        with self.using(prog):
+            pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
+            pos_covered = frozenset(self.pos_index[i] for i in pos_covered)
+            return pos_covered
+
     @contextmanager
     def using(self, prog):
         if self.settings.recursion_enabled:

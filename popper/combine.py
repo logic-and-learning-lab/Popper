@@ -63,6 +63,9 @@ class Combiner:
 
         self.inconsistent = set()
         self.debug_count = 0
+        self.pos_covered = set()
+        self.skip_count = 0
+        self.to_add = []
 
     def build_example_encoding(self):
         example_prog = []
@@ -180,17 +183,22 @@ class Combiner:
 
                     atoms = m.symbols(shown = True)
                     rules = [atom.arguments[0].number for atom in atoms]
+                    model_prog = [self.ruleid_to_rule[k] for k in rules]
 
                     if not self.settings.recursion_enabled and not self.settings.pi_enabled:
                         best_prog = rules
                         best_fn = fn
+                        this_covers, _  = self.tester.test_prog(model_prog)
+                        self.pos_covered = this_covers
                         continue
 
                     # check whether recursive program is inconsistent
                     with self.settings.stats.duration('combine_check_inconsistent'):
-                        model_prog = [self.ruleid_to_rule[k] for k in rules]
+
                         model_inconsistent = self.tester.is_inconsistent(model_prog)
                         if not model_inconsistent:
+                            this_covers, _  = self.tester.test_prog(model_prog)
+                            self.pos_covered = this_covers
                             best_prog = rules
                             best_fn = fn
                             if fn > 0 and self.tester.is_complete(model_prog):
@@ -220,7 +228,8 @@ class Combiner:
         return best_prog, best_fn
 
     # @profile
-    def select_solution(self, new_prog):
+    # def select_solution(self, new_prog):
+    def select_solution(self):
 
         with self.settings.stats.duration('combine_build_encoding'):
             encoding = set()
@@ -237,10 +246,12 @@ class Combiner:
                 encoding.add(':- #sum{1,E : covered(E)} <= ' + f'{self.num_covered}.')
 
             # any better solution must use at least one new rule
-            for rule in new_prog:
-                rule_hash = get_rule_hash(rule)
-                rule_id = self.rulehash_to_id[rule_hash]
-                encoding.add(f'uses_new:- rule({rule_id}).')
+            for new_prog in self.to_add:
+                for rule in new_prog:
+                    rule_hash = get_rule_hash(rule)
+                    rule_id = self.rulehash_to_id[rule_hash]
+                    encoding.add(f'uses_new:- rule({rule_id}).')
+            self.to_add = []
 
             if self.settings.recursion_enabled or self.settings.pi_enabled:
                 encoding.add(':- recursive, not base.')
@@ -287,7 +298,14 @@ class Combiner:
     def update_best_prog(self, prog, pos_covered):
         with self.settings.stats.duration('combine_update_prog_index'):
             self.update_prog_index(prog, pos_covered)
-        new_solution, fn = self.select_solution(prog)
+
+        self.to_add.append(prog)
+        if not self.solution_found and pos_covered.issubset(self.pos_covered):
+            # self.skip_count += 1
+            # print('skip_count', self.skip_count)
+            return False
+
+        new_solution, fn = self.select_solution()
 
         if len(new_solution) == 0:
             return False

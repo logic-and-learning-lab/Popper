@@ -3,8 +3,9 @@
 
 size(N):- #count{ID : selected(ID)} == N.
 
-%% need to select something
 :- size(0).
 
 %% every head literal must have a body literal
 :- head_literal(Rule,_,_,_), not body_literal(Rule,_,_,_).
+
+num_rules(N):- #count{Rule : body_literal(Rule,_,_,_)} == N.

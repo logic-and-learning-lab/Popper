@@ -1,5 +1,5 @@
-max_body(10).
-max_vars(9).
+max_body(7).
+max_vars(7).
 
 head_pred(goal,3).
 %% body_pred(does_jump,4).

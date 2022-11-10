@@ -117,6 +117,11 @@ def build_explain_encoding(prog, with_directions=False, recursion_enabled=False)
     head_index = {}
     body_index = {}
 
+    num_recursive = len([rule for rule in prog if rule_is_recursive(rule)])
+    if num_recursive > 1:
+        num_recursive
+        encoding.add(f'num_recursive({num_recursive}).')
+
     for rule_id, rule in enumerate(prog):
         head, body = rule
         rule_vars = set()
@@ -218,6 +223,7 @@ class Explainer:
         self.cached_unsatbody = set()
 
 
+        self.cached_sat1 = set()
 
         self.explain_encoding = pkg_resources.resource_string(__name__, "lp/explain.pl").decode()
         self.explain_dir_encoding = pkg_resources.resource_string(__name__, "lp/explain-dirs.pl").decode()
@@ -227,13 +233,17 @@ class Explainer:
         self.tmp_count = 0
         self.seen_body = set()
 
-    def add_seen_prog(self, prog):
+    def add_seen_unsat(self, prog):
         k = prog_hash(prog)
         k2 = prog_hash4(prog)
-        # self.seen_prog.add(k)
-        # self.seen_prog.add(k2)
         self.cached_unsat.add(k)
         self.cached_unsat.add(k2)
+
+    def add_seen_sat(self, prog):
+        k = prog_hash(prog)
+        k2 = prog_hash4(prog)
+        self.cached_sat.add(k)
+        self.cached_sat.add(k2)
 
     def deep_explain_unsat_body(self, prog):
         rule = prog[0]
@@ -294,15 +304,20 @@ class Explainer:
 
         for selected_literals, model in self.find_subprogs(encoding):
 
+            subprog = parse_model4(head_index, body_index, selected_literals)
+
             def build_nogood():
                 nogood = []
+
                 for idx in selected_literals:
                     x = (atom_to_symbol('selected', (idx,)), True)
                     nogood.append(x)
+                y = (atom_to_symbol('num_rules', (len(subprog),)), True)
+                nogood.append(y)
                 model.context.add_nogood(nogood)
 
-            subprog = parse_model4(head_index, body_index, selected_literals)
-            # print('\t' + '*'*10)
+
+            # print('\t' + '*'*10, self.tmp_count)
             # for rule in subprog:
             #     print('\t',format_rule(rule))
 
@@ -424,6 +439,10 @@ class Explainer:
                 #     print('\t:- ' + ', '.join(map(format_literal, b)))
                 #     pass
 
+            # print('\t' + '*'*10, self.tmp_count)
+            # for rule in subprog:
+            #     print('\t',format_rule(rule))
+
             with self.settings.stats.duration('explain_prolog'):
                 test_prog = []
 
@@ -460,11 +479,11 @@ class Explainer:
                         self.cached_sat.add(k2)
                     else:
                         # print('\t\tSHIT2')
-                        if len(test_prog) ==3:
-                            if len([r for r in test_prog if rule_is_recursive(r)]) == 1:
-                                for rule in prog:
-                                    print(format_rule(rule))
-                                exit()
+                        # if len(test_prog) ==3:
+                        #     if len([r for r in test_prog if rule_is_recursive(r)]) == 1:
+                        #         for rule in prog:
+                        #             print(format_rule(rule))
+                        #         exit()
                         # assert(redundant == False)
                         self.cached_unsat.add(k1)
                         self.cached_unsat.add(k2)
