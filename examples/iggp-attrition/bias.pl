@@ -1,5 +1,5 @@
-max_body(7).
-max_vars(7).
+max_body(6).
+max_vars(6).
 
 head_pred(next_score,3).
 body_pred(does,3).
@@ -51,8 +51,4 @@ type(P,(T,)):-
     constant(P,T).
 
 %% BECAUSE WE DO NOT LEARN FROM INTERPRETATIONS
-:-
-    clause(C),
-    #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
-
-:- body_literal(Rule,opponent,_,(V0,V1)), V0 > V1.
+:- clause(C), #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.

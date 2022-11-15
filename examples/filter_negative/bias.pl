@@ -17,30 +17,25 @@ body_pred(empty,1).
 %% body_pred(geq,2).
 body_pred(head,2).
 body_pred(negative,1).
-%% body_pred(odd,1).
-%% body_pred(one,1).
+body_pred(odd,1).
+body_pred(one,1).
 body_pred(positive,1).
 body_pred(tail,2).
 %% body_pred(zero,1).
 
-%% size 14
-
-%     filter_negative(A,E) :-  empty(A), empty(E)
-%     filter_negative(A,D) :-  head(A,B), negative(B), tail(A,C), filter_negative(C,D)
-%     filter_negative(A,E) :-  head(A,B), positive(B), tail(A,C), filter_negative(C,D), cons(B,D,E)
 
 direction(cons,(in,in,out)).
 %% direction(decrement,(in,out)).
 %% direction(element,(in,out)).
 direction(empty,(out,)).
-%% direction(even,(in,)).
+direction(even,(in,)).
 direction(filter_negative,(in,out)).
 %% direction(geq,(in,in)).
 direction(head,(in,out)).
 %% direction(increment,(in,out)).
 %% direction(mult,(in,in,out)).
 direction(negative,(in,)).
-%% direction(odd,(in,)).
+direction(odd,(in,)).
 %% direction(one,(in,)).
 direction(positive,(in,)).
 %% direction(sum,(in,in,out)).

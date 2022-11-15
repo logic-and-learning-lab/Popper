@@ -1,7 +1,8 @@
 import time
 import numbers
 from . combine import Combiner
-from . explain import Explainer
+# from . explain import Explainer
+from . explain3 import Explainer
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, order_rule
 from . tester import Tester
 from . generate import Generator, Grounder, parse_model
@@ -37,8 +38,19 @@ def parse_handles(generator, new_handles):
 def explain_failure(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons):
     pruned_subprog = False
 
-    for subprog, unsat_body in explainer.explain_totally_incomplete2(prog, directions, settings.stats.total_programs):
+    # print('')
+    # print('*'*30)
+
+    for subprog, unsat_body in explainer.explain_totally_incomplete2(prog, directions, 2):
         pruned_subprog = True
+
+        # print('--')
+        # for rule in prog:
+        #     print(format_rule(rule))
+        # for rule in subprog:
+        #     print('\t', format_rule(rule))
+
+        # print(format_rule(list(subprog)[0]), unsat_body)
 
         if unsat_body:
             _, body = subprog[0]
@@ -99,13 +111,17 @@ def popper(settings):
     settings.nogoods = 0
 
     tester = Tester(settings)
+    # explainer = Explainer(settings, tester)
+
     explainer = Explainer(settings, tester)
+    # explainer = Explainer3(settings, tester)
     settings.head_types, settings.body_types = explainer.load_types()
 
     grounder = Grounder()
     combiner = Combiner(settings, tester)
 
-    pi_or_rec = settings.recursion_enabled or settings.pi_enabled
+    settings.single_solve = not (settings.recursion_enabled or settings.pi_enabled)
+    # settings.single_solve = False
 
     num_pos = settings.pos
 
@@ -144,7 +160,7 @@ def popper(settings):
         # code is odd/crap:
         # if there is no PI or recursion, we only add nogoods
         # otherwise we build constraints and add them as nogoods and then again as constraints to the solver
-        if pi_or_rec:
+        if not settings.single_solve:
             settings.logger.info(f'SIZE: {size} MAX_SIZE: {settings.max_literals}')
             generator.update_number_of_literals(size)
 
@@ -189,10 +205,7 @@ def popper(settings):
                     if len(pos_covered) == 0:
                         explainer.add_seen_unsat(prog)
                         with settings.stats.duration('explain'):
-                            # t1 = time.time()
                             pruned_subprog = explain_failure(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons)
-                            # t2 = time.time()
-                            # print(t2-t1)
                     else:
                         explainer.add_seen_sat(prog)
 
@@ -345,7 +358,7 @@ def popper(settings):
                         if size >= settings.max_literals:
                             return
 
-                        if not pi_or_rec:
+                        if settings.single_solve:
                             for i in range(combiner.max_size, settings.max_literals+1):
                                 size_con = [(atom_to_symbol("size", (i,)), True)]
                                 model.context.add_nogood(size_con)
@@ -361,7 +374,7 @@ def popper(settings):
                     new_cons.add(con)
 
                 if add_gen:
-                    if pi_or_rec or not pruned_subprog:
+                    if settings.recursion_enabled or settings.pi_enabled or not pruned_subprog:
                         handles, con = generator.build_generalisation_constraint(prog, rule_ordering)
                         new_rule_handles.update(handles)
                         new_cons.add(con)
@@ -378,13 +391,14 @@ def popper(settings):
                     new_cons.update(cons)
 
                 # if pi or rec, save the constraints and handles for the next program size
-                if pi_or_rec:
+                if not settings.single_solve:
                     all_handles.update(parse_handles(generator, new_rule_handles))
 
                 # CONSTRAIN
                 constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons)
 
-        if not pi_or_rec:
+        # if not pi_or_rec:
+        if settings.single_solve:
             break
 
 def learn_solution(settings):

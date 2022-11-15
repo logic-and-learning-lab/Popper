@@ -1,4 +1,4 @@
-max_body(7).
+max_body(8).
 max_vars(7).
 
 head_pred(goal,3).

@@ -213,8 +213,11 @@ class Generator:
 
         encoding = '\n'.join(encoding)
 
-        if self.settings.recursion_enabled or self.settings.pi_enabled:
-            # solver = clingo.Control(["-t10"])
+        if self.settings.single_solve:
+            # solver = clingo.Control(["--heuristic=Domain", "-t2"])
+            solver = clingo.Control(["--heuristic=Domain"])
+        else:
+            # solver = clingo.Control(["-t4"])
             solver = clingo.Control([])
             NUM_OF_LITERALS = """
             %%% External atom for number of literals in the program %%%%%
@@ -224,8 +227,6 @@ class Generator:
                 #sum{K+1,Clause : body_size(Clause,K)} != n.
             """
             solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
-        else:
-            solver = clingo.Control(["--heuristic=Domain"])
 
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)

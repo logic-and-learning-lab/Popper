@@ -107,51 +107,7 @@ def standardise_vars(rule):
             new_args.append(lookup[var])
         body_literal.arguments = tuple(new_args)
 
-def build_explain_encoding(prog, with_directions=False, recursion_enabled=False):
-    encoding = set()
-    size = 0
-    literal_count = 0
-    head_index = {}
-    body_index = {}
-
-    num_recursive = len([rule for rule in prog if rule_is_recursive(rule)])
-    if num_recursive > 1:
-        num_recursive
-        encoding.add(f'num_recursive({num_recursive}).')
-
-    for rule_id, rule in enumerate(prog):
-        head, body = rule
-        rule_vars = set()
-        rule_vars.add(vars_to_ints(head.arguments))
-        head_index[literal_count] = head
-        # if recursion_enabled:
-        literal_enc = f'head_literal({rule_id},{head.predicate},{head.arity},{vars_to_ints(head.arguments)})'
-        encoding.add(f'{{{literal_enc}}}.')
-        encoding.add(f'selected({literal_count}):-{literal_enc}.')
-        literal_count +=1
-
-        encoding.add(f'head_pred({head.predicate},{head.arity}).')
-        encoding.add(f'arity({head.predicate},{head.arity}).')
-        for literal in body:
-            rule_vars.add(vars_to_ints(literal.arguments))
-            literal_enc = f'body_literal({rule_id},{literal.predicate},{literal.arity},{vars_to_ints(literal.arguments)})'
-            encoding.add(f'arity({literal.predicate},{literal.arity}).')
-            encoding.add(f'{{{literal_enc}}}.')
-            encoding.add(f'selected({literal_count}):-{literal_enc}.')
-            body_index[literal_count] = head, literal
-            literal_count += 1
-
-        size += len(body) + 1
-        encoding.add(f':-size({size}).')
-        # if with_directions:
-        for xs in rule_vars:
-            for i, x in enumerate(xs):
-                encoding.add(f'var_pos({x},{xs},{i}).')
-                encoding.add(f'var_member({x},{xs}).')
-    return head_index, body_index, encoding
-
 class Explainer:
-
     def load_types(self):
         enc = """
 #defined clause/1.
@@ -210,14 +166,12 @@ class Explainer:
 
         self.cached_satbody = set()
         self.cached_unsatbody = set()
-
-
         self.cached_sat1 = set()
 
         self.explain_encoding = pkg_resources.resource_string(__name__, "lp/explain.pl").decode()
         self.explain_dir_encoding = pkg_resources.resource_string(__name__, "lp/explain-dirs.pl").decode()
-        self.directions = self.load_directions()
-        self.has_directions = len(self.directions) > 0
+        # self.directions = self.load_directions()
+        # self.has_directions = len(self.directions) > 0
 
         self.tmp_count = 0
         self.seen_body = set()
@@ -234,82 +188,52 @@ class Explainer:
         self.cached_sat.add(k)
         self.cached_sat.add(k2)
 
-    # def deep_explain_unsat_body(self, prog):
-    #     rule = prog[0]
-    #     with self.settings.stats.duration('explain_deeeeep'):
-    #         head, body = rule
-    #         if len(body) < 2:
-    #             return
-    #         for sub_body in hacky_powerset(body):
-
-    #             body_k2 = hash(frozenset(tmp_get_new_body(set(), 0, sub_body)))
-
-    #             if body_k2 in self.seen_body:
-    #                 continue
-    #             else:
-    #                 self.seen_body.add(body_k2)
-
-    #             if not has_valid_directions((False, sub_body)):
-    #                 continue
-
-    #             if not connected(sub_body):
-    #                 continue
-
-    #             print('\tB1', format_rule((False, sub_body)))
-    #             with self.settings.stats.duration('explain_deeeeep_prolog'):
-    #                 if not self.tester.is_body_sat(order_body(sub_body)):
-    #                     print('UNSAT')
-    #                     # assert(len(sub_body) > 1)
-    #                     # assert(connected(sub_body))
-    #                     # for rule in prog:
-    #                         # print(format_rule(rule))
-    #                     # print('\tPRUNE!!', format_rule((False, sub_body)))
-    #                     yield sub_body
+    # @profile
+    def explain_totally_incomplete2(self, prog, directions, depth):
+        return self.explain_totally_incomplete2_aux(prog, directions, depth, set(), set())
 
     # @profile
-    def explain_totally_incomplete2(self, prog, directions, tmp_cnt):
-        encoding = set()
-        encoding.add(self.explain_encoding)
-        if self.has_directions:
-            encoding.update(self.directions)
-            encoding.add(self.explain_dir_encoding)
-        head_index, body_index, prog_encoding = build_explain_encoding(prog, self.has_directions, self.settings.recursion_enabled)
-        encoding.update(prog_encoding)
-        encoding = '\n'.join(encoding)
+    def explain_totally_incomplete2_aux(self, prog, directions, depth, sat=set(), unsat=set()):
+        rule = list(prog)[0]
+        head, body = rule
 
-        self.tmp_count+=1
-        with open(f'tmp/{self.tmp_count}.pl', 'w') as f:
-            f.write(encoding)
-        # print(self.tmp_count)
+        if len(body) == 1:
+            return
 
-        # print('---')
-        # for rule in prog:
-        #     print(format_rule(rule))
+        tmp = []
+        tmp.extend([(head, b) for b in combinations(body, len(body)-1)])
+        if head != None and len(body) > 1:
+            asda = [(None, b) for b in combinations(body, len(body)) if len(b) > 1]
+            tmp.extend(asda)
 
-        for selected_literals, model in self.find_subprogs(encoding):
-            subprog = parse_model4(head_index, body_index, selected_literals)
-
-            # print('---', self.tmp_count)
-            # for rule in subprog:
-            #     print(format_rule(rule))
+        # format_rule(rule)
 
 
-            def build_nogood():
-                nogood = []
-                for idx in selected_literals:
-                    x = (atom_to_symbol('selected', (idx,)), True)
-                    nogood.append(x)
-                y = (atom_to_symbol('num_rules', (len(subprog),)), True)
-                nogood.append(y)
-                model.context.add_nogood(nogood)
+
+        # for subbody in combinations(body, len(body)-1):
+        for new_rule in tmp:
+            # print('-'*depth, format_rule(new_rule), len(unsat))
+
+            h, b = new_rule
+            # b = frozenset(b)
+            if h == None and len(b) == 1:
+                continue
+
+            head_key = None
+            if h:
+                head_key = (h.predicate, h.arguments)
+            body_key = frozenset((lit.predicate, lit.arguments) for lit in b)
+
+
+            # new_rule = head, subbody
+
+            subprog = [new_rule]
 
             k1 = prog_hash(subprog)
-
             if k1 in self.seen_prog or k1 in self.cached_sat:
                 continue
 
             if k1 in self.cached_unsat:
-                build_nogood()
                 yield subprog, False
                 continue
 
@@ -319,9 +243,14 @@ class Explainer:
                 continue
 
             if k2 in self.cached_unsat:
-                build_nogood()
                 yield subprog, False
                 continue
+
+
+            # for h_, b_ in unsat:
+            #     if h == h_ and b_.issubset(b):
+            #         print('WTF'*10)
+
 
             k3 = False
             if len(subprog) == 1:
@@ -331,13 +260,11 @@ class Explainer:
                     if k3 in self.seen_prog or k3 in self.cached_satbody:
                         continue
                     if k3 in self.cached_unsatbody:
-                        build_nogood()
+                        # build_nogood()
                         yield subprog, True
-                        continue
+                        # continue
                     # TODO: PUSH TO SOLVER!!
                     if not connected(_body):
-                        # print('SKIP1!!!!')
-                        # print(format_rule(subprog[0]))
                         self.seen_prog.add(k1)
                         self.seen_prog.add(k2)
                         self.seen_prog.add(k3)
@@ -345,9 +272,7 @@ class Explainer:
 
             skip = False
             for _head, _body in subprog:
-                # TODO: PUSH TO SOLVER!!
                 if _head != None and not head_connected((_head, _body)):
-                    # print('SKIP2!!!!')
                     self.seen_prog.add(k1)
                     self.seen_prog.add(k2)
                     self.seen_prog.add(k3)
@@ -355,7 +280,49 @@ class Explainer:
                 if skip:
                     break
             if skip:
-                break
+                continue
+
+            for rule in subprog:
+                if not has_valid_directions(rule):
+                    self.seen_prog.add(k1)
+                    self.seen_prog.add(k2)
+                    self.seen_prog.add(k3)
+                    skip = True
+                if skip:
+                    break
+            if skip:
+                continue
+
+            # print('-')
+            # print('b', ','.join(map(str, b)))
+            seen_smaller_unsat = False
+            for x_h, x_b in unsat:
+                if x_h == None or head_key == x_h and x_b.issubset(body_key):
+                    # print('SEEN SMALLER UNSAT!!!!')
+                    if head_key:
+                        self.cached_unsat.add(k1)
+                        self.cached_unsat.add(k2)
+                    else:
+                        self.cached_unsat.add(k3)
+                    seen_smaller_unsat = True
+                    break
+            if seen_smaller_unsat:
+                continue
+
+            seen_bigger_sat = False
+            for x_h, x_b in sat:
+                # if head_key == None or head_key == x_h and x_b.issubset(body_key):
+                if head_key == None or head_key == x_h and body_key.issubset(x_b):
+                    # print('SEEN BIGGER SAT!!!!')
+                    if head_key:
+                        self.cached_sat.add(k1)
+                        self.cached_sat.add(k2)
+                    else:
+                        self.cached_sat.add(k3)
+                    seen_bigger_sat = True
+                    break
+            if seen_bigger_sat:
+                continue
 
             # with self.settings.stats.duration('check_redundant_literal'):
             if len(subprog) == 1 and len(list(self.tester.check_redundant_literal(subprog))) > 0:
@@ -370,10 +337,6 @@ class Explainer:
                 self.seen_prog.add(k2)
                 self.seen_prog.add(k3)
                 continue
-
-            # print('\t' + '*'*10, self.tmp_count)
-            # for rule in subprog:
-            #     print('\t',format_rule(rule))
 
             # with self.settings.stats.duration('explain_prolog'):
             test_prog = []
@@ -391,53 +354,46 @@ class Explainer:
                 rule = head_literal, body_literals
                 test_prog.append(rule)
 
-            prune = False
+
+            # for rule in subprog:
+                # print(format_rule(rule))
+
+            # prune = False
+
             # SPECIAL CASE WHEN THERE IS ONLY ONE HEADLESS RULE
             if len(test_prog) == 1 and test_prog[0][0] == False:
                 # pass
-                # FIX!!!!!!!!!!!!!!!!!!
                 if self.tester.is_body_sat(order_body(test_prog[0][1])):
                     self.cached_satbody.add(k3)
+                    sat.add((head_key, body_key))
+                    continue
                 else:
                     self.cached_unsatbody.add(k3)
-                    # print('--- shit 1', self.tmp_count)
-                    # for rule in subprog:
-                    #     print(format_rule(rule))
-                    prune = True
+                    # print('UNSAT1!', head_key, body_key)
+                    # exit()
+                    unsat.add((head_key, body_key))
                     yield subprog, True
+                    # continue
             else:
                 if self.tester.is_sat(test_prog):
                     self.cached_sat.add(k1)
                     self.cached_sat.add(k2)
+                    sat.add((head_key, body_key))
+                    continue
                 else:
                     self.cached_unsat.add(k1)
                     self.cached_unsat.add(k2)
-                    # print('--- shit 2', self.tmp_count)
-                    # for rule in subprog:
-                    #     print(format_rule(rule))
-                    prune = True
+                    # print('UNSAT2!', head_key, body_key)
+                    # print('adding', (head_key, body_key))
+                    unsat.add((head_key, body_key))
                     yield subprog, False
+                    # continue
 
-                if prune:
-                    build_nogood()
+            # print(format_rule(subprog[0]))
 
-    def find_subprogs(self, encoding):
-        solver = clingo.Control(["--heuristic=Domain"])
-        solver.configuration.solve.models = 0
-        # t1 = time.time()
-        solver.add('base', [], encoding)
-        solver.ground([('base', [])])
-        # t2 = time.time()
-        # print('\t', t2-t1)
+            # yield subprog
+            yield from self.explain_totally_incomplete2_aux(subprog, directions, depth+2, sat, unsat)
 
-        with solver.solve(yield_=True) as handle:
-            for model in handle:
-                atoms = model.symbols(shown = True)
-                yield [atom.arguments[0].number for atom in atoms], model
-
-
-    # def find_subprogs(self, rule, checked):
-        # list(chain.from_iterable(combinations(s, r) for r in range(len(s)-1,1,-1)))
 
 from itertools import chain, combinations
 def hacky_powerset(iterable):
@@ -445,57 +401,6 @@ def hacky_powerset(iterable):
     "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
     s = list(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(2, len(s)+1))
-
-def parse_model4(head_index, body_index, selected_literals):
-    # print('parse_model4')
-    rules = {head_index[idx]:set() for idx in selected_literals if idx in head_index}
-
-    if len(rules) == 0:
-        # parsing a single headless rule
-        body = set()
-        for idx in selected_literals:
-            head_literal, body_literal = body_index[idx]
-            body.add(body_literal)
-        return tuple([(None, frozenset(body))])
-    else:
-        for idx in selected_literals:
-            if idx in head_index:
-                continue
-            head_literal, body_literal = body_index[idx]
-            if head_literal not in rules:
-                rules[head_literal] = set()
-            rules[head_literal].add(body_literal)
-        return tuple((head, frozenset(body)) for head, body in rules.items())
-
-
-
-def has_valid_directions_old(rule):
-    head, body = rule
-    grounded_variables = head.inputs
-    body_literals = set(body)
-
-    if head.inputs == []:
-        return rule
-
-    while body_literals:
-        selected_literal = None
-        for literal in body_literals:
-            if not literal.inputs.issubset(grounded_variables):
-                continue
-            if literal.predicate != head.predicate:
-                # find the first ground non-recursive body literal and stop
-                selected_literal = literal
-                break
-            elif selected_literal == None:
-                # otherwise use the recursive body literal
-                selected_literal = literal
-
-        if selected_literal == None:
-            return False
-
-        grounded_variables = grounded_variables.union(selected_literal.outputs)
-        body_literals = body_literals.difference({selected_literal})
-    return True
 
 def has_valid_directions(rule):
     head, body = rule

@@ -179,7 +179,3 @@ prop(unsat_pair,zero,odd).
 prop(unsat_pair,zero,odd).
 prop(unsat_pair,zero,one).
 prop(unsat_pair,zero,one).
-
-:-
-    body_literal(R,empty,_,_),
-    R > 0.

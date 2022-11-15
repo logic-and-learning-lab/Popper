@@ -7,10 +7,6 @@ head_var(C,Var):- head_literal(C,_,_,Vars), var_member(Var,Vars).
 body_var(C,Var):- body_literal(C,_,_,Vars), var_member(Var,Vars).
 head_input_var(Rule,Var):- head_literal(Rule,P,_,Vars), var_pos(Var,Vars,Pos), direction(P,Pos,in).
 
-%% MUST BE CONNECTED
-head_connected(C,Var):- head_var(C,Var).
-head_connected(C,Var1):- head_literal(C,_,A,_), Var1 >= A, head_connected(C,Var2), body_literal(C,_,_,Vars), var_member(Var1,Vars), var_member(Var2,Vars), Var1 != Var2.
-:- head_literal(C,_,A,_), Var >= A, body_var(C,Var), not head_connected(C,Var).
 
 %% ========== DIRECTIONS ==========
 with_directions:- direction(_,_,_).
@@ -46,9 +42,12 @@ multiple_rules:- #count{Rule : rule(Rule)} > 1.
 
 %% cannot have multiple rules without recursion
 :- multiple_rules, not recursive.
+
 %% %% r1 is not a subset of r2 if there is a literal in r1 that is not in r2
+
 not_body_subset(R1,R2):-  recursive_rule(R1), recursive_rule(R2), R1 != R2,  body_literal(R1,P,A,Vars), not body_literal(R2,P,A,Vars).
 %% r1 is a subset of r2 if every literal
+
 :- recursive_rule(R1), recursive_rule(R2), R1 != R2, not not_body_subset(R1,R2), body_literal(R1,P,A,Vars), body_literal(R2,P,A,Vars).
 %% :- body_subset(R1,R2).
 
@@ -66,27 +65,13 @@ not_body_subset(R1,R2):-  recursive_rule(R1), recursive_rule(R2), R1 != R2,  bod
 
 %% :- not x.
 
+%% head_var(C,Var):- head_literal(C,_,_,Vars), var_member(Var,Vars).
+%% body_var(C,Var):- body_literal(C,_,_,Vars), var_member(Var,Vars).
 
+%% MUST BE CONNECTED
+head_connected(C,Var):- head_var(C,Var).
+head_connected(C,Var1):- head_literal(C,_,A,_), Var1 >= A, head_connected(C,Var2), body_literal(C,_,_,Vars), var_member(Var1,Vars), var_member(Var2,Vars), Var1 != Var2.
+:- head_literal(C,_,A,_), Var >= A, body_var(C,Var), not head_connected(C,Var).
 
-
-
-
-
-
-
-%% shares_var(Rule,P1,Vars1,P2,Vars2):-
-%%     (P1,Vars1) != (P2,Vars2),
-%%     body_literal(Rule,P1,A,Vars1),
-%%     body_literal(Rule,P2,A,Vars2),
-%%     var_member(Var,Vars1),
-%%     var_member(Var,Vars2).
-
-%% has_shared(Rule,P1,Vars1):-
-%%     shares_var(Rule,P1,Vars1,_,_).
-%% has_shared(Rule,P1,Vars1):-
-%%     shares_var(Rule,_,_,P1,Vars1).
-
-%% :-
-%%     body_literal(Rule,P,A,Vars1),
-%%     not head_literal(Rule,_,_,_),
-%%     not has_shared(Rule,P,Vars1).
+shares_var(Rule,P1,Vars1):- (P1,Vars1) != (P2,Vars2), body_literal(Rule,P1,_,Vars1), body_literal(Rule,P2,_,Vars2), var_member(Var,Vars1), var_member(Var,Vars2).
+:- body_literal(Rule,P,_,Vars1), not shares_var(Rule,P,Vars1).
