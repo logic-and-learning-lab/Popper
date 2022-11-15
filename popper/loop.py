@@ -1,8 +1,9 @@
 import time
 import numbers
 from . combine import Combiner
-# from . explain import Explainer
-from . explain3 import Explainer
+from . explain import Explainer
+# from . explain2 import Explainer
+# from . explain3 import Explainer
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, order_rule
 from . tester import Tester
 from . generate import Generator, Grounder, parse_model
