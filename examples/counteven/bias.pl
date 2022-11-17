@@ -179,3 +179,10 @@ prop(unsat_pair,zero,odd).
 prop(unsat_pair,zero,odd).
 prop(unsat_pair,zero,one).
 prop(unsat_pair,zero,one).
+
+
+:-
+    head_pred(P,2),
+    Rule > 0,
+    body_literal(Rule,empty,_,(A,)),
+    body_literal(Rule,P,_,(A,_)).

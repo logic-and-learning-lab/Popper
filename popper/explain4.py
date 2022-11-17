@@ -62,7 +62,6 @@ def headless_hash(subprog):
     head, body = rename_variables(rule)
     return hash(frozenset(body))
 
-
 class Explainer:
 
     def __init__(self, settings, tester):
@@ -90,11 +89,9 @@ class Explainer:
             test_prog.append(rule)
         return test_prog
 
-    # @profile
     def explain_totally_incomplete(self, prog, directions):
         return self.explain_totally_incomplete_aux(prog, directions, 0, set(), set())
 
-    # @profile
     def explain_totally_incomplete_aux(self, prog, directions, depth, sat=set(), unsat=set()):
         has_recursion = prog_is_recursive(prog)
 
@@ -125,14 +122,10 @@ class Explainer:
             if len(subprog) > 2 and self.tester.has_redundant_rule(subprog):
                 continue
 
-            if len(subprog) > 1 and prog_is_recursive(subprog) and any(not recursive_input_is_ok(rule) for rule in subprog):
+            if len(subprog) > 1 and has_recursion and any(not recursive_input_is_ok(rule) for rule in subprog):
                 continue
 
             test_prog = self.build_test_prog(subprog, directions)
-
-            # print('*')
-            # for rule in order_prog(test_prog):
-            #     print(format_rule(order_rule(rule)))
 
             if headless:
                 body = test_prog[0][1]
@@ -150,7 +143,6 @@ class Explainer:
                 yield from xs
             else:
                 yield subprog, headless
-
 
 def has_valid_directions(rule):
     head, body = rule
@@ -323,8 +315,6 @@ def recursive_input_is_ok(rule):
             return False
     return True
 
-
-
 def is_headless(prog):
     return any(head == None for head, body in prog)
 
@@ -332,7 +322,6 @@ def is_headless(prog):
 # IT DOES NOT ACCOUNT FOR VARIABLE RENAMING
 # R1 = (None, frozenset({('c3', ('A',)), ('c2', ('A',))}))
 # R2 = (None, frozenset({('c3', ('B',)), ('c2', ('B',), true_value(A,B))}))
-
 def rule_subsumes(r1, r2):
     # r1 subsumes r2 if r1 is a subset of r2
     h1, b1 = r1

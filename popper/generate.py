@@ -1,4 +1,3 @@
-
 import clingo
 import operator
 import numbers
@@ -26,7 +25,6 @@ def atom_to_symbol(pred, args):
     return Function(name = pred, arguments = xs)
 
 def find_all_vars(body):
-    # print(','.join(str(x) for x in body))
     all_vars = set()
     for literal in body:
         for arg in literal.arguments:
@@ -77,29 +75,23 @@ def make_literal_handle(literal):
     return f'{literal.predicate}{"".join(literal.arguments)}'
 
 def make_rule_handle(rule):
-    # if clause in self.seen_clause_handle:
-        # return self.seen_clause_handle[clause]
     head, body = rule
     body_literals = sorted(body, key = operator.attrgetter('predicate'))
     handle = ''.join(make_literal_handle(literal) for literal in [head] + body_literals)
-    # self.seen_clause_handle[clause] = clause_handle
     return handle
 
-def build_seen_rule(rule):
+def build_seen_rule(rule, is_rec):
     rule_var = vo_clause('l')
     handle = make_rule_handle(rule)
     head = Literal('seen_rule', (handle, rule_var))
     body = []
     body.extend(build_rule_literals(rule, rule_var))
-    if rule_is_recursive(rule):
+    if is_rec:
         body.append(gteq(rule_var, 1))
     return head, tuple(body)
 
 def build_seen_rule_literal(handle, rule_var):
     return Literal('seen_rule', (handle, rule_var))
-
-# literals.append(gteq(rule_var, 1))
-# literals.append(Literal('recursive_clause',(rule_var, head.predicate, head.arity)))
 
 # TODO: COULD CACHE TUPLES OF ARGS FOR TINY OPTIMISATION
 def parse_model(model):
@@ -190,8 +182,35 @@ def build_rule_ordering_literals(rule_index, rule_ordering):
             r2v = rule_index[r2]
             yield lt(r1v, r2v)
 
-class Generator:
+def load_types(settings):
+    enc = """
+#defined clause/1.
+#defined clause_var/2.
+#defined var_type/3."""
+    solver = clingo.Control()
+    with open(settings.bias_file) as f:
+        solver.add('bias', [], f.read())
+    solver.add('bias', [], enc)
+    solver.ground([('bias', [])])
 
+    for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
+        head_pred = x.symbol.arguments[0].name
+        head_arity = x.symbol.arguments[1].number
+
+    head_types = None
+    body_types = {}
+    for x in solver.symbolic_atoms.by_signature('type', arity=2):
+        pred = x.symbol.arguments[0].name
+        # xs = (str(t) for t in )
+        xs = [y.name for y in x.symbol.arguments[1].arguments]
+        if pred == head_pred:
+            head_types = xs
+        else:
+            body_types[pred] = xs
+
+    return head_types, body_types
+
+class Generator:
 
     def __init__(self, settings, grounder):
         self.settings = settings
@@ -234,53 +253,7 @@ class Generator:
         solver.ground([('base', [])])
         self.solver = solver
 
-        self.settings.head_types, self.settings.body_types = self.load_types()
-
-    def load_types(self):
-        enc = """
-#defined clause/1.
-#defined clause_var/2.
-#defined var_type/3."""
-        solver = clingo.Control()
-        with open(self.settings.bias_file) as f:
-            solver.add('bias', [], f.read())
-        solver.add('bias', [], enc)
-        solver.ground([('bias', [])])
-
-        for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
-            head_pred = x.symbol.arguments[0].name
-            head_arity = x.symbol.arguments[1].number
-
-        head_types = None
-        body_types = {}
-        for x in solver.symbolic_atoms.by_signature('type', arity=2):
-            pred = x.symbol.arguments[0].name
-            # xs = (str(t) for t in )
-            xs = [y.name for y in x.symbol.arguments[1].arguments]
-            if pred == head_pred:
-                head_types = xs
-            else:
-                body_types[pred] = xs
-
-        return head_types, body_types
-
-#     def load_directions(self):
-#         enc = """
-# #defined clause/1.
-# #defined clause_var/2.
-# #defined var_type/3."""
-#         solver = clingo.Control()
-#         with open(self.settings.bias_file) as f:
-#             solver.add('bias', [], f.read())
-#         solver.add('bias', [], enc)
-#         solver.ground([('bias', [])])
-#         encoding = set()
-#         for x in solver.symbolic_atoms.by_signature('direction', arity=2):
-#             pred = x.symbol.arguments[0]
-#             directions = x.symbol.arguments[1]
-#             for i, arg in enumerate(directions.arguments):
-#                 encoding.add(f'direction({pred},{i},{arg}).')
-#         return encoding
+        self.settings.head_types, self.settings.body_types = load_types(settings)
 
     def gen_symbol(self, literal, backend):
         sign, pred, args = literal
@@ -388,51 +361,71 @@ class Generator:
         # ground the rule for each variable assignment
         return set(ground_rule((False, body), assignment) for assignment in assignments)
 
-    def build_generalisation_constraint(self, prog, rule_ordering={}):
+    def build_generalisation_constraint(self, prog, rule_ordering=None):
         new_handles = set()
         prog = list(prog)
         rule_index = {}
         literals = []
+        recs = []
         for rule_id, rule in enumerate(prog):
             head, body = rule
             rule_var = vo_clause(rule_id)
             rule_index[rule] = rule_var
             handle = make_rule_handle(rule)
+            is_rec = rule_is_recursive(rule)
+            if is_rec:
+                recs.append((len(body), rule))
             if handle in self.seen_handles:
                 literals.append(build_seen_rule_literal(handle, rule_var))
-                if rule_is_recursive(rule):
+                if is_rec:
                     literals.append(gteq(rule_var, 1))
             else:
-                new_handles.add(build_seen_rule(rule))
+                new_handles.add(build_seen_rule(rule, is_rec))
                 literals.extend(tuple(build_rule_literals(rule, rule_var)))
             literals.append(body_size_literal(rule_var, len(body)))
-        literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
-
-        # print(':- ' + ', '.join(map(str,literals)))
-
+        if rule_ordering:
+            literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
+        else:
+            for k1, r1 in recs:
+                r1v = rule_index[r1]
+                for k2, r2 in recs:
+                    r2v = rule_index[r2]
+                    if k1 < k2:
+                        literals.append(lt(r1v, r2v))
         return new_handles, tuple(literals)
 
-    def build_specialisation_constraint(self, prog, rule_ordering={}):
+    def build_specialisation_constraint(self, prog, rule_ordering=None):
         new_handles = set()
         prog = list(prog)
         rule_index = {}
         literals = []
+        recs = []
         for rule_id, rule in enumerate(prog):
             head, body = rule
             rule_var = vo_clause(rule_id)
             rule_index[rule] = rule_var
             handle = make_rule_handle(rule)
+            is_rec = rule_is_recursive(rule)
+            if is_rec:
+                recs.append((len(body), rule))
             if handle in self.seen_handles:
                 literals.append(build_seen_rule_literal(handle, rule_var))
-                if rule_is_recursive(rule):
+                if is_rec:
                     literals.append(gteq(rule_var, 1))
             else:
-                # new_handles.add((handle, build_seen_rule(rule)))
-                new_handles.add(build_seen_rule(rule))
+                new_handles.add(build_seen_rule(rule, is_rec))
                 literals.extend(tuple(build_rule_literals(rule, rule_var)))
             literals.append(lt(rule_var, len(prog)))
         literals.append(Literal('clause', (len(prog), ), positive = False))
-        literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
+        if rule_ordering:
+            literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
+        else:
+            for k1, r1 in recs:
+                r1v = rule_index[r1]
+                for k2, r2 in recs:
+                    r2v = rule_index[r2]
+                    if k1 < k2:
+                        literals.append(lt(r1v, r2v))
         return new_handles, tuple(literals)
 
     def andy_tmp_con(self, prog, rule_ordering={}):
@@ -467,6 +460,7 @@ class Generator:
 
         rule_id = 0
         rule = list(prog)[0]
+        assert(not rule_is_recursive(rule))
         head, body = rule
         rule_var = vo_clause(rule_id)
         handle = make_rule_handle(rule)
@@ -475,7 +469,7 @@ class Generator:
             literals.append(build_seen_rule_literal(handle, rule_var))
         else:
             # new_handles.add((handle, build_seen_rule(rule)))
-            new_handles.add(build_seen_rule(rule))
+            new_handles.add(build_seen_rule(rule, False))
             literals.extend(build_rule_literals(rule, rule_var))
         literals.append(gteq(rule_var, 1))
         literals.append(Literal('recursive_clause',(rule_var, head.predicate, head.arity)))
@@ -572,6 +566,70 @@ class Generator:
                 rule_index[rule] = rule_var
                 handle = make_rule_handle(rule)
 
+                is_rec = rule_is_recursive(rule)
+
+                if handle in self.seen_handles:
+                    literals.append(build_seen_rule_literal(handle, rule_var))
+                    if is_rec:
+                        literals.append(gteq(rule_var, 1))
+                else:
+                    new_handles.add(build_seen_rule(rule, is_rec))
+                    literals.append(build_seen_rule_literal(handle, rule_var))
+
+            for other_lit, num_clauses in lits_num_rules.items():
+                if other_lit == lit:
+                    continue
+                literals.append(Literal('num_clauses', (other_lit, num_clauses)))
+            num_recursive = lits_num_recursive_rules[lit]
+            literals.append(Literal('num_recursive', (lit, num_recursive)))
+            literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
+            out_cons.append(tuple(literals))
+
+            # print(':- ' + ', '.join(map(str,literals)))
+
+        return new_handles, out_cons
+
+
+
+    def redundancy_constraint3(self, prog, rule_ordering={}):
+
+        lits_num_rules = defaultdict(int)
+        lits_num_recursive_rules = defaultdict(int)
+        for rule in prog:
+            head, _ = rule
+            lits_num_rules[head.predicate] += 1
+            if rule_is_recursive(rule):
+                lits_num_recursive_rules[head.predicate] += 1
+
+        recursively_called = set()
+        while True:
+            something_added = False
+            for rule in prog:
+                head, body = rule
+                is_rec = rule_is_recursive(rule)
+                for body_literal in body:
+                    if body_literal.predicate not in lits_num_rules:
+                        continue
+                    if (body_literal.predicate != head.predicate and is_rec) or (head.predicate in recursively_called):
+                        something_added |= not body_literal.predicate in recursively_called
+                        recursively_called.add(body_literal.predicate)
+            if not something_added:
+                break
+
+        new_handles = set()
+        out_cons = []
+        for lit in lits_num_rules.keys() - recursively_called:
+            rule_index = {}
+            literals = []
+            recs = []
+            for rule_id, rule in enumerate(prog):
+                head, body = rule
+                rule_var = vo_clause(rule_id)
+                rule_index[rule] = rule_var
+                handle = make_rule_handle(rule)
+
+                if rule_is_recursive(rule):
+                    recs.append((len(body), rule))
                 if handle in self.seen_handles:
                     literals.append(build_seen_rule_literal(handle, rule_var))
                     if rule_is_recursive(rule):
@@ -587,11 +645,21 @@ class Generator:
             num_recursive = lits_num_recursive_rules[lit]
             literals.append(Literal('num_recursive', (lit, num_recursive)))
             literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
+
+
+            for k1, r1 in recs:
+                r1v = rule_index[r1]
+                for k2, r2 in recs:
+                    r2v = rule_index[r2]
+                    if k1 < k2:
+                        literals.append(lt(r1v, r2v))
+
             out_cons.append(tuple(literals))
 
             # print(':- ' + ', '.join(map(str,literals)))
 
         return new_handles, out_cons
+
 
 BINDING_ENCODING = """\
 #defined rule_var/2.

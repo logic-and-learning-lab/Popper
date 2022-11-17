@@ -207,10 +207,6 @@ class Tester():
             return True
         return False
 
-
-
-
-
     # WE ASSUME THAT THERE IS A REUNDANT RULE
     def find_redundant_rule_(self, prog):
         prog_ = []
@@ -225,7 +221,6 @@ class Tester():
         k2 = res[0]['K2']
         return prog[k1], prog[k2]
         # return len(res) > 0
-
 
     def find_redundant_rules(self, prog):
         # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses

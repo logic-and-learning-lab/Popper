@@ -1,30 +1,11 @@
 import time
 import numbers
 from . combine import Combiner
-# asp version
-# from . explain import Explainer
-from . explain4 import Explainer
-from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, order_rule
+from . explain4 import Explainer, prog_hash
+from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, order_rule, prog_size
 from . tester import Tester
-from . generate import Generator, Grounder, parse_model
+from . generate import Generator, Grounder, parse_model, atom_to_symbol, arg_to_symbol
 from . bkcons import deduce_bk_cons
-from clingo import Function, Number, Tuple_
-
-def prog_size(prog):
-    return sum(1 + len(body) for head, body in prog)
-
-def arg_to_symbol(arg):
-    if isinstance(arg, numbers.Number):
-        return Number(arg)
-    if isinstance(arg, tuple):
-        return Tuple_(tuple(arg_to_symbol(a) for a in arg))
-    if isinstance(arg, str):
-        return Function(arg)
-    assert False, f'Unhandled argtype({type(arg)}) in aspsolver.py arg_to_symbol()'
-
-def atom_to_symbol(pred, args):
-    xs = tuple(arg_to_symbol(arg) for arg in args)
-    return Function(name = pred, arguments = xs)
 
 def parse_handles(generator, new_handles):
     for rule in new_handles:
@@ -36,19 +17,11 @@ def parse_handles(generator, new_handles):
             out_b = frozenset((b_pred, b_args) for _, b_pred, b_args in b)
             yield (out_h, out_b)
 
-def explain_failure(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons):
+def explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons):
     pruned_subprog = False
-
-    # print('*****')
-    # for rule in prog:
-        # print('*', format_rule(rule))
 
     for subprog, unsat_body in explainer.explain_totally_incomplete(prog, directions):
         pruned_subprog = True
-
-        # print('*****')
-        # for rule in subprog:
-        #     print(format_rule(rule))
 
         if unsat_body:
             _, body = subprog[0]
@@ -70,10 +43,47 @@ def explain_failure(settings, generator, explainer, prog, directions, new_cons, 
             new_cons.add(con)
             all_handles.update(parse_handles(generator, new_rule_handles))
 
-        handles, cons = generator.redundancy_constraint2(prog)
+        handles, cons = generator.redundancy_constraint2(subprog)
         new_cons.update(cons)
         all_handles.update(parse_handles(generator, handles))
 
+    return pruned_subprog
+
+def explain_inconsistent(settings, generator, tester, prog, rule_ordering, new_cons, all_handles):
+    if len(prog) == 1 or not settings.recursion_enabled:
+        return False
+
+    base = []
+    rec = []
+    for rule in prog:
+        if rule_is_recursive(rule):
+            rec.append(rule)
+        else:
+            base.append(rule)
+
+    pruned_subprog = False
+    for rule in base:
+        subprog = frozenset([rule])
+        if tester.is_inconsistent(subprog):
+            new_rule_handles, con = generator.build_generalisation_constraint(subprog)
+            new_cons.add(con)
+            all_handles.update(parse_handles(generator, new_rule_handles))
+            pruned_subprog = True
+
+    if pruned_subprog:
+        return True
+
+    if len(rec) == 1:
+        return False
+
+    for r1 in base:
+        for r2 in rec:
+            subprog = frozenset([r1,r2])
+            if tester.is_inconsistent(subprog):
+                new_rule_handles, con = generator.build_generalisation_constraint(subprog)
+                new_cons.add(con)
+                all_handles.update(parse_handles(generator, new_rule_handles))
+                pruned_subprog = True
     return pruned_subprog
 
 def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons):
@@ -100,18 +110,19 @@ def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atom
                     x = (atom_to_symbol(pred, args), sign)
                     cached_clingo_atoms[k] = x
                     nogood.append(x)
-            settings.nogoods +=1
             model.context.add_nogood(nogood)
 
 def popper(settings):
     if settings.bkcons:
         deduce_bk_cons(settings)
-    settings.nogoods = 0
 
     tester = Tester(settings)
     explainer = Explainer(settings, tester)
     grounder = Grounder(settings)
     combiner = Combiner(settings, tester)
+
+    TMP_INCONSISTENT = set()
+    TMP_COUNT = 0
 
     settings.single_solve = not (settings.recursion_enabled or settings.pi_enabled)
     # settings.single_solve = False
@@ -120,6 +131,7 @@ def popper(settings):
 
     # track the success sets of tested hypotheses
     success_sets = {}
+    rec_success_sets = {}
     last_size = None
 
     # caching
@@ -171,7 +183,8 @@ def popper(settings):
                 new_cons = set()
                 new_rule_handles = set()
                 new_ground_cons = set()
-                pruned_subprog = False
+                pruned_sub_incomplete = False
+                pruned_sub_inconsistent = False
 
                 # GENERATE A PROGRAM
                 with settings.stats.duration('generate'):
@@ -181,6 +194,8 @@ def popper(settings):
                         break
                     atoms = model.symbols(shown = True)
                     prog, rule_ordering, directions = parse_model(atoms)
+
+                is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
 
                 settings.stats.total_programs += 1
                 if settings.debug:
@@ -197,10 +212,10 @@ def popper(settings):
                 if settings.explain:
                     explainer.add_seen(prog)
                     if len(pos_covered) == 0:
-                        with settings.stats.duration('explain'):
-                            pruned_subprog = explain_failure(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons)
+                        with settings.stats.duration('explain_incomplete'):
+                            pruned_sub_incomplete = explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons)
 
-                if inconsistent and prog_is_recursive(prog):
+                if inconsistent and is_recursive:
                     combiner.add_inconsistent(prog)
 
                 # messy way to track program size
@@ -218,17 +233,9 @@ def popper(settings):
                 if inconsistent:
                     # if inconsistent, prune generalisations
                     add_gen = True
-                    # if the program has multiple rules, test the consistency of each non-recursive rule as we might not have seen it before
-                    if len(prog) > 1 and settings.recursion_enabled:
-                        for rule in prog:
-                            if rule_is_recursive(rule):
-                                continue
-                            subprog = frozenset([rule])
-                            # TODO: ADD CACHING BEFORE THE CALL TO TESTER
-                            if tester.is_inconsistent(subprog):
-                                handles, con = generator.build_generalisation_constraint(subprog)
-                                new_cons.add(con)
-                                new_rule_handles.update(handles)
+                    if settings.explain and settings.recursion_enabled:
+                        with settings.stats.duration('explain_inconsistent'):
+                            pruned_sub_inconsistent = explain_inconsistent(settings, generator, tester, prog, rule_ordering, new_cons, all_handles)
                 else:
                     # if consistent, prune specialisations
                     add_spec = True
@@ -262,7 +269,7 @@ def popper(settings):
                                     all_handles.update(parse_handles(generator, new_handles))
 
                 # remove a subset of theta-subsumed rules when learning recursive programs with more than two rules
-                if settings.recursion_enabled and settings.max_rules > 2 and prog_is_recursive(prog):
+                if settings.recursion_enabled and settings.max_rules > 2 and is_recursive:
                     for x in generator.andy_tmp_con(prog):
                         new_cons.add(x)
 
@@ -277,9 +284,9 @@ def popper(settings):
                 # check whether subsumed by a seen program
                 subsumed = False
 
-                # WHY DID WE HAVE A RECURSIVE CHECK???
-                # if num_pos_covered > 0 and not prog_is_recursive(prog):
-                if num_pos_covered > 0:
+                # WHY DO WE HAVE A RECURSIVE CHECK???
+                if num_pos_covered > 0 and not is_recursive:
+                # if num_pos_covered > 0:
                     subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets)
                     # if so, prune specialisations
                     if subsumed:
@@ -334,10 +341,18 @@ def popper(settings):
                             seen_incomplete_gen = set()
                             seen_incomplete_spec = set()
 
+                seen_better_rec = False
+                if is_recursive and not inconsistent and not subsumed and not add_gen and num_pos_covered > 0:
+                    seen_better_rec = pos_covered in rec_success_sets or any(pos_covered.issubset(xs) for xs in rec_success_sets)
+
                 # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
-                if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0:
+                # if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0:
+                if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec:
+
                     # update success sets
                     success_sets[pos_covered] = prog
+                    if is_recursive:
+                        rec_success_sets[pos_covered] = prog
 
                     # COMBINE
                     with settings.stats.duration('combine'):
@@ -360,24 +375,24 @@ def popper(settings):
                     return
 
                 # BUILD CONSTRAINTS
-                if add_spec and not pruned_subprog:
+                if add_spec and not pruned_sub_incomplete:
                     handles, con = generator.build_specialisation_constraint(prog, rule_ordering)
                     new_rule_handles.update(handles)
                     new_cons.add(con)
 
-                if add_gen:
-                    if settings.recursion_enabled or settings.pi_enabled or not pruned_subprog:
+                if add_gen and not pruned_sub_inconsistent:
+                    if settings.recursion_enabled or settings.pi_enabled or not pruned_sub_incomplete:
                         handles, con = generator.build_generalisation_constraint(prog, rule_ordering)
                         new_rule_handles.update(handles)
                         new_cons.add(con)
 
-                if add_redund1 and not pruned_subprog:
+                if add_redund1 and not pruned_sub_incomplete:
                     bad_handle, handles, con = generator.redundancy_constraint1(prog)
                     bad_handles.add(bad_handle)
                     new_rule_handles.update(handles)
                     new_cons.add(con)
 
-                if add_redund2 and not pruned_subprog:
+                if add_redund2 and not pruned_sub_incomplete:
                     handles, cons = generator.redundancy_constraint2(prog, rule_ordering)
                     new_rule_handles.update(handles)
                     new_cons.update(cons)
@@ -395,5 +410,4 @@ def popper(settings):
 
 def learn_solution(settings):
     timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)
-    # print('settings.nogoods',settings.nogoods)
     return settings.solution, settings.best_prog_score, settings.stats

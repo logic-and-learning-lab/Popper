@@ -64,6 +64,11 @@ type(zero,(element,)).
 
 
 
+:-
+    head_pred(P,2),
+    Rule > 0,
+    body_literal(Rule,empty,_,(A,)),
+    body_literal(Rule,P,_,(A,_)).
 
 prop(antitransitive,decrement).
 prop(antitransitive,decrement).
