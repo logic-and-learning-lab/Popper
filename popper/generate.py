@@ -192,6 +192,7 @@ def build_rule_ordering_literals(rule_index, rule_ordering):
 
 class Generator:
 
+
     def __init__(self, settings, grounder):
         self.settings = settings
         self.grounder = grounder
@@ -233,6 +234,54 @@ class Generator:
         solver.ground([('base', [])])
         self.solver = solver
 
+        self.settings.head_types, self.settings.body_types = self.load_types()
+
+    def load_types(self):
+        enc = """
+#defined clause/1.
+#defined clause_var/2.
+#defined var_type/3."""
+        solver = clingo.Control()
+        with open(self.settings.bias_file) as f:
+            solver.add('bias', [], f.read())
+        solver.add('bias', [], enc)
+        solver.ground([('bias', [])])
+
+        for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
+            head_pred = x.symbol.arguments[0].name
+            head_arity = x.symbol.arguments[1].number
+
+        head_types = None
+        body_types = {}
+        for x in solver.symbolic_atoms.by_signature('type', arity=2):
+            pred = x.symbol.arguments[0].name
+            # xs = (str(t) for t in )
+            xs = [y.name for y in x.symbol.arguments[1].arguments]
+            if pred == head_pred:
+                head_types = xs
+            else:
+                body_types[pred] = xs
+
+        return head_types, body_types
+
+#     def load_directions(self):
+#         enc = """
+# #defined clause/1.
+# #defined clause_var/2.
+# #defined var_type/3."""
+#         solver = clingo.Control()
+#         with open(self.settings.bias_file) as f:
+#             solver.add('bias', [], f.read())
+#         solver.add('bias', [], enc)
+#         solver.ground([('bias', [])])
+#         encoding = set()
+#         for x in solver.symbolic_atoms.by_signature('direction', arity=2):
+#             pred = x.symbol.arguments[0]
+#             directions = x.symbol.arguments[1]
+#             for i, arg in enumerate(directions.arguments):
+#                 encoding.add(f'direction({pred},{i},{arg}).')
+#         return encoding
+
     def gen_symbol(self, literal, backend):
         sign, pred, args = literal
         k = hash(literal)
@@ -263,6 +312,9 @@ class Generator:
             new_head = (True, head_pred, head_args)
             new_body = frozenset((True, pred, args) for pred, args in body)
             to_add.append((new_head, new_body))
+
+
+
 
         # bad_handles = []
         if bad_handles:
@@ -330,9 +382,9 @@ class Generator:
         # ground the rule for each variable assignment
         return set(ground_rule((head, body), assignment) for assignment in assignments)
 
-    def get_ground_deep_rules(self, body, head_types):
+    def get_ground_deep_rules(self, body):
         # find bindings for variables in the rule
-        assignments = self.grounder.find_deep_bindings(body, self.settings.head_types, self.settings.body_types, self.settings.max_rules, self.settings.max_vars)
+        assignments = self.grounder.find_deep_bindings(body, self.settings.max_rules, self.settings.max_vars)
         # ground the rule for each variable assignment
         return set(ground_rule((False, body), assignment) for assignment in assignments)
 
@@ -382,6 +434,29 @@ class Generator:
         literals.append(Literal('clause', (len(prog), ), positive = False))
         literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
         return new_handles, tuple(literals)
+
+    def andy_tmp_con(self, prog, rule_ordering={}):
+    # :-
+    # seen_rule(fABfCBtailAC,R1),
+    # seen_rule(fABfCBtailAC,R2),
+    # R1 < R2,
+    # body_size(R1,2).
+        for rule in prog:
+            if not rule_is_recursive(rule):
+                continue
+            head, body = rule
+            handle = make_rule_handle(rule)
+            if handle not in self.seen_handles:
+                continue
+            rule_var1 = vo_clause(1)
+            rule_var2 = vo_clause(2)
+            literals = []
+            literals.append(build_seen_rule_literal(handle, rule_var1))
+            literals.append(build_seen_rule_literal(handle, rule_var2))
+            literals.append(lt(rule_var1, rule_var2))
+            literals.append(gteq(rule_var1, 1))
+            literals.append(body_size_literal(rule_var1, len(body)))
+            yield tuple(literals)
 
     # only works with single rule programs
     # if a single rule R is unsatisfiable, then for R to appear in an optimal solution H it must be the case that H has a recursive rule that does not specialise R
@@ -581,9 +656,10 @@ def alldiff(args):
     return Literal('AllDifferent', args, meta=True)
 
 class Grounder():
-    def __init__(self):
+    def __init__(self, settings):
         self.seen_assignments = {}
         self.seen_deep_assignments = {}
+        self.settings = settings
 
     def find_bindings(self, rule, max_rules, max_vars):
         _, body = rule
@@ -703,8 +779,10 @@ class Grounder():
 
 
     # find_deep_bindings(body, head_types, self.settings.max_vars)
-    def find_deep_bindings(self, body, head_types, body_types, max_rules, max_vars):
+    def find_deep_bindings(self, body, max_rules, max_vars):
         all_vars = find_all_vars(body)
+        head_types = self.settings.head_types
+        body_types = self.settings.body_types
 
         body_hash = grounding_hash(body, all_vars)
         # print(','.join(map(str,body)), all_vars, body_hash)

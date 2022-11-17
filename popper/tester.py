@@ -145,7 +145,6 @@ class Tester():
         with self.using(prog):
             return self.bool_query('sat')
 
-
     def is_body_sat(self, body):
         try:
             body_str = ','.join(format_literal(literal) for literal in body)
@@ -154,7 +153,6 @@ class Tester():
             return self.bool_query('sat2')
         finally:
             self.prolog.retractall('sat2')
-
 
     def check_redundant_literal(self, prog):
         for rule in prog:

@@ -1,5 +1,5 @@
-max_body(8).
-max_vars(7).
+max_body(6).
+max_vars(6).
 max_clauses(1).
 
 head_pred(f,1).

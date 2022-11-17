@@ -116,8 +116,9 @@ def build_explain_encoding(prog, with_directions=False, recursion_enabled=False)
 
     num_recursive = len([rule for rule in prog if rule_is_recursive(rule)])
     if num_recursive > 1:
-        num_recursive
         encoding.add(f'num_recursive({num_recursive}).')
+    # if num_recursive > 0:
+    #     encoding.add(f'num_recursive({num_recursive}).')
 
     for rule_id, rule in enumerate(prog):
         head, body = rule
@@ -267,7 +268,7 @@ class Explainer:
     #                     yield sub_body
 
     # @profile
-    def explain_totally_incomplete2(self, prog, directions, tmp_cnt):
+    def explain_totally_incomplete(self, prog, directions):
         encoding = set()
         encoding.add(self.explain_encoding)
         if self.has_directions:
@@ -278,8 +279,8 @@ class Explainer:
         encoding = '\n'.join(encoding)
 
         self.tmp_count+=1
-        with open(f'tmp/{self.tmp_count}.pl', 'w') as f:
-            f.write(encoding)
+        # with open(f'tmp/{self.tmp_count}.pl', 'w') as f:
+            # f.write(encoding)
         # print(self.tmp_count)
 
         # print('---')

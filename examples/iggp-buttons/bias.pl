@@ -1,3 +1,8 @@
+
+max_body(6).
+max_vars(6).
+max_clauses(1).
+
 head_pred(next,2).
 body_pred(does,3).
 body_pred(my_input,2).

@@ -1,9 +1,9 @@
 import time
 import numbers
 from . combine import Combiner
-from . explain import Explainer
-# from . explain2 import Explainer
-# from . explain3 import Explainer
+# asp version
+# from . explain import Explainer
+from . explain4 import Explainer
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, order_rule
 from . tester import Tester
 from . generate import Generator, Grounder, parse_model
@@ -39,24 +39,21 @@ def parse_handles(generator, new_handles):
 def explain_failure(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons):
     pruned_subprog = False
 
-    # print('')
-    # print('*'*30)
+    # print('*****')
+    # for rule in prog:
+        # print('*', format_rule(rule))
 
-    for subprog, unsat_body in explainer.explain_totally_incomplete2(prog, directions, 2):
+    for subprog, unsat_body in explainer.explain_totally_incomplete(prog, directions):
         pruned_subprog = True
 
-        # print('--')
-        # for rule in prog:
-        #     print(format_rule(rule))
+        # print('*****')
         # for rule in subprog:
-        #     print('\t', format_rule(rule))
-
-        # print(format_rule(list(subprog)[0]), unsat_body)
+        #     print(format_rule(rule))
 
         if unsat_body:
             _, body = subprog[0]
             con = generator.unsat_constraint(body)
-            for h, b in generator.get_ground_deep_rules(con, settings.head_types):
+            for h, b in generator.get_ground_deep_rules(con):
                 new_ground_cons.add(b)
             continue
 
@@ -112,13 +109,8 @@ def popper(settings):
     settings.nogoods = 0
 
     tester = Tester(settings)
-    # explainer = Explainer(settings, tester)
-
     explainer = Explainer(settings, tester)
-    # explainer = Explainer3(settings, tester)
-    settings.head_types, settings.body_types = explainer.load_types()
-
-    grounder = Grounder()
+    grounder = Grounder(settings)
     combiner = Combiner(settings, tester)
 
     settings.single_solve = not (settings.recursion_enabled or settings.pi_enabled)
@@ -152,7 +144,6 @@ def popper(settings):
     generator = Generator(settings, grounder)
 
     max_size = (1 + settings.max_body) * settings.max_rules
-    dif = 0
 
     for size in range(1, max_size+1):
         if size > settings.max_literals:
@@ -173,6 +164,7 @@ def popper(settings):
         bad_handles = set()
 
         with generator.solver.solve(yield_ = True) as handle:
+            # use iter so that we can measure running time
             handle = iter(handle)
 
             while True:
@@ -203,21 +195,20 @@ def popper(settings):
 
                 # EXPLAIN A FAILURE
                 if settings.explain:
+                    explainer.add_seen(prog)
                     if len(pos_covered) == 0:
-                        explainer.add_seen_unsat(prog)
                         with settings.stats.duration('explain'):
                             pruned_subprog = explain_failure(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons)
-                    else:
-                        explainer.add_seen_sat(prog)
 
                 if inconsistent and prog_is_recursive(prog):
                     combiner.add_inconsistent(prog)
 
                 # messy way to track program size
-                k = prog_size(prog)
-                if last_size == None or k != last_size:
-                    last_size = k
-                    settings.logger.info(f'Searching programs of size: {k}')
+                if settings.single_solve:
+                    k = prog_size(prog)
+                    if last_size == None or k != last_size:
+                        last_size = k
+                        settings.logger.info(f'Searching programs of size: {k}')
 
                 add_spec = False
                 add_gen = False
@@ -228,7 +219,7 @@ def popper(settings):
                     # if inconsistent, prune generalisations
                     add_gen = True
                     # if the program has multiple rules, test the consistency of each non-recursive rule as we might not have seen it before
-                    if len(prog) > 1:
+                    if len(prog) > 1 and settings.recursion_enabled:
                         for rule in prog:
                             if rule_is_recursive(rule):
                                 continue
@@ -255,40 +246,40 @@ def popper(settings):
                     add_spec = True
                     # if recursion and no PI, apply redundancy constraints
                     if settings.recursion_enabled:
+                        add_redund2 = True
                         if len(prog) == 1 and not settings.pi_enabled:
                             add_redund1 = True
-                        add_redund2 = True
 
                 # remove generalisations of programs with redundant literals
-                if settings.recursion_enabled and not add_gen:
-                    # with settings.stats.duration('check_redundant_literal'):
-                    for rule in prog:
-                        if tester.has_redundant_literal([rule]):
-                            # print('REDUNDANT_LITERAL')
-                            # print(format_rule(rule))
-                            add_gen = True
-                            if len(prog) > 1:
-                                new_handles, con = generator.build_generalisation_constraint([rule])
-                                new_cons.add(con)
-                                all_handles.update(parse_handles(generator, new_handles))
+                if settings.recursion_enabled:
+                    if not add_gen or len(prog) > 1:
+                        for rule in prog:
+                            if tester.has_redundant_literal([rule]):
+                                add_gen = True
+                                if len(prog) > 1:
+                                    new_handles, con = generator.build_generalisation_constraint([rule])
+                                    new_cons.add(con)
+                                    all_handles.update(parse_handles(generator, new_handles))
 
-                if settings.recursion_enabled and not add_gen and len(prog) > 2:
-                    # with settings.stats.duration('check_redundant_rule'):
-                    if tester.has_redundant_rule(prog):
-                        add_gen = True
-                        r1, r2 = tester.find_redundant_rules(prog)
-                        # TODO: PRUNE THE SHIT RULES SUBSET!!!!!!!
-                        # print('REDUNDANT_RULE')
-                        # for rule in [r1,r2]:
-                        #     print(format_rule(order_rule(rule)))
-                        new_handles, con = generator.build_generalisation_constraint([r1,r2])
-                        new_cons.add(con)
-                        all_handles.update(parse_handles(generator, new_handles))
+                # remove a subset of theta-subsumed rules when learning recursive programs with more than two rules
+                if settings.recursion_enabled and settings.max_rules > 2 and prog_is_recursive(prog):
+                    for x in generator.andy_tmp_con(prog):
+                        new_cons.add(x)
+
+                # remove generalisations of programs with redundant rules
+                if settings.recursion_enabled and len(prog) > 2 and tester.has_redundant_rule(prog):
+                    add_gen = True
+                    r1, r2 = tester.find_redundant_rules(prog)
+                    new_handles, con = generator.build_generalisation_constraint([r1,r2])
+                    new_cons.add(con)
+                    all_handles.update(parse_handles(generator, new_handles))
 
                 # check whether subsumed by a seen program
                 subsumed = False
-                if num_pos_covered > 0 and not prog_is_recursive(prog):
-                    # with settings.stats.duration('subsume_check'):
+
+                # WHY DID WE HAVE A RECURSIVE CHECK???
+                # if num_pos_covered > 0 and not prog_is_recursive(prog):
+                if num_pos_covered > 0:
                     subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets)
                     # if so, prune specialisations
                     if subsumed:
@@ -404,5 +395,5 @@ def popper(settings):
 
 def learn_solution(settings):
     timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)
-    print('settings.nogoods',settings.nogoods)
+    # print('settings.nogoods',settings.nogoods)
     return settings.solution, settings.best_prog_score, settings.stats
