@@ -1,6 +1,4 @@
 enable_recursion.
-max_vars(6).
-max_body(6).
 
 head_pred(f,1).
 body_pred(tail,2).
@@ -23,6 +21,5 @@ direction(tail,(in,out)).
 direction(head,(in,out)).
 direction(last,(in,out)).
 direction(empty,(in,)).
-%% direction(empty,(out,)).
 direction(zero,(in,)).
 direction(even,(in,)).

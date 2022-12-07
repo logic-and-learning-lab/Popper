@@ -1,6 +1,4 @@
 %% The training examples are for the relation droplast/2 but Popper learns the relation f/2
-enable_recursion.
-
 head_pred(f,2).
 body_pred(head,2).
 body_pred(tail,2).

@@ -1,7 +1,3 @@
-max_body(6).
-max_vars(6).
-max_clauses(1).
-
 head_pred(f,1).
 body_pred(has_car,2).
 body_pred(has_load,2).

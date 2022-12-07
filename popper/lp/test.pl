@@ -41,9 +41,6 @@ test_ex(Atom):-
     current_predicate(timeout/1),!,
     timeout(T),
     catch(call_with_time_limit(T, call(Atom)),time_limit_exceeded,false),!.
-    %% timeout(T),
-    %% catch(call_with_inference_limit(Atom, 40000,_),_,false).
-    %% catch(call_with_time_limit(T, call(Atom)),time_limit_exceeded,false),!.
 
 test_ex(Atom):-
     call(Atom),!.
@@ -66,10 +63,6 @@ sat:-
 non_functional:-
     pos(Atom),
     non_functional(Atom),!.
-
-%% functional:-
-    %% \+ non_functional.
-
 
 %% %% ========== REDUNDANCY CHECKS ==========
 

@@ -74,10 +74,15 @@ def ground_rule(rule, assignment):
 def make_literal_handle(literal):
     return f'{literal.predicate}{"".join(literal.arguments)}'
 
+cached_handles = {}
 def make_rule_handle(rule):
+    k = hash(rule)
+    if k in cached_handles:
+        return cached_handles[k]
     head, body = rule
     body_literals = sorted(body, key = operator.attrgetter('predicate'))
     handle = ''.join(make_literal_handle(literal) for literal in [head] + body_literals)
+    cached_handles[k] = handle
     return handle
 
 def build_seen_rule(rule, is_rec):
@@ -93,7 +98,6 @@ def build_seen_rule(rule, is_rec):
 def build_seen_rule_literal(handle, rule_var):
     return Literal('seen_rule', (handle, rule_var))
 
-# TODO: COULD CACHE TUPLES OF ARGS FOR TINY OPTIMISATION
 def parse_model(model):
     directions = defaultdict(lambda: defaultdict(lambda: '?'))
     rule_index_to_body = defaultdict(set)
@@ -165,10 +169,10 @@ def parse_model(model):
 def build_rule_literals(rule, rule_var):
     literals = []
     head, body = rule
-    yield Literal('head_literal', (rule_var, head.predicate, head.arity, tuple(vo_variable2(rule_var, v) for v in head.arguments)))
+    yield Literal('head_literal', (rule_var, head.predicate, len(head.arguments), tuple(vo_variable2(rule_var, v) for v in head.arguments)))
 
     for body_literal in body:
-        yield Literal('body_literal', (rule_var, body_literal.predicate, body_literal.arity, tuple(vo_variable2(rule_var, v) for v in body_literal.arguments)))
+        yield Literal('body_literal', (rule_var, body_literal.predicate, len(body_literal.arguments), tuple(vo_variable2(rule_var, v) for v in body_literal.arguments)))
     for idx, var in enumerate(head.arguments):
         yield eq(vo_variable2(rule_var, var), idx)
 
@@ -227,6 +231,9 @@ class Generator:
         encoding.append(f'max_clauses({settings.max_rules}).')
         encoding.append(f'max_body({settings.max_body}).')
         encoding.append(f'max_vars({settings.max_vars}).')
+        max_size = (1 + settings.max_body) * settings.max_rules
+        if settings.max_literals < max_size:
+            encoding.append(f'custom_max_size({settings.max_literals}).')
 
         if self.settings.bkcons:
             encoding.append(self.settings.bkcons)
@@ -472,7 +479,7 @@ class Generator:
             new_handles.add(build_seen_rule(rule, False))
             literals.extend(build_rule_literals(rule, rule_var))
         literals.append(gteq(rule_var, 1))
-        literals.append(Literal('recursive_clause',(rule_var, head.predicate, head.arity)))
+        literals.append(Literal('recursive_clause',(rule_var, head.predicate, len(head.arguments))))
         literals.append(Literal('num_recursive', (head.predicate, 1)))
         # print('RED1', format_rule(rule))
         # print('\n'.join(str(x) for x in literals))
@@ -483,7 +490,7 @@ class Generator:
 
     def unsat_constraint(self, body):
         rule_var = vo_clause('X')
-        return tuple(Literal('body_literal', (rule_var, body_literal.predicate, body_literal.arity, tuple(vo_variable2(rule_var, v) for v in body_literal.arguments))) for body_literal in body)
+        return tuple(Literal('body_literal', (rule_var, body_literal.predicate, len(body_literal.arguments), tuple(vo_variable2(rule_var, v) for v in body_literal.arguments))) for body_literal in body)
 
 
     def redundancy_constraint4(self, program, rule_ordering={}):

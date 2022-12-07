@@ -1,5 +1,3 @@
-max_vars(6).
-max_body(7).
 enable_recursion.
 
 head_pred(next_list,2).

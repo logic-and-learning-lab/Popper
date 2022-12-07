@@ -70,7 +70,7 @@ class Combiner:
         self.big_encoding = set()
         if self.settings.recursion_enabled or self.settings.pi_enabled:
             self.big_encoding.add(':- recursive, not base.')
-            self.big_encoding.add(':- recursive, #count{R : rule(R)} > ' + f'{self.settings.max_rules}.')
+            # self.big_encoding.add(':- recursive, #count{R : rule(R)} > ' + f'{self.settings.max_rules}.')
         # add example atoms
         self.big_encoding.add(self.example_prog)
 

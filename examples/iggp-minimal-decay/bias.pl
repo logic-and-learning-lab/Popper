@@ -1,7 +1,3 @@
-max_clauses(1).
-max_body(6).
-max_vars(6).
-
 head_pred(next_value,2).
 body_pred(does,3).
 body_pred(true_value,2).
@@ -29,4 +25,11 @@ type(c4,(int,)).
 type(c5,(int,)).
 
 %% BECAUSE WE DO NOT LEARN FROM INTERPRETATIONS
-:- clause(C), #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
+tmp(next_value).
+tmp(does).
+tmp(true_value).
+bad_body(P,A,Vars):-
+    tmp(P),
+    body_pred(P,A),
+    var_pos(Var,Vars,0),
+    Var != 0.

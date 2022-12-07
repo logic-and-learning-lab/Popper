@@ -1,5 +1,11 @@
-max_vars(7).
-max_body(7).
+head_pred(goal,3).
+body_pred(true_whiteScore,2).
+body_pred(true_blackScore,2).
+body_pred(true_rounds,2).
+body_pred(role,1).
+body_pred(succ,2).
+body_pred(maxRounds,1).
+
 constant(agent_white, agent).
 constant(agent_black, agent).
 constant(int_0, int).
@@ -105,13 +111,7 @@ constant(int_99, int).
 constant(int_100, int).
 constant(action_straight, action).
 constant(action_swerve, action).
-head_pred(goal,3).
-body_pred(true_whiteScore,2).
-body_pred(true_blackScore,2).
-body_pred(true_rounds,2).
-body_pred(role,1).
-body_pred(succ,2).
-body_pred(maxRounds,1).
+
 type(true_whiteScore,(ex,int)).
 type(true_blackScore,(ex,int)).
 type(true_rounds,(ex,int)).

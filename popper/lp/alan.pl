@@ -11,6 +11,7 @@
 #defined enable_recursion/0.
 #defined non_datalog/0.
 #defined allow_singletons/0.
+#defined custom_max_size/1.
 
 #show head_literal/4.
 #show body_literal/4.
@@ -21,14 +22,17 @@
 #heuristic size(N). [1000-N,true]
 
 max_size(K):-
+    custom_max_size(K).
+max_size(K):-
+    not custom_max_size(_),
     max_body(M),
     max_clauses(N),
     K = (M+1)*N.
-
 size(N):-
     max_size(MaxSize),
     N = 2..MaxSize,
-    #sum{K+1,C : body_size(C,K)} == N.
+    #sum{K+1,Rule : body_size(Rule,K)} == N.
+:- not size(_).
 
 pi_or_rec:-
     recursive.
@@ -39,16 +43,17 @@ pi_or_rec_enabled:-
 pi_or_rec_enabled:-
     enable_recursion.
 
+%% prohibit multi-clause programs when no recursion or PI
 :-
     clause(1),
     not pi_or_rec.
 
+%% AC: @DC, this constraint might mess up the work on negation
 :-
     enable_recursion,
     clause(Rule),
     Rule > 0,
     not recursive_clause(Rule,_,_).
-
 
 %% head pred symbol if given by user or invented
 head_aux(P,A):-
@@ -137,12 +142,12 @@ clause(C):-
 %% NUM BODY LITERALS OF A CLAUSE
 %% TODO: IMPROVE AS EXPENSIVE
 %% grounding is > c * (n choose k), where n = |Herbrand base| and k = MaxN
-body_size(C,N):-
-    clause(C),
+body_size(Rule,N):-
+    clause(Rule),
     max_body(MaxN),
     N > 0,
     N <= MaxN,
-    #count{P,Vars : body_literal(C,P,_,Vars)} == N.
+    #count{P,Vars : body_literal(Rule,P,_,Vars)} == N.
 
 %% USE CLAUSES IN ORDER
 :-
@@ -501,6 +506,32 @@ base_clause(C,P,A):-
     direction_(P,Pos1,in),
     direction_(P,Pos2,in).
 
+:-
+    Rule > 0,
+    head_literal(Rule,P,_,(A,_)),
+    body_literal(Rule,P,_,(_,A)).
+
+:-
+    Rule > 0,
+    head_literal(Rule,P,_,(_,A)),
+    body_literal(Rule,P,_,(A,_)).
+
+%% PREVENT LEFT RECURSION FOR ARITY 3
+:-
+    C > 0,
+    num_in_args(P,2),
+    head_literal(C,P,A,Vars1),
+    body_literal(C,P,A,Vars2),
+    Var1 != Var2,
+    var_pos(Var1,Vars1,V1Pos1),
+    var_pos(Var1,Vars2,V1Pos2),
+    direction_(P,V1Pos1,in),
+    direction_(P,V1Pos2,in),
+    var_pos(Var2,Vars1,V2Pos1),
+    var_pos(Var2,Vars2,V2Pos2),
+    direction_(P,V2Pos1,in),
+    direction_(P,V2Pos2,in).
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% ENSURES INPUT VARS ARE GROUND
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -528,67 +559,30 @@ num_in_args(P,N):-
     direction_(P,_,_),
     #count{Pos : direction_(P,Pos,in)} == N.
 
-%% %% %% VAR SAFE IF HEAD INPUT VAR
-%% safe_var(C,Var):-
-%%     head_literal(C,P,_,Vars),
-%%     var_pos(Var,Vars,Pos),
-%%     direction_(P,Pos,in).
-
-%% %% VAR SAFE IF IN A LITERAL THAT ONLY HAS OUT VARS
-%% safe_var(C,Var):-
-%%     num_in_args(P,0),
-%%     body_literal(C,P,_,Vars),
-%%     var_member(Var,Vars).
-
-%% %% VAR SAFE IF IN SAFE LITERAL
-%% safe_var(C,Var):-
-%%     safe_literal(C,P,Vars),
-%%     var_member(Var,Vars).
-
-%% %% LITERAL WITH N INPUT VARS IS SAFE IF N VARS ARE SAFE
-%% safe_literal(C,P,Vars):-
-%%     num_in_args(P,N),
-%%     N > 0,
-%%     body_literal(C,P,_,Vars),
-%%     #count{Pos :
-%%         var_pos(Var,Vars,Pos),
-%%         direction_(P,Pos,in),
-%%         safe_var(C,Var)
-%%     } == N.
-
-%% %% SAFE VARS
-%% :-
-%%     direction_(_,_,_), % guard for when no direction_s are given
-%%     clause_var(C,Var),
-%%     not safe_var(C,Var).
-
-%% new!!!!!
 %% VAR SAFE IF HEAD INPUT VAR
 safe_bvar(Rule,Var):-
     head_literal(Rule,P,_,Vars),
     var_pos(Var,Vars,Pos),
     direction_(P,Pos,in).
 
+%% VAR SAFE IF A OUTPUT VAR
 safe_bvar(Rule,Var):-
     body_literal(Rule,P,_,Vars),
     num_in_args(P,0),
     var_member(Var,Vars).
 
+%% VAR SAFE IF ALL INPUT VARS ARE SAFE
 safe_bvar(Rule,Var):-
     body_literal(Rule,P,_,Vars),
     var_member(Var,Vars),
     num_in_args(P,N),
+    N > 0,
     #count{Pos : var_pos(Var2,Vars,Pos), direction_(P,Pos,in), safe_bvar(Rule,Var2)} == N.
 
 :-
     direction_(_,_,_),
     body_var(Rule,Var),
     not safe_bvar(Rule,Var).
-%% #show safe_bvar/2.
-%% #show tmp/1.
-%% tmp(Var):-
-%%     body_var(Rule,Var),
-%%     not safe_bvar(Rule,Var).
 
 %% ########################################
 %% CLAUSES SPECIFIC TO PREDICATE INVENTION
@@ -905,96 +899,3 @@ only_once(P,A):-
 :- prop(pre_postcon,(P,Q,R)), body_literal(Rule,P,_,(A,)),body_literal(Rule,Q,_,(A,B)),body_literal(Rule,R,_,(B,)).
 :- prop(chain,(P,Q)), body_literal(Rule,P,_,(_,A)),body_literal(Rule,Q,_,(A,_)).
 :- prop(countk,P,K), K > 1, body_pred(P,_), clause(Rule), #count{Vars : body_literal(Rule,P,_,Vars)} > K.
-
-%% DEBUGGING
-
-%% {body_literal(0,P,A,Vars)}:-
-%%     body_aux(P,A),
-%%     vars(A,Vars),
-%%     not head_pred(P,A),
-%%     not type_mismatch(P,Vars),
-%%     not bad_body(P,A,Vars).
-
-%% bad_rule(Handle,R):-
-%%     bad_handle(Handle),
-%%     seen_rule(Handle,R).
-
-%% #defined seen_rule/2.
-%% #defined bad_handle/1.
-%% #defined bad_rule/2.
-%% has_new_rule:-
-%%     clause(R),
-%%     not bad_rule(_,R).
-%% :-
-%%     not has_new_rule.
-
-
-
-
-
-%% :-
-%%     separable(C).
-
-%% separable(C) :-
-%%     Var1 < Var2,
-%%     body_var(C,Var1),
-%%     body_var(C,Var2),
-%%     not head_var(C,Var1),
-%%     not head_var(C,Var2),
-%%     not path(C,Var1,Var2).
-
-%% path(C,Var1,Var2) :-
-%%     Var1 < Var2,
-%%     body_literal(C,_,_,Vars),
-%%     not head_var(C,Var1),
-%%     not head_var(C,Var2),
-%%     var_member(Var1,Vars),
-%%     var_member(Var2,Vars).
-%% path(C,Var1,Var2) :-
-%%     Var1 < Var2,
-%%     body_literal(C,_,_,Vars),
-%%     var_member(Var1,Vars),
-%%     not head_var(C,Var1),
-%%     not head_var(C,Var3),
-%%     var_member(Var3,Vars),
-%%     path(C,Var3,Var2).
-
-
-%% %%% depends on relation - necessary for redundancy constraints and higher-order programs
-%% % NB: following assumes that the body literal can always be unified with the head literal - an assumption that holds for now...
-%% depends_on(C1,C2) :-
-%%     head_literal(C2,Pred,Arity,_),
-%%     body_literal(C1,Pred,Arity,_).
-%% depends_on(C1,C3) :-
-%%     depends_on(C1,C2),
-%%     depends_on(C2,C3).
-
-
-
-:-
-    Rule > 0,
-    head_literal(Rule,P,_,(A,_)),
-    body_literal(Rule,P,_,(_,A)).
-
-:-
-    Rule > 0,
-    head_literal(Rule,P,_,(_,A)),
-    body_literal(Rule,P,_,(A,_)).
-
-
-%% PREVENT LEFT RECURSION
-%% TODO: GENERALISE FOR ARITY > 3
-:-
-    C > 0,
-    num_in_args(P,2),
-    head_literal(C,P,A,Vars1),
-    body_literal(C,P,A,Vars2),
-    Var1 != Var2,
-    var_pos(Var1,Vars1,V1Pos1),
-    var_pos(Var1,Vars2,V1Pos2),
-    direction_(P,V1Pos1,in),
-    direction_(P,V1Pos2,in),
-    var_pos(Var2,Vars1,V2Pos1),
-    var_pos(Var2,Vars2,V2Pos2),
-    direction_(P,V2Pos1,in),
-    direction_(P,V2Pos2,in).

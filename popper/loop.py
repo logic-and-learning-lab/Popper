@@ -1,7 +1,7 @@
 import time
 import numbers
 from . combine import Combiner
-from . explain4 import Explainer, prog_hash
+from . explain import Explainer
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, order_rule, prog_size
 from . tester import Tester
 from . generate import Generator, Grounder, parse_model, atom_to_symbol, arg_to_symbol
@@ -121,11 +121,7 @@ def popper(settings):
     grounder = Grounder(settings)
     combiner = Combiner(settings, tester)
 
-    TMP_INCONSISTENT = set()
-    TMP_COUNT = 0
-
     settings.single_solve = not (settings.recursion_enabled or settings.pi_enabled)
-    # settings.single_solve = False
 
     num_pos = settings.pos
 
@@ -223,6 +219,8 @@ def popper(settings):
                     k = prog_size(prog)
                     if last_size == None or k != last_size:
                         last_size = k
+                        if last_size > settings.max_literals:
+                            return
                         settings.logger.info(f'Searching programs of size: {k}')
 
                 add_spec = False
@@ -366,7 +364,9 @@ def popper(settings):
                             return
 
                         if settings.single_solve:
-                            for i in range(combiner.max_size, settings.max_literals+1):
+                            # AC: sometimes adding these size constraints can take longer
+                            for i in range(combiner.max_size, max_size+1):
+                                # print('mooo', i)
                                 size_con = [(atom_to_symbol("size", (i,)), True)]
                                 model.context.add_nogood(size_con)
 
