@@ -25,6 +25,11 @@ type(c4,(int,)).
 type(c5,(int,)).
 
 %% BECAUSE WE DO NOT LEARN FROM INTERPRETATIONS
-:-
-    clause(C),
-    #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
+tmp(next_value).
+tmp(does).
+tmp(true_value).
+bad_body(P,A,Vars):-
+    tmp(P),
+    body_pred(P,A),
+    var_pos(Var,Vars,0),
+    Var != 0.

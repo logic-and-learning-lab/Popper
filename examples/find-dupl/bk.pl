@@ -12,13 +12,15 @@ mergesort([H|T],B):-
 
 
 increment(A,B):-
-    (nonvar(A) -> \+ is_list(A); true),
-    (nonvar(B) -> \+ is_list(B); true),
+    ((nonvar(A), nonvar(B)) -> !, false),
+    %% (nonvar(A) -> \+ is_list(A); true),
+    %% (nonvar(B) -> \+ is_list(B); true),
     succ(A,B).
 
 decrement(A,B):-
-    (nonvar(A) -> \+ is_list(A); true),
-    (nonvar(B) -> \+ is_list(B); true),
+    ((nonvar(A), nonvar(B)) -> !, false),
+    %% (nonvar(A) -> \+ is_list(A); true),
+    %% (nonvar(B) -> \+ is_list(B); true),
     succ(B,A).
 
 empty([]).

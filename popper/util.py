@@ -22,7 +22,7 @@ MAX_EXAMPLES=10000
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper is an ILP system based on learning from failures')
-    parser.add_argument('kbpath', help = 'Path to the knowledge base one wants to learn on')
+    parser.add_argument('kbpath', default=False, help = 'Path to the knowledge base one wants to learn on')
     # parser.add_argument('--info', default=False, action='store_true', help='Print best programs so ')
     parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
@@ -38,6 +38,8 @@ def parse_args():
 
     # parser.add_argument('--threads', type=int, default=MAX_LITERALS, help=f'Maximum number of threads (default: 1)')
 
+    parser.add_argument('--explain', default=True, action='store_true', help='explain')
+    parser.add_argument('--test', default=False, action='store_true', help='test')
     # parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
     # parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
@@ -195,23 +197,33 @@ def rule_is_invented(rule):
 def order_rule(rule):
     head, body = rule
     ordered_body = []
-    grounded_variables = head.inputs
+    grounded_variables = set()
+
+    if head:
+        if head.inputs == []:
+            return rule
+        grounded_variables.update(head.inputs)
+
     body_literals = set(body)
 
-    if head.inputs == []:
-        return clause
 
     while body_literals:
         selected_literal = None
         for literal in body_literals:
-            # AC: could cache for a micro-optimisation
-            if literal.inputs.issubset(grounded_variables):
-                if literal.predicate != head.predicate:
-                    # find the first ground non-recursive body literal and stop
-                    selected_literal = literal
-                else:
-                    # otherwise use the recursive body literal
-                    selected_literal = literal
+            if len(literal.outputs) == len(literal.arguments):
+                selected_literal = literal
+                break
+
+            if not literal.inputs.issubset(grounded_variables):
+                continue
+
+            if head and literal.predicate != head.predicate:
+                # find the first ground non-recursive body literal and stop
+                selected_literal = literal
+                break
+            elif selected_literal == None:
+                # otherwise use the recursive body literal
+                selected_literal = literal
 
         if selected_literal == None:
             message = f'{selected_literal} in clause {format_rule(rule)} could not be grounded'
@@ -235,7 +247,7 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, kbpath=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False):
+    def __init__(self, kbpath=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, explain=False, test=False):
 
         if kbpath == False:
             args = parse_args()
@@ -243,6 +255,13 @@ class Settings:
             quiet = args.quiet
             debug = args.debug
             kbpath = args.kbpath
+            if kbpath:
+                self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
+            else:
+                self.bk_file = args.bk_file
+                self.ex_file = args.ex_file
+                self.bias_file = args.bias_file
+
             show_stats = args.stats
             bkcons = args.bkcons
             max_literals = args.max_literals
@@ -253,6 +272,9 @@ class Settings:
             max_vars = args.max_vars
             max_rules = args.max_rules
             functional_test = args.functional_test
+            explain = args.explain
+            test = args.test
+
 
         self.logger = logging.getLogger("popper")
 
@@ -269,12 +291,13 @@ class Settings:
         self.debug = debug
         self.stats = Stats(info=info, debug=debug)
         self.stats.logger = self.logger
-        self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
         self.show_stats = show_stats
         self.bkcons = bkcons
         self.max_literals = max_literals
         # self.clingo_args = [] if not args.clingo_args else args.clingo_args.split(' ')
         self.functional_test = functional_test
+        self.explain = explain
+        self.test = test
         self.timeout = timeout
         self.eval_timeout = eval_timeout
         self.max_examples = max_examples

@@ -1,3 +1,11 @@
+head_pred(next_control,2).
+body_pred(true_whitePayoff,2).
+body_pred(true_blackPayoff,2).
+body_pred(true_control,2).
+body_pred(does,3).
+body_pred(role,1).
+body_pred(succ,2).
+
 constant(agent_white, agent).
 constant(agent_black, agent).
 constant(int_0, int).
@@ -25,13 +33,7 @@ constant(action_finish, action).
 constant(action_continue, action).
 constant(action_noop, action).
 constant(prop_gameOver, prop).
-head_pred(next_control,2).
-body_pred(true_whitePayoff,2).
-body_pred(true_blackPayoff,2).
-body_pred(true_control,2).
-body_pred(does,3).
-body_pred(role,1).
-body_pred(succ,2).
+
 type(true_whitePayoff,(ex,int)).
 type(true_blackPayoff,(ex,int)).
 type(true_control,(ex,agent)).

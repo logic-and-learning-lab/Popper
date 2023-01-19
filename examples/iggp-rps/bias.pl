@@ -1,5 +1,3 @@
-max_vars(7).
-
 head_pred(next_score,3).
 body_pred(my_true_score,3).
 body_pred(my_succ,2).
@@ -17,9 +15,11 @@ type(player,(player,)).
 type(different,(player,player)).
 
 %% HACK BECAUSE WE DO NOT LEARN FROM INTERPRETATIONS
-:-
-    clause(C),
-    #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
-
-:-
-    body_literal(_,different,_,(V0,V1)), V0 > V1.
+tmp(next_score).
+tmp(my_true_score).
+tmp(does).
+bad_body(P,A,Vars):-
+    tmp(P),
+    body_pred(P,A),
+    var_pos(Var,Vars,0),
+    Var != 0.

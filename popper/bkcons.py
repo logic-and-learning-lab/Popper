@@ -67,9 +67,17 @@ def deduce_bk_cons(settings):
     bk = bk.replace('\+','not')
 
     xs = deduce_bk_cons_aux(cons, prog, bias, bk)
-    # for x in xs:
+
+    # ys = sorted(xs)
+    # for x in ys:
         # x += '.'
         # print(x)
+
+    # with open('dbg-cons.txt', 'w') as f:
+        # f.write('\n'.join(ys))
+
+    # exit()
+
 
     settings.bkcons = '\n'.join(x + '.' for x in xs)
 
