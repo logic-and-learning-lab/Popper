@@ -2,7 +2,7 @@ import time
 import numbers
 from . combine import Combiner
 from . explain import Explainer
-from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, order_rule, prog_size
+from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, prog_size
 from . tester import Tester
 from . generate import Generator, Grounder, parse_model, atom_to_symbol, arg_to_symbol
 from . bkcons import deduce_bk_cons
@@ -192,6 +192,7 @@ def popper(settings):
                     prog, rule_ordering, directions = parse_model(atoms)
 
                 is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
+                has_invention = settings.pi_enabled and prog_has_invention(prog)
 
                 settings.stats.total_programs += 1
                 if settings.debug:
@@ -205,7 +206,7 @@ def popper(settings):
                     num_pos_covered = len(pos_covered)
 
                 # EXPLAIN A FAILURE
-                if settings.explain:
+                if settings.explain and not has_invention:
                     explainer.add_seen(prog)
                     if len(pos_covered) == 0:
                         with settings.stats.duration('explain'):

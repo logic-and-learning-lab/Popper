@@ -39,6 +39,8 @@ def parse_args():
     # parser.add_argument('--threads', type=int, default=MAX_LITERALS, help=f'Maximum number of threads (default: 1)')
 
     parser.add_argument('--explain', default=True, action='store_true', help='explain')
+    # parser.add_argument('--explain', default=False, action='store_true', help='explain')
+
     parser.add_argument('--test', default=False, action='store_true', help='test')
     # parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
     # parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')
@@ -186,7 +188,14 @@ def rule_is_recursive(rule):
     return any(head.predicate  == literal.predicate for literal in body if isinstance(literal, Literal))
 
 def prog_is_recursive(prog):
+    if len(prog) < 2:
+        return False
     return any(rule_is_recursive(rule) for rule in prog)
+
+def prog_has_invention(prog):
+    if len(prog) < 2:
+        return False
+    return any(rule_is_invented(rule) for rule in prog)
 
 def rule_is_invented(rule):
     head, body = rule
