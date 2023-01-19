@@ -11,7 +11,6 @@ Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](htt
 - [pyswip](https://github.com/yuce/pyswip) (**You _must_ install pyswip from the master branch!**)
     -  use the command: `pip install git+https://github.com/yuce/pyswip@master#egg=pyswip`
 
-
 - [SWI-Prolog](https://www.swi-prolog.org) (**8.4.2 or above**)
 
 - [Clingo](https://potassco.org/clingo/) (**5.5.0 or above**)
@@ -91,7 +90,7 @@ father(gavin,amelia).
 father(andy,spongebob).
 ```
 
-A bias file contains information necessary to restrict the search space of Popper.
+A bias file contains the information necessary to restrict the search space of Popper.
 **Predicate declarations** tell Popper which predicate symbols it can use in the head or body of a rule, such as:
 
 ```prolog
@@ -163,7 +162,7 @@ f(A,B,C):- decrement(B,E),f(A,E,D),tail(D,C).
 ******************************
 ```
 
-To supress this information, run Popper with the `--quiet` (`-q`) flag.
+To suppress this information, run Popper with the `--quiet` (`-q`) flag.
 
 ## Recursion
 To enable recursion add `enable_recursion.` to the bias file.
@@ -250,15 +249,6 @@ Popper supports non-observational predicate learning, where it must learn defini
 See the example 'non-OPL'.
  -->
 
-## Parallelisation
-[Coming soon](https://arxiv.org/pdf/2109.07132.pdf)
-
-## Bias discovery
-[Coming soon](https://arxiv.org/pdf/2202.09806.pdf)
-
-## Failure explanation
-[Coming soon](https://arxiv.org/pdf/2102.12551.pdf)
-
 # Popper settings
 
 To run with statistics use the flag `--stats` (default: false)
@@ -266,6 +256,8 @@ To run with statistics use the flag `--stats` (default: false)
 To run in debug mode use the flag `--debug` (default: false)
 
 To run in quiet mode use the flag `--quiet` (default: False)
+
+To run with [BK constraint discover](https://arxiv.org/pdf/2202.09806.pdf) (Datalog programs only) use the flag `--bkcons` (default: False)
 
 <!-- To show the full hypothesis space (bounded by `N`) use the flag `--hspace N`. -->
 
