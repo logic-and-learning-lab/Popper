@@ -2,25 +2,19 @@
 
 Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) (ILP) system. 
 
-If you use Popper, please cite the paper: 
+If you use Popper, please cite the paper: Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259). Mach. Learn. 110(4): 801-856 (2021)
 
-Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259). Mach. Learn. 110(4): 801-856 (2021)
+### Requirements
 
-## Requirements
+- [pyswip](https://github.com/yuce/pyswip) (You **_must_** install pyswip from the master branch! with  the command: `pip install git+https://github.com/yuce/pyswip@master#egg=pyswip`)
+- [SWI-Prolog](https://www.swi-prolog.org) (8.4.2 or above)
+- [Clingo](https://potassco.org/clingo/) (5.5.0 or above)
 
-- [pyswip](https://github.com/yuce/pyswip) (**You _must_ install pyswip from the master branch!**)
-    -  use the command: `pip install git+https://github.com/yuce/pyswip@master#egg=pyswip`
-
-- [SWI-Prolog](https://www.swi-prolog.org) (**8.4.2 or above**)
-
-- [Clingo](https://potassco.org/clingo/) (**5.5.0 or above**)
-
-## Installation
-The latest release of Popper is [here](https://github.com/logic-and-learning-lab/Popper/releases). 
+### Installation
 To install the master branch, run the command:
-```pip install git+https://github.com/logic-and-learning-lab/Popper@main``` 
+```pip install git+https://github.com/logic-and-learning-lab/Popper@main```
 
-# Command line usage
+### Command line usage
 
 You can run Popper with the command `python popper.py <input dir>`.
 For instance, the command `python popper.py examples/dropk` produces:
@@ -44,7 +38,7 @@ f(A):- has_car(A,C),has_car(A,B),long(B),three_wheels(C),roof_closed(B).
 
 Look at the examples for guidance.
 
-# Library usage
+### Library usage
 
 You can import Popper and use it in your Python code like so:
 
@@ -58,9 +52,9 @@ if prog != None:
     print_prog_score(prog, score)
 ```
 
-# Example problem
+### Example problem
 
-Popper requires three files: 
+Popper requires three files:
 
 - an examples file
 - a background knowledge (BK) file
@@ -109,21 +103,21 @@ grandparent(A,B):-mother(A,C),mother(C,B).
 % Precision:1.00, Recall:1.00, TP:5, FN:0, TN:1, FP:0
 ```
 
-## Bias
+### Bias
 Popper has three main bias settings:
 
 - `max_vars(N)` sets the maximum number of variables in a rule to `N` (default: 6)
 - `max_body(N)` sets the maximum number of body literals in a rule to `N` (default: 6)
 - `max_clauses(N)` sets the maximum number of rules/clauses to `N` (default: 1 or 2 if `enable_recursion` is set)
 
-These parameters are important. They greatly influence the search space. If the values are too high then Popper might struggle to learn a solution. If the settings are too low then the search space might be too small to contain a good solution. 
+These parameters are important. They greatly influence the search space. If the values are too high then Popper might struggle to learn a solution. If the settings are too low then the search space might be too small to contain a good solution.
 You can set these settings in the bias file or through the command line (see `--help`).
 
-Finding suitable values can often be a process of trial and error. We are trying to automatically set these settings. 
+Finding suitable values can often be a process of trial and error. We are trying to automatically set these settings.
 
 **Do not supply max_clauses if you are learning non-recursive programs.**
 
-## Anytime
+### Anytime
 
 Popper is an anytime algorithm.
 By default, it shows intermediate solutions.
@@ -164,7 +158,7 @@ f(A,B,C):- decrement(B,E),f(A,E,D),tail(D,C).
 
 To suppress this information, run Popper with the `--quiet` (`-q`) flag.
 
-## Recursion
+### Recursion
 To enable recursion add `enable_recursion.` to the bias file.
 Recursion allows Popper to learn programs where a predicate symbol appears in both the head and body of a rule, such as to find a duplicate element (`python popper.py examples/find-dupl`) in a list:
 
@@ -182,7 +176,7 @@ f(A,B):-head(A,E),even(E),tail(A,C),f(C,D),prepend(E,D,B).
 
 Recursion is expensive, so it is best to try without it first.
 
-## Types
+### Types
 Popper supports **optional** type annotations in the bias file.
 A type annotation is of the form `type(p,(t1,t2,...,tk)` for a predicate symbol `p` with arity `k`, such as:
 
@@ -197,7 +191,7 @@ type(prepend,(element,list,list)).
 ```
 These types are **optional** but can substantially reduce learning times.
 
-## Directions 
+### Directions
 Prolog often requires arguments to be ground.
 For instance, when asking Prolog to answer the query:
 ```prolog
@@ -225,9 +219,9 @@ direction(geq,(in,in)).
 
 Again, directions are **optional** but can substantially reduce learning times.
 
-## Predicate invention
+### Predicate invention
 
-Popper supports [automatic predicate invention](https://arxiv.org/pdf/2104.14426.pdf) (PI). 
+Popper supports [automatic predicate invention](https://arxiv.org/pdf/2104.14426.pdf) (PI).
 To enable PI, add the setting `enable_pi.` to the bias file.
 With PI enabled, Popper (`python popper.py examples/kinship-pi`) learns the following program:
 
@@ -249,7 +243,7 @@ Popper supports non-observational predicate learning, where it must learn defini
 See the example 'non-OPL'.
  -->
 
-# Popper settings
+### Popper settings
 
 To run with statistics use the flag `--stats` (default: false)
 
