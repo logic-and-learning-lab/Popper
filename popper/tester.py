@@ -16,7 +16,9 @@ from collections import defaultdict
 class Tester():
 
     def query(self, query, key):
-        return set(next(self.prolog.query(query))[key])
+        result = next(self.prolog.query(query))[key]
+        result = map(lambda s: s.replace("'", "") if type(s) == str else s, result)
+        return set(result)
 
     def bool_query(self, query,):
         return len(list(self.prolog.query(query))) > 0
