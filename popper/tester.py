@@ -17,7 +17,7 @@ class Tester():
 
     def query(self, query, key):
         result = next(self.prolog.query(query))[key]
-        result = map(lambda s: s.replace("'", "") if type(s) == str else s, result)
+        result = [s.replace("'", "") if isinstance(s, str) else s for s in result]
         return set(result)
 
     def bool_query(self, query,):

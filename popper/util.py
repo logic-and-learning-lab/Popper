@@ -38,7 +38,7 @@ def parse_args():
 
     # parser.add_argument('--threads', type=int, default=MAX_LITERALS, help=f'Maximum number of threads (default: 1)')
 
-    parser.add_argument('--explain', default=False, action='store_true', help='explain')
+    parser.add_argument('--explain', default=True, action='store_true', help='explain')
     parser.add_argument('--test', default=False, action='store_true', help='test')
     # parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
     # parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')

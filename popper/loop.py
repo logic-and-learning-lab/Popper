@@ -208,7 +208,7 @@ def popper(settings):
                 if settings.explain:
                     explainer.add_seen(prog)
                     if len(pos_covered) == 0:
-                        with settings.stats.duration('explain_incomplete'):
+                        with settings.stats.duration('explain'):
                             pruned_sub_incomplete = explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons)
 
                 if inconsistent and is_recursive:
@@ -219,9 +219,9 @@ def popper(settings):
                     k = prog_size(prog)
                     if last_size == None or k != last_size:
                         last_size = k
-                        if last_size > settings.max_literals:
-                            return
                         settings.logger.info(f'Searching programs of size: {k}')
+                    if last_size > settings.max_literals:
+                        return
 
                 add_spec = False
                 add_gen = False
@@ -232,7 +232,7 @@ def popper(settings):
                     # if inconsistent, prune generalisations
                     add_gen = True
                     if settings.explain and settings.recursion_enabled:
-                        with settings.stats.duration('explain_inconsistent'):
+                        with settings.stats.duration('explain'):
                             pruned_sub_inconsistent = explain_inconsistent(settings, generator, tester, prog, rule_ordering, new_cons, all_handles)
                 else:
                     # if consistent, prune specialisations
