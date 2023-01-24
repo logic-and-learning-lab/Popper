@@ -1,0 +1,10 @@
+pos(pointsto(t1,v1,h1)).
+pos(pointsto(t2,v2,h2)).
+pos(pointsto(t1,v5,h5)).
+pos(pointsto(t3,v9,h9)).
+pos(pointsto(t1,v11,h11)).
+pos(pointsto(t2,v2,h1)).
+pos(pointsto(t1,v4,h5)).
+pos(pointsto(t1,v8,h11)).
+pos(pointsto(t1,v1,h11)).
+pos(pointsto(t2,v2,h11)).
