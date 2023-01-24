@@ -17,36 +17,10 @@ class Tester():
 
     def query(self, query, key):
         result = next(self.prolog.query(query))[key]
-        result = [s.replace("'", "") if isinstance(s, str) else s for s in result]
         return set(result)
 
     def bool_query(self, query,):
         return len(list(self.prolog.query(query))) > 0
-
-    # TODO: COULD PUSH TO CLINGO TO SAVE PROLOG FROM HAVING TO INDEX STUFF
-    def get_examples(self):
-        pos = set()
-        neg = set()
-
-        pos = self.query('findall(X,pos(X),Xs)', 'Xs')
-
-        if self.bool_query('current_predicate(neg/1)'):
-            neg = self.query('findall(X,neg(X),Xs)', 'Xs')
-
-        self.settings.stats.logger.info(f'Num. pos examples: {len(pos)}')
-        self.settings.stats.logger.info(f'Num. neg examples: {len(neg)}')
-
-        if self.settings.max_examples < len(pos):
-            self.settings.stats.logger.info(f'Sampling {self.settings.max_examples} pos examples')
-            pos = np.random.choice(list(pos), self.settings.max_examples)
-        if self.settings.max_examples < len(neg):
-            self.settings.stats.logger.info(f'Sampling {self.settings.max_examples} neg examples')
-            neg = np.random.choice(list(neg), self.settings.max_examples)
-
-        self.cached_explain = set()
-        self.seen_prog = set()
-
-        return pos, neg
 
     def __init__(self, settings):
         self.settings = settings
@@ -61,25 +35,17 @@ class Tester():
                 x = x.replace('\\', '\\\\')
             self.prolog.consult(x)
 
-        self.pos_index = {}
-        self.neg_index = {}
+        # load examples
+        self.bool_query(f'load_examples')
+        self.pos_index = self.query('findall(K,pos_index(K,Atom),Xs)', 'Xs')
+        self.neg_index = self.query('findall(K,neg_index(K,Atom),Xs)', 'Xs')
 
-        pos, neg = self.get_examples()
-        self.num_pos = len(pos)
-        self.num_neg = len(neg)
+        self.num_pos = len(self.pos_index)
+        self.num_neg = len(self.neg_index)
 
-        for i, atom in enumerate(pos):
-            k = i+1
-            self.prolog.assertz(f'pos_index({k},{atom})')
-            self.pos_index[k] = atom
-
-        for i, atom in enumerate(neg):
-            k = -(i+1)
-            self.prolog.assertz(f'neg_index({k},{atom})')
-            self.neg_index[k] = atom
-
-        self.settings.pos = frozenset(self.pos_index.values())
-        self.settings.neg = frozenset(self.neg_index.values())
+        # weird
+        self.settings.pos_index = self.pos_index
+        self.settings.neg_index = self.neg_index
 
         if self.settings.recursion_enabled:
             self.prolog.assertz(f'timeout({self.settings.eval_timeout})')
@@ -87,7 +53,6 @@ class Tester():
     def test_prog(self, prog):
         with self.using(prog):
             pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
-            pos_covered = frozenset(self.pos_index[i] for i in pos_covered)
             inconsistent = False
             if len(self.neg_index) > 0:
                 inconsistent = len(list(self.prolog.query("inconsistent"))) > 0
@@ -102,12 +67,11 @@ class Tester():
     def is_complete(self, prog):
         with self.using(prog):
             pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
-            return len(pos_covered) == self.num_pos
+            return len(pos_covered) == len(self.pos_index)
 
     def get_pos_covered(self, prog):
         with self.using(prog):
             pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
-            pos_covered = frozenset(self.pos_index[i] for i in pos_covered)
             return pos_covered
 
     @contextmanager

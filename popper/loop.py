@@ -124,7 +124,7 @@ def popper(settings):
 
     settings.single_solve = not (settings.recursion_enabled or settings.pi_enabled)
 
-    num_pos = settings.pos
+    num_pos = len(settings.pos_index)
 
     # track the success sets of tested hypotheses
     success_sets = {}

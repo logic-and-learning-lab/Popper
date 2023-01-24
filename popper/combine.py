@@ -39,8 +39,8 @@ class Combiner:
         self.seen_rules = {}
         self.rule_count = 0
         self.rule_sizes = {}
-        self.covered_by = {ex : set() for ex in settings.pos}
-        self.discovered_order = []
+        # self.covered_by = {ex : set() for ex in settings.pos}
+        # self.discovered_order = []
         self.prog_coverage2 = {}
 
         self.settings = settings
@@ -77,8 +77,7 @@ class Combiner:
 
     def build_example_encoding(self):
         example_prog = []
-        for i, x in enumerate(self.settings.pos):
-            self.example_to_id[x] = i
+        for i in self.settings.pos_index:
             example_prog.append(f'example({i}).')
         self.example_prog = '\n'.join(example_prog)
 
@@ -213,7 +212,8 @@ class Combiner:
                         best_prog = rules
                         best_fn = fn
                         # if fn > 0 and self.tester.is_complete(model_prog):
-                        if fn > 0 and len(self.pos_covered) == len(self.settings.pos):
+                        # if fn > 0 and len(self.pos_covered) == len(self.settings.pos):
+                        if fn > 0 and len(self.pos_covered) == len(self.settings.pos_index):
                             best_fn = 0
                         continue
 
@@ -274,8 +274,8 @@ class Combiner:
 
             prog_rules = ','.join(f'rule({i})' for i in prog_rules)
             for ex in examples_covered:
-                i = self.example_to_id[ex]
-                self.big_encoding.add(f'covered({i}):- {prog_rules}.')
+                # i = self.example_to_id[ex]
+                self.big_encoding.add(f'covered({ex}):- {prog_rules}.')
 
         # add constraints to prune inconsistent recursive programs
         # with self.settings.stats.duration('inconsistent thingy'):

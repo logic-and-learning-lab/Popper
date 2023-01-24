@@ -37,10 +37,18 @@ ex_index(ID,Atom):-
     current_predicate(neg_index/2),
     neg_index(ID,Atom).
 
-test_ex(Atom):-
+%% test_ex(Atom):-
+%%     current_predicate(timeout/1),!,
+%%     timeout(T),
+%%     catch(call_with_time_limit(T, call(Atom)),time_limit_exceeded,false),!.
+
+test_ex(X):-
     current_predicate(timeout/1),!,
     timeout(T),
-    catch(call_with_time_limit(T, call(Atom)),time_limit_exceeded,false),!.
+    catch(call_with_time_limit(T, call(X)),time_limit_exceeded,false),!.
+    %% call_with_inference_limit(call(X), 100000, Result),!,
+    %% call_with_inference_limit(call(X), 10000, Result),!,
+    %% Result \= inference_limit_exceeded.
 
 test_ex(Atom):-
     call(Atom),!.
