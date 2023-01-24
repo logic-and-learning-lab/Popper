@@ -3,6 +3,7 @@ import time
 import numpy as np
 import pkg_resources
 from pyswip import Prolog
+from pyswip.prolog import PrologError
 from contextlib import contextmanager
 from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive
 
@@ -51,11 +52,17 @@ class Tester():
             self.prolog.assertz(f'timeout({self.settings.eval_timeout})')
 
     def test_prog(self, prog):
-        with self.using(prog):
-            pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
-            inconsistent = False
-            if len(self.neg_index) > 0:
-                inconsistent = len(list(self.prolog.query("inconsistent"))) > 0
+        try:
+            with self.using(prog):
+                pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
+                inconsistent = False
+                if len(self.neg_index) > 0:
+                    inconsistent = len(list(self.prolog.query("inconsistent"))) > 0
+        except PrologError as err:
+            print('PROLOG ERROR',err)
+            pos_covered = set()
+            inconsistent = True
+
         return pos_covered, inconsistent
 
     def is_inconsistent(self, prog):
