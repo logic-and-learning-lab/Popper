@@ -22,8 +22,8 @@ MAX_EXAMPLES=10000
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper is an ILP system based on learning from failures')
-    parser.add_argument('kbpath', default=False, help = 'Path to the knowledge base one wants to learn on')
-    # parser.add_argument('--info', default=False, action='store_true', help='Print best programs so ')
+
+    parser.add_argument('kbpath', help='Path to files to learn from')
     parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
@@ -35,20 +35,9 @@ def parse_args():
     parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
     parser.add_argument('--max-rules', type=int, default=MAX_RULES, help=f'Maximum number of rules allowed in recursive program (default: {MAX_RULES})')
     parser.add_argument('--max-examples', type=int, default=MAX_EXAMPLES, help=f'Maximum number of examples per label (positive or negative) to learn from (default: {MAX_EXAMPLES})')
-
-    # parser.add_argument('--threads', type=int, default=MAX_LITERALS, help=f'Maximum number of threads (default: 1)')
-
     parser.add_argument('--explain', default=True, action='store_true', help='explain')
-    # parser.add_argument('--explain', default=False, action='store_true', help='explain')
-
-    parser.add_argument('--test', default=False, action='store_true', help='test')
-    # parser.add_argument('--cd', default=False, action='store_true', help='context-dependent')
-    # parser.add_argument('--hspace', type=int, default=-1, help='Show the full hypothesis space')
+    # parser.add_argument('--test', default=False, action='store_true', help='test')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
-    # parser.add_argument('--clingo-args', type=str, default=CLINGO_ARGS, help='Arguments to pass to Clingo')
-    parser.add_argument('--ex-file', type=str, default='', help='Filename for the examples')
-    parser.add_argument('--bk-file', type=str, default='', help='Filename for the background knowledge')
-    parser.add_argument('--bias-file', type=str, default='', help='Filename for the bias')
     parser.add_argument('--bkcons', default=False, action='store_true', help='EXPERIMENTAL FEATURE: deduce background constraints from Datalog background')
     return parser.parse_args()
 
@@ -256,21 +245,13 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, kbpath=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, explain=False, test=False):
+    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, explain=False, test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False):
 
-        if kbpath == False:
+        if cmd_line:
             args = parse_args()
-            # info = args.info
+            self.bk_file, self.ex_file, self.bias_file = load_kbpath(args.kbpath)
             quiet = args.quiet
             debug = args.debug
-            kbpath = args.kbpath
-            if kbpath:
-                self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
-            else:
-                self.bk_file = args.bk_file
-                self.ex_file = args.ex_file
-                self.bias_file = args.bias_file
-
             show_stats = args.stats
             bkcons = args.bkcons
             max_literals = args.max_literals
@@ -282,8 +263,13 @@ class Settings:
             max_rules = args.max_rules
             functional_test = args.functional_test
             explain = args.explain
-            test = args.test
-
+        else:
+            if kbpath:
+                self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
+            else:
+                self.ex_file = ex_file
+                self.bk_file = bk_file
+                self.bias_file = bias_file
 
         self.logger = logging.getLogger("popper")
 
