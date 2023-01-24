@@ -114,7 +114,8 @@ def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atom
 
 def popper(settings):
     if settings.bkcons:
-        deduce_bk_cons(settings)
+        with settings.stats.duration('preprocessing'):
+            deduce_bk_cons(settings)
 
     tester = Tester(settings)
     explainer = Explainer(settings, tester)

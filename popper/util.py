@@ -36,7 +36,6 @@ def parse_args():
     parser.add_argument('--max-rules', type=int, default=MAX_RULES, help=f'Maximum number of rules allowed in recursive program (default: {MAX_RULES})')
     parser.add_argument('--max-examples', type=int, default=MAX_EXAMPLES, help=f'Maximum number of examples per label (positive or negative) to learn from (default: {MAX_EXAMPLES})')
     parser.add_argument('--explain', default=True, action='store_true', help='explain')
-    # parser.add_argument('--test', default=False, action='store_true', help='test')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
     parser.add_argument('--bkcons', default=False, action='store_true', help='EXPERIMENTAL FEATURE: deduce background constraints from Datalog background')
     return parser.parse_args()
@@ -84,13 +83,13 @@ class Stats:
 
     def show(self):
         message = f'Num. programs: {self.total_programs}\n'
-        total_op_time = 0
+        total_op_time = sum(summary.total for summary in self.duration_summary())
+
         for summary in self.duration_summary():
+            percentage = int((summary.total/total_op_time)*100)
             message += f'{summary.operation}:\n\tCalled: {summary.called} times \t ' + \
                        f'Total: {summary.total:0.2f} \t Mean: {summary.mean:0.3f} \t ' + \
-                       f'Max: {summary.maximum:0.3f}\n'
-            if summary.operation != 'basic setup':
-                total_op_time += summary.total
+                       f'Max: {summary.maximum:0.3f} \t Percentage: {percentage}%\n'
         message += f'Total operation time: {total_op_time:0.2f}s\n'
         message += f'Total execution time: {self.total_exec_time():0.2f}s'
         print(message)
