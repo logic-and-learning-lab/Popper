@@ -1,4 +1,6 @@
 %%%%%%%%%% EXAMPLE LOADING %%%%%%%%%%
+:- dynamic
+    neg_index/2.
 
 load_examples:-
     load_pos,
