@@ -206,11 +206,11 @@ def popper(settings):
                     pos_covered, inconsistent = tester.test_prog(prog)
                     num_pos_covered = len(pos_covered)
 
-                # EXPLAIN A FAILURE
-                if settings.explain and not has_invention:
+                # FIND MUCS
+                if not has_invention:
                     explainer.add_seen(prog)
                     if len(pos_covered) == 0:
-                        with settings.stats.duration('explain'):
+                        with settings.stats.duration('find mucs'):
                             pruned_sub_incomplete = explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons)
 
                 if inconsistent and is_recursive:
@@ -233,8 +233,8 @@ def popper(settings):
                 if inconsistent:
                     # if inconsistent, prune generalisations
                     add_gen = True
-                    if settings.explain and settings.recursion_enabled:
-                        with settings.stats.duration('explain'):
+                    if settings.recursion_enabled:
+                        with settings.stats.duration('find sub inconsistent'):
                             pruned_sub_inconsistent = explain_inconsistent(settings, generator, tester, prog, rule_ordering, new_cons, all_handles)
                 else:
                     # if consistent, prune specialisations

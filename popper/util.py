@@ -27,7 +27,6 @@ def parse_args():
     parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
-
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {TIMEOUT})')
     parser.add_argument('--eval-timeout', type=float, default=EVAL_TIMEOUT, help=f'Prolog evaluation timeout in seconds (default: {EVAL_TIMEOUT})')
     parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help=f'Maximum number of literals allowed in program (default: {MAX_LITERALS})')
@@ -35,7 +34,6 @@ def parse_args():
     parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
     parser.add_argument('--max-rules', type=int, default=MAX_RULES, help=f'Maximum number of rules allowed in recursive program (default: {MAX_RULES})')
     parser.add_argument('--max-examples', type=int, default=MAX_EXAMPLES, help=f'Maximum number of examples per label (positive or negative) to learn from (default: {MAX_EXAMPLES})')
-    parser.add_argument('--explain', default=True, action='store_true', help='explain')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
     parser.add_argument('--bkcons', default=False, action='store_true', help='EXPERIMENTAL FEATURE: deduce background constraints from Datalog background')
     return parser.parse_args()
@@ -244,7 +242,7 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, explain=False, test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False):
+    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False):
 
         if cmd_line:
             args = parse_args()
@@ -261,7 +259,6 @@ class Settings:
             max_vars = args.max_vars
             max_rules = args.max_rules
             functional_test = args.functional_test
-            explain = args.explain
         else:
             if kbpath:
                 self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
@@ -288,10 +285,7 @@ class Settings:
         self.show_stats = show_stats
         self.bkcons = bkcons
         self.max_literals = max_literals
-        # self.clingo_args = [] if not args.clingo_args else args.clingo_args.split(' ')
         self.functional_test = functional_test
-        self.explain = explain
-        self.test = test
         self.timeout = timeout
         self.eval_timeout = eval_timeout
         self.max_examples = max_examples
@@ -301,7 +295,6 @@ class Settings:
 
         self.solution = None
         self.best_prog_score = None
-        # self.best_prog = None
 
         solver = clingo.Control()
         with open(self.bias_file) as f:
@@ -346,7 +339,6 @@ class Settings:
         self.logger.debug(f'Max body: {self.max_body}')
 
     def print_incomplete_solution(self, prog, tp, fn, size):
-        # self.logger.info(self.hypothesis_output(prog, tp, fn, size))
         self.logger.info('*'*20)
         self.logger.info('New best hypothesis:')
         self.logger.info(f'tp:{tp} fn:{fn} size:{size}')
