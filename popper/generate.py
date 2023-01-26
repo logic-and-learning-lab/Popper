@@ -242,7 +242,9 @@ class Generator:
 
         if self.settings.single_solve:
             # solver = clingo.Control(["--heuristic=Domain", "-t2"])
+            # solver = clingo.Control(["--heuristic=Domain", '-Wnone'])
             solver = clingo.Control(["--heuristic=Domain"])
+            # solver = clingo.Control(['-Wnone'])
         else:
             # solver = clingo.Control(["-t4"])
             solver = clingo.Control([])

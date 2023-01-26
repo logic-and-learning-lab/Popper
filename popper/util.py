@@ -296,7 +296,7 @@ class Settings:
         self.solution = None
         self.best_prog_score = None
 
-        solver = clingo.Control()
+        solver = clingo.Control(['-Wnone'])
         with open(self.bias_file) as f:
             solver.add('bias', [], f.read())
         solver.add('bias', [], """

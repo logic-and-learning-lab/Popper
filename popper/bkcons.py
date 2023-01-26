@@ -2,6 +2,7 @@ import clingo
 import clingo.script
 from . core import Literal
 from clingo import Function, Number, Tuple_
+import pkg_resources
 
 # tmp_map = {1:'A', 2:'A,B',3:'A,B,C', 4:'A,B,C,D',5:'A,B,C,D,E', 6:'A,B,C,D,E,F'}
 tmp_map = {}
@@ -20,7 +21,7 @@ TIDY_OUTPUT = """
 """
 
 def get_body_preds(settings):
-    solver = clingo.Control()
+    solver = clingo.Control(['-Wnone'])
     with open(settings.bias_file) as f:
         solver.add('bias', [], f.read())
     solver.add('bias', [], TIDY_OUTPUT)
@@ -61,43 +62,17 @@ def deduce_bk_cons(settings):
         bias = f.read()
     with open(settings.bk_file) as f:
         bk = f.read()
-    with open('popper/lp/cons.pl') as f:
-        cons = f.read()
 
+    cons = pkg_resources.resource_string(__name__, "lp/cons.pl").decode()
     bk = bk.replace('\+','not')
 
     xs = deduce_bk_cons_aux(cons, prog, bias, bk)
-
-    # ys = sorted(xs)
-    # for x in ys:
-        # x += '.'
-        # print(x)
-
-    # with open('dbg-cons.txt', 'w') as f:
-        # f.write('\n'.join(ys))
-
-    # exit()
-
-
     settings.bkcons = '\n'.join(x + '.' for x in xs)
-
-    # print('intersection')
-    # for x in sorted(list(all_props)):
-    #     print(str(x) +  '.')
-
-    # print('counts')
-    # for k, vs in all_counts.items():
-    #     if len(vs) == 1:
-    #         continue
-    #     print(f'prop(countk,{k},{max(vs)}).')
-    #     # print(str(x) +  '.')
-
-    # exit()
 
 def deduce_bk_cons_aux(cons, prog, bias, bk):
     encoding = [cons, prog, bias, bk, TIDY_OUTPUT]
     encoding = '\n'.join(encoding)
-    solver = clingo.Control()
+    solver = clingo.Control(['-Wnone'])
     solver.add('base', [], encoding)
     solver.ground([('base', [])])
     out = set()
