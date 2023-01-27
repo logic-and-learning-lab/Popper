@@ -1,3 +1,6 @@
+% Generated via https://github.com/tomsilver/popper-policies
+% This is an open problem.
+
 % Set max bounds
 max_body(10).
 max_vars(6).

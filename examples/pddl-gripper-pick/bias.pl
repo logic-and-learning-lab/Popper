@@ -1,3 +1,11 @@
+% Generated via https://github.com/tomsilver/popper-policies
+% Example expected output:
+% ********** SOLUTION **********
+% Precision:1.00 Recall:1.00 TP:10 FN:0 TN:623 FP:0 Size:9
+% pick(A,B,C,D):- free(C,D),gripper(C,D),room(B,D),ball(A,D),at_robby(B,D),at(A,B,D),goal_at(A,E,D),negated_at_robby(E,D).
+% ******************************
+
+% Set max bounds
 max_body(10).
 max_vars(6).
 
@@ -32,6 +40,7 @@ type(carry,(object,object,ex_id)).
 type(gripper,(object,ex_id)).
 type(at_robby,(object,ex_id)).
 type(pick,(object,object,object,ex_id)).
+type(goal_at,(object,object,ex_id)).
 type(ball,(object,ex_id)).
 
 % Example ID can only appear once
