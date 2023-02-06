@@ -208,7 +208,7 @@ class Combiner:
                     # with self.settings.stats.duration('combine_check_inconsistent'):
                     model_inconsistent = self.tester.is_inconsistent(model_prog)
                     if not model_inconsistent:
-                        self.pos_covered = self.tester.test_prog(model_prog)
+                        self.pos_covered, _ = self.tester.test_prog(model_prog)
                         best_prog = rules
                         best_fn = fn
                         # if fn > 0 and self.tester.is_complete(model_prog):
