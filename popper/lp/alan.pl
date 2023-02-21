@@ -894,8 +894,8 @@ only_once(P,A):-
 :- prop(antitransitive,P), body_literal(Rule,P,_,(A,B)), body_literal(Rule,P,_,(B,C)), body_literal(Rule,P,_,(A,C)).
 :- prop(antitriangular,P), body_literal(Rule,P,_,(A,B)), body_literal(Rule,P,_,(B,C)), body_literal(Rule,P,_,(C,A)).
 :- prop(unsat_pair,P,Q), body_literal(Rule,P,_,Vars), body_literal(Rule,Q,_,Vars).
-:- prop(precon,P,Q), body_literal(Rule,P,_,(A,)), body_literal(Rule,Q,_,(A,B)).
-:- prop(postcon,P,Q), body_literal(Rule,P,_,(A,B)), body_literal(Rule,Q,_,(B,)).
+:- prop(precon,(P,Q)), body_literal(Rule,P,_,(A,)), body_literal(Rule,Q,_,(A,B)).
+:- prop(postcon,(P,Q)), body_literal(Rule,P,_,(A,B)), body_literal(Rule,Q,_,(B,)).
 :- prop(pre_postcon,(P,Q,R)), body_literal(Rule,P,_,(A,)),body_literal(Rule,Q,_,(A,B)),body_literal(Rule,R,_,(B,)).
 :- prop(chain,(P,Q)), body_literal(Rule,P,_,(_,A)),body_literal(Rule,Q,_,(A,_)).
 :- prop(countk,P,K), K > 1, body_pred(P,_), clause(Rule), #count{Vars : body_literal(Rule,P,_,Vars)} > K.
