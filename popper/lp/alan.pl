@@ -51,6 +51,7 @@ pi_or_rec_enabled:-
 %% AC: @DC, this constraint might mess up the work on negation
 :-
     enable_recursion,
+    not pi,
     clause(Rule),
     Rule > 0,
     not recursive_clause(Rule,_,_).
