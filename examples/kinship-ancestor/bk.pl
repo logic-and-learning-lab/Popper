@@ -1,0 +1,12 @@
+mother(queen_victoria,edward_seventh).
+mother(queen_mother,elizabeth_second).
+mother(elizabeth_second,prince_charles).
+mother(princess_diana,prince_william).
+mother(princess_diana,prince_harry).
+father(edward_seventh,george_fifth).
+father(george_fifth,george_sixth).
+father(george_sixth,elizabeth_second).
+father(prince_philip,prince_charles).
+father(prince_charles,prince_william).
+father(prince_charles,prince_harry).
+father(prince_william,prince_george).
