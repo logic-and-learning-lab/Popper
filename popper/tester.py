@@ -52,6 +52,8 @@ class Tester():
             self.prolog.assertz(f'timeout({self.settings.eval_timeout})')
 
     def test_prog(self, prog):
+        if len(prog) == 1:
+            return self.test_single_rule(prog)
         try:
             with self.using(prog):
                 pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
@@ -63,6 +65,24 @@ class Tester():
             pos_covered = set()
             inconsistent = True
 
+        return pos_covered, inconsistent
+
+    def test_single_rule(self, prog):
+        try:
+            rule = list(prog)[0]
+            head, _body = rule
+            head, ordered_body = order_rule(rule)
+            atom_str = format_literal(head)
+            body_str = format_rule((None,ordered_body))[2:-1]
+            q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+            xs = next(self.prolog.query(q))
+            pos_covered = frozenset(xs['Xs'])
+            inconsistent = False
+            q = f'neg_index(_,{atom_str}),{body_str},!'
+            if len(self.neg_index) > 0:
+                inconsistent = len(list(self.prolog.query(q))) > 0
+        except PrologError as err:
+            print('PROLOG ERROR',err)
         return pos_covered, inconsistent
 
     def is_inconsistent(self, prog):
@@ -115,17 +135,23 @@ class Tester():
         return program
 
     def is_sat(self, prog):
-        with self.using(prog):
-            return self.bool_query('sat')
+        if len(prog) == 1:
+            rule = list(prog)[0]
+            head, _body = rule
+            head, ordered_body = order_rule(rule)
+            head = f'pos_index(_,{format_literal(head)})'
+            x = format_rule((None,ordered_body))[2:-1]
+            x = f'{head},{x},!'
+            return self.bool_query(x)
+        else:
+            with self.using(prog):
+                return self.bool_query('sat')
 
     def is_body_sat(self, body):
-        try:
-            body_str = ','.join(format_literal(literal) for literal in body)
-            query = f'sat2:- {body_str}'
-            self.prolog.assertz(query)
-            return self.bool_query('sat2')
-        finally:
-            self.prolog.retractall('sat2')
+        _, ordered_body = order_rule((None,body))
+        body_str = ','.join(format_literal(literal) for literal in ordered_body)
+        query = body_str + ',!'
+        return self.bool_query(query)
 
     def check_redundant_literal(self, prog):
         for rule in prog:
@@ -150,19 +176,14 @@ class Tester():
                 return True
         return False
 
-
     def has_redundant_rule_(self, prog):
         prog_ = []
         for head, body in prog:
             c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
             prog_.append(c)
         prog_ = f"[{','.join(prog_)}]"
-        # print(prog_)
         return len(list(self.prolog.query(f'redundant_clause({prog_})'))) > 0
-            # print(prog_)
-            # return True
-        # return False
-
+        # return self.bool_query(f'redundant_clause({prog_})')
 
     def has_redundant_rule(self, prog):
         # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
