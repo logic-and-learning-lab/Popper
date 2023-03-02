@@ -191,7 +191,8 @@ def load_types(settings):
 #defined clause/1.
 #defined clause_var/2.
 #defined var_type/3."""
-    solver = clingo.Control()
+    # solver = clingo.Control()
+    solver = clingo.Control(['-Wnone'])
     with open(settings.bias_file) as f:
         solver.add('bias', [], f.read())
     solver.add('bias', [], enc)
@@ -243,11 +244,12 @@ class Generator:
         if self.settings.single_solve:
             # solver = clingo.Control(["--heuristic=Domain", "-t2"])
             # solver = clingo.Control(["--heuristic=Domain", '-Wnone'])
-            solver = clingo.Control(["--heuristic=Domain"])
+            solver = clingo.Control(['--heuristic=Domain','-Wnone'])
             # solver = clingo.Control(['-Wnone'])
         else:
             # solver = clingo.Control(["-t4"])
-            solver = clingo.Control([])
+            # solver = clingo.Control([])
+            solver = clingo.Control(['-Wnone'])
             NUM_OF_LITERALS = """
             %%% External atom for number of literals in the program %%%%%
             #external size_in_literals(n).

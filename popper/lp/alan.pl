@@ -161,7 +161,8 @@ body_size(Rule,N):-
 :-
     clause_var(C,Var1),
     Var1 > 1,
-    Var2 = Var1-1,
+    %% Var2 = Var1-1,
+    Var2 = 1..Var1-1,
     not clause_var(C,Var2).
 
 %% ##################################################

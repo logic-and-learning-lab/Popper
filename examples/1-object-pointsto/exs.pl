@@ -1,9 +1,0 @@
-pos(pointsto(v3,v1,h1)).
-pos(pointsto(v4,v2,h2)).
-pos(pointsto(v3,v5,h5)).
-pos(pointsto(v5,v9,h9)).
-pos(pointsto(v3,v11,h11)).
-pos(pointsto(v5,v4,h2)).
-pos(pointsto(v3,v8,h11)).
-pos(pointsto(v3,v4,h5)).
-pos(pointsto(v3,v2,h5)).

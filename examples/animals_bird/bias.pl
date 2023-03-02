@@ -1,9 +1,0 @@
-head_pred(bird, 1).
-body_pred(feathers, 1).
-body_pred(scales, 1).
-body_pred(hair, 1).
-body_pred(has_covering, 2).
-body_pred(has_milk, 1).
-body_pred(homeothermic, 1).
-body_pred(has_eggs, 1).
-body_pred(has_gills, 1).
