@@ -66,7 +66,15 @@ type(P,(T,)):-
 direction(P,(out,)):-
     constant(P,_).
 
-
-
 constant(token,value).
 constant(empty,value).
+
+%% BECAUSE WE DO NOT LEARN FROM INTERPRETATIONS
+tmp(not_cell_is_value).
+tmp(cell_is_value).
+tmp(trat_action_cellue_value).
+bad_body(P,A,Vars):-
+    tmp(P),
+    body_pred(P,A),
+    var_pos(Var,Vars,0),
+    Var != 0.

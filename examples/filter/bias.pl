@@ -41,8 +41,6 @@ only_once(prepend).
     body_literal(0,_,3,_).
 :-
     body_literal(1,empty,_,_).
-:-
-    body_literal(2,empty,_,_).
 
 prop(antitransitive,decrement).
 prop(antitransitive,decrement).
