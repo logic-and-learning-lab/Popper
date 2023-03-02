@@ -1,7 +1,7 @@
-max_vars(3).
-max_body(2).
+%% max_vars(3).
+%% max_body(2).
 max_clauses(4).
-enable_pi.
+%% enable_pi.
 enable_recursion.
 
 head_pred(ancestor,2).

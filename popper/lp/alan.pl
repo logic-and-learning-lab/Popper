@@ -158,10 +158,17 @@ body_size(Rule,N):-
     not clause(C2).
 
 %% USE VARS IN ORDER IN A CLAUSE
+%% :-
+%%     clause_var(C,Var1),
+%%     Var1 > 1,
+%%     Var2 = Var1-1,
+%%     %% Var2 = 1..Var1-1,
+%%     not clause_var(C,Var2).
+
+%% USE VARS IN ORDER IN A CLAUSE
 :-
     clause_var(C,Var1),
     Var1 > 1,
-    %% Var2 = Var1-1,
     Var2 = 1..Var1-1,
     not clause_var(C,Var2).
 
