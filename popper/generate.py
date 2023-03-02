@@ -815,7 +815,8 @@ class Grounder():
         # print(encoding)
 
         # print('ASDASDA')
-        solver = clingo.Control()
+        # solver = clingo.Control()
+        solver = clingo.Control(['-Wnone'])
         # solver = clingo.Control(["-t4"])
         # ask for all models
         solver.configuration.solve.models = 0
@@ -930,7 +931,8 @@ class Grounder():
         # print('*'*10)
         # print(encoding)
 
-        solver = clingo.Control()
+        # solver = clingo.Control()
+        solver = clingo.Control(['-Wnone'])
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
         solver.ground([("base", [])])
