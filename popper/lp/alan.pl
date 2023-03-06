@@ -76,7 +76,7 @@ head_literal(0,P,A,Vars):-
     head_pred(P,A),
     head_vars(A,Vars).
 
-1 {body_literal(0,P,A,Vars): body_aux(P,A), vars(A,Vars), not type_mismatch(P,Vars), not bad_body(P,A,Vars)} M :-
+1 {body_literal(0,P,A,Vars): body_aux(P,A), vars(A,Vars), not head_pred(P,A), not type_mismatch(P,Vars), not bad_body(P,A,Vars)} M :-
     max_body(M).
 
 %% ********** RECURSIVE CASE (RULE > 0) **********
@@ -92,6 +92,24 @@ head_literal(0,P,A,Vars):-
     max_body(M),
     enable_recursion,
     not enable_pi.
+
+
+%% 0 {body_literal(Rule,P,A,Vars): body_aux(P,A), vars(A,Vars), not bad_body(P,A,Vars), not type_mismatch(P,Vars)} M :-
+%%     %% clause(Rule),
+%%     %% Rule > 0,
+%%     Rule = 1..N-1,
+%%     max_clauses(N),
+%%     max_body(M),
+%%     enable_recursion,
+%%     not enable_pi.
+
+%% :-
+%%     clause(Rule),
+%%     not body_literal(Rule,_,_,_).
+
+%% :-
+%%     body_literal(Rule,_,_,_),
+%%     not clause rule()
 
 %% ********** INVENTED RULES **********
 1 {body_literal(Rule,P,A,Vars): body_aux(P,A), vars(A,Vars), not bad_body(P,A,Vars)} M :-
@@ -433,6 +451,8 @@ var_type(C,Var,@pytype(Pos,Types)):-
 %% p(A)<-q(A),r(A). (C1)
 %% p(A)<-s(A). (C2)
 bigger(C1,C2):-
+    max_clauses(K),
+    K > 2,
     body_size(C1,N1),
     body_size(C2,N2),
     C1 < C2,
@@ -472,10 +492,6 @@ recursive_clause(C,P,A):-
 base_clause(C,P,A):-
     head_literal(C,P,A,_),
     not body_literal(C,P,A,_).
-
-%% NO RECURSION IN THE FIRST CLAUSE
-:-
-    recursive_clause(0,_,_).
 
 %% A RECURSIVE CLAUSE MUST HAVE MORE THAN ONE BODY LITERAL
 :-
