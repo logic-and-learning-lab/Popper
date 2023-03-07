@@ -36,6 +36,7 @@ def parse_args():
     parser.add_argument('--max-examples', type=int, default=MAX_EXAMPLES, help=f'Maximum number of examples per label (positive or negative) to learn from (default: {MAX_EXAMPLES})')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
     parser.add_argument('--bkcons', default=False, action='store_true', help='EXPERIMENTAL FEATURE: deduce background constraints from Datalog background')
+    parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
@@ -189,7 +190,11 @@ def rule_is_invented(rule):
         return False
     return head.predicate.startswith('inv')
 
-def order_rule(rule):
+def order_rule(rule, settings=None):
+
+    if settings and settings.datalog:
+        return order_rule_datalog(rule, settings)
+
     head, body = rule
     ordered_body = []
     grounded_variables = set()
@@ -230,6 +235,45 @@ def order_rule(rule):
 
     return head, tuple(ordered_body)
 
+def order_rule_datalog(rule, settings):
+
+    def tmp_score(seen_vars, literal):
+        key = []
+        for x in literal.arguments:
+            if x in seen_vars:
+                key.append('1')
+            else:
+                key.append('0')
+        key = ''.join(key)
+        k = (literal.predicate, key)
+        if k in settings.recall:
+            return settings.recall[k]
+        return 1000000
+
+    head, body = rule
+    ordered_body = []
+    seen_vars = set()
+
+    if head:
+        seen_vars.update(head.arguments)
+    body_literals = set(body)
+    while body_literals:
+        selected_literal = None
+        for literal in body_literals:
+            if set(literal.arguments).issubset(seen_vars):
+                selected_literal = literal
+                break
+
+        if selected_literal == None:
+            xs = sorted(body_literals, key=lambda x: tmp_score(seen_vars, x))
+            selected_literal = xs[0]
+
+        ordered_body.append(selected_literal)
+        seen_vars = seen_vars.union(selected_literal.arguments)
+        body_literals = body_literals.difference({selected_literal})
+
+    return head, tuple(ordered_body)
+
 class DurationSummary:
     def __init__(self, operation, called, total, mean, maximum):
         self.operation = operation
@@ -242,7 +286,7 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False):
+    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False):
 
         if cmd_line:
             args = parse_args()
@@ -259,6 +303,7 @@ class Settings:
             max_vars = args.max_vars
             max_rules = args.max_rules
             functional_test = args.functional_test
+            datalog = args.datalog
         else:
             if kbpath:
                 self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
@@ -284,6 +329,7 @@ class Settings:
         self.stats.logger = self.logger
         self.show_stats = show_stats
         self.bkcons = bkcons
+        self.datalog = datalog
         self.max_literals = max_literals
         self.functional_test = functional_test
         self.timeout = timeout
@@ -309,6 +355,12 @@ class Settings:
             #defined var_in_literal/4.
         """)
         solver.ground([('bias', [])])
+
+        self.body_preds = set()
+        for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
+            pred = x.symbol.arguments[0].name
+            arity = x.symbol.arguments[1].number
+            self.body_preds.add((pred, arity))
 
         for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
             self.max_body = x.symbol.arguments[0].number
