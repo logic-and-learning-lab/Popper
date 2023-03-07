@@ -53,8 +53,8 @@ class Tester():
             self.prolog.assertz(f'timeout({self.settings.eval_timeout})')
 
         if self.settings.datalog:
-            with self.settings.stats.duration('load recalls'):
-                self.load_recalls()
+            with self.settings.stats.duration('load recalls2'):
+                self.load_recalls2()
 
     def test_prog(self, prog):
         if len(prog) == 1:
@@ -236,43 +236,111 @@ class Tester():
             return self.find_redundant_rule_(step)
         return None
 
-    def load_recalls(self):
+    # def load_recalls(self):
+    #     # recall for a subset of arguments, e.g. when A and C are ground in a call to add(A,B,C)
+    #     counts = {}
+    #     # maximum recall for a predicate symbol
+    #     counts_all = {}
+
+    #     for pred, arity in self.settings.body_preds:
+    #         counts_all[pred] = 0
+    #         counts[pred] = {}
+
+    #         args = [chr(ord('A') + i) for i in range(arity)]
+    #         args_str = ','.join(args)
+    #         atom1 = f'{pred}({args_str})'
+    #         q = f'{atom1}'
+    #         # nasty but works ok for long-running problems
+    #         # we find all facts for a given predicate symbol
+    #         for x in self.prolog.query(q):
+    #             counts_all[pred] +=1
+    #             x_args = [x[arg] for arg in args]
+
+    #             print('A', x, x_args)
+
+    #             # we now enumerate all subsets of possible input/ground arguments
+    #             # for instance, for a predicate symbol p/2 we consider p(10) and p(01), where 1 denotes input
+    #             # note that p(00) is the max recall and p(11) is 1 since it is a boolean check
+    #             binary_strings = generate_binary_strings(arity)[1:-1]
+
+    #             for var_subset in binary_strings:
+    #                 if var_subset not in counts[pred]:
+    #                     counts[pred][var_subset] = {}
+    #                 key = []
+    #                 value = []
+    #                 for i in range(len(args)):
+    #                     if var_subset[i] == '1':
+    #                         key.append(args[i])
+    #                     else:
+    #                         value.append(args[i])
+    #                 key = tuple(key)
+    #                 value = tuple(value)
+    #                 print(key, value)
+    #                 if key not in counts[pred][var_subset]:
+    #                     counts[pred][var_subset][key] = set()
+    #                 counts[pred][var_subset][key].add(value)
+
+    #     # we now calculate the maximum recall
+    #     self.settings.recall = {}
+    #     for pred, arity in self.settings.body_preds:
+    #         d1 = counts[pred]
+    #         self.settings.recall[(pred, '0'*arity)] = counts_all[pred]
+    #         for args, d2 in d1.items():
+    #             recall = max(len(xs) for xs in d2.values())
+    #             self.settings.recall[(pred, args)] = recall
+
+    def load_recalls2(self):
         # recall for a subset of arguments, e.g. when A and C are ground in a call to add(A,B,C)
         counts = {}
         # maximum recall for a predicate symbol
         counts_all = {}
 
+        with open(self.settings.bk_file) as f:
+            bk = f.read()
+        solver = clingo.Control(['-Wnone'])
+        solver.add('base', [], bk)
+        solver.ground([('base', [])])
+
+
+
         for pred, arity in self.settings.body_preds:
             counts_all[pred] = 0
             counts[pred] = {}
-
-            args = [chr(ord('A') + i) for i in range(arity)]
-            args_str = ','.join(args)
-            atom1 = f'{pred}({args_str})'
-            q = f'{atom1}'
-            # nasty but works ok for long-running problems
             # we find all facts for a given predicate symbol
-            for x in self.prolog.query(q):
-                counts_all[pred] +=1
-                x_args = [x[arg] for arg in args]
 
+            for atom in solver.symbolic_atoms.by_signature(pred, arity=arity):
+                args = []
+                for i in range(arity):
+                    arg = atom.symbol.arguments[i]
+                    t = arg.type
+                    if t == clingo.SymbolType.Number:
+                        x = arg.number
+                    else:
+                        x = arg.name
+                    args.append(x)
+
+                # print('X', pred, args)
+                counts_all[pred] +=1
+                # x_args = [x[arg] for arg in args]
                 # we now enumerate all subsets of possible input/ground arguments
                 # for instance, for a predicate symbol p/2 we consider p(10) and p(01), where 1 denotes input
                 # note that p(00) is the max recall and p(11) is 1 since it is a boolean check
                 binary_strings = generate_binary_strings(arity)[1:-1]
 
                 for var_subset in binary_strings:
+                    # print('var_subset', var_subset)
                     if var_subset not in counts[pred]:
                         counts[pred][var_subset] = {}
                     key = []
                     value = []
-                    for i in range(len(args)):
+                    for i in range(arity):
                         if var_subset[i] == '1':
                             key.append(args[i])
                         else:
                             value.append(args[i])
                     key = tuple(key)
                     value = tuple(value)
+                    # print('\t', key, value)
                     if key not in counts[pred][var_subset]:
                         counts[pred][var_subset][key] = set()
                     counts[pred][var_subset][key].add(value)
