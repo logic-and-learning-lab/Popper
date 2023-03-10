@@ -2,7 +2,7 @@ import time
 import numbers
 from . combine import Combiner
 from . explain import Explainer
-from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, prog_size
+from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, prog_size, format_literal
 from . tester import Tester
 from . generate import Generator, Grounder, parse_model, atom_to_symbol, arg_to_symbol
 from . bkcons import deduce_bk_cons
@@ -22,6 +22,9 @@ def explain_incomplete(settings, generator, explainer, prog, directions, new_con
 
     for subprog, unsat_body in explainer.explain_totally_incomplete(prog, directions):
         pruned_subprog = True
+
+        # for rule in subprog:
+            # print(format_rule(rule))
 
         if unsat_body:
             _, body = subprog[0]
@@ -91,26 +94,23 @@ def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atom
     ground_bodies = set()
     ground_bodies.update(new_ground_cons)
 
-    with settings.stats.duration('ground'):
-        for con in new_cons:
-            ground_rules = generator.get_ground_rules((None, con))
-            for ground_rule in ground_rules:
-                _ground_head, ground_body = ground_rule
-                ground_bodies.add(ground_body)
-                all_ground_cons.add(frozenset(ground_body))
-
-    with settings.stats.duration('constrain'):
-        for ground_body in ground_bodies:
-            nogood = []
-            for sign, pred, args in ground_body:
-                k = hash((sign, pred, args))
-                if k in cached_clingo_atoms:
-                    nogood.append(cached_clingo_atoms[k])
-                else:
-                    x = (atom_to_symbol(pred, args), sign)
-                    cached_clingo_atoms[k] = x
-                    nogood.append(x)
-            model.context.add_nogood(nogood)
+    for con in new_cons:
+        ground_rules = generator.get_ground_rules((None, con))
+        for ground_rule in ground_rules:
+            _ground_head, ground_body = ground_rule
+            ground_bodies.add(ground_body)
+            all_ground_cons.add(frozenset(ground_body))
+    for ground_body in ground_bodies:
+        nogood = []
+        for sign, pred, args in ground_body:
+            k = hash((sign, pred, args))
+            if k in cached_clingo_atoms:
+                nogood.append(cached_clingo_atoms[k])
+            else:
+                x = (atom_to_symbol(pred, args), sign)
+                cached_clingo_atoms[k] = x
+                nogood.append(x)
+        model.context.add_nogood(nogood)
 
 def popper(settings):
     if settings.bkcons:
@@ -118,6 +118,7 @@ def popper(settings):
             deduce_bk_cons(settings)
 
     tester = Tester(settings)
+    # exit()
     explainer = Explainer(settings, tester)
     grounder = Grounder(settings)
     combiner = Combiner(settings, tester)
@@ -152,8 +153,13 @@ def popper(settings):
     # generator that builds programs
     generator = Generator(settings, grounder)
 
-    max_size = (1 + settings.max_body) * settings.max_rules
+    tmp_covered = set()
 
+
+    seen_tmp = {}
+
+    max_size = (1 + settings.max_body) * settings.max_rules
+    maxtime = None
     for size in range(1, max_size+1):
         if size > settings.max_literals:
             break
@@ -196,15 +202,31 @@ def popper(settings):
                 has_invention = settings.pi_enabled and prog_has_invention(prog)
 
                 settings.stats.total_programs += 1
-                if settings.debug:
-                    settings.logger.debug(f'Program {settings.stats.total_programs}:')
-                    for rule in order_prog(prog):
-                        settings.logger.debug(format_rule(order_rule(rule)))
 
                 # TEST A PROGRAM
                 with settings.stats.duration('test'):
+                    t1 = time.time()
                     pos_covered, inconsistent = tester.test_prog(prog)
+                    t2 = time.time()
+                    d = t2-t1
+
+
+                    if maxtime is None or d > maxtime:
+                        maxtime = d
+                        # print(d)
+                        # for rule in prog:
+                            # print(format_rule(order_rule(rule, settings)))
+
                     num_pos_covered = len(pos_covered)
+
+
+                    # if inconsistent and num_pos_covered > 0:
+                    #     for rule in prog:
+                    #         print(format_rule(rule))
+
+
+                if not inconsistent:
+                    tmp_covered.update(pos_covered)
 
                 # FIND MUCS
                 if not has_invention:
@@ -213,8 +235,42 @@ def popper(settings):
                         with settings.stats.duration('find mucs'):
                             pruned_sub_incomplete = explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons)
 
+
+
+
                 if inconsistent and is_recursive:
                     combiner.add_inconsistent(prog)
+
+                # if not inconsistent and settings.functional_test:
+                #     # TODO: SKIP IF WE ARE ALREADY AT MAX RULES
+                #     with settings.stats.duration('is_non_functional'):
+                #         asda = tester.is_non_functional(prog)
+                #     if asda:
+                #         # if not functional, rule out generalisations and set as inconsistent
+                #         add_gen = True
+                #         # v.important: do not prune specialisations!
+                #         # print('functional', add_spec)
+                #         if num_pos_covered > 0:
+                #             add_spec = False
+                #             # print('moo')
+                #             # for rule in prog:
+                #             #     print(format_rule(rule))
+                #             # print(format_prog(prog))
+
+                #         # else:
+                #             # print('moo')
+                #             # pass
+                #         # print('functional2', add_spec)
+                #         inconsistent = True
+
+                #         # AC: WIP!
+                #         # AC: FIND THE MOST GENERAL NON-FUNCTIONAL CORE
+                #         # with settings.stats.duration('explain_none_functional'):
+                #         #     explain_none_functional(settings, generator, tester, prog, rule_ordering, new_cons, all_handles)
+                #         # if has_invention:
+                #         #     with settings.stats.duration('explain_none_functional2'):
+                #         #         explain_none_functional2(settings, generator, tester, prog, rule_ordering, new_cons, all_handles)
+
 
                 # messy way to track program size
                 if settings.single_solve:
@@ -222,6 +278,7 @@ def popper(settings):
                     if last_size == None or k != last_size:
                         last_size = k
                         settings.logger.info(f'Searching programs of size: {k}')
+                        # print('size', k)
                     if last_size > settings.max_literals:
                         return
 
@@ -239,6 +296,7 @@ def popper(settings):
                 else:
                     # if consistent, prune specialisations
                     add_spec = True
+
 
                 # if consistent and partially complete test whether functional
                 if not inconsistent and settings.functional_test and num_pos_covered > 0 and tester.is_non_functional(prog):
@@ -341,13 +399,97 @@ def popper(settings):
                             seen_incomplete_gen = set()
                             seen_incomplete_spec = set()
 
+
+                if not add_spec and False:
+                # if not add_spec:
+                    head, body = list(prog)[0]
+                    body = list(body)
+
+                    rule_vars = set()
+                    rule_vars.update(head.arguments)
+                    # rule_vars.update(head.arguments)
+                    for lit in body:
+                        rule_vars.update(lit.arguments)
+
+                    num_neg_covered = tester.get_neg_covered(prog)
+
+                    for i in range(len(body)):
+                        if add_spec:
+                            break
+                        new_body = body[:i] + body[i+1:]
+
+                        new_vars = set()
+                        new_vars.update(head.arguments)
+                        for lit in new_body:
+                            new_vars.update(lit.arguments)
+
+                        if not new_vars.issubset(rule_vars):
+                            continue
+
+                        if len(new_body) < 2:
+                            continue
+
+                        # print(new_body)
+                        new_prog = [(head, new_body)]
+                        num_neg_covered2 = tester.get_neg_covered(new_prog)
+
+                        if num_neg_covered == num_neg_covered2:
+                            add_spec = True
+                            print('A',format_rule((head, body)))
+                            print('\t',format_literal(body[i]))
+                            break
+                            # new_handles, con = generator.build_specialisation_constraint(new_prog)
+                            # new_cons.add(con)
+                            # all_handles.update(parse_handles(generator, new_handles))
+
+                            # print('--')
+
+                            # print('B',format_rule((head, new_body)))
+
+                # micro-optimisiations
+                # if settings.recursion_enabled:
+                if not add_spec and num_pos_covered > 1:
+                    seen_tmp[prog] = pos_covered
+                    # print('KEEPING PROG JUST IN CASE')
+                    # for rule in prog:
+                        # print(format_rule(rule))
+
+                # if num_pos_covered == 1:
+                    # add_spec = True
+
                 seen_better_rec = False
                 if is_recursive and not inconsistent and not subsumed and not add_gen and num_pos_covered > 0:
                     seen_better_rec = pos_covered in rec_success_sets or any(pos_covered.issubset(xs) for xs in rec_success_sets)
 
+
                 # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
                 # if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0:
                 if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec:
+
+                    flag = False
+                    flag = True
+
+                    if flag:
+                        with settings.stats.duration('tmp'):
+                            to_dump = set()
+                            for prog2, covered2 in seen_tmp.items():
+                                if covered2.issubset(pos_covered):
+                                    # pass
+
+                                    if flag:
+                                        to_dump.add(prog2)
+                                        new_handles, con = generator.build_specialisation_constraint(prog2)
+                                        new_cons.add(con)
+                                        all_handles.update(parse_handles(generator, new_handles))
+                                    # print('MOO')
+                                    # print('good')
+                                    # print('\n'.join(format_rule(r) for r in prog))
+                                    # print('bad')
+                                    # print('\n'.join(format_rule(r) for r in prog2))
+
+                            for x in to_dump:
+                                del seen_tmp[x]
+
 
                     # update success sets
                     success_sets[pos_covered] = prog
@@ -376,11 +518,39 @@ def popper(settings):
                 if not inconsistent and num_pos_covered == num_pos:
                     return
 
+                # could_prune=False
+                # if not add_spec:
+                #     if last_size+1 >= num_pos_covered:
+                #         could_prune=True
+                #         add_spec=True
+                #         # print(last_size+1, num_pos_covered)
+                        # for rule in prog:
+                        #     print(format_rule(rule))
+
+                  # if last_size >= num_pos_covered:
+                    #     if all(x in tmp_covered for x in pos_covered):
+                    #         print('SHIT PANTS')
+                    #         print('moo', last_size, num_pos_covered)
+                    #         for rule in prog:
+                    #             print(format_rule(rule))
+
+
+                if settings.debug and not add_spec:
+                    settings.logger.debug(f'Program {settings.stats.total_programs}:')
+                    # settings.logger.debug((num_pos_covered, inconsistent, add_spec))
+                    for rule in order_prog(prog):
+                        settings.logger.debug(format_rule(order_rule(rule)))
+
+
+
                 # BUILD CONSTRAINTS
                 if add_spec and not pruned_sub_incomplete:
                     handles, con = generator.build_specialisation_constraint(prog, rule_ordering)
                     new_rule_handles.update(handles)
                     new_cons.add(con)
+
+
+
 
                 if add_gen and not pruned_sub_inconsistent:
                     if settings.recursion_enabled or settings.pi_enabled or not pruned_sub_incomplete:
@@ -404,7 +574,8 @@ def popper(settings):
                     all_handles.update(parse_handles(generator, new_rule_handles))
 
                 # CONSTRAIN
-                constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons)
+                with settings.stats.duration('constrain'):
+                    constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons)
 
         # if not pi_or_rec:
         if settings.single_solve:

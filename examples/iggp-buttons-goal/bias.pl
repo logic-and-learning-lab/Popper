@@ -1,4 +1,5 @@
-max_body(8).
+max_vars(7).
+max_body(10).
 
 head_pred(goal,3).
 body_pred(my_input,2).

@@ -1,3 +1,6 @@
+max_body(10).
+max_vars(7).
+
 head_pred(f,1).
 body_pred(has_car,2).
 body_pred(has_load,2).
@@ -60,3 +63,14 @@ direction(rectangle,(in,)).
 direction(diamond,(in,)).
 direction(hexagon,(in,)).
 direction(inverted_triangle,(in,)).
+
+
+
+
+:-
+    clause(Rule),
+    #count{B : body_literal(Rule,has_car,_,(A,B))} > 4.
+
+:-
+    clause(Rule),
+    #count{B : body_literal(Rule,has_load,_,(A,B))} > 3.

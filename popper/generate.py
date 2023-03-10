@@ -236,13 +236,14 @@ class Generator:
         if settings.max_literals < max_size:
             encoding.append(f'custom_max_size({settings.max_literals}).')
 
-        if self.settings.bkcons:
-            encoding.append(self.settings.bkcons)
+        if (self.settings.bkcons or self.settings.datalog) and self.settings.deduced_bkcons != '':
+            # print(self.settings.deduced_bkcons)
+            encoding.append(self.settings.deduced_bkcons)
 
         encoding = '\n'.join(encoding)
 
         if self.settings.single_solve:
-            # solver = clingo.Control(["--heuristic=Domain", "-t2"])
+            # solver = clingo.Control(["--heuristic=Domain", "-t5"])
             # solver = clingo.Control(["--heuristic=Domain", '-Wnone'])
             solver = clingo.Control(['--heuristic=Domain','-Wnone'])
             # solver = clingo.Control(['-Wnone'])

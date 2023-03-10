@@ -67,11 +67,17 @@ def deduce_bk_cons(settings):
     bk = bk.replace('\+','not')
 
     xs = deduce_bk_cons_aux(cons, prog, bias, bk)
-    settings.bkcons = '\n'.join(x + '.' for x in xs)
+    settings.deduced_bkcons = '\n'.join(x + '.' for x in xs)
+    # print('\n'.join(x + '.' for x in sorted(xs)))
+    # exit()
 
 def deduce_bk_cons_aux(cons, prog, bias, bk):
     encoding = [cons, prog, bias, bk, TIDY_OUTPUT]
     encoding = '\n'.join(encoding)
+    # print(encoding)
+    # with open('bkcons-encoding.pl', 'w') as f:
+        # f.write(encoding)
+    # exit()
     solver = clingo.Control(['-Wnone'])
     solver.add('base', [], encoding)
     solver.ground([('base', [])])

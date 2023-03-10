@@ -1,3 +1,6 @@
+max_vars(6).
+max_body(10).
+
 head_pred(next_score,3).
 body_pred(does,3).
 body_pred(my_true_claim_made_by,2).

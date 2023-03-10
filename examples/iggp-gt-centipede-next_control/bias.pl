@@ -1,3 +1,6 @@
+max_vars(6).
+max_body(10).
+
 head_pred(next_control,2).
 body_pred(true_whitePayoff,2).
 body_pred(true_blackPayoff,2).

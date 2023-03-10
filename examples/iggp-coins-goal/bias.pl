@@ -1,8 +1,7 @@
-max_body(8).
-max_vars(7).
+max_vars(6).
+max_body(10).
 
 head_pred(goal,3).
-%% body_pred(does_jump,4).
 body_pred(my_true_cell,3).
 body_pred(role,1).
 body_pred(my_pos,1).
@@ -133,7 +132,6 @@ type(my_succ,(pos,pos)).
 type(my_true_cell,(ex,pos,cell_value)).
 type(role,(agent,)).
 type(my_pos,(pos,)).
-type(different,(pos,pos)).
 type(c_zerocoins,(cell_value,)).
 type(c_onecoin,(cell_value,)).
 type(c_twocoins,(cell_value,)).

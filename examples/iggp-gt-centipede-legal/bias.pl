@@ -1,3 +1,6 @@
+max_vars(6).
+max_body(10).
+
 constant(agent_white, agent).
 constant(agent_black, agent).
 constant(int_0, int).
@@ -47,3 +50,10 @@ body_pred(P,1):-
 
 type(P,(T,)):-
 	constant(P,T).
+
+%% :-
+%% 	clause(C),
+%% 	#count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
+%% :-
+%% 	clause(C),
+%% 	#count{V : clause_var(C,V),var_type(C,V,action)} > 3.

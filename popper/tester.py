@@ -56,6 +56,56 @@ class Tester():
             with self.settings.stats.duration('load recalls2'):
                 self.load_recalls2()
 
+
+            out = []
+
+            for (pred, key), recall in self.settings.recall.items():
+                # if recall == 1:
+                    # continue
+                if recall > 3:
+                    continue
+                if '1' not in key:
+                    continue
+                arity = len(key)
+                args = [f'V{i}' for i in range(arity)]
+                args_str = ','.join(args)
+                subset = []
+                fixer = []
+                # fixer = [y for (x,y) in zip(key, args) if x == '1']
+
+                for x, y in zip(key, args):
+                    if x == '0':
+                        subset.append(y)
+                        fixer.append('_')
+                    else:
+                        fixer.append(y)
+
+
+                subset_str = ','.join(subset)
+                fixer_str = ','.join(fixer)
+                # if len(subset) == 1:
+                    # subset_str+= ','
+                if len(fixer) == 1:
+                    fixer_str+= ','
+
+                # con = ':- clause(Rule), #count{' + subset_str + f': body_literal(Rule,{pred},_,({args_str}))' + '} > ' + str(recall) + '.'
+
+                con2 = f':- clause(Rule), body_literal(Rule,{pred},_,({fixer_str})), #count{{{subset_str}: body_literal(Rule,{pred},_,({args_str}))}} > {recall}.'
+                # con2 = f':- clause(Rule), #count{{{subset_str}: body_literal(Rule,{pred},_,({args_str}))}} > {recall}.'
+                # print(con2)
+                # con = f':- clause(Rule), {subset}'
+                # print(con)
+                out.append(con2)
+
+            # print('\n'.join(sorted(out)))
+
+            self.settings.deduced_bkcons += '\n' + '\n'.join(out)
+
+        # exit()
+
+
+
+
     def test_prog(self, prog):
         if len(prog) == 1:
             return self.test_single_rule(prog)
@@ -105,6 +155,10 @@ class Tester():
         with self.using(prog):
             pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
             return pos_covered
+
+    def get_neg_covered(self, prog):
+        with self.using(prog):
+            return frozenset(self.query('neg_covered(Xs)', 'Xs'))
 
     @contextmanager
     def using(self, prog):
@@ -290,6 +344,8 @@ class Tester():
     #             self.settings.recall[(pred, args)] = recall
 
     def load_recalls2(self):
+        # Jan Struyf, Hendrik Blockeel: Query Optimization in Inductive Logic Programming by Reordering Literals. ILP 2003: 329-346
+
         # recall for a subset of arguments, e.g. when A and C are ground in a call to add(A,B,C)
         counts = {}
         # maximum recall for a predicate symbol
@@ -353,6 +409,9 @@ class Tester():
             for args, d2 in d1.items():
                 recall = max(len(xs) for xs in d2.values())
                 self.settings.recall[(pred, args)] = recall
+
+        # for k, v in self.settings.recall.items():
+            # print(k, v)
 
 def generate_binary_strings(bit_count):
     binary_strings = []

@@ -341,6 +341,7 @@ class Settings:
 
         self.solution = None
         self.best_prog_score = None
+        self.deduced_bkcons = ''
 
         solver = clingo.Control(['-Wnone'])
         with open(self.bias_file) as f:

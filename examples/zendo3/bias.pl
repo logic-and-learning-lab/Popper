@@ -1,3 +1,5 @@
+max_body(7).
+
 head_pred(zendo,1).
 body_pred(piece,2).
 body_pred(contact,2).
@@ -48,3 +50,12 @@ direction(upright,(in,)).
 direction(lhs,(in,)).
 direction(rhs,(in,)).
 direction(strange,(in,)).
+
+
+:-
+    clause(Rule),
+    #count{A : body_literal(Rule,contact,_,(A,B))} > 2.
+
+:-
+    clause(Rule),
+    #count{B : body_literal(Rule,contact,_,(A,B))} > 2.

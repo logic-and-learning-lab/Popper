@@ -1,3 +1,6 @@
+max_body(10).
+max_vars(7).
+
 head_pred(f,1).
 body_pred(has_car,2).
 body_pred(has_load,2).
@@ -60,3 +63,40 @@ direction(rectangle,(in,)).
 direction(diamond,(in,)).
 direction(hexagon,(in,)).
 direction(inverted_triangle,(in,)).
+
+
+
+
+
+
+:-
+    clause(Rule),
+    #count{B : body_literal(Rule,has_car,_,(A,B))} > 4.
+
+:-
+    clause(Rule),
+    #count{B : body_literal(Rule,has_load,_,(A,B))} > 3.
+
+%% ('circle', '0') 1099
+%% ('diamond', '0') 589
+%% ('has_car', '00') 3010
+%% ('has_car', '01') 1
+%% ('has_car', '10') 4
+%% ('has_load', '00') 4550
+%% ('has_load', '01') 1
+%% ('has_load', '10') 3
+%% ('hexagon', '0') 608
+%% ('inverted_triangle', '0') 580
+%% ('long', '0') 1508
+%% ('one_load', '0') 1745
+%% ('rectangle', '0') 1090
+%% ('roof_closed', '0') 1812
+%% ('roof_flat', '0') 893
+%% ('roof_open', '0') 1198
+%% ('short', '0') 1503
+%% ('three_load', '0') 584
+%% ('three_wheels', '0') 771
+%% ('triangle', '0') 584
+%% ('two_load', '0') 1657
+%% ('two_wheels', '0') 2240
+%% ('zero_load', '0') 564
