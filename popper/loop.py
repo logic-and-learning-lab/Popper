@@ -1,7 +1,7 @@
 import time
 import numbers
 from . combine import Combiner
-from . explain import Explainer
+from . explain import Explainer, rule_hash
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, prog_size, format_literal
 from . tester import Tester
 from . generate import Generator, Grounder, parse_model, atom_to_symbol, arg_to_symbol
@@ -88,6 +88,297 @@ def explain_inconsistent(settings, generator, tester, prog, rule_ordering, new_c
                 all_handles.update(parse_handles(generator, new_rule_handles))
                 pruned_subprog = True
     return pruned_subprog
+
+# @profile
+
+cached_neg_count = {}
+def check_redundant_literal(prog, tester):
+    rule = list(prog)[0]
+    head, body = rule
+    body = tuple(body)
+
+    head_vars = set(head.arguments)
+    rule_vars = set()
+    rule_vars.update(head_vars)
+    for lit in body:
+        rule_vars.update(lit.arguments)
+
+    fetched_thing = False
+    assert(rule_hash(rule) not in cached_neg_count)
+    # print('A',format_rule(rule))
+    none_checked = True
+    for i in range(len(body)):
+        new_body = body[:i] + body[i+1:]
+        new_vars = set()
+        new_body_vars = set()
+        for lit in new_body:
+            new_body_vars.update(lit.arguments)
+
+        new_vars.update(head_vars)
+        new_vars.update(new_body_vars)
+
+        if not new_vars.issubset(rule_vars):
+            continue
+
+        if not head_vars.issubset(new_body_vars):
+            continue
+
+        if len(new_body) < 2:
+            continue
+
+        var_count = {}
+        for x in head_vars:
+            var_count[x]=1
+
+        for lit in new_body:
+            for x in lit.arguments:
+                if x in var_count:
+                    var_count[x] += 1
+                else:
+                    var_count[x] = 1
+
+        if any(v == 1 for v in var_count.values()):
+            continue
+
+        if not fetched_thing:
+            fetched_thing = True
+            neg_covered = tester.get_neg_covered(prog)
+            num_neg_covered = len(neg_covered)
+            cached_neg_count[rule_hash(rule)] = num_neg_covered
+
+        none_checked = False
+
+        new_rule = (head, frozenset(new_body))
+        new_prog = [new_rule]
+
+        # print('\t',format_rule(new_rule))
+
+        # TMP!!!!
+        if rule_hash(new_rule) in cached_neg_count:
+            # print('seen')
+            num_neg_covered2 = cached_neg_count[rule_hash(new_rule)]
+        else:
+            neg_covered2 = tester.get_neg_covered(new_prog)
+            num_neg_covered2 = len(neg_covered2)
+            cached_neg_count[rule_hash(new_rule)] = num_neg_covered2
+
+        neg_covered2 = tester.get_neg_covered(new_prog)
+        num_neg_covered2 = len(neg_covered2)
+
+        if num_neg_covered == num_neg_covered2:
+            # print('--')
+            # print('A',format_rule((head, body)))
+            # print(num_neg_covered, num_neg_covered2)
+            # print('\t',format_literal(body[i]))
+            print('check_redundant_literal1-neg_covered1', neg_covered)
+            print('check_redundant_literal1-neg_covered2', neg_covered2)
+            return True
+
+    return False
+
+cached_neg_covered = {}
+seen_subprog = set()
+def check_redundant_literal2(prog, tester, settings):
+    rule = list(prog)[0]
+    head, body = rule
+
+    if len(body) == 1:
+        return False
+
+    body = tuple(body)
+
+    head_vars = set(head.arguments)
+    rule_vars = set()
+    rule_vars.update(head_vars)
+    for lit in body:
+        rule_vars.update(lit.arguments)
+    fetched_thing = False
+
+
+    for i in range(len(body)):
+        new_body = body[:i] + body[i+1:]
+
+        new_vars = set()
+
+        new_body_vars = set()
+        for lit in new_body:
+            new_body_vars.update(lit.arguments)
+
+        new_vars.update(head_vars)
+        new_vars.update(new_body_vars)
+
+        if not new_vars.issubset(rule_vars):
+            continue
+
+        if not head_vars.issubset(new_body_vars):
+            continue
+
+        if len(new_body) < 2:
+            continue
+
+        var_count = {}
+        for x in head_vars:
+            var_count[x]=1
+
+        for lit in new_body:
+            for x in lit.arguments:
+                if x in var_count:
+                    var_count[x] += 1
+                else:
+                    var_count[x] = 1
+
+        if any(v == 1 for v in var_count.values()):
+            continue
+
+        new_rule = (head, frozenset(new_body))
+
+        if not fetched_thing:
+            fetched_thing = True
+            # print(format_rule(rule))
+            with settings.stats.duration('a1'):
+                neg_covered = tester.get_neg_covered(prog)
+            # with settings.stats.duration('a2'):
+                # neg_covered = tester.get_neg_uncovered(prog)
+            # num_neg_covered = len(neg_covered)
+            # assert(rule_hash(rule) not in cached_neg_covered)
+            assert(rule_hash(rule) not in seen_subprog)
+            # cached_neg_covered[rule_hash(rule)] = num_neg_covered
+            seen_subprog.add(rule_hash(rule))
+
+        # print('\t',format_rule(new_rule))
+
+        # if rule_hash(new_rule) in seen_subprog:
+        #     # print('\t\tseen')
+        #     pass
+        # else:
+        #     seen_subprog.add(rule_hash(new_rule))
+
+        # if rule_hash(new_rule) in cached_neg_covered:
+        #     # print('SEEEEN')
+        #     # print(format_rule(new_rule))
+        #     num_neg_covered2 = cached_neg_covered[rule_hash(new_rule)]
+        #     if num_neg_covered2 > num_neg_covered:
+        #         return True
+        # else:
+        new_prog = [new_rule]
+
+
+        # if rule_hash(new_rule) in seen_subprog:
+        #     print('already seen')
+        #     print(format_rule(new_rule))
+        # cached_neg_covered[rule_hash(rule)] = num_neg_covered
+        seen_subprog.add(rule_hash(new_rule))
+
+
+
+        # t1 = time.time()
+        # neg_covered2 = tester.get_neg_covered(new_prog)
+        # t2 = time.time()
+        # d1=t2-t1
+
+        uncovered = [x for x in tester.neg_index if x not in neg_covered]
+        # t1 = time.time()
+        with settings.stats.duration('a2'):
+            tmp = tester.covers_any(new_prog, uncovered)
+        # t2 = time.time()
+        # d2=t2-t1
+        # print(d2)
+
+
+        # print(neg_covered)
+        # print(neg_covered2)
+        # print(uncovered)
+        # print(neg_covered2-neg_covered)
+        # print(len(neg_covered))
+        # print(len(neg_covered2))
+
+        # print(format_rule(rule))
+        # print(format_rule(new_rule))
+        # print(tmp)
+        # if tmp:
+        #     if len(neg_covered2) <= len(neg_covered):
+        #         # print(neg_covered, len(neg_covered))
+        #         # print(neg_covered2, len(neg_covered2))
+        #         # print(format_rule(rule))
+        #         assert(False)
+        #     # return True
+        if not tmp:
+            # assert(len(neg_covered2) == len(neg_covered))
+            return True
+
+        # with settings.stats.duration('a2'):
+        #     tmp =
+        #     if tmp:
+        #         pass
+        #     else:
+        #         neg_covered2 = tester.get_neg_covered(new_prog)
+        #         print('A',neg_covered, len(neg_covered))
+        #         print('B',neg_covered2, len(neg_covered2))
+        #         print(set(x for x in neg_covered2 if x not in neg_covered))
+        #         return True
+
+    return False
+
+
+def check_redundant_literal3(prog, tester, settings):
+    rule = list(prog)[0]
+    head, body = rule
+
+    if len(body) == 1:
+        return False
+
+    body = tuple(body)
+
+    head_vars = set(head.arguments)
+    rule_vars = set()
+    rule_vars.update(head_vars)
+    for lit in body:
+        rule_vars.update(lit.arguments)
+    fetched_thing = False
+
+
+
+    for i in range(len(body)):
+        new_body = body[:i] + body[i+1:]
+
+        new_vars = set()
+
+        new_body_vars = set()
+        for lit in new_body:
+            new_body_vars.update(lit.arguments)
+
+        new_vars.update(head_vars)
+        new_vars.update(new_body_vars)
+
+        if not new_vars.issubset(rule_vars):
+            continue
+
+        if not head_vars.issubset(new_body_vars):
+            continue
+
+        if len(new_body) < 2:
+            continue
+
+        var_count = {}
+        for x in head_vars:
+            var_count[x]=1
+
+        for lit in new_body:
+            for x in lit.arguments:
+                if x in var_count:
+                    var_count[x] += 1
+                else:
+                    var_count[x] = 1
+
+        if any(v == 1 for v in var_count.values()):
+            continue
+
+        new_rule = (head, frozenset(new_body))
+
+        if tester.tmp(prog, [new_rule]) == False:
+            return True
+
+    return False
 
 def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons):
     all_ground_cons.update(new_ground_cons)
@@ -205,25 +496,8 @@ def popper(settings):
 
                 # TEST A PROGRAM
                 with settings.stats.duration('test'):
-                    t1 = time.time()
                     pos_covered, inconsistent = tester.test_prog(prog)
-                    t2 = time.time()
-                    d = t2-t1
-
-
-                    if maxtime is None or d > maxtime:
-                        maxtime = d
-                        # print(d)
-                        # for rule in prog:
-                            # print(format_rule(order_rule(rule, settings)))
-
                     num_pos_covered = len(pos_covered)
-
-
-                    # if inconsistent and num_pos_covered > 0:
-                    #     for rule in prog:
-                    #         print(format_rule(rule))
-
 
                 if not inconsistent:
                     tmp_covered.update(pos_covered)
@@ -235,42 +509,8 @@ def popper(settings):
                         with settings.stats.duration('find mucs'):
                             pruned_sub_incomplete = explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons)
 
-
-
-
                 if inconsistent and is_recursive:
                     combiner.add_inconsistent(prog)
-
-                # if not inconsistent and settings.functional_test:
-                #     # TODO: SKIP IF WE ARE ALREADY AT MAX RULES
-                #     with settings.stats.duration('is_non_functional'):
-                #         asda = tester.is_non_functional(prog)
-                #     if asda:
-                #         # if not functional, rule out generalisations and set as inconsistent
-                #         add_gen = True
-                #         # v.important: do not prune specialisations!
-                #         # print('functional', add_spec)
-                #         if num_pos_covered > 0:
-                #             add_spec = False
-                #             # print('moo')
-                #             # for rule in prog:
-                #             #     print(format_rule(rule))
-                #             # print(format_prog(prog))
-
-                #         # else:
-                #             # print('moo')
-                #             # pass
-                #         # print('functional2', add_spec)
-                #         inconsistent = True
-
-                #         # AC: WIP!
-                #         # AC: FIND THE MOST GENERAL NON-FUNCTIONAL CORE
-                #         # with settings.stats.duration('explain_none_functional'):
-                #         #     explain_none_functional(settings, generator, tester, prog, rule_ordering, new_cons, all_handles)
-                #         # if has_invention:
-                #         #     with settings.stats.duration('explain_none_functional2'):
-                #         #         explain_none_functional2(settings, generator, tester, prog, rule_ordering, new_cons, all_handles)
-
 
                 # messy way to track program size
                 if settings.single_solve:
@@ -296,7 +536,6 @@ def popper(settings):
                 else:
                     # if consistent, prune specialisations
                     add_spec = True
-
 
                 # if consistent and partially complete test whether functional
                 if not inconsistent and settings.functional_test and num_pos_covered > 0 and tester.is_non_functional(prog):
@@ -399,52 +638,28 @@ def popper(settings):
                             seen_incomplete_gen = set()
                             seen_incomplete_spec = set()
 
+                    if not add_spec:
+                        pass
+                        # moo = False
+                        # moo2 = False
+                        # with settings.stats.duration('check_redundant_literal'):
+                        #     if check_redundant_literal(prog, tester):
+                        #         moo = True
+                        #         add_spec = True
+                        with settings.stats.duration('check_redundant_literal2'):
+                            if check_redundant_literal2(prog, tester, settings):
+                                # moo2 = True
+                                add_spec = True
+                        # if moo != moo2:
+                        #     rule = list(prog)[0]
 
-                if not add_spec and False:
-                # if not add_spec:
-                    head, body = list(prog)[0]
-                    body = list(body)
+                        #     print(format_rule(rule))
+                        #     print(moo, moo2)
+                        #     assert(False)
+                        # with settings.stats.duration('check_redundant_literal3'):
+                        #     if check_redundant_literal3(prog, tester, settings):
+                        #         add_spec = True
 
-                    rule_vars = set()
-                    rule_vars.update(head.arguments)
-                    # rule_vars.update(head.arguments)
-                    for lit in body:
-                        rule_vars.update(lit.arguments)
-
-                    num_neg_covered = tester.get_neg_covered(prog)
-
-                    for i in range(len(body)):
-                        if add_spec:
-                            break
-                        new_body = body[:i] + body[i+1:]
-
-                        new_vars = set()
-                        new_vars.update(head.arguments)
-                        for lit in new_body:
-                            new_vars.update(lit.arguments)
-
-                        if not new_vars.issubset(rule_vars):
-                            continue
-
-                        if len(new_body) < 2:
-                            continue
-
-                        # print(new_body)
-                        new_prog = [(head, new_body)]
-                        num_neg_covered2 = tester.get_neg_covered(new_prog)
-
-                        if num_neg_covered == num_neg_covered2:
-                            add_spec = True
-                            print('A',format_rule((head, body)))
-                            print('\t',format_literal(body[i]))
-                            break
-                            # new_handles, con = generator.build_specialisation_constraint(new_prog)
-                            # new_cons.add(con)
-                            # all_handles.update(parse_handles(generator, new_handles))
-
-                            # print('--')
-
-                            # print('B',format_rule((head, new_body)))
 
                 # micro-optimisiations
                 # if settings.recursion_enabled:
@@ -467,29 +682,21 @@ def popper(settings):
                 if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec:
 
                     flag = False
-                    flag = True
+                    # TMP!!!!!
+                    flag = settings.datalog
 
                     if flag:
                         with settings.stats.duration('tmp'):
                             to_dump = set()
                             for prog2, covered2 in seen_tmp.items():
                                 if covered2.issubset(pos_covered):
-                                    # pass
-
                                     if flag:
                                         to_dump.add(prog2)
                                         new_handles, con = generator.build_specialisation_constraint(prog2)
                                         new_cons.add(con)
                                         all_handles.update(parse_handles(generator, new_handles))
-                                    # print('MOO')
-                                    # print('good')
-                                    # print('\n'.join(format_rule(r) for r in prog))
-                                    # print('bad')
-                                    # print('\n'.join(format_rule(r) for r in prog2))
-
                             for x in to_dump:
                                 del seen_tmp[x]
-
 
                     # update success sets
                     success_sets[pos_covered] = prog

@@ -1,4 +1,4 @@
-max_body(7).
+max_body(10).
 
 head_pred(zendo,1).
 body_pred(piece,2).

@@ -48,39 +48,3 @@ direction(upright,(in,)).
 direction(lhs,(in,)).
 direction(rhs,(in,)).
 direction(strange,(in,)).
-
-
-
-:-
-    clause(Rule),
-    #count{A : body_literal(Rule,contact,_,(A,B))} > 2.
-
-:-
-    clause(Rule),
-    #count{B : body_literal(Rule,contact,_,(A,B))} > 2.
-
-%% ('blue', '0') 58
-%% ('contact', '00') 60
-%% ('contact', '01') 2
-%% ('contact', '10') 2
-%% ('coord1', '00') 139
-%% ('coord1', '01') 15
-%% ('coord1', '10') 1
-%% ('coord2', '00') 139
-%% ('coord2', '01') 22
-%% ('coord2', '10') 1
-%% ('green', '0') 34
-%% ('large', '0') 4
-%% ('lhs', '0') 35
-%% ('medium', '0') 3
-%% ('piece', '00') 139
-%% ('piece', '01') 1
-%% ('piece', '10') 5
-%% ('red', '0') 47
-%% ('rhs', '0') 39
-%% ('size', '00') 139
-%% ('size', '01') 20
-%% ('size', '10') 1
-%% ('small', '0') 4
-%% ('strange', '0') 31
-%% ('upright', '0') 34

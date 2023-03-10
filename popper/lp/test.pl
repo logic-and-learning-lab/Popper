@@ -61,6 +61,41 @@ pos_covered(Xs):-
 neg_covered(Xs):-
     findall(ID, (neg_index(ID,Atom),test_ex(Atom)), Xs).
 
+neg_uncovered(Xs):-
+    findall(ID, (neg_index(ID,Atom),\+test_ex(Atom)), Xs).
+
+is_more_inconsistent(Xs):-
+    neg_index(Id,Atom),
+    \+member(Id,Xs),
+    test_ex(Atom),!.
+
+covers_any(Xs,Id):-
+    member(Id,Xs),
+    neg_index(Id,Atom),
+    test_ex(Atom),
+    %% writeln(Id),
+    !.
+
+
+prog1_covers(Atom):-
+    Atom =.. [_|T],
+    List2 = [prog1|T],
+    Atom2 =..List2,
+    call(Atom2).
+
+prog2_covers(Atom):-
+    Atom =.. [_|T],
+    List2 = [prog2|T],
+    Atom2 =..List2,
+    call(Atom2).
+
+covers_more:-
+    neg_index(_,Atom),
+    prog2_covers(Atom),
+    \+prog1_covers(Atom),!.
+
+
+
 inconsistent:-
     neg_index(_,Atom),
     test_ex(Atom),!.

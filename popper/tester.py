@@ -11,6 +11,7 @@ import clingo
 import clingo.script
 import pkg_resources
 from . core import Literal
+from . explain import rule_hash
 from . generate import parse_model
 from collections import defaultdict
 
@@ -45,6 +46,9 @@ class Tester():
         self.num_pos = len(self.pos_index)
         self.num_neg = len(self.neg_index)
 
+
+        self.cached_covers_any = {}
+
         # weird
         self.settings.pos_index = self.pos_index
         self.settings.neg_index = self.neg_index
@@ -62,7 +66,7 @@ class Tester():
             for (pred, key), recall in self.settings.recall.items():
                 # if recall == 1:
                     # continue
-                if recall > 3:
+                if recall > 4:
                     continue
                 if '1' not in key:
                     continue
@@ -94,17 +98,10 @@ class Tester():
                 # con2 = f':- clause(Rule), #count{{{subset_str}: body_literal(Rule,{pred},_,({args_str}))}} > {recall}.'
                 # print(con2)
                 # con = f':- clause(Rule), {subset}'
-                # print(con)
+                print(con2)
                 out.append(con2)
 
-            # print('\n'.join(sorted(out)))
-
             self.settings.deduced_bkcons += '\n' + '\n'.join(out)
-
-        # exit()
-
-
-
 
     def test_prog(self, prog):
         if len(prog) == 1:
@@ -159,6 +156,73 @@ class Tester():
     def get_neg_covered(self, prog):
         with self.using(prog):
             return frozenset(self.query('neg_covered(Xs)', 'Xs'))
+    def get_neg_uncovered(self, prog):
+        with self.using(prog):
+            return frozenset(self.query('neg_uncovered(Xs)', 'Xs'))
+
+    def is_more_inconsistent(self, prog, neg_covered):
+        with self.using(prog):
+            return len(list(self.prolog.query(f"is_more_inconsistent({neg_covered})"))) > 0
+
+    def tmp(self, prog1, prog2):
+        current_clauses = set()
+        try:
+            for rule in prog1:
+                head, _body = rule
+                head.predicate = 'prog1'
+                x = format_rule(order_rule(rule, self.settings))[:-1]
+                self.prolog.assertz(x)
+                current_clauses.add((head.predicate, head.arity))
+            for rule in prog2:
+                head, _body = rule
+                head.predicate = 'prog2'
+                x = format_rule(order_rule(rule, self.settings))[:-1]
+                self.prolog.assertz(x)
+                current_clauses.add((head.predicate, head.arity))
+            return len(list(self.prolog.query(f"covers_more"))) > 0
+        finally:
+            for predicate, arity in current_clauses:
+                args = ','.join(['_'] * arity)
+                self.prolog.retractall(f'{predicate}({args})')
+
+        # with self.using(prog):
+
+
+    def covers_any(self, prog, neg):
+
+        rule = list(prog)[0]
+        k = rule_hash(rule)
+        if k in self.cached_covers_any:
+            for x in self.cached_covers_any[k]:
+                if x in neg:
+                    # print('skipped call')
+                    return True
+        self.cached_covers_any[k] = set()
+
+        with self.using(prog):
+            xs = list(self.prolog.query(f"covers_any({neg},ID)"))
+            if len(xs) > 0:
+                ex = xs[0]['ID']
+                # print(ex)
+                self.cached_covers_any[k].add(ex)
+                return True
+            return False
+    # def get_num_neg_covered(self, prog):
+    #     assert(len(prog) == 1)
+
+    #     rule = list(prog)[0]
+    #     head, _body = rule
+    #     head, ordered_body = order_rule(rule, self.settings)
+    #     atom_str = format_literal(head)
+    #     body_str = format_rule((None,ordered_body))[2:-1]
+    #     q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+    #     xs = next(self.prolog.query(q))
+    #     pos_covered = frozenset(xs['Xs'])
+    #     inconsistent = False
+    #     q = f'neg_index(_,{atom_str}),{body_str},!'
+    #     if len(self.neg_index) > 0:
+    #     inconsistent = len(list(self.prolog.query(q))) > 0
+
 
     @contextmanager
     def using(self, prog):
