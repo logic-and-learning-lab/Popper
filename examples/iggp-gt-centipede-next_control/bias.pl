@@ -1,5 +1,5 @@
 max_vars(6).
-max_body(10).
+max_body(15).
 
 head_pred(next_control,2).
 body_pred(true_whitePayoff,2).

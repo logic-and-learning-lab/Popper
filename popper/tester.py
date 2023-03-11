@@ -11,7 +11,7 @@ import clingo
 import clingo.script
 import pkg_resources
 from . core import Literal
-from . explain import rule_hash
+from . explain import rule_hash, prog_hash
 from . generate import parse_model
 from collections import defaultdict
 
@@ -48,6 +48,7 @@ class Tester():
 
 
         self.cached_covers_any = {}
+        self.cached_pos_covered = {}
 
         # weird
         self.settings.pos_index = self.pos_index
@@ -117,6 +118,7 @@ class Tester():
             pos_covered = set()
             inconsistent = True
 
+        self.cached_pos_covered[prog_hash(prog)] = pos_covered
         return pos_covered, inconsistent
 
     def test_single_rule(self, prog):
@@ -149,9 +151,24 @@ class Tester():
             return len(pos_covered) == len(self.pos_index)
 
     def get_pos_covered(self, prog):
-        with self.using(prog):
-            pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
-            return pos_covered
+        k = prog_hash(prog)
+        if k in self.cached_pos_covered:
+            return self.cached_pos_covered[k]
+
+        if len(prog) == 1:
+            rule = list(prog)[0]
+            head, _body = rule
+            head, ordered_body = order_rule(rule, self.settings)
+            atom_str = format_literal(head)
+            body_str = format_rule((None,ordered_body))[2:-1]
+            q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+            xs = next(self.prolog.query(q))
+            pos_covered = frozenset(xs['Xs'])
+        else:
+            with self.using(prog):
+                pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
+        self.cached_pos_covered[k] = pos_covered
+        return pos_covered
 
     def get_neg_covered(self, prog):
          with self.using(prog):

@@ -3,7 +3,7 @@
 
 % Set max bounds
 max_body(10).
-max_vars(6).
+max_vars(7).
 
 % Predicates
 body_pred(at,3).
