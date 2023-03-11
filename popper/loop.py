@@ -156,7 +156,7 @@ def check_redundant_literal2(prog, tester, settings):
     return False
 
 seen_shit_subprog = set()
-# @profile
+@profile
 def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generator, new_cons, all_handles, d=1, seen_poo=set(), seen_ok=set()):
     # return
     rule = list(prog)[0]
@@ -167,14 +167,14 @@ def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generat
 
     body = tuple(body)
 
+    pruned = False
+
     head_vars = set(head.arguments)
     rule_vars = set()
     rule_vars.update(head_vars)
 
     for lit in body:
         rule_vars.update(lit.arguments)
-
-    fetched_thing = False
 
     for i in range(len(body)):
         new_body = body[:i] + body[i+1:]
@@ -226,39 +226,50 @@ def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generat
             pass
 
         if tester.has_redundant_literal(subprog):
+            # print('has_redundant_literal')
             # for rule in subprog:
                 # print(format_rule(rule))
             find_most_general_shit_subrule(subprog, tester, settings, min_coverage, generator, new_cons, all_handles, d+1, seen_poo, seen_ok)
-            continue
-            # print('moo')
+            # if len(xs) > 0:
             # continue
+            # print('moo')
+            continue
 
         if seen_more_general_unsat(raw_subprog, seen_poo):
             # print('SKIP1')
             continue
 
         if seen_more_specific_sat(raw_subprog, seen_ok):
-            # print('SKIP2')
+            # print('SKIP2', d)
+            # for rule in prog:
+            #     print(format_rule(rule))
+            # for rule in subprog:
+            #     print(format_rule(rule))
             continue
 
-        # for rule in subprog:
-            # print(format_rule(rule))
+        for rule in subprog:
+            print(format_rule(rule))
 
         pos_covered = tester.get_pos_covered(subprog)
         if len(pos_covered) <= min_coverage:
+            # MAYBE MOVE DOWN
+            pruned = True
+            seen_poo.add(raw_subprog)
             # seen.add(subprog)
             # print('PRUNESUB', d, len(pos_covered), min_coverage, format_rule((head, new_body)))
-            new_rule_handles, con = generator.build_specialisation_constraint(subprog)
-            new_cons.add(con)
-            seen_poo.add(raw_subprog)
-            all_handles.update(parse_handles(generator, new_rule_handles))
-
-            find_most_general_shit_subrule(subprog, tester, settings, min_coverage, generator, new_cons, all_handles, d+1, seen_poo, seen_ok)
+            if not find_most_general_shit_subrule(subprog, tester, settings, min_coverage, generator, new_cons, all_handles, d+1, seen_poo, seen_ok):
+                new_rule_handles, con = generator.build_specialisation_constraint(subprog)
+                new_cons.add(con)
+                all_handles.update(parse_handles(generator, new_rule_handles))
         else:
+            # CAN WE STOP HERE???
+            # print('----')
+            # for rule in prog:
+            #     print(format_rule(rule))
+            # for rule in subprog:
+            #     print(format_rule(rule))
             seen_ok.add(raw_subprog)
-    return False
-
-
+    return pruned
 
 def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons):
     all_ground_cons.update(new_ground_cons)
@@ -531,11 +542,6 @@ def popper(settings):
                             min_coverage = min(len(cached_pos_covered[x]) for x in combiner.best_prog)
                             if num_pos_covered <= min_coverage:
                                 add_spec=True
-                                # TODO!!!!!
-                                # FIND THE SMALLEST SUBRULE!!!
-                                # print(num_pos_covered, min_coverage)
-                                # for rule in prog:
-                                #     print(format_rule(rule))
                                 with settings.stats.duration('most gen'):
                                     find_most_general_shit_subrule(prog, tester, settings, min_coverage, generator, new_cons, all_handles)
                         if not add_spec:
@@ -603,7 +609,7 @@ def popper(settings):
                                     new_cons.add(con)
                                     all_handles.update(parse_handles(generator, new_handles))
 
-                                    with settings.stats.duration('most gen'):
+                                    with settings.stats.duration('most gen2'):
                                         find_most_general_shit_subrule(prog2, tester, settings, min_coverage, generator, new_cons, all_handles)
                             for x in to_dump:
                                 del could_prune_later[x]
