@@ -98,7 +98,7 @@ class Tester():
                 # con2 = f':- clause(Rule), #count{{{subset_str}: body_literal(Rule,{pred},_,({args_str}))}} > {recall}.'
                 # print(con2)
                 # con = f':- clause(Rule), {subset}'
-                print(con2)
+                # print(con2)
                 out.append(con2)
 
             self.settings.deduced_bkcons += '\n' + '\n'.join(out)
@@ -154,8 +154,26 @@ class Tester():
             return pos_covered
 
     def get_neg_covered(self, prog):
-        with self.using(prog):
+         with self.using(prog):
             return frozenset(self.query('neg_covered(Xs)', 'Xs'))
+
+    def get_neg_covered2(self, prog):
+        if len(prog) == 1:
+            rule = list(prog)[0]
+            head, _body = rule
+            head, ordered_body = order_rule(rule, self.settings)
+            atom_str = format_literal(head)
+            body_str = format_rule((None,ordered_body))[2:-1]
+            q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+            xs = next(self.prolog.query(q))
+            return frozenset(xs['Xs'])
+        else:
+            with self.using(prog):
+                return frozenset(self.query('neg_covered(Xs)', 'Xs'))
+
+
+
+
     def get_neg_uncovered(self, prog):
         with self.using(prog):
             return frozenset(self.query('neg_uncovered(Xs)', 'Xs'))
@@ -189,24 +207,92 @@ class Tester():
 
 
     def covers_any(self, prog, neg):
-
         rule = list(prog)[0]
-        k = rule_hash(rule)
-        if k in self.cached_covers_any:
-            for x in self.cached_covers_any[k]:
-                if x in neg:
-                    # print('skipped call')
-                    return True
-        self.cached_covers_any[k] = set()
+        # k = rule_hash(rule)
+        # if k in self.cached_covers_any:
+        #     for x in self.cached_covers_any[k]:
+        #         if x in neg:
+        #             return True
+        # self.cached_covers_any[k] = set()
 
         with self.using(prog):
             xs = list(self.prolog.query(f"covers_any({neg},ID)"))
             if len(xs) > 0:
                 ex = xs[0]['ID']
                 # print(ex)
-                self.cached_covers_any[k].add(ex)
+                # self.cached_covers_any[k].add(ex)
                 return True
             return False
+
+    def covers_any2(self, prog, neg):
+        rule = list(prog)[0]
+        # k = rule_hash(rule)
+        # if k in self.cached_covers_any:
+        #     for x in self.cached_covers_any[k]:
+        #         if x in neg:
+        #             return True
+        # self.cached_covers_any[k] = set()
+
+        rule = list(prog)[0]
+        head, _body = rule
+        head, ordered_body = order_rule(rule, self.settings)
+        atom_str = format_literal(head)
+        body_str = format_rule((None,ordered_body))[2:-1]
+        # q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+        q = f'member(Id,{neg}),neg_index(Id,{atom_str}),{body_str},!'
+        # print(q)
+        xs = list(self.prolog.query(q))
+        # print(xs)
+        return len(xs) > 0
+
+        # return frozenset(xs['Xs'])
+
+        # with self.using(prog):
+        #     xs = list(self.prolog.query(f"covers_any({neg},ID)"))
+        #     if len(xs) > 0:
+        #         ex = xs[0]['ID']
+        #         # print(ex)
+        #         self.cached_covers_any[k].add(ex)
+        #         return True
+        #     return False
+
+
+    def covers_any3(self, prog, neg):
+        rule = list(prog)[0]
+        k = rule_hash(rule)
+        if k in self.cached_covers_any:
+            for x in self.cached_covers_any[k]:
+                if x in neg:
+                    return True
+        self.cached_covers_any[k] = set()
+
+        rule = list(prog)[0]
+        head, _body = rule
+        head, ordered_body = order_rule(rule, self.settings)
+        atom_str = format_literal(head)
+        body_str = format_rule((None,ordered_body))[2:-1]
+        # q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+        q = f'member(Id,{neg}),neg_index(Id,{atom_str}),{body_str},!'
+        # print(q)
+        xs = list(self.prolog.query(q))
+        if len(xs) > 0:
+            ex = xs[0]['Id']
+            self.cached_covers_any[k].add(ex)
+            return True
+        # print(xs)
+        return False
+
+        # return frozenset(xs['Xs'])
+
+        # with self.using(prog):
+        #     xs = list(self.prolog.query(f"covers_any({neg},ID)"))
+        #     if len(xs) > 0:
+        #         ex = xs[0]['ID']
+        #         # print(ex)
+        #         self.cached_covers_any[k].add(ex)
+        #         return True
+        #     return False
+
     # def get_num_neg_covered(self, prog):
     #     assert(len(prog) == 1)
 

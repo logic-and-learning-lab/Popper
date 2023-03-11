@@ -1,5 +1,5 @@
 max_vars(6).
-max_body(10).
+max_body(15).
 constant(agent_robot, agent).
 constant(mypos_1, mypos).
 constant(mypos_2, mypos).

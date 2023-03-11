@@ -1,5 +1,5 @@
 %% max_vars(6).
-max_body(10). % makes the example a little quicker to run
+max_body(15). % makes the example a little quicker to run
 %% max_body(5). % makes the example a little quicker to run
 %% max_body(6). % makes the example a little quicker to run
 head_pred(next_cell,3).

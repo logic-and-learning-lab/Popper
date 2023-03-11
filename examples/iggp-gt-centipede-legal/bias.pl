@@ -1,5 +1,5 @@
 max_vars(6).
-max_body(10).
+max_body(15).
 
 constant(agent_white, agent).
 constant(agent_black, agent).

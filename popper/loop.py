@@ -91,93 +91,93 @@ def explain_inconsistent(settings, generator, tester, prog, rule_ordering, new_c
 
 # @profile
 
-cached_neg_count = {}
-def check_redundant_literal(prog, tester):
-    rule = list(prog)[0]
-    head, body = rule
-    body = tuple(body)
+# cached_neg_count = {}
+# def check_redundant_literal(prog, tester):
+#     rule = list(prog)[0]
+#     head, body = rule
+#     body = tuple(body)
 
-    head_vars = set(head.arguments)
-    rule_vars = set()
-    rule_vars.update(head_vars)
-    for lit in body:
-        rule_vars.update(lit.arguments)
+#     head_vars = set(head.arguments)
+#     rule_vars = set()
+#     rule_vars.update(head_vars)
+#     for lit in body:
+#         rule_vars.update(lit.arguments)
 
-    fetched_thing = False
-    assert(rule_hash(rule) not in cached_neg_count)
-    # print('A',format_rule(rule))
-    none_checked = True
-    for i in range(len(body)):
-        new_body = body[:i] + body[i+1:]
-        new_vars = set()
-        new_body_vars = set()
-        for lit in new_body:
-            new_body_vars.update(lit.arguments)
+#     fetched_thing = False
+#     assert(rule_hash(rule) not in cached_neg_count)
+#     # print('A',format_rule(rule))
+#     none_checked = True
+#     for i in range(len(body)):
+#         new_body = body[:i] + body[i+1:]
+#         new_vars = set()
+#         new_body_vars = set()
+#         for lit in new_body:
+#             new_body_vars.update(lit.arguments)
 
-        new_vars.update(head_vars)
-        new_vars.update(new_body_vars)
+#         new_vars.update(head_vars)
+#         new_vars.update(new_body_vars)
 
-        if not new_vars.issubset(rule_vars):
-            continue
+#         if not new_vars.issubset(rule_vars):
+#             continue
 
-        if not head_vars.issubset(new_body_vars):
-            continue
+#         if not head_vars.issubset(new_body_vars):
+#             continue
 
-        if len(new_body) < 2:
-            continue
+#         if len(new_body) < 2:
+#             continue
 
-        var_count = {}
-        for x in head_vars:
-            var_count[x]=1
+#         var_count = {}
+#         for x in head_vars:
+#             var_count[x]=1
 
-        for lit in new_body:
-            for x in lit.arguments:
-                if x in var_count:
-                    var_count[x] += 1
-                else:
-                    var_count[x] = 1
+#         for lit in new_body:
+#             for x in lit.arguments:
+#                 if x in var_count:
+#                     var_count[x] += 1
+#                 else:
+#                     var_count[x] = 1
 
-        if any(v == 1 for v in var_count.values()):
-            continue
+#         if any(v == 1 for v in var_count.values()):
+#             continue
 
-        if not fetched_thing:
-            fetched_thing = True
-            neg_covered = tester.get_neg_covered(prog)
-            num_neg_covered = len(neg_covered)
-            cached_neg_count[rule_hash(rule)] = num_neg_covered
+#         if not fetched_thing:
+#             fetched_thing = True
+#             neg_covered = tester.get_neg_covered(prog)
+#             num_neg_covered = len(neg_covered)
+#             cached_neg_count[rule_hash(rule)] = num_neg_covered
 
-        none_checked = False
+#         none_checked = False
 
-        new_rule = (head, frozenset(new_body))
-        new_prog = [new_rule]
+#         new_rule = (head, frozenset(new_body))
+#         new_prog = [new_rule]
 
-        # print('\t',format_rule(new_rule))
+#         # print('\t',format_rule(new_rule))
 
-        # TMP!!!!
-        if rule_hash(new_rule) in cached_neg_count:
-            # print('seen')
-            num_neg_covered2 = cached_neg_count[rule_hash(new_rule)]
-        else:
-            neg_covered2 = tester.get_neg_covered(new_prog)
-            num_neg_covered2 = len(neg_covered2)
-            cached_neg_count[rule_hash(new_rule)] = num_neg_covered2
+#         # TMP!!!!
+#         if rule_hash(new_rule) in cached_neg_count:
+#             # print('seen')
+#             num_neg_covered2 = cached_neg_count[rule_hash(new_rule)]
+#         else:
+#             neg_covered2 = tester.get_neg_covered(new_prog)
+#             num_neg_covered2 = len(neg_covered2)
+#             cached_neg_count[rule_hash(new_rule)] = num_neg_covered2
 
-        neg_covered2 = tester.get_neg_covered(new_prog)
-        num_neg_covered2 = len(neg_covered2)
+#         neg_covered2 = tester.get_neg_covered(new_prog)
+#         num_neg_covered2 = len(neg_covered2)
 
-        if num_neg_covered == num_neg_covered2:
-            # print('--')
-            # print('A',format_rule((head, body)))
-            # print(num_neg_covered, num_neg_covered2)
-            # print('\t',format_literal(body[i]))
-            print('check_redundant_literal1-neg_covered1', neg_covered)
-            print('check_redundant_literal1-neg_covered2', neg_covered2)
-            return True
+#         if num_neg_covered == num_neg_covered2:
+#             # print('--')
+#             # print('A',format_rule((head, body)))
+#             # print(num_neg_covered, num_neg_covered2)
+#             # print('\t',format_literal(body[i]))
+#             print('check_redundant_literal1-neg_covered1', neg_covered)
+#             print('check_redundant_literal1-neg_covered2', neg_covered2)
+#             return True
 
-    return False
+#     return False
 
-cached_neg_covered = {}
-seen_subprog = set()
+# cached_neg_covered = {}
+# seen_subprog = set()
 def check_redundant_literal2(prog, tester, settings):
     rule = list(prog)[0]
     head, body = rule
@@ -190,17 +190,18 @@ def check_redundant_literal2(prog, tester, settings):
     head_vars = set(head.arguments)
     rule_vars = set()
     rule_vars.update(head_vars)
+
     for lit in body:
         rule_vars.update(lit.arguments)
-    fetched_thing = False
 
+    fetched_thing = False
 
     for i in range(len(body)):
         new_body = body[:i] + body[i+1:]
 
         new_vars = set()
-
         new_body_vars = set()
+
         for lit in new_body:
             new_body_vars.update(lit.arguments)
 
@@ -216,9 +217,7 @@ def check_redundant_literal2(prog, tester, settings):
         if len(new_body) < 2:
             continue
 
-        var_count = {}
-        for x in head_vars:
-            var_count[x]=1
+        var_count = {x:1 for x in head_vars}
 
         for lit in new_body:
             for x in lit.arguments:
@@ -234,151 +233,35 @@ def check_redundant_literal2(prog, tester, settings):
 
         if not fetched_thing:
             fetched_thing = True
-            # print(format_rule(rule))
-            with settings.stats.duration('a1'):
-                neg_covered = tester.get_neg_covered(prog)
+            # print(format_rule(order_rule(rule)))
+            # with settings.stats.duration('a1'):
+                # neg_covered = tester.get_neg_covered(prog)
+            # with settings.stats.duration('a2'):
+            neg_covered = tester.get_neg_covered2(prog)
+                # assert(neg_covered == neg_covered2)
             # with settings.stats.duration('a2'):
                 # neg_covered = tester.get_neg_uncovered(prog)
             # num_neg_covered = len(neg_covered)
             # assert(rule_hash(rule) not in cached_neg_covered)
-            assert(rule_hash(rule) not in seen_subprog)
+            # assert(rule_hash(rule) not in seen_subprog)
             # cached_neg_covered[rule_hash(rule)] = num_neg_covered
-            seen_subprog.add(rule_hash(rule))
+            # seen_subprog.add(rule_hash(rule))
 
-        # print('\t',format_rule(new_rule))
-
-        # if rule_hash(new_rule) in seen_subprog:
-        #     # print('\t\tseen')
-        #     pass
-        # else:
-        #     seen_subprog.add(rule_hash(new_rule))
-
-        # if rule_hash(new_rule) in cached_neg_covered:
-        #     # print('SEEEEN')
-        #     # print(format_rule(new_rule))
-        #     num_neg_covered2 = cached_neg_covered[rule_hash(new_rule)]
-        #     if num_neg_covered2 > num_neg_covered:
-        #         return True
-        # else:
+        # print('\t', format_rule(order_rule(new_rule)))
+        # print('\t',format_literal(body[i]))
         new_prog = [new_rule]
 
-
-        # if rule_hash(new_rule) in seen_subprog:
-        #     print('already seen')
-        #     print(format_rule(new_rule))
-        # cached_neg_covered[rule_hash(rule)] = num_neg_covered
-        seen_subprog.add(rule_hash(new_rule))
-
-
-
-        # t1 = time.time()
-        # neg_covered2 = tester.get_neg_covered(new_prog)
-        # t2 = time.time()
-        # d1=t2-t1
-
         uncovered = [x for x in tester.neg_index if x not in neg_covered]
-        # t1 = time.time()
-        with settings.stats.duration('a2'):
-            tmp = tester.covers_any(new_prog, uncovered)
-        # t2 = time.time()
-        # d2=t2-t1
-        # print(d2)
+        tmp = tester.covers_any3(new_prog, uncovered)
 
-
-        # print(neg_covered)
-        # print(neg_covered2)
-        # print(uncovered)
-        # print(neg_covered2-neg_covered)
-        # print(len(neg_covered))
-        # print(len(neg_covered2))
-
-        # print(format_rule(rule))
-        # print(format_rule(new_rule))
-        # print(tmp)
-        # if tmp:
-        #     if len(neg_covered2) <= len(neg_covered):
-        #         # print(neg_covered, len(neg_covered))
-        #         # print(neg_covered2, len(neg_covered2))
-        #         # print(format_rule(rule))
-        #         assert(False)
-        #     # return True
         if not tmp:
+            # print('\t\t',format_literal(body[i]))
+            # print('\t\t','REDUNDANT')
             # assert(len(neg_covered2) == len(neg_covered))
             return True
 
-        # with settings.stats.duration('a2'):
-        #     tmp =
-        #     if tmp:
-        #         pass
-        #     else:
-        #         neg_covered2 = tester.get_neg_covered(new_prog)
-        #         print('A',neg_covered, len(neg_covered))
-        #         print('B',neg_covered2, len(neg_covered2))
-        #         print(set(x for x in neg_covered2 if x not in neg_covered))
-        #         return True
-
     return False
 
-
-def check_redundant_literal3(prog, tester, settings):
-    rule = list(prog)[0]
-    head, body = rule
-
-    if len(body) == 1:
-        return False
-
-    body = tuple(body)
-
-    head_vars = set(head.arguments)
-    rule_vars = set()
-    rule_vars.update(head_vars)
-    for lit in body:
-        rule_vars.update(lit.arguments)
-    fetched_thing = False
-
-
-
-    for i in range(len(body)):
-        new_body = body[:i] + body[i+1:]
-
-        new_vars = set()
-
-        new_body_vars = set()
-        for lit in new_body:
-            new_body_vars.update(lit.arguments)
-
-        new_vars.update(head_vars)
-        new_vars.update(new_body_vars)
-
-        if not new_vars.issubset(rule_vars):
-            continue
-
-        if not head_vars.issubset(new_body_vars):
-            continue
-
-        if len(new_body) < 2:
-            continue
-
-        var_count = {}
-        for x in head_vars:
-            var_count[x]=1
-
-        for lit in new_body:
-            for x in lit.arguments:
-                if x in var_count:
-                    var_count[x] += 1
-                else:
-                    var_count[x] = 1
-
-        if any(v == 1 for v in var_count.values()):
-            continue
-
-        new_rule = (head, frozenset(new_body))
-
-        if tester.tmp(prog, [new_rule]) == False:
-            return True
-
-    return False
 
 def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons):
     all_ground_cons.update(new_ground_cons)
@@ -447,6 +330,10 @@ def popper(settings):
     tmp_covered = set()
 
 
+    cached_pos_covered = {}
+    could_prune_later = {}
+
+
     seen_tmp = {}
 
     max_size = (1 + settings.max_body) * settings.max_rules
@@ -497,7 +384,10 @@ def popper(settings):
                 # TEST A PROGRAM
                 with settings.stats.duration('test'):
                     pos_covered, inconsistent = tester.test_prog(prog)
-                    num_pos_covered = len(pos_covered)
+                num_pos_covered = len(pos_covered)
+
+                # TMPP!!!!!!
+                cached_pos_covered[list(prog)[0]] = pos_covered
 
                 if not inconsistent:
                     tmp_covered.update(pos_covered)
@@ -639,43 +529,30 @@ def popper(settings):
                             seen_incomplete_spec = set()
 
                     if not add_spec:
-                        pass
-                        # moo = False
-                        # moo2 = False
-                        # with settings.stats.duration('check_redundant_literal'):
-                        #     if check_redundant_literal(prog, tester):
-                        #         moo = True
-                        #         add_spec = True
+                    # if not add_spec and False:
+                        if combiner.solution_found:
+                            # if not add_spec and combiner.solution_found and False:
+                                # TODO: BACKTRACK ON THIS!!!!!
+                                min_coverage = min(len(cached_pos_covered[x]) for x in combiner.best_prog)
+                                if num_pos_covered <= min_coverage:
+                                    add_spec=True
+                                    print('P1')
+                        else:
+                            could_prune_later[prog]=num_pos_covered
+
+                    # if not add_spec and False:
+                    if not add_spec:
                         with settings.stats.duration('check_redundant_literal2'):
                             if check_redundant_literal2(prog, tester, settings):
-                                # moo2 = True
                                 add_spec = True
-                        # if moo != moo2:
-                        #     rule = list(prog)[0]
+                                print('check_redundant_literal2')
 
-                        #     print(format_rule(rule))
-                        #     print(moo, moo2)
-                        #     assert(False)
-                        # with settings.stats.duration('check_redundant_literal3'):
-                        #     if check_redundant_literal3(prog, tester, settings):
-                        #         add_spec = True
-
-
-                # micro-optimisiations
-                # if settings.recursion_enabled:
                 if not add_spec and num_pos_covered > 1:
                     seen_tmp[prog] = pos_covered
-                    # print('KEEPING PROG JUST IN CASE')
-                    # for rule in prog:
-                        # print(format_rule(rule))
-
-                # if num_pos_covered == 1:
-                    # add_spec = True
 
                 seen_better_rec = False
                 if is_recursive and not inconsistent and not subsumed and not add_gen and num_pos_covered > 0:
                     seen_better_rec = pos_covered in rec_success_sets or any(pos_covered.issubset(xs) for xs in rec_success_sets)
-
 
                 # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
                 # if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0:
@@ -713,6 +590,22 @@ def popper(settings):
                         settings.max_literals = combiner.max_size-1
                         if size >= settings.max_literals:
                             return
+
+                        # TMP!!!!
+                        min_coverage = min(len(cached_pos_covered[x]) for x in combiner.best_prog)
+                        to_dump = set()
+                        for prog2, num_covers2 in could_prune_later.items():
+                            if num_covers2 <= min_coverage:
+                                print('P2')
+                                to_dump.add(prog2)
+                                new_handles, con = generator.build_specialisation_constraint(prog2)
+                                new_cons.add(con)
+                                all_handles.update(parse_handles(generator, new_handles))
+                        for x in to_dump:
+                            del could_prune_later[x]
+                            # could_prune_later.remove(x)
+
+
 
                         if settings.single_solve:
                             # AC: sometimes adding these size constraints can take longer

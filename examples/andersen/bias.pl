@@ -1,5 +1,7 @@
-enable_recursion.
+%% enable_recursion.
 allow_singletons.
+
+max_body(10).
 
 head_pred(pt, 2).
 body_pred(addr, 2).
