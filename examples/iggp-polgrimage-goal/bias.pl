@@ -1,3 +1,4 @@
+%% allow_singletons.
 max_vars(6).
 max_body(15).
 constant(agent_red, agent).

@@ -48,7 +48,9 @@ class Tester():
 
 
         self.cached_covers_any = {}
+        self.cached_covers_any2 = {}
         self.cached_pos_covered = {}
+        self.cached_inconsistent = {}
 
         # weird
         self.settings.pos_index = self.pos_index
@@ -105,6 +107,9 @@ class Tester():
             self.settings.deduced_bkcons += '\n' + '\n'.join(out)
 
     def test_prog(self, prog):
+        if prog_hash(prog) in self.cached_pos_covered:
+            print('wtf?')
+
         if len(prog) == 1:
             return self.test_single_rule(prog)
         try:
@@ -132,18 +137,37 @@ class Tester():
             xs = next(self.prolog.query(q))
             pos_covered = frozenset(xs['Xs'])
             inconsistent = False
-            q = f'neg_index(_,{atom_str}),{body_str},!'
+            # q = f'neg_index(_,{atom_str}),{body_str},!'
+            # if len(self.neg_index) > 0:
+            #     inconsistent = len(list(self.prolog.query(q))) > 0
             if len(self.neg_index) > 0:
-                inconsistent = len(list(self.prolog.query(q))) > 0
+                q = f'neg_index(Id,{atom_str}),{body_str},!'
+                xs = list(self.prolog.query(q))
+                if len(xs) > 0:
+                    ex = xs[0]['Id']
+                    k = prog_hash(prog)
+                    if k not in self.cached_covers_any2:
+                        self.cached_covers_any2[k] = set([ex])
+                    else:
+                        self.cached_covers_any2[k].add(ex)
+                    # print(ex)
+                    inconsistent = True
+
         except PrologError as err:
             print('PROLOG ERROR',err)
         return pos_covered, inconsistent
 
+
     def is_inconsistent(self, prog):
         if len(self.neg_index) == 0:
             return False
+        k = prog_hash(prog)
+        if k in self.cached_inconsistent:
+            return self.cached_inconsistent[k]
         with self.using(prog):
-            return len(list(self.prolog.query("inconsistent"))) > 0
+            inconsistent = len(list(self.prolog.query("inconsistent"))) > 0
+            self.cached_inconsistent[k] = inconsistent
+            return inconsistent
 
     def is_complete(self, prog):
         with self.using(prog):
@@ -223,65 +247,74 @@ class Tester():
         # with self.using(prog):
 
 
-    def covers_any(self, prog, neg):
-        rule = list(prog)[0]
-        # k = rule_hash(rule)
-        # if k in self.cached_covers_any:
-        #     for x in self.cached_covers_any[k]:
-        #         if x in neg:
-        #             return True
-        # self.cached_covers_any[k] = set()
+    # def covers_any(self, prog, neg):
+    #     rule = list(prog)[0]
+    #     # k = rule_hash(rule)
+    #     # if k in self.cached_covers_any:
+    #     #     for x in self.cached_covers_any[k]:
+    #     #         if x in neg:
+    #     #             return True
+    #     # self.cached_covers_any[k] = set()
 
-        with self.using(prog):
-            xs = list(self.prolog.query(f"covers_any({neg},ID)"))
-            if len(xs) > 0:
-                ex = xs[0]['ID']
-                # print(ex)
-                # self.cached_covers_any[k].add(ex)
-                return True
-            return False
+    #     with self.using(prog):
+    #         xs = list(self.prolog.query(f"covers_any({neg},ID)"))
+    #         if len(xs) > 0:
+    #             ex = xs[0]['ID']
+    #             # print(ex)
+    #             # self.cached_covers_any[k].add(ex)
+    #             return True
+    #         return False
 
-    def covers_any2(self, prog, neg):
-        rule = list(prog)[0]
-        # k = rule_hash(rule)
-        # if k in self.cached_covers_any:
-        #     for x in self.cached_covers_any[k]:
-        #         if x in neg:
-        #             return True
-        # self.cached_covers_any[k] = set()
+    # def covers_any2(self, prog, neg):
+    #     rule = list(prog)[0]
+    #     # k = rule_hash(rule)
+    #     # if k in self.cached_covers_any:
+    #     #     for x in self.cached_covers_any[k]:
+    #     #         if x in neg:
+    #     #             return True
+    #     # self.cached_covers_any[k] = set()
 
-        rule = list(prog)[0]
-        head, _body = rule
-        head, ordered_body = order_rule(rule, self.settings)
-        atom_str = format_literal(head)
-        body_str = format_rule((None,ordered_body))[2:-1]
-        # q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-        q = f'member(Id,{neg}),neg_index(Id,{atom_str}),{body_str},!'
-        # print(q)
-        xs = list(self.prolog.query(q))
-        # print(xs)
-        return len(xs) > 0
+    #     rule = list(prog)[0]
+    #     head, _body = rule
+    #     head, ordered_body = order_rule(rule, self.settings)
+    #     atom_str = format_literal(head)
+    #     body_str = format_rule((None,ordered_body))[2:-1]
+    #     # q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+    #     q = f'member(Id,{neg}),neg_index(Id,{atom_str}),{body_str},!'
+    #     # print(q)
+    #     xs = list(self.prolog.query(q))
+    #     # print(xs)
+    #     return len(xs) > 0
 
-        # return frozenset(xs['Xs'])
+    #     # return frozenset(xs['Xs'])
 
-        # with self.using(prog):
-        #     xs = list(self.prolog.query(f"covers_any({neg},ID)"))
-        #     if len(xs) > 0:
-        #         ex = xs[0]['ID']
-        #         # print(ex)
-        #         self.cached_covers_any[k].add(ex)
-        #         return True
-        #     return False
+    #     # with self.using(prog):
+    #     #     xs = list(self.prolog.query(f"covers_any({neg},ID)"))
+    #     #     if len(xs) > 0:
+    #     #         ex = xs[0]['ID']
+    #     #         # print(ex)
+    #     #         self.cached_covers_any[k].add(ex)
+    #     #         return True
+    #     #     return False
 
 
     def covers_any3(self, prog, neg):
+        # k = rule_hash(rule)
         rule = list(prog)[0]
-        k = rule_hash(rule)
+        k = prog_hash(prog)
         if k in self.cached_covers_any:
             for x in self.cached_covers_any[k]:
                 if x in neg:
                     return True
+        if k in self.cached_covers_any2:
+            for x in self.cached_covers_any2[k]:
+                if x in neg:
+                    return True
+                    # print('MOOCOWJONES!!!!!!!!')
         self.cached_covers_any[k] = set()
+
+        # for rule in prog:
+            # print('\tcalling prolog', format_rule(rule))
 
         rule = list(prog)[0]
         head, _body = rule

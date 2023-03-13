@@ -1,3 +1,4 @@
+%% allow_singletons.
 max_vars(7).
 max_body(15).
 

@@ -1,4 +1,7 @@
 max_body(10).
+%% max_body(2).
+
+allow_singletons.
 
 head_pred(rhh, 2).
 body_pred(mmetharg, 3).
