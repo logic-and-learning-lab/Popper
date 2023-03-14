@@ -558,6 +558,7 @@ def popper(settings):
 
     seen_tmp = {}
 
+    count_check_redundant_literal2 = 0
     max_size = (1 + settings.max_body) * settings.max_rules
     maxtime = None
     for size in range(1, max_size+1):
@@ -797,9 +798,6 @@ def popper(settings):
                             if num_pos_covered <= min_coverage:
                                 add_spec=True
                                 with settings.stats.duration('most gen'):
-                                    # print('most gen')
-                                    # for rule in prog:
-                                        # print(format_rule(rule))
                                     pruned_more_general_shit = find_most_general_shit_subrule(prog, tester, settings, min_coverage, generator, new_cons, all_handles)
                         if not add_spec:
                             could_prune_later[prog]=num_pos_covered
@@ -807,11 +805,13 @@ def popper(settings):
                     # if not add_spec and False:
                     if not add_spec:
                         with settings.stats.duration('check_redundant_literal2'):
-                            # for rule in prog:
-                                # print('check_redundant_literal2', format_rule(rule))
                             if check_redundant_literal2(prog, tester, settings):
+                                print(num_pos_covered, inconsistent)
+                                for rule in prog:
+                                    print(format_rule(rule))
                                 add_spec = True
-                                # print('check_redundant_literal2')
+                                count_check_redundant_literal2 +=1
+                                print('count_check_redundant_literal2',count_check_redundant_literal2)
 
                 if not add_spec and num_pos_covered > 1:
                     seen_tmp[prog] = pos_covered
