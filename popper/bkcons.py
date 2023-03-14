@@ -68,7 +68,7 @@ def deduce_bk_cons(settings):
 
     xs = deduce_bk_cons_aux(cons, prog, bias, bk)
     settings.deduced_bkcons = '\n'.join(x + '.' for x in xs)
-    # print('\n'.join(x + '.' for x in sorted(xs)))
+    print('\n'.join(x + '.' for x in sorted(xs)))
     # exit()
 
 def deduce_bk_cons_aux(cons, prog, bias, bk):

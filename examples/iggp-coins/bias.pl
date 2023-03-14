@@ -1,5 +1,5 @@
 %% allow_singletons.
-%% max_vars(6).
+%% max_vars(7).
 max_body(15). % makes the example a little quicker to run
 %% max_body(5). % makes the example a little quicker to run
 %% max_body(6). % makes the example a little quicker to run

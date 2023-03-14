@@ -122,6 +122,7 @@ def check_redundant_literal2(prog, tester, settings):
 
     for i in range(len(body)):
         new_body = body[:i] + body[i+1:]
+        new_rule = (head, frozenset(new_body))
 
         new_vars = set()
         new_body_vars = set()
@@ -131,6 +132,9 @@ def check_redundant_literal2(prog, tester, settings):
 
         new_vars.update(head_vars)
         new_vars.update(new_body_vars)
+
+        if not head_connected(new_rule):
+            continue
 
         if not new_vars.issubset(rule_vars):
             continue
@@ -153,7 +157,7 @@ def check_redundant_literal2(prog, tester, settings):
         if any(v == 1 for v in var_count.values()):
             continue
 
-        new_rule = (head, frozenset(new_body))
+
 
         if not fetched_thing:
             fetched_thing = True
@@ -184,10 +188,93 @@ def check_redundant_literal2(prog, tester, settings):
             print('\t\tredundant',format_literal(body[i]))
             if check_redundant_literal2(new_prog, tester, settings):
                 print('MOOOOO!!!1')
-                assert(False)
+                # assert(False)
             # print(tmp)
             return True
     return False
+
+seen_can_be_reduced = {}
+def has_tautology(prog, tester, settings, generator, new_cons, d=1):
+    # return False
+    rule = list(prog)[0]
+    head, body = rule
+
+    k = prog_hash(prog)
+    if k in seen_can_be_reduced:
+        return seen_can_be_reduced[k]
+
+    if len(body) == 1:
+        return False
+
+    body = tuple(body)
+
+    head_vars = set(head.arguments)
+    rule_vars = set()
+    rule_vars.update(head_vars)
+
+    for lit in body:
+        rule_vars.update(lit.arguments)
+
+    fetched_thing = False
+
+    # pos_covered = tester.get_pos_covered(prog)
+     # = tester.is_inconsistent(prog)
+
+    found_smaller = False
+
+    for i in range(len(body)):
+        new_body = body[:i] + body[i+1:]
+
+        new_vars = set()
+        new_body_vars = set()
+
+        for lit in new_body:
+            new_body_vars.update(lit.arguments)
+
+        new_vars.update(head_vars)
+        new_vars.update(new_body_vars)
+
+        # if not new_vars.issubset(rule_vars):
+            # continue
+
+        if not head_vars.issubset(new_body_vars):
+            continue
+
+        # if len(new_body) < 2:
+            # continue
+
+        var_count = {x:1 for x in head_vars}
+
+        # for lit in new_body:
+        #     for x in lit.arguments:
+        #         if x in var_count:
+        #             var_count[x] += 1
+        #         else:
+        #             var_count[x] = 1
+
+        # if any(v == 1 for v in var_count.values()):
+            # continue
+
+        new_rule = (head, frozenset(new_body))
+        new_prog = frozenset([new_rule])
+        new_k = prog_hash(new_prog)
+
+        if not tester.is_inconsistent(new_prog):
+            # seen_can_be_reduced[new_k] = True
+            print('\t'*d, 'can prune', format_rule(new_rule))
+            if not check_can_be_reduced(new_prog, tester, settings, generator, new_cons, d+1):
+                new_rule_handles, con = generator.build_specialisation_constraint(new_prog)
+                ground_rules = generator.get_ground_rules((None, con))
+                print('\t'*d, 'pruning', format_rule(new_rule))
+                # for _,r in ground_rules:
+                    # print(r)
+                    # print(format_literal(x))
+                new_cons.add(con)
+            found_smaller = True
+
+    seen_can_be_reduced[k] = found_smaller
+    return found_smaller
+
 
 seen_can_be_reduced = {}
 def check_can_be_reduced(prog, tester, settings, generator, new_cons, d=1):

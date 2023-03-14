@@ -60,33 +60,62 @@ prop(subsumes_1,(P,Q)):-
 %% type(Q,(Ta,)),
 %% holds(P,(X,_)), #count{X: not holds(Q,(X,))} == 0.
 
+prop(pab_qbc_implies_rac,(P,Q,R)):- holds(P,(A,B)), holds(Q,(B,C)), holds(R,(A,C)), not pab_qbc_implies_rac_aux(P,Q,R).
+pab_qbc_implies_rac_aux(P,Q,R):- holds(P,(A,B)), holds(Q,(B,C)), holds(R,(_,_)), not holds(R,(A,C)).
 
-%% p(A,B) implies (p(A,B), q(A))
+
+
+%% p(A,B) implies q(A)
 prop(subsumes_pab_qa,(P,Q)):- holds(P,(A,B)), holds(Q,(A,)), type(P,(Ta,Tb)), type(Q,(Ta,)), not not_subsumes_pab_qa(P,Q).
 not_subsumes_pab_qa(P,Q):- holds(P,(A,B)), holds(Q,(_,)), not holds(Q,(A,)).
 
-%% p(A,B) implies (p(A,B), q(B))
+%% p(A,B) implies q(B)
 prop(subsumes_pab_qb,(P,Q)):- holds(P,(A,B)), holds(Q,(B,)), type(P,(Ta,Tb)), type(Q,(Tb,)), not not_subsumes_pab_qb(P,Q).
 not_subsumes_pab_qb(P,Q):- holds(P,(A,B)), holds(Q,(_,)), not holds(Q,(B,)).
 
-%% p(A,B,C) implies (p(A,B,C), q(A))
+
+prop(subsumes_pab_qab,(P,Q)):- P!=Q, holds(P,(A,B)), holds(Q,(A,B)), holds(P,(X,Y)), #count{X,Y: not holds(Q,(X,Y))} == 0.
+prop(subsumes_pab_qba,(P,Q)):- P!=Q, holds(P,(A,B)), holds(Q,(B,A)), holds(P,(X,Y)), #count{X,Y: not holds(Q,(Y,X))} == 0.
+
+%% my_succ(D,B),different(B,D).
+
+
+%% p(A,B,C) implies q(A)
 prop(subsumes_pabc_qa,(P,Q)):- holds(P,(A,B,C)), holds(Q,(A,)), type(P,(Ta,Tb,Tc)), type(Q,(Ta,)), not not_subsumes_pabc_qa(P,Q).
 not_subsumes_pabc_qa(P,Q):- holds(P,(A,B,C)), holds(Q,(_,)), not holds(Q,(A,)).
 
-%% p(A,B,C) implies (p(A,B,C), q(B).
+%% p(A,B,C) implies q(B)
 prop(subsumes_pabc_qb,(P,Q)):- holds(P,(A,B,C)), holds(Q,(B,)), type(P,(Ta,Tb,Tc)), type(Q,(Tb,)), not not_subsumes_pabc_qb(P,Q).
 not_subsumes_pab_qa(P,Q):- holds(P,(A,B,C)), holds(Q,(_,)), not holds(Q,(B,)).
 
-%% p(A,B,C) implies (p(A,B,C), q(C).
+%% p(A,B,C) implies q(C)
 prop(subsumes_pabc_qc,(P,Q)):- holds(P,(A,B,C)), holds(Q,(C,)), type(P,(Ta,Tb,Tc)), type(Q,(Tc,)), not not_subsumes_pabc_qc(P,Q).
 not_subsumes_pab_qc(P,Q):- holds(P,(A,B,C)), holds(Q,(_,)), not holds(Q,(C,)).
 
 
-%% p(A,B,C) implies (p(A,B,C,D), q(A))
+
+
+%% p(A,B,C) implies p((A)
 prop(subsumes_pabcd_qa,(P,Q)):- holds(P,(A,B,C,D)), holds(Q,(A,)), type(P,(Ta,Tb,Tc,Td)), type(Q,(Ta,)), holds(P,(X,_,_,_)), #count{X: not holds(Q,(X,))} == 0.
 prop(subsumes_pabcd_qb,(P,Q)):- holds(P,(A,B,C,D)), holds(Q,(B,)), type(P,(Ta,Tb,Tc,Td)), type(Q,(Tb,)), holds(P,(_,X,_,_)), #count{X: not holds(Q,(X,))} == 0.
 prop(subsumes_pabcd_qc,(P,Q)):- holds(P,(A,B,C,D)), holds(Q,(C,)), type(P,(Ta,Tb,Tc,Td)), type(Q,(Tc,)), holds(P,(_,_,X,_)), #count{X: not holds(Q,(X,))} == 0.
 prop(subsumes_pabcd_qd,(P,Q)):- holds(P,(A,B,C,D)), holds(Q,(D,)), type(P,(Ta,Tb,Tc,Td)), type(Q,(Td,)), holds(P,(_,_,_,X)), #count{X: not holds(Q,(X,))} == 0.
+
+
+%% minus(A,B,C),less_than(A,B).
+prop(subsumes_pabc_qab,(P,Q)):- holds(P,(A,B,C)), holds(Q,(A,B)), holds(P,(X,Y,_)), #count{X,Y: not holds(Q,(X,Y))} == 0.
+
+%% minus(A,B,C),less_than(B,A).
+prop(subsumes_pabc_qba,(P,Q)):- holds(P,(A,B,C)), holds(Q,(B,A)), holds(P,(X,Y,_)), #count{X,Y: not holds(Q,(Y,X))} == 0.
+
+%% minus(A,B,C),less_than(C,A).
+prop(subsumes_pabc_qca,(P,Q)):- holds(P,(A,B,C)), holds(Q,(C,A)), holds(P,(X,_,Z)), #count{Z,X: not holds(Q,(Z,X))} == 0.
+
+%% minus(A,B,C),less_than(A,C).
+prop(subsumes_pabc_qac,(P,Q)):- holds(P,(A,B,C)), holds(Q,(A,C)), holds(P,(X,_,Z)), #count{X,Z: not holds(Q,(X,Z))} == 0.
+
+%% minus(A,B,C),divisible(B,C)
+prop(subsumes_pabc_qbc,(P,Q)):- holds(P,(A,B,C)), holds(Q,(B,C)), holds(P,(X,Y,Z)), #count{Y,Z: not holds(Q,(Y,Z))} == 0.
 
 
 
