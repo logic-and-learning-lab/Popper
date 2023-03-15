@@ -64,6 +64,12 @@ prop(subsumes_1,(P,Q)):-
 prop(pab_qbc_implies_rac,(P,Q,R)):- holds(P,(A,B)), holds(Q,(B,C)), holds(R,(A,C)), not pab_qbc_implies_rac_aux(P,Q,R).
 pab_qbc_implies_rac_aux(P,Q,R):- holds(P,(A,B)), holds(Q,(B,C)), holds(R,(_,_)), not holds(R,(A,C)).
 
+%% pab and qbc implies rac
+prop(pab_qac_implies_rbc,(P,Q,R)):- holds(P,(A,B)), holds(Q,(A,C)), holds(R,(B,C)), not pab_qac_implies_rbc_aux(P,Q,R).
+pab_qac_implies_rbc_aux(P,Q,R):- holds(P,(A,B)), holds(Q,(A,C)), holds(R,(_,_)), not holds(R,(B,C)).
+
+%% different(B,D),different(B,E),different(D,E),my_true_cell(A,E,C).
+%%     redundant different(B,E)
 
 
 %% p(A,B) implies q(A)
@@ -101,7 +107,8 @@ prop(subsumes_pabcd_qb,(P,Q)):- holds(P,(A,B,C,D)), holds(Q,(B,)), type(P,(Ta,Tb
 prop(subsumes_pabcd_qc,(P,Q)):- holds(P,(A,B,C,D)), holds(Q,(C,)), type(P,(Ta,Tb,Tc,Td)), type(Q,(Tc,)), holds(P,(_,_,X,_)), #count{X: not holds(Q,(X,))} == 0.
 prop(subsumes_pabcd_qd,(P,Q)):- holds(P,(A,B,C,D)), holds(Q,(D,)), type(P,(Ta,Tb,Tc,Td)), type(Q,(Td,)), holds(P,(_,_,_,X)), #count{X: not holds(Q,(X,))} == 0.
 
-%% minus(A,B,C),less_than(A,B).
+%% p(A,B,C) implies q(A,B).
+
 prop(subsumes_pabc_qab,(P,Q)):- holds(P,(A,B,C)), holds(Q,(A,B)), holds(P,(X,Y,_)), #count{X,Y: not holds(Q,(X,Y))} == 0.
 
 %% minus(A,B,C),less_than(B,A).
@@ -116,10 +123,11 @@ prop(subsumes_pabc_qac,(P,Q)):- holds(P,(A,B,C)), holds(Q,(A,C)), holds(P,(X,_,Z
 %% minus(A,B,C),divisible(B,C)
 prop(subsumes_pabc_qbc,(P,Q)):- holds(P,(A,B,C)), holds(Q,(B,C)), holds(P,(X,Y,Z)), #count{Y,Z: not holds(Q,(Y,Z))} == 0.
 
+%% minus(A,B,C),divisible(C,B)
+prop(pabc_implies_qcb,(P,Q)):- holds(P,(A,B,C)), holds(Q,(C,B)), holds(P,(X,Y,Z)), #count{Z,Y: not holds(Q,(Z,Y))} == 0.
 
 %% p(A,B,C,D) implies q(C,D)
 prop(pabcd_implies_qcd,(P,Q)):- holds(P,(A,B,C,D)), holds(Q,(C,D)), holds(P,(_,_,X,Y)), #count{X,Y: not holds(Q,(X,Y))} == 0.
-
 
 
 prop(chain,(P,Q)):- type(P,(_,Ta)), type(Q,(Ta,_)), body_pred(P,_), body_pred(Q,_), not chain_sat((P,Q)).

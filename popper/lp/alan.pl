@@ -950,6 +950,8 @@ only_once(P,A):-
 
 :- prop(pab_qbc_implies_rac,(P,Q,R)), body_literal(Rule,P,_,(A,B)), body_literal(Rule,Q,_,(B,C)), body_literal(Rule,Q,_,(C,A)), var_appears_more_than_twice(Rule,A),var_appears_more_than_twice(Rule,B),var_appears_more_than_twice(Rule,C).
 
+:- prop(pab_qac_implies_rbc,(P,Q,R)), body_literal(Rule,P,_,(A,B)), body_literal(Rule,Q,_,(A,C)), body_literal(Rule,Q,_,(B,C)), var_appears_more_than_twice(Rule,A),var_appears_more_than_twice(Rule,B),var_appears_more_than_twice(Rule,C).
+
 :- prop(pa_qb_implies_rab,(P,Q,R)),
     body_literal(Rule,P,_,(A,)),
     body_literal(Rule,Q,_,(B,)),
@@ -979,14 +981,11 @@ only_once(P,A):-
 
 %% minus(A,B,C),less_than(A,B).
 :- prop(subsumes_pabc_qab,(P,Q)), body_literal(Rule,P,_,(A,B,C)), body_literal(Rule,Q,_,(A,B)), var_appears_more_than_twice(Rule,A),var_appears_more_than_twice(Rule,B).
-
 :- prop(subsumes_pabc_qba,(P,Q)), body_literal(Rule,P,_,(A,B,C)), body_literal(Rule,Q,_,(B,A)), var_appears_more_than_twice(Rule,A),var_appears_more_than_twice(Rule,B).
-
 :- prop(subsumes_pabc_qca,(P,Q)), body_literal(Rule,P,_,(A,B,C)), body_literal(Rule,Q,_,(C,A)), var_appears_more_than_twice(Rule,A),var_appears_more_than_twice(Rule,C).
-
 :- prop(subsumes_pabc_qac,(P,Q)), body_literal(Rule,P,_,(A,B,C)), body_literal(Rule,Q,_,(A,C)), var_appears_more_than_twice(Rule,A),var_appears_more_than_twice(Rule,C).
-:- prop(subsumes_pabc_qbc,(P,Q)), body_literal(Rule,P,_,(A,B,C)), body_literal(Rule,Q,_,(B,C)), var_appears_more_than_twice(Rule,A),var_appears_more_than_twice(Rule,C).
-
+:- prop(subsumes_pabc_qbc,(P,Q)), body_literal(Rule,P,_,(A,B,C)), body_literal(Rule,Q,_,(B,C)), var_appears_more_than_twice(Rule,B),var_appears_more_than_twice(Rule,C).
+:- prop(pabc_implies_qcb,(P,Q)), body_literal(Rule,P,_,(A,B,C)), body_literal(Rule,Q,_,(C,B)), var_appears_more_than_twice(Rule,B),var_appears_more_than_twice(Rule,C).
 
 
 

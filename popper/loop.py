@@ -806,9 +806,9 @@ def popper(settings):
                     if not add_spec:
                         with settings.stats.duration('check_redundant_literal2'):
                             if check_redundant_literal2(prog, tester, settings):
-                                print(num_pos_covered, inconsistent)
-                                for rule in prog:
-                                    print(format_rule(rule))
+                                # print(num_pos_covered, inconsistent)
+                                # for rule in prog:
+                                    # print(format_rule(rule))
                                 add_spec = True
                                 count_check_redundant_literal2 +=1
                                 print('count_check_redundant_literal2',count_check_redundant_literal2)
