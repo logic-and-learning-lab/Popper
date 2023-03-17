@@ -192,7 +192,7 @@ def rule_is_invented(rule):
 
 def order_rule(rule, settings=None):
 
-    if settings and settings.datalog:
+    if settings and settings.bkcons:
         return order_rule_datalog(rule, settings)
 
     head, body = rule

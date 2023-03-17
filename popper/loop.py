@@ -5,7 +5,7 @@ from . explain import Explainer, rule_hash, head_connected, find_subprogs, get_r
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, prog_size, format_literal, theory_subsumes, rule_subsumes
 from . tester import Tester
 from . generate import Generator, Grounder, parse_model, atom_to_symbol, arg_to_symbol
-from . bkcons import deduce_bk_cons
+from . bkcons import deduce_bk_cons, deduce_recalls
 
 
 seen_cons = set()
@@ -660,8 +660,12 @@ def build_constraints(settings, generator, new_cons, new_rule_handles, add_spec,
 
 def popper(settings):
     if settings.bkcons:
-        with settings.stats.duration('preprocessing'):
+        with settings.stats.duration('bkcons'):
             deduce_bk_cons(settings)
+        with settings.stats.duration('recalls'):
+            deduce_recalls(settings)
+    # print(settings.deduced_bkcons)
+    # exit()
 
     tester = Tester(settings)
     explainer = Explainer(settings, tester)
