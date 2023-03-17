@@ -1,5 +1,3 @@
-max_vars(5).
-max_body(5).
 max_clauses(3).
 enable_recursion.
 

@@ -36,30 +36,6 @@ prop(subsumes_1,(P,Q)):-
     not not_subsumes(P,Q).
 
 
-
-%% type(next_cell,(ex,pos,cell_value)).
-%% type(does_jump,(ex,agent,pos,pos)).
-%% type(my_succ,(pos,pos)).
-%% type(my_true_cell,(ex,pos,cell_value)).
-%% type(role,(agent,)).
-%% type(my_pos,(pos,)).
-%% type(different,(pos,pos)).
-%% type(c_zerocoins,(cell_value,)).
-%% type(c_onecoin,(cell_value,)).
-%% type(c_twocoins,(cell_value,)).
-
-%% type(next_score,(ex,player,int)).
-%% type(my_true_score,(ex,player,int)).
-%% type(my_succ,(int,int)).
-%% type(does,(ex,player,action)).
-
-%% prop(subsumes_pab_qa2,(P,Q)):-
-%% holds(P,(A,B)),
-%% holds(Q,(A,)),
-%% type(P,(Ta,Tb)),
-%% type(Q,(Ta,)),
-%% holds(P,(X,_)), #count{X: not holds(Q,(X,))} == 0.
-
 %% pab and qbc implies rac
 prop(pab_qbc_implies_rac,(P,Q,R)):- holds(P,(A,B)), holds(Q,(B,C)), holds(R,(A,C)), not pab_qbc_implies_rac_aux(P,Q,R).
 pab_qbc_implies_rac_aux(P,Q,R):- holds(P,(A,B)), holds(Q,(B,C)), holds(R,(_,_)), not holds(R,(A,C)).
@@ -67,9 +43,6 @@ pab_qbc_implies_rac_aux(P,Q,R):- holds(P,(A,B)), holds(Q,(B,C)), holds(R,(_,_)),
 %% pab and qbc implies rac
 prop(pab_qac_implies_rbc,(P,Q,R)):- holds(P,(A,B)), holds(Q,(A,C)), holds(R,(B,C)), not pab_qac_implies_rbc_aux(P,Q,R).
 pab_qac_implies_rbc_aux(P,Q,R):- holds(P,(A,B)), holds(Q,(A,C)), holds(R,(_,_)), not holds(R,(B,C)).
-
-%% different(B,D),different(B,E),different(D,E),my_true_cell(A,E,C).
-%%     redundant different(B,E)
 
 
 %% p(A,B) implies q(A)

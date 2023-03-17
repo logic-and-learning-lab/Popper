@@ -1,4 +1,4 @@
-%% enable_recursion.
+enable_recursion.
 allow_singletons.
 
 max_body(10).

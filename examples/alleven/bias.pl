@@ -1,4 +1,5 @@
 enable_recursion.
+max_body(10).
 
 head_pred(f,1).
 body_pred(tail,2).

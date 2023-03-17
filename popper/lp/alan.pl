@@ -547,15 +547,15 @@ base_clause(C,P,A):-
     direction_(P,Pos2,in).
 
 %% TODO: Dangerous rules, can cause failure commenting out for now
-% :-
-%     Rule > 0,
-%     head_literal(Rule,P,_,(A,_)),
-%     body_literal(Rule,P,_,(_,A)).
-%
-% :-
-%     Rule > 0,
-%     head_literal(Rule,P,_,(_,A)),
-%     body_literal(Rule,P,_,(A,_)).
+:-
+ Rule > 0,
+ head_literal(Rule,P,_,(A,_)),
+ body_literal(Rule,P,_,(_,A)).
+
+:-
+ Rule > 0,
+ head_literal(Rule,P,_,(_,A)),
+ body_literal(Rule,P,_,(A,_)).
 
 %% PREVENT LEFT RECURSION FOR ARITY 3
 :-

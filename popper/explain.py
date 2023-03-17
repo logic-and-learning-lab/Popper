@@ -8,7 +8,7 @@ from itertools import chain, combinations
 import pkg_resources
 from pyswip import Prolog
 from contextlib import contextmanager
-from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive
+from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, theory_subsumes
 from . core import Literal
 import clingo
 import clingo.script
@@ -96,6 +96,7 @@ class Explainer:
         has_recursion = prog_is_recursive(prog)
 
         for subprog in find_subprogs(prog, has_recursion):
+
             headless = is_headless(subprog)
 
             if headless:
@@ -107,6 +108,9 @@ class Explainer:
                 continue
 
             self.seen_prog.add(k)
+            # print('prog', k)
+            # for rule in subprog:
+                # print(format_rule(rule))
 
             raw_prog = get_raw_prog(subprog)
 
@@ -137,6 +141,7 @@ class Explainer:
                     sat.add(raw_prog)
                     continue
 
+            # print(format_rule())
             unsat.add(raw_prog)
             xs = list(self.explain_totally_incomplete_aux(subprog, directions, depth+1, sat, unsat))
             if len(xs):
@@ -199,18 +204,28 @@ def has_valid_directions(rule):
         return True
 
 def find_subrules(rule, force_head, recursive):
-    for rule in find_subrules_aux(rule, force_head, recursive):
-        head, body = rule
-        if head and not head_connected(rule):
+
+    for subrule in find_subrules_aux(rule, force_head, recursive):
+        head, body = subrule
+
+        if head and not head_connected(subrule):
+            yield from find_subrules(subrule, force_head, recursive)
             continue
+
         if not head and not connected(body):
+            yield from find_subrules(subrule, force_head, recursive)
             continue
-        if not has_valid_directions(rule):
+
+        if not has_valid_directions(subrule):
+            yield from find_subrules(subrule, force_head, recursive)
             continue
-        if head and recursive and not rule_is_recursive(rule) and singleton_head(rule):
+
+        if head and recursive and not rule_is_recursive(subrule) and singleton_head(subrule):
+            yield from find_subrules(subrule, force_head, recursive)
             continue
+
         # %% head input arg in a recursive rule must appear in the bod
-        yield rule
+        yield subrule
 
 def find_subrules_aux(rule, force_head, recursive):
     head, body = rule
@@ -239,7 +254,6 @@ def find_subrules_aux(rule, force_head, recursive):
 
 def find_subprogs(prog, recursive):
     prog = list(prog)
-
     force_head = len(prog) > 1
 
     for i in range(len(prog)):
@@ -328,22 +342,6 @@ def recursive_input_is_ok(rule):
 
 def is_headless(prog):
     return any(head == None for head, body in prog)
-
-# TODO: THIS CHECK IS NOT COMPLETE
-# IT DOES NOT ACCOUNT FOR VARIABLE RENAMING
-# R1 = (None, frozenset({('c3', ('A',)), ('c2', ('A',))}))
-# R2 = (None, frozenset({('c3', ('B',)), ('c2', ('B',), true_value(A,B))}))
-def rule_subsumes(r1, r2):
-    # r1 subsumes r2 if r1 is a subset of r2
-    h1, b1 = r1
-    h2, b2 = r2
-    if h1 != None and h2 == None:
-        return False
-    return b1.issubset(b2)
-
-def theory_subsumes(prog1, prog2):
-    # P1 subsumes P2 if for every rule R2 in P2 there is a rule R1 in P1 such that R1 subsumes R2
-    return all(any(rule_subsumes(r1, r2) for r1 in prog1) for r2 in prog2)
 
 def seen_more_general_unsat(prog, unsat):
     return any(theory_subsumes(seen, prog) for seen in unsat)

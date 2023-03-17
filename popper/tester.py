@@ -52,6 +52,8 @@ class Tester():
         self.cached_pos_covered = {}
         self.cached_inconsistent = {}
 
+        self.cached_neg_covers = {}
+
         # weird
         self.settings.pos_index = self.pos_index
         self.settings.neg_index = self.neg_index
@@ -106,9 +108,17 @@ class Tester():
 
             self.settings.deduced_bkcons += '\n' + '\n'.join(out)
 
+    def tmp(self):
+        len(list(self.prolog.query("true"))) > 0
+
     def test_prog(self, prog):
-        if prog_hash(prog) in self.cached_pos_covered:
-            print('wtf?')
+        # with self.settings.stats.duration('cache test'):
+            # k = prog_hash(prog)
+            # if k in self.cached_pos_covered:
+                # return self.cached_pos_covered[k]
+                # print('wtf?',
+                # for rule in order_prog(prog):
+                    # print('wtf',prog_hash(prog),format_rule(order_rule(rule)))
 
         if len(prog) == 1:
             return self.test_single_rule(prog)
@@ -123,7 +133,7 @@ class Tester():
             pos_covered = set()
             inconsistent = True
 
-        self.cached_pos_covered[prog_hash(prog)] = pos_covered
+        # self.cached_pos_covered[k] = pos_covered
         return pos_covered, inconsistent
 
     def test_single_rule(self, prog):
@@ -199,6 +209,9 @@ class Tester():
             return frozenset(self.query('neg_covered(Xs)', 'Xs'))
 
     def get_neg_covered2(self, prog):
+        k = prog_hash(prog)
+        assert(k not in self.cached_neg_covers)
+
         if len(prog) == 1:
             rule = list(prog)[0]
             head, _body = rule
@@ -207,10 +220,13 @@ class Tester():
             body_str = format_rule((None,ordered_body))[2:-1]
             q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
             xs = next(self.prolog.query(q))
+            self.cached_neg_covers[k] = xs
             return frozenset(xs['Xs'])
         else:
             with self.using(prog):
-                return frozenset(self.query('neg_covered(Xs)', 'Xs'))
+                xs = frozenset(self.query('neg_covered(Xs)', 'Xs'))
+                self.cached_neg_covers[k] = xs
+                return xs
 
 
 
@@ -223,26 +239,26 @@ class Tester():
         with self.using(prog):
             return len(list(self.prolog.query(f"is_more_inconsistent({neg_covered})"))) > 0
 
-    def tmp(self, prog1, prog2):
-        current_clauses = set()
-        try:
-            for rule in prog1:
-                head, _body = rule
-                head.predicate = 'prog1'
-                x = format_rule(order_rule(rule, self.settings))[:-1]
-                self.prolog.assertz(x)
-                current_clauses.add((head.predicate, head.arity))
-            for rule in prog2:
-                head, _body = rule
-                head.predicate = 'prog2'
-                x = format_rule(order_rule(rule, self.settings))[:-1]
-                self.prolog.assertz(x)
-                current_clauses.add((head.predicate, head.arity))
-            return len(list(self.prolog.query(f"covers_more"))) > 0
-        finally:
-            for predicate, arity in current_clauses:
-                args = ','.join(['_'] * arity)
-                self.prolog.retractall(f'{predicate}({args})')
+    # def tmp(self, prog1, prog2):
+    #     current_clauses = set()
+    #     try:
+    #         for rule in prog1:
+    #             head, _body = rule
+    #             head.predicate = 'prog1'
+    #             x = format_rule(order_rule(rule, self.settings))[:-1]
+    #             self.prolog.assertz(x)
+    #             current_clauses.add((head.predicate, head.arity))
+    #         for rule in prog2:
+    #             head, _body = rule
+    #             head.predicate = 'prog2'
+    #             x = format_rule(order_rule(rule, self.settings))[:-1]
+    #             self.prolog.assertz(x)
+    #             current_clauses.add((head.predicate, head.arity))
+    #         return len(list(self.prolog.query(f"covers_more"))) > 0
+    #     finally:
+    #         for predicate, arity in current_clauses:
+    #             args = ','.join(['_'] * arity)
+    #             self.prolog.retractall(f'{predicate}({args})')
 
         # with self.using(prog):
 
