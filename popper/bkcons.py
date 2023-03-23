@@ -50,21 +50,24 @@ def get_body_preds(settings):
 from itertools import permutations, combinations
 myvars = ['A','B','C','D','E','F','G','H']
 
-def connected(xs,ys):
-    for x in xs:
-        for y in ys:
-            if x==y:
-                return True
+def connected(xs, ys):
+    xs = set(xs)
+    for y in ys:
+        if y in xs:
+            return True
     return False
 
 def uses_in_order(xs, ys):
-    zs = set(x for x in xs+ys)
+    zs = set(xs) | set(ys)
     for i in myvars[:len(zs)]:
         if i not in zs:
             return False
     return True
 
 def build_props(arities):
+
+    # arities = [x for x in arities if x < 2]
+
     pairs = []
     for a1 in arities:
         xs = tuple(myvars[:a1])
@@ -77,9 +80,32 @@ def build_props(arities):
                     continue
                 pairs.append((xs, ys))
 
+    pairs2 = set()
+    for xs, ys in pairs:
+        lookup = {}
+        def tmp(vs, next_var):
+            out = []
+            for v in vs:
+                if v not in lookup:
+                    lookup[v] = next_var
+                    next_var+=1
+                k = lookup[v]
+                out.append(chr(ord('A') + k))
+            return tuple(out), next_var
+        var_count = 0
+        out_xs, var_count = tmp(xs, var_count)
+        out_ys, var_count = tmp(ys, var_count)
+        # out_zs, var_count = tmp(zs, var_count)
+        pairs2.add((out_xs, out_ys))
+
+    # print(len(pairs), len(pairs2))
+
+    # for x in sorted(pairs2):
+        # print(x)
+
     props = []
     cons = []
-    for xs, ys in pairs:
+    for xs, ys in pairs2:
         xs_set = set(xs)
         ys_set = set(ys)
 
@@ -107,9 +133,16 @@ def build_props(arities):
             atom_right += ','
 
         # # IMPLIES NOT
-        key = f'{left}_implies_not_{right}'
-        l1 = f'prop({key},(P,Q)):- body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), not {key}_aux((P,Q)).'
-        l2 = f'{key}_aux((P,Q)):- body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), holds(Q,({atom_right})).'
+        # key = f'not_{left}_implies_{right}'
+        key = f'not_{left}_{right}'
+
+        # if the vars are identical then remove symmetries
+        sym_con = ''
+        if xs == ys:
+            sym_con = 'P<Q,'
+
+        l1 = f'prop({key},(P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), not {key}_aux((P,Q)).'
+        l2 = f'{key}_aux((P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), holds(Q,({atom_right})).'
         props.extend([l1, l2])
 
 
@@ -120,14 +153,16 @@ def build_props(arities):
             continue
 
         # IMPLIES
-        key = f'{left}_implies_{right}'
+        key = f'{left}_{right}'
 
+
+        # if the vars are identical then remove symmetries
+        sym_con = ''
         if xs == ys:
-            l1 = f'prop({key},(P,Q)):- P!=Q, body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), holds(Q,({atom_right})), not {key}_aux((P,Q)).'
-            l2 = f'{key}_aux((P,Q)):- P!=Q, body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), not holds(Q,({atom_right})).'
-        else:
-            l1 = f'prop({key},(P,Q)):- body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), holds(Q,({atom_right})), not {key}_aux((P,Q)).'
-            l2 = f'{key}_aux((P,Q)):- body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), not holds(Q,({atom_right})).'
+            sym_con = 'P!=Q,'
+
+        l1 = f'prop({key},(P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), holds(Q,({atom_right})), not {key}_aux((P,Q)).'
+        l2 = f'{key}_aux((P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), not holds(Q,({atom_right})).'
         props.extend([l1, l2])
 
 
@@ -144,9 +179,190 @@ def build_props(arities):
     return props, cons
 
 
+def build_props2(arities):
+    premise1 = []
+
+    arities = [x for x in arities if x < 3]
+    # arities = [x for x in arities if x < 2]
+
+    pairs = []
+    for a1 in arities:
+        xs = tuple(myvars[:a1])
+        # xs_set = set(xs)
+        for a2 in arities:
+            for ys in permutations(myvars,a2):
+                if not connected(xs, ys):
+                    continue
+                if not uses_in_order(xs, ys):
+                    continue
+                xs_ys = set(xs) | set(ys)
+                for a3 in arities:
+                    for zs in permutations(myvars,a3):
+                        if not connected(xs_ys, zs):
+                            continue
+                        if not uses_in_order(xs_ys, zs):
+                            continue
+                        # print(xs,ys,zs)
+                        # TODO: RENAME VARIABLES
+                        pairs.append((xs, ys, zs))
+
+    pairs2 = set()
+    for xs, ys, zs in pairs:
+        lookup = {}
+        def tmp(vs, next_var):
+            out = []
+            for v in vs:
+                if v not in lookup:
+                    lookup[v] = next_var
+                    next_var+=1
+                k = lookup[v]
+                out.append(chr(ord('A') + k))
+            return tuple(out), next_var
+        var_count = 0
+        out_xs, var_count = tmp(xs, var_count)
+        out_ys, var_count = tmp(ys, var_count)
+        out_zs, var_count = tmp(zs, var_count)
+        pairs2.add((out_xs, out_ys, out_zs))
+
+    seen = set()
+    seen_map = {}
+    pairs3 = set()
+    for xs, ys, zs in pairs2:
+        k = (frozenset((xs, ys)), zs)
+        if k in seen:
+            # print('match')
+            # print(xs, ys, zs)
+            # print(seen_map[k])
+            continue
+        seen.add(k)
+        seen_map[k] = (xs, ys, zs)
+
+        # if len(xs) > len(ys):
+        #     # print('1', xs, ys, zs)
+        #     continue
+        # else:
+        # print(xs, ys, zs)
+        pairs3.add((xs, ys, zs))
+
+    # for x in sorted(pairs3):
+        # print(x)
+    # print('p1',len(pairs))
+    # print('p2',len(pairs2))
+    # print('p3',len(pairs3))
+    pairs = pairs2
+    # for x in sorted(pairs2):
+    #     print(x)
+    # print(len(pairs))
+    # print(len(pairs2))
+    # for x in pairs:
+        # print(x)
+    props = []
+    cons = []
+    for xs, ys, zs in pairs:
+        xs_set = set(xs)
+        ys_set = set(ys)
+        zs_set = set(zs)
+
+        a1 = ''.join(x.lower() for x in xs)
+        a2 = ''.join(y.lower() for y in ys)
+        a3 = ''.join(z.lower() for z in zs)
+
+        t1 = ','.join(f'T{x}' for x in xs)
+        t2 = ','.join(f'T{y}' for y in ys)
+        t3 = ','.join(f'T{z}' for z in zs)
 
 
-def deduce_bk_cons(settings):
+        smoothed = []
+        xs_ys_set = xs_set | ys_set
+        for z in zs:
+            if z not in xs_ys_set:
+                smoothed.append('_')
+            else:
+                smoothed.append(z)
+
+        smoothed = ','.join(smoothed)
+        if len(zs) == 1:
+            smoothed += ','
+
+
+        atom1 = ','.join(xs)
+        atom2 = ','.join(ys)
+        atom3 = ','.join(zs)
+
+        if len(xs) == 1:
+            t1 += ','
+            atom1 += ','
+        if len(ys) == 1:
+            t2 += ','
+            atom2 += ','
+        if len(zs) == 1:
+            t3 += ','
+            atom3 += ','
+
+        # # IMPLIES NOT
+        key = f'not_{a1}_{a2}_{a3}'
+
+
+        # # if the vars are identical then remove symmetries
+        sym_con = ''
+        if xs == ys:
+            sym_con += 'P<Q,'
+        if xs == zs:
+            sym_con += 'P<R,'
+        if ys == zs:
+            sym_con += 'Q<R,'
+
+        aux_key = f'{key}_subsumed'
+        aux1 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a1}_{a3},(P,R)).'
+        aux2 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a2}_{a3},(Q,R)).'
+        props.extend([aux1, aux2])
+
+        l1 = f'prop({key},(P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not {key}_aux((P,Q,R)), not {aux_key}(P,Q,R).'
+        l2 = f'{key}_aux((P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), holds(R,({atom3})), not {aux_key}(P,Q,R).'
+
+        # l1 = f'prop({key},(P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not {key}_aux((P,Q,R)).'
+        # l2 = f'{key}_aux((P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), holds(R,({atom3})).'
+
+        props.extend([l1, l2])
+
+        # print(l1)
+        # print(l2)
+
+        con1 = f':- prop({key},(P,Q,R)), body_literal(Rule,P,_,({atom1})), body_literal(Rule,Q,_,({atom2})), body_literal(Rule,R,_,({atom3})).'
+        cons.append(con1)
+
+        if not zs_set.issubset(xs_ys_set):
+            continue
+
+        # # IMPLIES
+        key = f'{a1}_{a2}_{a3}'
+
+
+        aux_key = f'{key}_subsumed'
+        aux1 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop({a1}_{a3},(P,R)).'
+        aux2 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop({a2}_{a3},(Q,R)).'
+        props.extend([aux1, aux2])
+
+
+        l1 = f'prop({key},(P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not {key}_aux((P,Q,R)), not {aux_key}(P,Q,R).'
+        l2 = f'{key}_aux((P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not holds(R,({smoothed})).'
+
+
+        props.extend([l1, l2])
+
+
+        # rule_vars = xs_set | ys_set
+        rule_vars = zs_set
+        checker = ','.join(f'var_appears_more_than_twice(Rule,{v})' for v in rule_vars)
+        con1 = f':- prop({key},(P,Q,R)), body_literal(Rule,P,_,({atom1})), body_literal(Rule,Q,_,({atom2})), body_literal(Rule,R,_,({atom3})), {checker}.'
+        # # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
+        # # print(con1)
+        cons.append(con1)
+    return props, cons
+
+
+
+def deduce_bk_cons(settings, tester):
     prog = []
     lookup2 = {k: f'({v})' for k,v in tmp_map.items()}
     lookup1 = {k:v for k,v in lookup2.items()}
@@ -170,24 +386,67 @@ def deduce_bk_cons(settings):
     cons = pkg_resources.resource_string(__name__, "lp/cons.pl").decode()
     bk = bk.replace('\+','not')
 
-    new_props, new_cons = build_props(arities)
+    # build_props(arities)
+    # build_props2(arities)
+
+    new_props1, new_cons1 = build_props(arities)
+    new_props2, new_cons2 = build_props2(arities)
+
+    # exit()
+
+    new_props = new_props1 + new_props2
+    new_cons = new_cons1 + new_cons2
+
+    # print(new_cons)
+
     new_props = '\n'.join(new_props)
     new_cons = '\n'.join(new_cons)
     encoding = [cons, prog, bias, bk, TIDY_OUTPUT, new_props]
     encoding = '\n'.join(encoding)
     # print(encoding)
-    # with open('bkcons-encoding.pl', 'w') as f:
-        # f.write(encoding)
+    with open('bkcons-encoding.pl', 'w') as f:
+        f.write(encoding)
     # exit()
     solver = clingo.Control(['-Wnone'])
     solver.add('base', [], encoding)
     solver.ground([('base', [])])
     out = set()
+
+    implies_not = []
+
     with solver.solve(yield_=True) as handle:
         for m in handle:
             for atom in m.symbols(shown = True):
+                args = atom.arguments
                 if atom.name == 'prop':
                     out.add(str(atom))
+                    # key = args[0].name
+                    # xs = list(x.name for x in args[1].arguments)
+                    # # print(key, xs)
+                    # if key.startswith('not'):
+                    #     key2 = key.split('_')[1:]
+                    #     # implies_not.append((key, xs))
+                    #     # print(key, xs)
+                    #     out = []
+                    #     # print(key2, xs)
+                    #     for i in range(len(key2)-1):
+                    #         pred = xs[i]
+                    #         args = key2[i]
+                    #         tmp = ','.join(x.upper() for x in args)
+                    #         out.append(f'{pred}({tmp})')
+
+                    #     i = len(xs)-1
+                    #     pred = xs[i]
+                    #     args = key2[i]
+                    #     tmp = ','.join(x.upper() for x in args)
+                    #     out.append(f'not_{pred}({tmp})')
+                    #     # print(key, out)
+                    #     implies_not.append(out)
+
+    # for x in implies_not:
+        # print(x)
+    # print(len(implies_not))
+    # tester.find_redundant_rule_2(implies_not)
     xs = out
     print('\n'.join(sorted(xs)))
     # print(new_cons)

@@ -113,6 +113,9 @@ non_functional:-
 
 subsumes(C,D) :- \+ \+ (copy_term(D,D2), numbervars(D2,0,_), subset(C,D2)).
 
+
+%% subsumes2(C,D) :- \+ \+ (copy_term(D,D2), numbervars(D2,0,_), writeln(D2),subset(C,D2)).
+
 subset([], _D).
 subset([A|B], D):-
     member(A, D),
@@ -134,3 +137,52 @@ find_redundant_rule(P1,K1,K2):-
     select(K1-C1,P1,P2),
     member(K2-C2,P2),
     subsumes(C1,C2),!.
+
+
+subsumes2(A,B):-
+    subsumes(A,B),
+    writeln(asda),
+    writeln(A),
+    writeln(B),
+    \+ subsumes(B,A).
+
+subsumes2(A,B):-
+    subsumes(A,B),
+    subsumes(B,A),
+    length(A,N1),
+    length(B,N2),
+    writeln(asda-N1-N2),
+    writeln(A),
+    writeln(B),
+    %% writeln(N1-N2),
+    N1 =< N2.
+
+%% subsumes2(A,B):-
+%%     subsumes(A,B),
+%%     subsumes(B,A),
+%%     length(A,N1),
+%%     length(B,N2),
+%%     writeln(asda-N1-N2),
+%%     writeln(A),
+%%     writeln(B),
+%%     %% writeln(N1-N2),
+%%     N1 < N2.
+%% %% TODO: ADD MEANINGFUL COMMENT
+reduce_theory(P1,K2):-
+    %% writeln(P1),
+    %% writeln(P2),
+    reduce_theory_(P1,P2),
+    findall(K, member(K-_,P2), K2).
+
+reduce_theory_(P1,P2):-
+    select(K1-C1,P1,P3),
+    member(K2-C2,P3),
+    subsumes(C1,C2),!,
+    %% writeln(asda),
+    %% writeln(C1),
+    %% writeln(C2),
+    %% subsumes2(C2,C1),!,
+    %% writeln(K1-K2),
+    reduce_theory_(P3,P2).
+
+reduce_theory_(P1,P1).

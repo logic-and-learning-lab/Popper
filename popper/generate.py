@@ -242,6 +242,9 @@ class Generator:
 
         encoding = '\n'.join(encoding)
 
+        with open('ENCODING-GEN.pl', 'w') as f:
+            f.write(encoding)
+
         if self.settings.single_solve:
             # solver = clingo.Control(["--heuristic=Domain", "-t5"])
             # solver = clingo.Control(["--heuristic=Domain", '-Wnone'])

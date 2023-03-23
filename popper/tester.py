@@ -445,6 +445,25 @@ class Tester():
         return prog[k1], prog[k2]
         # return len(res) > 0
 
+    def find_redundant_rule_2(self, rules):
+        prog_ = []
+        for i, rule in enumerate(rules):
+            c = f"{i}-[{','.join(rule)}]"
+            prog_.append(c)
+            # print(c)
+        prog_ = f"[{','.join(prog_)}]"
+        # print(prog_)
+        q = f'reduce_theory({prog_},K2)'
+        print(len(rules))
+
+        res = list(self.prolog.query(q))
+        # print(res)
+        # k1 = res[0]['K1']
+        k2 = res[0]['K2']
+        print(len(k2))
+        # pr
+        # return prog[k1], prog[k2]
+
     def find_redundant_rules(self, prog):
         # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
         base = []
