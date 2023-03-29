@@ -404,8 +404,8 @@ def deduce_bk_cons(settings, tester):
     encoding = [cons, prog, bias, bk, TIDY_OUTPUT, new_props]
     encoding = '\n'.join(encoding)
     # print(encoding)
-    with open('bkcons-encoding.pl', 'w') as f:
-        f.write(encoding)
+    # with open('bkcons-encoding.pl', 'w') as f:
+        # f.write(encoding)
     # exit()
     solver = clingo.Control(['-Wnone'])
     solver.add('base', [], encoding)
@@ -448,7 +448,7 @@ def deduce_bk_cons(settings, tester):
     # print(len(implies_not))
     # tester.find_redundant_rule_2(implies_not)
     xs = out
-    print('\n'.join(sorted(xs)))
+    # print('\n'.join(sorted(xs)))
     # print(new_cons)
     settings.deduced_bkcons = '\n'.join(x + '.' for x in xs) + '\n' + new_cons + '\n'
     # settings.deduced_bkcons = '\n'.join(x + '.' for x in xs)

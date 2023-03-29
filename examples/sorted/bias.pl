@@ -1,8 +1,8 @@
 %% speed up example
-%% max_vars(6).
+max_vars(5).
 max_body(5).
-%% max_clauses(2).
-%% enable_recursion.
+max_clauses(2).
+enable_recursion.
 
 head_pred(f,1).
 body_pred(head,2).
@@ -28,27 +28,14 @@ type(odd,(element,)).
 type(one,(element,)).
 type(zero,(element,)).
 
-%% direction(f,(in,)).
-%% direction(head,(in,out)).
-%% direction(tail,(in,out)).
-%% direction(increment,(in,out)).
-%% direction(decrement,(in,out)).
-%% direction(geq,(in,in)).
-%% direction(empty,(in,)).
-%% direction(even,(in,)).
-%% direction(odd,(in,)).
-%% direction(one,(in,)).
-%% direction(zero,(out,)).
-
-
 direction(f,(in,)).
 direction(head,(in,out)).
 direction(tail,(in,out)).
-direction(geq,(out,out)).
-direction(increment,(out,out)).
-direction(decrement,(out,out)).
-direction(even,(out,)).
-direction(odd,(out,)).
-direction(empty,(out,)).
-direction(one,(out,)).
+direction(increment,(in,out)).
+direction(decrement,(in,out)).
+direction(geq,(in,in)).
+direction(empty,(in,)).
+direction(even,(in,)).
+direction(odd,(in,)).
+direction(one,(in,)).
 direction(zero,(out,)).

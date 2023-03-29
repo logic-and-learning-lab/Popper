@@ -168,21 +168,21 @@ subsumes2(A,B):-
 %%     %% writeln(N1-N2),
 %%     N1 < N2.
 %% %% TODO: ADD MEANINGFUL COMMENT
-reduce_theory(P1,K2):-
-    %% writeln(P1),
-    %% writeln(P2),
-    reduce_theory_(P1,P2),
-    findall(K, member(K-_,P2), K2).
+%% reduce_theory(P1,K2):-
+%%     %% writeln(P1),
+%%     %% writeln(P2),
+%%     reduce_theory_(P1,P2),
+%%     findall(K, member(K-_,P2), K2).
 
-reduce_theory_(P1,P2):-
-    select(K1-C1,P1,P3),
-    member(K2-C2,P3),
-    subsumes(C1,C2),!,
-    %% writeln(asda),
-    %% writeln(C1),
-    %% writeln(C2),
-    %% subsumes2(C2,C1),!,
-    %% writeln(K1-K2),
-    reduce_theory_(P3,P2).
+%% reduce_theory_(P1,P2):-
+%%     select(K1-C1,P1,P3),
+%%     member(K2-C2,P3),
+%%     subsumes(C1,C2),!,
+%%     %% writeln(asda),
+%%     %% writeln(C1),
+%%     %% writeln(C2),
+%%     %% subsumes2(C2,C1),!,
+%%     %% writeln(K1-K2),
+%%     reduce_theory_(P3,P2).
 
-reduce_theory_(P1,P1).
+%% reduce_theory_(P1,P1).
