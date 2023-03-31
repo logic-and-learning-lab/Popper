@@ -6,6 +6,7 @@ from . hasse import get_raw_prog as get_raw_prog2
 from . combine import Combiner
 from . explain import Explainer, rule_hash, head_connected, find_subprogs, get_raw_prog, seen_more_general_unsat, seen_more_specific_sat, prog_hash, has_valid_directions
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, prog_size, format_literal, theory_subsumes, rule_subsumes, format_prog
+from . core import Literal
 from . tester import Tester
 from . generate import Generator, Grounder, parse_model, atom_to_symbol, arg_to_symbol
 from . bkcons import deduce_bk_cons, deduce_recalls
@@ -354,13 +355,13 @@ def check_redundant_literal2(prog, tester, settings):
 
 seen_shit_subprog = set()
 # @profile
-def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generator, new_cons, all_handles, d=1, seen_poo=set(), seen_ok=set()):
+def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generator, new_cons, all_handles, d=0, seen_poo=set(), seen_ok=set()):
 
     rule = list(prog)[0]
     head, body = rule
 
     if len(body) == 0:
-        return None
+        return
 
     body = tuple(body)
 
@@ -377,7 +378,7 @@ def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generat
         new_body = body[:i] + body[i+1:]
         new_rule = (head, new_body)
         subprog = frozenset([(head, frozenset(new_body))])
-        raw_subprog = get_raw_prog(subprog)
+        raw_subprog = get_raw_prog2(subprog)
 
         if len(new_body) == 0:
             continue
@@ -385,7 +386,6 @@ def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generat
         k = prog_hash(subprog)
 
         if k in seen_shit_subprog:
-            # print('skip')
             continue
         seen_shit_subprog.add(k)
 
@@ -410,30 +410,15 @@ def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generat
         if not has_valid_directions(new_rule):
             continue
 
-            # pass
-                # TMP1
-
-        # for rule in subprog:
-        #     print('\tsub', format_rule(rule))
-
-        pos_covered = tester.get_pos_covered(subprog)
-        # for rule in subprog:
-            # print(min_coverage, d, format_rule(rule), len(pos_covered))
-
-        # var_count = {x:1 for x in head_vars}
-        # for lit in new_body:
-        #     for x in lit.arguments:
-        #         if x in var_count:
-        #             var_count[x] += 1
-        #         else:
-        #             var_count[x] = 1
-        # if any(v == 1 for v in var_count.values()):
-        #     pass
+        if has_messed_up_vars([new_rule]):
+            new_rule2 = functional_rename_vars(new_rule)
+            k2 = prog_hash([new_rule2])
+            if k2 in seen_shit_subprog:
+                seen_shit_subprog.add(k)
+                continue
 
         if tester.has_redundant_literal(subprog):
-            x = find_most_general_shit_subrule(subprog, tester, settings, min_coverage, generator, new_cons, all_handles, d+1, seen_poo, seen_ok)
-            if x != None:
-                pruned_subprog = x
+            yield from find_most_general_shit_subrule(subprog, tester, settings, min_coverage, generator, new_cons, all_handles, d+1, seen_poo, seen_ok)
             continue
 
         # SLOW BUT SHOULD HELP
@@ -441,30 +426,31 @@ def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generat
             continue
 
         # # SLOW BUT SHOULD HELP
-        # if seen_more_specific_sat(raw_subprog, seen_ok):
-        #     continue
+        if seen_more_specific_sat(raw_subprog, seen_ok):
+            continue
 
-        # print('\ttesting')
         pos_covered = tester.get_pos_covered(subprog)
+
+        print('\t\t', 'testing', min_coverage, len(pos_covered), format_prog(subprog))
+        # print(seen_poo)
+        # for x in seen_poo:
+            # print('\t'*5, x, theory_subsumes(x, raw_subprog))
         if len(pos_covered) <= min_coverage:
+            # print('\t\t\t', 'moo', min_coverage, len(pos_covered), format_prog(subprog))
             pruned = True
-            pruned_subprog = subprog, pos_covered
             seen_poo.add(raw_subprog)
-            x = find_most_general_shit_subrule(subprog, tester, settings, min_coverage, generator, new_cons, all_handles, d+1, seen_poo, seen_ok)
-            if x != None:
-                pruned_subprog = x
+            xs = set(find_most_general_shit_subrule(subprog, tester, settings, min_coverage, generator, new_cons, all_handles, d+1, seen_poo, seen_ok))
+            if len(xs) != 0:
+                yield from xs
             else:
                 new_rule_handles, con = generator.build_specialisation_constraint(subprog)
                 new_cons.add(con)
-                # assert(con not in seen_cons)
-                # seen_cons.add(con)
-                # print('\t\tprune', format_rule(new_rule))
-                # print(format_rule(new_rule))
+                yield subprog, pos_covered
                 if not settings.single_solve:
                     all_handles.update(parse_handles(generator, new_rule_handles))
         else:
             seen_ok.add(raw_subprog)
-    return pruned_subprog
+    # return pruned_subprog
 
 def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons):
     all_ground_cons.update(new_ground_cons)
@@ -576,6 +562,46 @@ def get_min_pos_coverage(combiner, cached_pos_covered):
 #                 loop(node.children)
 #     loop(hasse.children)
 
+def functional_rename_vars(rule):
+    head, body = rule
+    seen_args = set()
+    for body_literal in body:
+        seen_args.update(body_literal.arguments)
+
+    if head:
+        head_vars = set(head.arguments)
+    else:
+        head_vars = set()
+    next_var = len(head_vars)
+    new_body = []
+    lookup = {}
+
+    new_body = set()
+    for body_literal in sorted(body, key=lambda x: x.predicate):
+        new_args = []
+        for var in body_literal.arguments:
+            if var in head_vars:
+                new_args.append(var)
+                continue
+            elif var not in lookup:
+                lookup[var] = chr(ord('A') + next_var)
+                next_var+=1
+            new_args.append(lookup[var])
+        new_atom = Literal(body_literal.predicate, tuple(new_args), body_literal.directions)
+        new_body.add(new_atom)
+
+    return head, frozenset(new_body)
+
+def has_messed_up_vars(prog):
+    for head, body in prog:
+        seen_args = set()
+        seen_args.update(head.arguments)
+        for body_literal in body:
+            seen_args.update(body_literal.arguments)
+        # print(seen_args, any(chr(ord('A') + i) not in seen_args for i in range(len(seen_args))))
+        if any(chr(ord('A') + i) not in seen_args for i in range(len(seen_args))):
+            return True
+    return False
 
 def tmp_rename_vars(prog):
     for rule in prog:
@@ -585,6 +611,7 @@ def tmp_rename_variables(rule):
 
     head, body = rule
     seen_args = set()
+    seen_args.update(head.arguments)
     for body_literal in body:
         seen_args.update(body_literal.arguments)
 
@@ -618,9 +645,10 @@ def tmp_rename_variables(rule):
     # return (head, new_body)
 
 
+# @profile
 def prune_smaller_backtrack2(cached_pos_covered, combiner, generator, new_cons, all_handles, settings, tester, hasse):
     min_coverage = get_min_pos_coverage(combiner, cached_pos_covered)
-    seen_poo = set()
+
 
     to_explore = deque()
     to_explore.extend(hasse.children)
@@ -638,11 +666,12 @@ def prune_smaller_backtrack2(cached_pos_covered, combiner, generator, new_cons, 
 
         prog = node.prog
         deleted_progs.add(node.raw_prog)
-        pruned_smaller = None
+        # pruned_smaller = None
         with settings.stats.duration('most gen2'):
-            pruned_smaller = find_most_general_shit_subrule(prog, tester, settings, min_coverage, generator, new_cons, all_handles, seen_poo=seen_poo)
+            seen_poo = set()
+            pruned_smaller = set(find_most_general_shit_subrule(prog, tester, settings, min_coverage, generator, new_cons, all_handles, seen_poo=seen_poo))
 
-        if pruned_smaller == None:
+        if len(pruned_smaller) == 0:
             print('smaller1', format_prog(prog))
             with settings.stats.duration('prune specialisations1'):
                 specialisation_raw_progs = hasse.prune_specialisations2(prog, node.pos_covered)
@@ -653,14 +682,14 @@ def prune_smaller_backtrack2(cached_pos_covered, combiner, generator, new_cons, 
                 parsed_handles = parse_handles(generator, new_handles)
                 all_handles.update(parsed_handles)
         else:
-            pruned_pruned_smaller_prog, pruned_small_pos_covered = pruned_smaller
+            for pruned_pruned_smaller_prog, pruned_small_pos_covered in pruned_smaller:
             # print('smaller2', format_prog(pruned_pruned_smaller_prog))
-            tmp_rename_vars(pruned_pruned_smaller_prog)
-            print('smaller2', format_prog(pruned_pruned_smaller_prog))
+                tmp_rename_vars(pruned_pruned_smaller_prog)
+                print('smaller2', format_prog(pruned_pruned_smaller_prog))
 
-            with settings.stats.duration('prune specialisations2'):
-                specialisation_raw_progs = hasse.prune_specialisations2(pruned_pruned_smaller_prog, pruned_small_pos_covered)
-            deleted_progs.update(specialisation_raw_progs)
+                with settings.stats.duration('prune specialisations2'):
+                    specialisation_raw_progs = hasse.prune_specialisations2(pruned_pruned_smaller_prog, pruned_small_pos_covered)
+                    deleted_progs.update(specialisation_raw_progs)
 
 # def prune_subsumed_backtrack(pos_covered, combiner, generator, new_cons, all_handles, settings, seen_tmp, could_prune_later):
 #     to_dump = set()
