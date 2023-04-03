@@ -431,7 +431,7 @@ def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generat
 
         pos_covered = tester.get_pos_covered(subprog)
 
-        print('\t\t', 'testing', min_coverage, len(pos_covered), format_prog(subprog))
+        # print('\t\t', 'testing', min_coverage, len(pos_covered), format_prog(subprog))
         # print(seen_poo)
         # for x in seen_poo:
             # print('\t'*5, x, theory_subsumes(x, raw_subprog))
@@ -453,27 +453,34 @@ def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generat
     # return pruned_subprog
 
 def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons):
-    all_ground_cons.update(new_ground_cons)
-    ground_bodies = set()
-    ground_bodies.update(new_ground_cons)
+    with settings.stats.duration('constrain'):
+        all_ground_cons.update(new_ground_cons)
+        ground_bodies = set()
+        ground_bodies.update(new_ground_cons)
 
-    for con in new_cons:
-        ground_rules = generator.get_ground_rules((None, con))
-        for ground_rule in ground_rules:
-            _ground_head, ground_body = ground_rule
-            ground_bodies.add(ground_body)
-            all_ground_cons.add(frozenset(ground_body))
-    for ground_body in ground_bodies:
-        nogood = []
-        for sign, pred, args in ground_body:
-            k = hash((sign, pred, args))
-            if k in cached_clingo_atoms:
-                nogood.append(cached_clingo_atoms[k])
-            else:
-                x = (atom_to_symbol(pred, args), sign)
-                cached_clingo_atoms[k] = x
-                nogood.append(x)
-        model.context.add_nogood(nogood)
+        for con in new_cons:
+            ground_rules = generator.get_ground_rules((None, con))
+            for ground_rule in ground_rules:
+                _ground_head, ground_body = ground_rule
+                ground_bodies.add(ground_body)
+                all_ground_cons.add(frozenset(ground_body))
+
+        nogoods = []
+        for ground_body in ground_bodies:
+            nogood = []
+            for sign, pred, args in ground_body:
+                k = hash((sign, pred, args))
+                if k in cached_clingo_atoms:
+                    nogood.append(cached_clingo_atoms[k])
+                else:
+                    x = (atom_to_symbol(pred, args), sign)
+                    cached_clingo_atoms[k] = x
+                    nogood.append(x)
+            nogoods.append(nogood)
+
+    with settings.stats.duration('constrain_clingo'):
+        for x in nogoods:
+            model.context.add_nogood(x)
 
 def get_min_pos_coverage(combiner, cached_pos_covered):
     min_coverage = 1
@@ -888,11 +895,13 @@ def popper(settings):
                 add_redund2 = False
 
                 # GENERATE A PROGRAM
-                with settings.stats.duration('generate'):
+                with settings.stats.duration('generate_clingo'):
                     # get the next model from the solver
                     model = next(handle, None)
                     if model is None:
                         break
+
+                with settings.stats.duration('generate_parse'):
                     atoms = model.symbols(shown = True)
                     prog, rule_ordering, directions = parse_model(atoms)
 
@@ -1193,8 +1202,8 @@ def popper(settings):
                     build_constraints(settings, generator, new_cons, new_rule_handles, add_spec, add_gen, add_redund1, add_redund2, pruned_sub_incomplete, pruned_more_general_shit, pruned_sub_inconsistent, all_handles, bad_handles, prog, rule_ordering)
 
                 # CONSTRAIN
-                with settings.stats.duration('constrain'):
-                    constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons)
+                # with settings.stats.duration('constrain'):
+                constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons)
 
         # if not pi_or_rec:
         if settings.single_solve:

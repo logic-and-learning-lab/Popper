@@ -878,15 +878,15 @@ only_once(P,A):-
 
 %% :- prop(singleton,P), body_literal(Rule,P,_,_), #count{Vars : body_literal(Rule,P,A,Vars)} > 1.
 
-:- prop(ab_implies_ba,(P,P)), body_literal(Rule,P,_,(A,B)), A>B.
-:- prop(symmetric_abc_acb,(P,P)), body_literal(Rule,P,_,(A,B,C)), B>C.
-:- prop(symmetric_abc_bac,P), body_literal(Rule,P,_,(A,B,C)), A>B.
-:- prop(symmetric_abc_cba,P), body_literal(Rule,P,_,(A,B,C)), A>B.
+:- prop(ab_ba,(P,P)), body_literal(Rule,P,_,(A,B)), A>B.
+:- prop(abc_acb,(P,P)), body_literal(Rule,P,_,(A,B,C)), B>C.
+:- prop(abc_bac,P), body_literal(Rule,P,_,(A,B,C)), A>B.
+:- prop(abc_cba,P), body_literal(Rule,P,_,(A,B,C)), A>B.
 
-:- prop(antitransitive,P), body_literal(Rule,P,_,(A,B)), body_literal(Rule,P,_,(B,C)), body_literal(Rule,P,_,(A,C)).
-:- prop(antitriangular,P), body_literal(Rule,P,_,(A,B)), body_literal(Rule,P,_,(B,C)), body_literal(Rule,P,_,(C,A)).
-:- prop(pre_postcon,(P,Q,R)), body_literal(Rule,P,_,(A,)),body_literal(Rule,Q,_,(A,B)),body_literal(Rule,R,_,(B,)).
-:- prop(chain,(P,Q)), body_literal(Rule,P,_,(_,A)),body_literal(Rule,Q,_,(A,_)).
+%% :- prop(antitransitive,P), body_literal(Rule,P,_,(A,B)), body_literal(Rule,P,_,(B,C)), body_literal(Rule,P,_,(A,C)).
+%% :- prop(antitriangular,P), body_literal(Rule,P,_,(A,B)), body_literal(Rule,P,_,(B,C)), body_literal(Rule,P,_,(C,A)).
+%% :- prop(pre_postcon,(P,Q,R)), body_literal(Rule,P,_,(A,)),body_literal(Rule,Q,_,(A,B)),body_literal(Rule,R,_,(B,)).
+%% :- prop(chain,(P,Q)), body_literal(Rule,P,_,(_,A)),body_literal(Rule,Q,_,(A,_)).
 
 
 %% :- prop(subsumes_1,(P,Q)), body_literal(Rule,P,_,Vars), body_literal(Rule,Q,_,Vars).
