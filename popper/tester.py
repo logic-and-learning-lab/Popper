@@ -32,11 +32,11 @@ class Tester():
         exs_pl_path = self.settings.ex_file
         test_pl_path = pkg_resources.resource_filename(__name__, "lp/test.pl")
 
-        with self.settings.stats.duration('load data'):
-            for x in [exs_pl_path, bk_pl_path, test_pl_path]:
-                if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
-                    x = x.replace('\\', '\\\\')
-                self.prolog.consult(x)
+        # with self.settings.stats.duration('load data'):
+        for x in [exs_pl_path, bk_pl_path, test_pl_path]:
+            if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
+                x = x.replace('\\', '\\\\')
+            self.prolog.consult(x)
 
         # load examples
         self.bool_query(f'load_examples')
@@ -431,19 +431,16 @@ class Tester():
         return False
 
     # WE ASSUME THAT THERE IS A REUNDANT RULE
-    def find_redundant_rule_(self, prog):
-        prog_ = []
-        for i, (head, body) in enumerate(prog):
-            c = f"{i}-[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-            prog_.append(c)
-        prog_ = f"[{','.join(prog_)}]"
-        # print(prog_)
-        q = f'find_redundant_rule({prog_},K1,K2)'
+    def subsumes(self, r1, r2):
+        r2 = str(r2)
+        r2 = r2.replace('A','X')
+        r2 = r2.replace('B','Y')
+        r2 = r2.replace('C','Z')
+        q = f'subsumes_term({r1},{r2})'.replace("'",'')
+        # q = f'subsumes({r1},{r2})'.replace("'",'')
+        # print(q)
         res = list(self.prolog.query(q))
-        k1 = res[0]['K1']
-        k2 = res[0]['K2']
-        return prog[k1], prog[k2]
-        # return len(res) > 0
+        return len(res) > 0
 
     def find_redundant_rule_2(self, rules):
         prog_ = []

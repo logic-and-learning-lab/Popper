@@ -64,11 +64,11 @@ def uses_in_order(xs, ys):
             return False
     return True
 
-def build_props(arities):
+def build_props(arities, tester=None):
 
-    # arities = [x for x in arities if x < 2]
+    arities = [x for x in arities if x < 3]
 
-    pairs = []
+    pairs = set()
     for a1 in arities:
         xs = tuple(myvars[:a1])
         xs_set = set(xs)
@@ -78,8 +78,15 @@ def build_props(arities):
                     continue
                 if not uses_in_order(xs, ys):
                     continue
-                pairs.append((xs, ys))
+                # pairs.append((xs, ys))
+                pairs.add(tuple(sorted([xs, ys])))
 
+    # print('pairs1')
+    # for x in pairs:
+        # print(x)
+    # print('len(pairs)',len(pairs))
+
+    pairs = sorted(pairs)
     pairs2 = set()
     for xs, ys in pairs:
         lookup = {}
@@ -98,14 +105,65 @@ def build_props(arities):
         # out_zs, var_count = tmp(zs, var_count)
         pairs2.add((out_xs, out_ys))
 
-    # print(len(pairs), len(pairs2))
+    pairs3 = set()
+    for xs, ys in pairs2:
+        lookup = {}
+        def tmp(vs, next_var):
+            out = []
+            for v in vs:
+                if v not in lookup:
+                    lookup[v] = next_var
+                    next_var+=1
+                k = lookup[v]
+                out.append(chr(ord('A') + k))
+            return tuple(out), next_var
+        var_count = 0
 
-    # for x in sorted(pairs2):
+        zs = sorted([xs, ys], key=lambda x: len(x), reverse=True)
+        # xs1, ys1 = xs, ys
+        xs, ys = zs
+        out_xs, var_count = tmp(xs, var_count)
+        out_ys, var_count = tmp(ys, var_count)
+        # out_zs, var_count = tmp(zs, var_count)
+        k = (out_xs, out_ys)
+        pairs3.add(k)
+
+    # for x in sorted(pairs3):
         # print(x)
 
+
+    # pairs2 = set(tuple(sorted(xs)) for xs in pairs2)
+    # print('len(pairs2)',len(pairs2))
+
+    # pairs3 = list(sorted(pairs3))
+
+    # subsumed = set()
+
+    # pairs3 = list(pairs3)
+    # for i in range(len(pairs3)):
+    #     for j in range(i+1, len(pairs3)):
+    #         a = [list(x) for x in pairs3[i]]
+    #         b = [list(x) for x in pairs3[j]]
+    #         if tester.subsumes(a,b):
+    #             subsumed.add((b,a))
+    #             # print(a, 'subsumes', b)
+    #         elif tester.subsumes(b,a):
+    #             subsumed.add((a,b))
+    #             # print(b, 'subsumes', a)
+
+
+
+
+
+    # print('pairs2')
+    # for x in sorted(pairs3):
+    #     print(x)
+    # print('len(pairs)',len(pairs))
+    # print('len(pairs2)',len(pairs2))
+    # print('len(pairs3)',len(pairs3))
     props = []
     cons = []
-    for xs, ys in pairs2:
+    for xs, ys in pairs3:
         xs_set = set(xs)
         ys_set = set(ys)
 
@@ -135,6 +193,8 @@ def build_props(arities):
         # # IMPLIES NOT
         # key = f'not_{left}_implies_{right}'
         key = f'not_{left}_{right}'
+
+
 
         # if the vars are identical then remove symmetries
         sym_con = ''
@@ -206,6 +266,8 @@ def build_props2(arities):
                         # TODO: RENAME VARIABLES
                         pairs.append((xs, ys, zs))
 
+    # for x in pairs:
+    #     print(x)
     pairs2 = set()
     for xs, ys, zs in pairs:
         lookup = {}
@@ -219,10 +281,51 @@ def build_props2(arities):
                 out.append(chr(ord('A') + k))
             return tuple(out), next_var
         var_count = 0
+        xs, ys, zs = sorted([xs, ys, zs], key=lambda x: len(x), reverse=True)
         out_xs, var_count = tmp(xs, var_count)
         out_ys, var_count = tmp(ys, var_count)
         out_zs, var_count = tmp(zs, var_count)
         pairs2.add((out_xs, out_ys, out_zs))
+
+    # print(len(pairs2))
+    # pairs2 = set(tuple(sorted(xs)) for xs in pairs2)
+    # print('len(pairs2)',len(pairs2))
+
+    # pairs2 = list(pairs2)
+
+    # for i in range(len(pairs2)):
+    #     for j in range(i, len(pairs2)):
+    #         print(pairs2[i], pairs2[j])
+
+
+    # pairs3 = set()
+    # for xs, ys, zs in pairs2:
+    #     lookup = {}
+    #     def tmp(vs, next_var):
+    #         out = []
+    #         for v in vs:
+    #             if v not in lookup:
+    #                 lookup[v] = next_var
+    #                 next_var+=1
+    #             k = lookup[v]
+    #             out.append(chr(ord('A') + k))
+    #         return tuple(out), next_var
+    #     var_count = 0
+
+    #     zs = sorted([xs, ys], key=lambda x: len(x), reverse=True)
+    #     # xs1, ys1 = xs, ys
+    #     xs, ys = zs
+    #     out_xs, var_count = tmp(xs, var_count)
+    #     out_ys, var_count = tmp(ys, var_count)
+    #     # out_zs, var_count = tmp(zs, var_count)
+    #     k = (out_xs, out_ys)
+    #     pairs3.add(k)
+
+    # print(len(pairs3))
+
+    # for x in sorted(pairs2):
+        # print(x)
+
 
     seen = set()
     seen_map = {}
@@ -389,7 +492,7 @@ def deduce_bk_cons(settings, tester):
     # build_props(arities)
     # build_props2(arities)
 
-    new_props1, new_cons1 = build_props(arities)
+    new_props1, new_cons1 = build_props(arities, tester)
     new_props2, new_cons2 = build_props2(arities)
 
     # exit()
@@ -448,8 +551,8 @@ def deduce_bk_cons(settings, tester):
     # print(len(implies_not))
     # tester.find_redundant_rule_2(implies_not)
     xs = out
-    print('\n'.join(sorted(xs)))
-    # print(new_cons)
+    # print('\n'.join(sorted(xs)))
+    print(len(xs))
     settings.deduced_bkcons = '\n'.join(x + '.' for x in xs) + '\n' + new_cons + '\n'
     # settings.deduced_bkcons = '\n'.join(x + '.' for x in xs)
     # print(new_cons)
