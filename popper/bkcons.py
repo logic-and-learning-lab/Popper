@@ -66,7 +66,7 @@ def uses_in_order(xs, ys):
 
 def build_props(arities, tester=None):
 
-    arities = [x for x in arities if x < 3]
+    # arities = [x for x in arities if x < 3]
 
     pairs = set()
     for a1 in arities:

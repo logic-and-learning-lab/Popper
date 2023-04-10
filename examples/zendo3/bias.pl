@@ -1,4 +1,10 @@
-max_body(7).
+max_body(15).
+%% ********** SOLUTION **********
+%% Precision:1.00 Recall:1.00 TP:50 FN:0 TN:50 FP:0 Size:19
+%% zendo(A):- piece(A,C),rhs(C),contact(C,D),size(D,B),large(B).
+%% zendo(A):- piece(A,C),contact(C,D),size(D,B),large(B),blue(D).
+%% zendo(A):- piece(A,C),red(C),coord1(C,B),piece(A,D),blue(D),coord1(D,B).
+
 
 head_pred(zendo,1).
 body_pred(piece,2).
@@ -50,12 +56,3 @@ direction(upright,(in,)).
 direction(lhs,(in,)).
 direction(rhs,(in,)).
 direction(strange,(in,)).
-
-
-:-
-    clause(Rule),
-    #count{A : body_literal(Rule,contact,_,(A,B))} > 2.
-
-:-
-    clause(Rule),
-    #count{B : body_literal(Rule,contact,_,(A,B))} > 2.

@@ -119,7 +119,7 @@ class Stats:
                 self.durations[operation].append(duration)
 
 def format_prog(prog):
-    return '\n'.join(format_rule(order_rule(rule)) for rule in prog)
+    return '\n'.join(format_rule(order_rule(rule)) for rule in order_prog(prog))
 
 def format_literal(literal):
     args = ','.join(literal.arguments)

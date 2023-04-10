@@ -67,6 +67,8 @@ class Combiner:
         self.skip_count = 0
         self.to_add = []
 
+        self.min_coverage = None
+
         self.big_encoding = set()
         if self.settings.recursion_enabled or self.settings.pi_enabled:
             self.big_encoding.add(':- recursive, not base.')
@@ -136,6 +138,10 @@ class Combiner:
 
 
     def find_combination(self, encoding):
+
+        # if self.min_coverage != None:
+            # encoding.add(':- #sum{1,E : rule(R), covers(R,E)} < ' + f'{self.min_coverage}.')
+
         str_encoding = '\n'.join(encoding)
         self.debug_count += 1
 
@@ -245,6 +251,7 @@ class Combiner:
         this_encoding = set()
 
         if self.solution_found:
+
             # this encoding has a hard constraint to ensure the program is complete
             this_encoding.add(FIND_SUBSET_PROG2)
             # add size constraint to only find programs smaller than the best one so far
@@ -276,6 +283,13 @@ class Combiner:
             for ex in examples_covered:
                 # i = self.example_to_id[ex]
                 self.big_encoding.add(f'covered({ex}):- {prog_rules}.')
+
+            # # TMP!!!!!!!!
+            # if len(new_prog) == 1:
+            #     for ex in examples_covered:
+            #         # i = self.example_to_id[ex]
+            #         self.big_encoding.add(f'covers({prog_rules[0]},{ex}).')
+
 
         # add constraints to prune inconsistent recursive programs
         # with self.settings.stats.duration('inconsistent thingy'):

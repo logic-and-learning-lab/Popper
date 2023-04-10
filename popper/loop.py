@@ -1,9 +1,7 @@
 import time
 import numbers
 from collections import deque
-# from . hasse import Hasse
-from . hasse2 import Hasse
-from . hasse import get_raw_prog as get_raw_prog2
+from . explain import get_raw_prog as get_raw_prog2
 from . combine import Combiner
 from . explain import Explainer, rule_hash, head_connected, find_subprogs, get_raw_prog, seen_more_general_unsat, seen_more_specific_sat, prog_hash, has_valid_directions
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, prog_size, format_literal, theory_subsumes, rule_subsumes, format_prog
@@ -12,9 +10,7 @@ from . tester import Tester
 from . generate import Generator, Grounder, parse_model, atom_to_symbol, arg_to_symbol
 from . bkcons import deduce_bk_cons, deduce_recalls
 
-seen_cons = set()
-cached_pos_covered2 = {}
-seen_parse_handles = {}
+AGGRESSIVE=True
 
 def parse_handles(generator, new_handles):
     for rule in new_handles:
@@ -25,13 +21,11 @@ def parse_handles(generator, new_handles):
             out_b = frozenset((b_pred, b_args) for _, b_pred, b_args in b)
             yield (out_h, out_b)
 
-def explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons, hasse2):
+def explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons):
     pruned_subprog = False
 
     for subprog, unsat_body in explainer.explain_totally_incomplete(prog, directions):
         pruned_subprog = True
-
-
 
         if unsat_body:
             _, body = subprog[0]
@@ -39,8 +33,6 @@ def explain_incomplete(settings, generator, explainer, prog, directions, new_con
             for h, b in generator.get_ground_deep_rules(con):
                 new_ground_cons.add(b)
             continue
-
-        # assert(not hasse2.generalises_child(subprog))
 
         new_rule_handles, con = generator.build_specialisation_constraint(subprog)
         new_cons.add(con)
@@ -356,8 +348,9 @@ def check_redundant_literal2(prog, tester, settings):
 
 seen_shit_subprog = set()
 # @profile
-def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generator, new_cons, all_handles, d=0, seen_poo=set(), seen_ok=set()):
 
+# TODO: seen_more_specific_sat NEEDS UPDATING WITH MIN COVERAGES
+def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generator, new_cons, all_handles, d=0, seen_poo=set(), seen_ok={}, all_seen_crap=set()):
     rule = list(prog)[0]
     head, body = rule
 
@@ -419,20 +412,44 @@ def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generat
                 continue
 
         if tester.has_redundant_literal(subprog):
-            yield from find_most_general_shit_subrule(subprog, tester, settings, min_coverage, generator, new_cons, all_handles, d+1, seen_poo, seen_ok)
+            yield from find_most_general_shit_subrule(subprog, tester, settings, min_coverage, generator, new_cons, all_handles, d+1, seen_poo, seen_ok, all_seen_crap)
             continue
 
         # SLOW BUT SHOULD HELP
         if seen_more_general_unsat(raw_subprog, seen_poo):
             continue
 
+        # if seen_more_general_unsat(raw_subprog, all_seen_crap):
+        #     print('WTF??????')
+        #     continue
+
         # # SLOW BUT SHOULD HELP
+        skip = False
         if seen_more_specific_sat(raw_subprog, seen_ok):
+            for seen, coverage_ in seen_ok.items():
+                if min_coverage <= coverage_ and theory_subsumes(raw_subprog, seen):
+                    skip = True
+                    # print('SEEN_MORE_SPECIFIC_SAT', format_prog(subprog), min_coverage, coverage_)
+                    break
+        if skip:
             continue
 
-        pos_covered = tester.get_pos_covered(subprog)
+                    # print('MOOOOOOOO', coverage_, min_coverage)
+            # if coverage_ == min_coverage and theory_subsumes(raw_subprog, seen):
+        # if seen_more_specific_sat(raw_subprog, seen_ok):
+                # continue
 
-        # print('\t\t', 'testing', min_coverage, len(pos_covered), format_prog(subprog))
+        t1 = time.time()
+        pos_covered = tester.get_pos_covered(subprog)
+        t2 = time.time()
+        d1 = t2-t1
+
+        # t1 = time.time()
+        # pos_covered = tester.covers_more_than_k_examples(subprog, min_coverage)
+        # t2 = time.time()
+        # d2 = t2-t1
+
+        # print('\t\t', 'testing', t2-t1, min_coverage, len(pos_covered), format_prog(subprog))
         # print(seen_poo)
         # for x in seen_poo:
             # print('\t'*5, x, theory_subsumes(x, raw_subprog))
@@ -440,17 +457,17 @@ def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generat
             # print('\t\t\t', 'moo', min_coverage, len(pos_covered), format_prog(subprog))
             pruned = True
             seen_poo.add(raw_subprog)
-            xs = set(find_most_general_shit_subrule(subprog, tester, settings, min_coverage, generator, new_cons, all_handles, d+1, seen_poo, seen_ok))
+            xs = set(find_most_general_shit_subrule(subprog, tester, settings, min_coverage, generator, new_cons, all_handles, d+1, seen_poo, seen_ok, all_seen_crap))
             if len(xs) != 0:
                 yield from xs
             else:
                 new_rule_handles, con = generator.build_specialisation_constraint(subprog)
                 new_cons.add(con)
-                yield subprog, pos_covered
+                yield subprog
                 if not settings.single_solve:
                     all_handles.update(parse_handles(generator, new_rule_handles))
         else:
-            seen_ok.add(raw_subprog)
+            seen_ok[raw_subprog] = min_coverage
     # return pruned_subprog
 
 def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atoms, model, new_ground_cons):
@@ -484,98 +501,15 @@ def constrain(settings, new_cons, generator, all_ground_cons, cached_clingo_atom
         model.context.add_nogood(x)
 
 def get_min_pos_coverage(combiner, cached_pos_covered):
-    min_coverage = 1
+    min_coverage = None
     for x in combiner.best_prog:
-        # k = prog_hash(x)
         if x in cached_pos_covered:
-            # assert(k in cached_pos_covered2)
             v = len(cached_pos_covered[x])
-            if v > min_coverage:
+            if min_coverage == None or v < min_coverage:
                 min_coverage = v
+        else:
+            assert(False)
     return min_coverage
-
-def prune_smaller_backtrack(cached_pos_covered, combiner, could_prune_later, generator, new_cons, all_handles, settings, tester):
-    # min_coverage = min(len(cached_pos_covered[x]) for x in combiner.best_prog)
-
-    min_coverage = get_min_pos_coverage(combiner, cached_pos_covered)
-
-    to_dump = set()
-    # print('most gen2')
-    seen_poo = set()
-    for prog2, pos_covered2 in could_prune_later.items():
-        if len(pos_covered2) <= min_coverage:
-            to_dump.add(prog2)
-            # print('prune_smaller_backtrack')
-            # for rule in order_prog(prog2):
-                # print('\t',format_rule(order_rule(rule)))
-            has_smaller=False
-            with settings.stats.duration('most gen2'):
-                pruned_smaller = set(find_most_general_shit_subrule(prog2, tester, settings, min_coverage, generator, new_cons, all_handles, seen_poo=seen_poo))
-
-            if len(pruned_smaller) == 0:
-                # print('smaller1', format_prog(prog))
-                # with settings.stats.duration('prune specialisations1'):
-                    # specialisation_raw_progs = hasse.prune_specialisations2(prog, node.pos_covered)
-                # deleted_progs.update(specialisation_raw_progs)
-                new_handles, con = generator.build_specialisation_constraint(prog2)
-                new_cons.add(con)
-                if not settings.single_solve:
-                    parsed_handles = parse_handles(generator, new_handles)
-                    all_handles.update(parsed_handles)
-            else:
-                for pruned_pruned_smaller_prog, pruned_small_pos_covered in pruned_smaller:
-                    tmp_rename_vars(pruned_pruned_smaller_prog)
-                    new_handles, con = generator.build_specialisation_constraint(pruned_pruned_smaller_prog)
-                    new_cons.add(con)
-                    if not settings.single_solve:
-                        parsed_handles = parse_handles(generator, new_handles)
-
-    for x in to_dump:
-        del could_prune_later[x]
-
-# @profile
-# def prune_smaller_backtrack3(cached_pos_covered, combiner, generator, new_cons, all_handles, settings, tester, hasse):
-#     min_coverage = get_min_pos_coverage(combiner, cached_pos_covered)
-#     # to_dump = set()
-#     seen_poo = set()
-
-#     pruned_raw_progs = set()
-
-#     # hasse.print()
-#     # print('mooooooo')
-#     # @profile
-#     def loop(nodes):
-#         # SKIP PRUNED!!!
-#         for node in nodes:
-#             if node.raw_prog in pruned_raw_progs:
-#                 continue
-
-#             num_covers2 = len(node.pos_covered)
-#             if num_covers2 <= min_coverage:
-#                 prog2 = node.prog
-#                 pruned_raw_progs.add(node.raw_prog)
-#                 pruned_smaller = None
-#                 with settings.stats.duration('most gen2'):
-#                     pruned_smaller = find_most_general_shit_subrule(prog2, tester, settings, min_coverage, generator, new_cons, all_handles, seen_poo=seen_poo)
-
-#                 if pruned_smaller != None:
-#                     with settings.stats.duration('prune specialisations'):
-#                         specialisation_raw_progs = hasse.prune_specialisations(pruned_smaller)
-#                     pruned_raw_progs.update(specialisation_raw_progs)
-#                     # for rule in order_prog(pruned_smaller):
-#                         # print('\t', 'prune_smaller_backtrack2 smaller', format_rule(order_rule(rule)))
-#                     continue
-
-#                 # for rule in order_prog(prog2):
-#                     # print('\t', 'prune_smaller_backtrack2', format_rule(order_rule(rule)))
-#                 new_handles, con = generator.build_specialisation_constraint(prog2)
-#                 new_cons.add(con)
-#                 if not settings.single_solve:
-#                     parsed_handles = parse_handles(generator, new_handles)
-#                     all_handles.update(parsed_handles)
-#             else:
-#                 loop(node.children)
-#     loop(hasse.children)
 
 def functional_rename_vars(rule):
     head, body = rule
@@ -661,132 +595,250 @@ def tmp_rename_variables(rule):
 
 
 # @profile
-def prune_smaller_backtrack2(cached_pos_covered, combiner, generator, new_cons, all_handles, settings, tester, hasse):
+def prune_smaller_backtrack4(cached_pos_covered, combiner, could_prune_later, generator, new_cons, all_handles, settings, tester):
     min_coverage = get_min_pos_coverage(combiner, cached_pos_covered)
+    if not AGGRESSIVE:
+        min_coverage = 1
 
+    if combiner.solution_found and len(combiner.best_prog) <= 2:
+        min_coverage = len(settings.pos_index)-1
 
-    to_explore = deque()
-    to_explore.extend(hasse.children)
+    to_dump = set()
+    pruned = set()
+    to_prune = set()
 
-    deleted_progs = set()
-    while len(to_explore) > 0:
-        node = to_explore.popleft()
+    # print(f'prune_smaller_backtrack4  min_coverage:{min_coverage} could_prune_later:{len(could_prune_later)}')
 
-        if node.raw_prog in deleted_progs:
+    zs = sorted(could_prune_later.items(), key=lambda x: len(list(x[0])[0][1]), reverse=False)
+    for prog2, pos_covered2 in zs:
+
+        if len(pos_covered2) > min_coverage:
             continue
 
-        if len(node.pos_covered) > min_coverage:
-            to_explore.extend(node.children)
+        to_dump.add(prog2)
+        head, body = list(prog2)[0]
+
+        if any(frozenset((y.predicate, y.arguments) for y in x) in pruned for x in powerset(body)):
             continue
 
-        prog = node.prog
-        deleted_progs.add(node.raw_prog)
-        # pruned_smaller = None
+        z = frozenset((y.predicate, y.arguments) for y in body)
+        pruned.add(z)
+
         with settings.stats.duration('most gen2'):
-            seen_poo = set()
-            pruned_smaller = set(find_most_general_shit_subrule(prog, tester, settings, min_coverage, generator, new_cons, all_handles, seen_poo=seen_poo))
+            if min_coverage > 1:
+                pruned_smaller = set(find_most_general_shit_subrule(prog2, tester, settings, min_coverage, generator, new_cons, all_handles))
+            else:
+                pruned_smaller = set()
 
         if len(pruned_smaller) == 0:
-            print('smaller1', format_prog(prog))
-            with settings.stats.duration('prune specialisations1'):
-                specialisation_raw_progs = hasse.prune_specialisations2(prog, node.pos_covered)
-            deleted_progs.update(specialisation_raw_progs)
-            new_handles, con = generator.build_specialisation_constraint(prog)
-            new_cons.add(con)
-            if not settings.single_solve:
-                parsed_handles = parse_handles(generator, new_handles)
-                all_handles.update(parsed_handles)
+            to_prune.add(prog2)
+            print('pruned smaller1', len(pos_covered2), format_prog(prog2))
         else:
-            for pruned_pruned_smaller_prog, pruned_small_pos_covered in pruned_smaller:
+            for pruned_pruned_smaller_prog in pruned_smaller:
                 tmp_rename_vars(pruned_pruned_smaller_prog)
-                print('smaller2', format_prog(pruned_pruned_smaller_prog))
+                to_prune.add(pruned_pruned_smaller_prog)
+                print('pruned smaller2', len(pos_covered2), format_prog(pruned_pruned_smaller_prog))
+                head, body = list(pruned_pruned_smaller_prog)[0]
+                z = frozenset((y.predicate, y.arguments) for y in body)
+                pruned.add(z)
 
-                with settings.stats.duration('prune specialisations2'):
-                    specialisation_raw_progs = hasse.prune_specialisations2(pruned_pruned_smaller_prog, pruned_small_pos_covered)
-                    deleted_progs.update(specialisation_raw_progs)
-                new_handles, con = generator.build_specialisation_constraint(pruned_pruned_smaller_prog)
-                new_cons.add(con)
-                if not settings.single_solve:
-                    parsed_handles = parse_handles(generator, new_handles)
-                    all_handles.update(parsed_handles)
-
-def prune_subsumed_backtrack(pos_covered, combiner, generator, new_cons, all_handles, settings, could_prune_later):
-    to_dump = set()
-    # TODO: ONLY PRUNE THE MINIMAL ONE
-    # print('a')
-    # for rule in prog:
-        # print('\t',format_rule(rule))
-    print('could_prune_later.items',len(could_prune_later))
-    for prog2, covered2 in could_prune_later.items():
-        if covered2.issubset(pos_covered):
-            print('pruned subsumed backtrack')
-            for rule in order_prog(prog2):
-                print('\t',format_rule(order_rule(rule)))
-            to_dump.add(prog2)
-            new_handles, con = generator.build_specialisation_constraint(prog2)
-            new_cons.add(con)
-            assert(con not in seen_cons)
-            seen_cons.add(con)
-            if not settings.single_solve:
-                all_handles.update(parse_handles(generator, new_handles))
-    for x in to_dump:
-        if x in could_prune_later:
-            del could_prune_later[x]
-
-def prune_subsumed_backtrack2(pos_covered, generator, new_cons, all_handles, settings, hasse):
-    # print('='*20,'start')
-    # hasse.print()
-    # print('='*20, 'end')
-    # exit()
-    # set of raw_progs
-    to_explore = deque()
-    to_explore.extend(hasse.children)
-    deleted_progs = set()
-
-    seen = set()
-
-    # print('prune_subsumed_backtrack2:', pos_covered)
-
-    while len(to_explore) > 0:
-        node = to_explore.popleft()
-
-        if node in seen:
-            # pass
-            # continue
-            # print('ASDA')
-            # print(format_prog(node.prog))
-            continue
-
-        seen.add(node)
-
-        # print('\tnode:', format_prog(node.prog), node.pos_covered)
-
-        # THIS SHOULD NOT HAPPEN BUT SOMETIMES DOES?
-        if node.raw_prog in deleted_progs:
-            continue
-
-        if not any(x in node.pos_covered for x in pos_covered):
-            continue
-
-        if not node.pos_covered.issubset(pos_covered):
-            if pos_covered.issubset(node.pos_covered):
-                to_explore.extend(node.children)
-                # print('\t\tadd children')
-            continue
-
-        print('\t\tsubsumed', format_prog(node.prog))
-
-        prog = node.prog
-        deleted_progs.add(node.raw_prog)
-        deleted = hasse.prune_specialisations2(prog, pos_covered)
-        deleted_progs.update(deleted)
+    for prog in to_prune:
         new_handles, con = generator.build_specialisation_constraint(prog)
         new_cons.add(con)
         if not settings.single_solve:
             parsed_handles = parse_handles(generator, new_handles)
             all_handles.update(parsed_handles)
 
-# @profile
+    for x in to_dump:
+        del could_prune_later[x]
+
+# TODO
+# STOP REDUNDANT CHECKS + CONS
+def prune_subsumed_backtrack2(pos_covered, combiner, generator, new_cons, all_handles, settings, could_prune_later, tester):
+    to_prune = set()
+    pruned = set()
+    to_delete = set()
+
+    seen = set()
+
+    zs = sorted(could_prune_later.items(), key=lambda x: len(list(x[0])[0][1]), reverse=False)
+    for prog2, pos_covered2 in zs:
+    # for prog2, covered2 in could_prune_later.items():
+
+        if pos_covered2.issubset(pos_covered):
+            head, body = list(prog2)[0]
+
+            if body in seen:
+                # print('skip')
+                continue
+            seen.add(body)
+
+            if any(frozenset((y.predicate, y.arguments) for y in x) in pruned for x in powerset(body)):
+                # print('skip1', format_prog(prog2))
+                to_delete.add(prog2)
+                continue
+
+            pruned_subprog = False
+            for x in powerset(body):
+                if len(x) == 0:
+                    continue
+                if len(x) == len(body):
+                    continue
+
+                new_rule = (head, x)
+
+                if not head_connected(new_rule):
+                    continue
+
+                # if not new_vars.issubset(rule_vars):
+                #     pass
+
+                # if not head_vars.issubset(new_body_vars):
+                #     pass
+
+                if not has_valid_directions(new_rule):
+                    continue
+
+                # if seen_more_general_unsat(raw_subprog, seen_poo):
+                    # continue
+
+                tmp = frozenset((y.predicate, y.arguments) for y in x)
+
+                if tmp in seen:
+                    # print('skip2')
+                    continue
+                seen.add(tmp)
+
+                new_prog = frozenset([new_rule])
+                sub_prog_pos_covered = tester.get_pos_covered(new_prog)
+                if sub_prog_pos_covered == pos_covered2:
+                    print('\tpruned subsumed backtrack2', format_prog(new_prog))
+                    to_prune.add(new_prog)
+                    pruned.add(tmp)
+                    pruned_subprog = True
+
+            z = frozenset((y.predicate, y.arguments) for y in body)
+            pruned.add(z)
+            to_delete.add(prog2)
+            if pruned_subprog == False:
+                print('\tpruned subsumed backtrack', format_prog(prog2))
+                to_prune.add(prog2)
+
+
+    for x in to_prune:
+        # del could_prune_later[x]
+        new_handles, con = generator.build_specialisation_constraint(x)
+        new_cons.add(con)
+        if not settings.single_solve:
+            all_handles.update(parse_handles(generator, new_handles))
+
+    for x in to_delete:
+        del could_prune_later[x]
+
+
+# def prune_subsumed_backtrack2_(prog, tester, settings, min_coverage, generator, new_cons, all_handles, d=0, seen_poo=set(), seen_ok={}, all_seen_crap=set()):
+#     rule = list(prog)[0]
+#     head, body = rule
+
+#     if len(body) == 0:
+#         return
+
+#     body = tuple(body)
+
+#     pruned_subprog = None
+
+#     head_vars = set(head.arguments)
+#     rule_vars = set()
+#     rule_vars.update(head_vars)
+
+#     for lit in body:
+#         rule_vars.update(lit.arguments)
+
+#     for i in range(len(body)):
+#         new_body = body[:i] + body[i+1:]
+#         new_rule = (head, new_body)
+#         subprog = frozenset([(head, frozenset(new_body))])
+#         raw_subprog = get_raw_prog2(subprog)
+
+#         if len(new_body) == 0:
+#             continue
+
+#         k = prog_hash(subprog)
+
+#         # if k in seen_shit_subprog:
+#         #     continue
+#         # seen_shit_subprog.add(k)
+
+#         new_vars = set()
+#         new_body_vars = set()
+
+#         for lit in new_body:
+#             new_body_vars.update(lit.arguments)
+
+#         new_vars.update(head_vars)
+#         new_vars.update(new_body_vars)
+
+#         if not head_connected(new_rule):
+#             continue
+
+#         if not has_valid_directions(new_rule):
+#             continue
+
+#         if has_messed_up_vars([new_rule]):
+#             new_rule2 = functional_rename_vars(new_rule)
+#             k2 = prog_hash([new_rule2])
+#             if k2 in seen_shit_subprog:
+#                 seen_shit_subprog.add(k)
+#                 continue
+
+#         if tester.has_redundant_literal(subprog):
+#             print('asda!!!!!!!!')
+#             # yield from find_most_general_shit_subrule(subprog, tester, settings, min_coverage, generator, new_cons, all_handles, d+1, seen_poo, seen_ok, all_seen_crap)
+#             continue
+
+#         # SLOW BUT SHOULD HELP
+#         if seen_more_general_unsat(raw_subprog, seen_poo):
+#             continue
+
+#         t1 = time.time()
+#         pos_covered = tester.get_pos_covered(subprog)
+#         t2 = time.time()
+#         d1 = t2-t1
+
+#         # t1 = time.time()
+#         # pos_covered = tester.covers_more_than_k_examples(subprog, min_coverage)
+#         # t2 = time.time()
+#         # d2 = t2-t1
+
+#         # print('\t\t', 'testing', t2-t1, min_coverage, len(pos_covered), format_prog(subprog))
+#         # print(seen_poo)
+#         # for x in seen_poo:
+#             # print('\t'*5, x, theory_subsumes(x, raw_subprog))
+#         if len(pos_covered) <= min_coverage:
+#             # print('\t\t\t', 'moo', min_coverage, len(pos_covered), format_prog(subprog))
+#             pruned = True
+#             seen_poo.add(raw_subprog)
+#             xs = set(find_most_general_shit_subrule(subprog, tester, settings, min_coverage, generator, new_cons, all_handles, d+1, seen_poo, seen_ok, all_seen_crap))
+#             if len(xs) != 0:
+#                 yield from xs
+#             else:
+#                 new_rule_handles, con = generator.build_specialisation_constraint(subprog)
+#                 new_cons.add(con)
+#                 yield subprog
+#                 if not settings.single_solve:
+#                     all_handles.update(parse_handles(generator, new_rule_handles))
+#         else:
+#             seen_ok[raw_subprog] = min_coverage
+#     # return pruned_subprog
+
+from itertools import chain, combinations
+
+def powerset(iterable):
+    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+    s = list(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+
+
 def build_constraints(settings, generator, new_cons, new_rule_handles, add_spec, add_gen, add_redund1, add_redund2, pruned_sub_incomplete, pruned_more_general_shit, pruned_sub_inconsistent, all_handles, bad_handles, prog, rule_ordering):
     # with settings.stats.duration('build_constraints'):
     # BUILD CONSTRAINTS
@@ -795,8 +847,8 @@ def build_constraints(settings, generator, new_cons, new_rule_handles, add_spec,
         if not settings.single_solve:
             new_rule_handles.update(handles)
         new_cons.add(con)
-        assert(con not in seen_cons)
-        seen_cons.add(con)
+        # assert(con not in seen_cons)
+        # seen_cons.add(con)
 
     if add_gen and not pruned_sub_inconsistent:
         if settings.recursion_enabled or settings.pi_enabled or not pruned_sub_incomplete:
@@ -804,8 +856,8 @@ def build_constraints(settings, generator, new_cons, new_rule_handles, add_spec,
             if not settings.single_solve:
                 new_rule_handles.update(handles)
             new_cons.add(con)
-            assert(con not in seen_cons)
-            seen_cons.add(con)
+            # assert(con not in seen_cons)
+            # seen_cons.add(con)
 
     if add_redund1 and not pruned_sub_incomplete:
         bad_handle, handles, con = generator.redundancy_constraint1(prog)
@@ -813,8 +865,8 @@ def build_constraints(settings, generator, new_cons, new_rule_handles, add_spec,
         if not settings.single_solve:
             new_rule_handles.update(handles)
         new_cons.add(con)
-        assert(con not in seen_cons)
-        seen_cons.add(con)
+        # assert(con not in seen_cons)
+        # seen_cons.add(con)
 
     if add_redund2 and not pruned_sub_incomplete:
         handles, cons = generator.redundancy_constraint2(prog, rule_ordering)
@@ -833,11 +885,11 @@ def build_constraints(settings, generator, new_cons, new_rule_handles, add_spec,
 
 def popper(settings):
     tester = Tester(settings)
+
     if settings.bkcons:
-        # with settings.stats.duration('bkcons'):
-        deduce_bk_cons(settings, tester)
-        # with settings.stats.duration('recalls'):
-        deduce_recalls(settings)
+        with settings.stats.duration('bkcons'):
+            deduce_bk_cons(settings, tester)
+            deduce_recalls(settings)
 
     # exit()
 
@@ -878,13 +930,8 @@ def popper(settings):
 
     # tmp_covered = set()
     cached_pos_covered = {}
-
     could_prune_later = {}
-    # seen_tmp = {}
 
-    # hasse = Hasse()
-    hasse2 = Hasse()
-    # hasse3 = Hasse2()
 
     count_check_redundant_literal2 = 0
     max_size = (1 + settings.max_body) * settings.max_rules
@@ -920,7 +967,6 @@ def popper(settings):
                 pruned_sub_incomplete = False
                 pruned_sub_inconsistent = False
                 pruned_more_general_shit = False
-
                 add_spec = False
                 add_gen = False
                 add_redund1 = False
@@ -940,8 +986,8 @@ def popper(settings):
 
                 if settings.debug:
                     settings.logger.debug(f'Program {settings.stats.total_programs}:')
-                    for rule in order_prog(prog):
-                        settings.logger.debug(format_rule(order_rule(rule)))
+                    settings.logger.debug(format_prog(prog))
+
 
                 is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
                 has_invention = settings.pi_enabled and prog_has_invention(prog)
@@ -951,6 +997,7 @@ def popper(settings):
                 # TEST A PROGRAM
                 with settings.stats.duration('test'):
                     pos_covered, inconsistent = tester.test_prog(prog)
+                    settings.logger.debug(len(pos_covered))
 
                 num_pos_covered = len(pos_covered)
 
@@ -962,14 +1009,25 @@ def popper(settings):
                     explainer.add_seen(prog)
                     if num_pos_covered == 0:
                         with settings.stats.duration('find mucs'):
-                            pruned_sub_incomplete = explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons, hasse2)
+                            pruned_sub_incomplete = explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons)
                     elif combiner.solution_found:
-                        pass
-                        # min_coverage = get_min_pos_coverage(combiner, cached_pos_covered)
-                        # # PUT BACK!!!!!!
-                        # if len(pos_covered) <= min_coverage:
-                        #     pruned_more_general_shit = find_most_general_shit_subrule(prog, tester, settings, min_coverage, generator, new_cons, all_handles)
-                        #     print('MOOOO', pruned_more_general_shit)
+                        # pass
+                        min_coverage = get_min_pos_coverage(combiner, cached_pos_covered)
+                        if not AGGRESSIVE:
+                            min_coverage = 1
+                        if len(pos_covered) <= min_coverage:
+                            add_spec = True
+                            # print('DOES NOT COVER ENOUGH EXAMPLES', len(pos_covered), format_prog(prog))
+                            with settings.stats.duration('find most gen shit'):
+                                more_general_shit_progs = set(find_most_general_shit_subrule(prog, tester, settings, min_coverage, generator, new_cons, all_handles))
+                                if len(more_general_shit_progs):
+                                    pruned_more_general_shit = True
+                                for x in more_general_shit_progs:
+                                    print('PRUNED_MORE_GENERAL_SHIT',format_prog(x))
+                                    new_handles, con = generator.build_specialisation_constraint(x)
+                                    new_cons.add(con)
+                                    if not settings.single_solve:
+                                        all_handles.update(parse_handles(generator, new_handles))
 
                 if inconsistent and is_recursive:
                     combiner.add_inconsistent(prog)
@@ -993,6 +1051,7 @@ def popper(settings):
                 else:
                     # if consistent, prune specialisations
                     add_spec = True
+                    # TODO: CHECK WHETHER THE PROGRAM CONTAINS A REDUNDANT LITERAL
                     # with settings.stats.duration('reduce consistent'):
                     #     # print(format_rule(list(prog)[0]))
                     #     check_can_be_reduced(prog, tester, settings, generator, new_cons)
@@ -1024,16 +1083,12 @@ def popper(settings):
                                 add_gen = True
                                 new_handles, con = generator.build_generalisation_constraint([rule])
                                 new_cons.add(con)
-                                # assert(con not in seen_cons)
-                                # seen_cons.add(con)
                                 if not settings.single_solve:
                                     all_handles.update(parse_handles(generator, new_handles))
 
                 # remove a subset of theta-subsumed rules when learning recursive programs with more than two rules
                 if settings.max_rules > 2 and is_recursive:
                     for x in generator.andy_tmp_con(prog):
-                        # assert(x not in seen_cons)
-                        # seen_cons.add(x)
                         new_cons.add(x)
 
                 # remove generalisations of programs with redundant rules
@@ -1048,8 +1103,6 @@ def popper(settings):
                         print('\t','r2',format_rule(order_rule(r2)))
                         new_handles, con = generator.build_generalisation_constraint([r1,r2])
                         new_cons.add(con)
-                        # assert(con not in seen_cons)
-                        # seen_cons.add(con)
                         all_handles.update(parse_handles(generator, new_handles))
 
                 # check whether subsumed by a seen program
@@ -1057,97 +1110,165 @@ def popper(settings):
 
                 # WHY DO WE HAVE A RECURSIVE CHECK???
                 if num_pos_covered > 0 and not is_recursive:
-                    # with settings.stats.duration('check_subsumed'):
+                    with settings.stats.duration('check_subsumed'):
                 # if num_pos_covered > 0:
                     # AC LOOK AT THIS!!!!!!
                     # assert(add_spec == FalsSe)
-                    subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets)
-                    # if so, prune specialisations
-                    if subsumed:
-                        add_spec = True
+                        subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets)
+                        # if so, prune specialisations
+                        if subsumed:
+                            add_spec = True
+
+                            # print('SUBSUMED',format_prog(prog))
+
+                            head, body = list(prog)[0]
+                            for x in powerset(body):
+                                if len(x) == 0:
+                                    continue
+                                if len(x) == len(body):
+                                    continue
+                                new_rule = (head, x)
+
+                                if not head_connected(new_rule):
+                                    continue
+
+                                if not has_valid_directions(new_rule):
+                                    continue
+
+                                new_prog = frozenset([new_rule])
+                                sub_prog_pos_covered = tester.get_pos_covered(new_prog)
+                                if sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets):
+                                    print('KABOOOOM', format_prog(new_prog))
+                                    new_handles, con = generator.build_specialisation_constraint(new_prog)
+                                    new_cons.add(con)
+                                    if not settings.single_solve:
+                                        all_handles.update(parse_handles(generator, new_handles))
+
+
+                # SPECIAL CASE FOR WHEN THE SOLUTION ONLY HAS AT MOST TWO RULES
+                # TODO: IMPROVE!!!!
+                if combiner.solution_found and len(combiner.best_prog) <= 2:
+                    with settings.stats.duration('new check on min_coverage'):
+                        head, body = list(prog)[0]
+                        for x in powerset(body):
+                            if len(x) == 0:
+                                continue
+                            if len(x) == len(body):
+                                continue
+                            new_rule = (head, x)
+
+                            if not head_connected(new_rule):
+                                continue
+
+                            if not has_valid_directions(new_rule):
+                                continue
+
+                            new_prog = frozenset([new_rule])
+                            sub_prog_pos_covered = tester.get_pos_covered(new_prog)
+                            if len(sub_prog_pos_covered) != num_pos:
+                                # print('MOOOO3')
+                                # print('\trule:',format_prog(prog))
+                                # print('\tsubset',format_prog(new_prog))
+                                new_handles, con = generator.build_specialisation_constraint(new_prog)
+                                new_cons.add(con)
+                                if not settings.single_solve:
+                                    all_handles.update(parse_handles(generator, new_handles))
 
                 # micro-optimisiations
                 # if not settings.recursion_enabled:
-                if True:
+                # if True:
 
-                    # if we already have a solution, a new rule must cover at least two examples
-                    if not add_spec and combiner.solution_found and num_pos_covered == 1:
-                        add_spec = True
+                #     # if we already have a solution, a new rule must cover at least two examples
+                if not add_spec and num_pos_covered == 1:
+                    # print('PANTS', format_prog(prog))
+                    assert(combiner.solution_found == False)
+                        # add_spec = True
 
-                    # keep track of programs that only cover one example
-                    # once we find a solution, we apply specialisation/generalisation constraints
-                    if num_pos_covered == 1:
-                        if not add_gen:
-                            seen_covers_only_one_gen.add(prog)
-                        if not add_spec:
-                            seen_covers_only_one_spec.add(prog)
+                #     # keep track of programs that only cover one example
+                #     # once we find a solution, we apply specialisation/generalisation constraints
+                #     # if num_pos_covered == 1:
+                #     #     if not add_gen:
+                #     #         seen_covers_only_one_gen.add(prog)
+                #     #     if not add_spec:
+                #     #         seen_covers_only_one_spec.add(prog)
 
-                    # keep track of programs that do not cover all the examples
-                    if num_pos_covered != num_pos:
-                        if not add_gen:
-                            seen_incomplete_gen.add(prog)
-                        if not add_spec:
-                            seen_incomplete_spec.add(prog)
+                #     # keep track of programs that do not cover all the examples
+                #     # if num_pos_covered != num_pos:
+                #     #     if not add_gen:
+                #     #         seen_incomplete_gen.add(prog)
+                #     #     if not add_spec:
+                #     #         seen_incomplete_spec.add(prog)
 
-                    # if we find a solution, prune programs that only cover one example
-                    # reset the sets to avoid adding duplicate constraints
-                    if combiner.solution_found:
-                        for x in seen_covers_only_one_gen:
-                            new_handles, con = generator.build_generalisation_constraint(x)
-                            new_cons.add(con)
-                            # assert(con not in seen_cons)
-                            # seen_cons.add(con)
-                            if not settings.single_solve:
-                                all_handles.update(parse_handles(generator, new_handles))
+                #     # if we find a solution, prune programs that only cover one example
+                #     # reset the sets to avoid adding duplicate constraints
+                #     if combiner.solution_found:
+                #         for x in seen_covers_only_one_gen:
+                #             new_handles, con = generator.build_generalisation_constraint(x)
+                #             new_cons.add(con)
+                #             if not settings.single_solve:
+                #                 all_handles.update(parse_handles(generator, new_handles))
 
-                            # if hasse2.seen_prog(x):
-                                # hasse2.remove_prog(x)
+                #             if prog in could_prune_later:
+                #                 print('moo1', format_prog(prog))
 
-                        seen_covers_only_one_gen = set()
-                        for x in seen_covers_only_one_spec:
-                            new_handles, con = generator.build_specialisation_constraint(x)
-                            new_cons.add(con)
-                            if not settings.single_solve:
-                                all_handles.update(parse_handles(generator, new_handles))
-                            # if hasse2.seen_prog(x):
-                                # pass
-                                # hasse2.remove_prog(x)
-                        seen_covers_only_one_spec = set()
+                #             # if hasse2.seen_prog(x):
+                #                 # hasse2.remove_prog(x)
 
-                        if len(combiner.best_prog) <= 2:
-                            for x in seen_incomplete_gen:
-                                new_handles, con = generator.build_generalisation_constraint(x)
-                                new_cons.add(con)
-                                # assert(con not in seen_cons)
-                                # seen_cons.add(con)
-                                if not settings.single_solve:
-                                    all_handles.update(parse_handles(generator, new_handles))
-                                # if hasse2.seen_prog(x):
-                                    # hasse2.remove_prog(x)
-                                # if x in seen_tmp:
-                                    # print('asda4.2')
-                            for x in seen_incomplete_spec:
-                                new_handles, con = generator.build_specialisation_constraint(x)
-                                new_cons.add(con)
-                                # assert(con not in seen_cons)
-                                # seen_cons.add(con)
-                                if not settings.single_solve:
-                                    all_handles.update(parse_handles(generator, new_handles))
-                                # if hasse2.seen_prog(x):
-                                    # hasse2.remove_prog(x)
-                            seen_incomplete_gen = set()
-                            seen_incomplete_spec = set()
+                #         seen_covers_only_one_gen = set()
+                #         for x in seen_covers_only_one_spec:
+                #             new_handles, con = generator.build_specialisation_constraint(x)
+                #             new_cons.add(con)
+                #             if not settings.single_solve:
+                #                 all_handles.update(parse_handles(generator, new_handles))
+
+                #             if prog in could_prune_later:
+                #                 print('moo2', format_prog(prog))
+                #             # if hasse2.seen_prog(x):
+                #                 # pass
+                #                 # hasse2.remove_prog(x)
+                #         seen_covers_only_one_spec = set()
+
+                #         if len(combiner.best_prog) <= 2:
+                #             for x in seen_incomplete_gen:
+                #                 # print('seen_incomplete_gen', format_prog(x))
+                #                 new_handles, con = generator.build_generalisation_constraint(x)
+                #                 new_cons.add(con)
+                #                 # assert(con not in seen_cons)
+                #                 # seen_cons.add(con)
+                #                 if not settings.single_solve:
+                #                     all_handles.update(parse_handles(generator, new_handles))
+
+                #                 if prog in could_prune_later:
+                #                     print('moo3', format_prog(prog))
+                #                 # if hasse2.seen_prog(x):
+                #                     # hasse2.remove_prog(x)
+                #                 # if x in seen_tmp:
+                #                     # print('asda4.2')
+                #             for x in seen_incomplete_spec:
+                #                 new_handles, con = generator.build_specialisation_constraint(x)
+                #                 new_cons.add(con)
+                #                 # assert(con not in seen_cons)
+                #                 # seen_cons.add(con)
+                #                 if not settings.single_solve:
+                #                     all_handles.update(parse_handles(generator, new_handles))
+
+                #                 if prog in could_prune_later:
+                #                     print('moo4', format_prog(prog))
+                #                 # if hasse2.seen_prog(x):
+                #                     # hasse2.remove_prog(x)
+                #             seen_incomplete_gen = set()
+                #             seen_incomplete_spec = set()
 
                 # track how many examples are covered
                 # if a program does not cover enough examples then prune it
                 # if not add_spec and settings.datalog:
                 # if not add_spec and False:
-                if not add_spec:
-                    assert(pruned_sub_incomplete == False)
-                    if combiner.solution_found:
-                        min_coverage = get_min_pos_coverage(combiner, cached_pos_covered)
-                        if num_pos_covered <= min_coverage:
-                            add_spec=True
+                # if not add_spec:
+                #     assert(pruned_sub_incomplete == False)
+                #     if combiner.solution_found:
+                #         min_coverage = get_min_pos_coverage(combiner, cached_pos_covered)
+                #         if num_pos_covered <= min_coverage:
+                #             add_spec=True
                             # print('pruned because program covers too few examples')
                             # for rule in order_prog(prog):
                             #     print('\t',format_rule(order_rule(rule)))
@@ -1173,12 +1294,10 @@ def popper(settings):
                             #     for rule in prog:
                             #         print('\t',format_rule(rule))
 
-                if not add_spec:
+                if not add_spec and not pruned_more_general_shit:
+                    # assert(pruned_more_general_shit == False)
                     assert(pruned_sub_incomplete == False)
-                    with settings.stats.duration('build hasse2'):
-                        hasse2.add(prog, pos_covered)
-                    # with settings.stats.duration('build could_prune_later'):
-                        # could_prune_later[prog] = pos_covered
+                    could_prune_later[prog] = pos_covered
 
                 seen_better_rec = False
                 # with settings.stats.duration('seen_better_rec'):
@@ -1192,9 +1311,11 @@ def popper(settings):
 
                 # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
                 # if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0:
-                if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec:
+                if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general_shit:
 
                     assert(pruned_sub_incomplete == False)
+                    assert(pruned_more_general_shit == False)
+
                     # update success sets
                     success_sets[pos_covered] = prog
                     if is_recursive:
@@ -1207,15 +1328,29 @@ def popper(settings):
                     # if we find a new solution, update the maximum program size
                     # if only adding nogoods, eliminate larger programs
                     if new_solution_found:
+
+                        # if non-separable program covers all examples, stop
+                        if not inconsistent and num_pos_covered == num_pos:
+                            return
+
                         settings.max_literals = combiner.max_size-1
                         if size >= settings.max_literals:
                             return
 
-                        # with settings.stats.duration('prune smaller backtrack OLD'):
-                            # prune_smaller_backtrack(cached_pos_covered, combiner, could_prune_later, generator, new_cons, all_handles, settings, tester)
+                        # x =
 
-                        # with settings.stats.duration('prune smaller backtrack NEW'):
-                            # prune_smaller_backtrack2(cached_pos_covered, combiner, generator, new_cons, all_handles, settings, tester, hasse2)
+                        print('GET_MIN_POS_COVERAGE', get_min_pos_coverage(combiner, cached_pos_covered))
+                        # TMP!!
+                        combiner.min_coverage = get_min_pos_coverage(combiner, cached_pos_covered)
+                        for x in combiner.best_prog:
+                            v = len(cached_pos_covered[x])
+                            print('\t', format_rule(x), v)
+
+                        with settings.stats.duration('prune smaller backtrack'):
+                            prune_smaller_backtrack4(cached_pos_covered, combiner, could_prune_later, generator, new_cons, all_handles, settings, tester)
+
+                        # if len(combiner.best_prog) <= 2:
+                            # tmp(generator, new_cons, all_handles, could_prune_later, tester, num_pos, settings)
 
                         if settings.single_solve:
                             # AC: sometimes adding these size constraints can take longer
@@ -1224,16 +1359,11 @@ def popper(settings):
                                 size_con = [(atom_to_symbol("size", (i,)), True)]
                                 model.context.add_nogood(size_con)
 
-                    # with settings.stats.duration('pruned subsumed backtrack OLD'):
-                        # prune_subsumed_backtrack(pos_covered, combiner, generator, new_cons, all_handles, settings, could_prune_later)
-
-                    with settings.stats.duration('pruned subsumed backtrack NEW'):
-                        prune_subsumed_backtrack2(pos_covered, generator, new_cons, all_handles, settings, hasse2)
+                    with settings.stats.duration('prune subsumed backtrack'):
+                        print('prune_subsumed_backtrack2', format_prog(prog))
+                        prune_subsumed_backtrack2(pos_covered, combiner, generator, new_cons, all_handles, settings, could_prune_later, tester)
 
 
-                # if non-separable program covers all examples, stop
-                if not inconsistent and num_pos_covered == num_pos:
-                    return
 
                 # with settings.stats.duration('build_constraints'):
                 build_constraints(settings, generator, new_cons, new_rule_handles, add_spec, add_gen, add_redund1, add_redund2, pruned_sub_incomplete, pruned_more_general_shit, pruned_sub_inconsistent, all_handles, bad_handles, prog, rule_ordering)

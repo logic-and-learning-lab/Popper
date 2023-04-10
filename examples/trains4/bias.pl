@@ -1,6 +1,6 @@
 max_vars(6).
-%% max_body(10).
-max_body(8).
+max_body(9).
+%% max_body(15).
 
 head_pred(f,1).
 body_pred(has_car,2).

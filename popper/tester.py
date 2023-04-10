@@ -158,6 +158,38 @@ class Tester():
         self.cached_pos_covered[k] = pos_covered
         return pos_covered
 
+
+    def get_pos_covered2(self, prog):
+        if len(prog) == 1:
+            rule = list(prog)[0]
+            head, _body = rule
+            head, ordered_body = order_rule(rule, self.settings)
+            atom_str = format_literal(head)
+            body_str = format_rule((None,ordered_body))[2:-1]
+            q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+            xs = next(self.prolog.query(q))
+            pos_covered = frozenset(xs['Xs'])
+        else:
+            with self.using(prog):
+                pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
+        return pos_covered
+
+    def covers_more_than_k_examples(self, prog, m):
+        if len(prog) == 1:
+            rule = list(prog)[0]
+            head, _body = rule
+            head, ordered_body = order_rule(rule, self.settings)
+            atom_str = format_literal(head)
+            body_str = format_rule((None,ordered_body))[2:-1]
+            q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+            xs = next(self.prolog.query(q))
+            pos_covered = frozenset(xs['Xs'])
+        else:
+            with self.using(prog):
+                pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
+        self.cached_pos_covered[k] = pos_covered
+        return pos_covered
+
     def get_neg_covered(self, prog):
          with self.using(prog):
             return frozenset(self.query('neg_covered(Xs)', 'Xs'))

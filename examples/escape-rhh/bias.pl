@@ -1,4 +1,4 @@
-max_body(10).
+max_body(15).
 %% max_body(2).
 
 %% allow_singletons.

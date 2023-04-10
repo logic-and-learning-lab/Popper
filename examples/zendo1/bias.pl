@@ -1,3 +1,5 @@
+max_body(15).
+
 head_pred(zendo,1).
 body_pred(piece,2).
 body_pred(contact,2).
