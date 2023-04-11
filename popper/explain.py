@@ -45,7 +45,6 @@ def rename_variables(rule):
         new_body.append((body_literal.predicate, tuple(new_args)))
     return (head, new_body)
 
-
 def get_raw_prog(prog):
     xs = set()
     for rule in prog:

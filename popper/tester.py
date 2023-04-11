@@ -11,7 +11,7 @@ import clingo
 import clingo.script
 import pkg_resources
 from . core import Literal
-from . explain import rule_hash, prog_hash
+from . explain import rule_hash, prog_hash, get_raw_prog
 from . generate import parse_model
 from collections import defaultdict
 
@@ -138,10 +138,17 @@ class Tester():
             pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
             return len(pos_covered) == len(self.pos_index)
 
-    def get_pos_covered(self, prog):
+    # @profile
+    def get_pos_covered(self, prog, ignore=False):
         k = prog_hash(prog)
         if k in self.cached_pos_covered:
             return self.cached_pos_covered[k]
+
+        # if not ignore:
+        #     # print('\t'*10, 'calling_prolog')
+        #     # print('\t'*2, k)
+        #     print('\t'*2, 'prog', format_prog(prog))
+        #     # print('\t'*12, 'raw_prog', get_raw_prog(prog))
 
         if len(prog) == 1:
             rule = list(prog)[0]
@@ -159,20 +166,20 @@ class Tester():
         return pos_covered
 
 
-    def get_pos_covered2(self, prog):
-        if len(prog) == 1:
-            rule = list(prog)[0]
-            head, _body = rule
-            head, ordered_body = order_rule(rule, self.settings)
-            atom_str = format_literal(head)
-            body_str = format_rule((None,ordered_body))[2:-1]
-            q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-            xs = next(self.prolog.query(q))
-            pos_covered = frozenset(xs['Xs'])
-        else:
-            with self.using(prog):
-                pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
-        return pos_covered
+    # def get_pos_covered2(self, prog):
+    #     if len(prog) == 1:
+    #         rule = list(prog)[0]
+    #         head, _body = rule
+    #         head, ordered_body = order_rule(rule, self.settings)
+    #         atom_str = format_literal(head)
+    #         body_str = format_rule((None,ordered_body))[2:-1]
+    #         q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+    #         xs = next(self.prolog.query(q))
+    #         pos_covered = frozenset(xs['Xs'])
+    #     else:
+    #         with self.using(prog):
+    #             pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
+    #     return pos_covered
 
     def covers_more_than_k_examples(self, prog, m):
         if len(prog) == 1:

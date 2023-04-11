@@ -203,8 +203,9 @@ class Combiner:
                     if not self.settings.recursion_enabled and not self.settings.pi_enabled:
                         best_prog = rules
                         best_fn = fn
+                        # TODO: only do at the end!!!!!!!!
                         if not self.solution_found:
-                            self.pos_covered = self.tester.get_pos_covered(model_prog)
+                            self.pos_covered = self.tester.get_pos_covered(model_prog, ignore=True)
                         # print('asda', self.debug_count, best_fn)
                         # for rule in model_prog:
                         #     print(format_rule(rule))
