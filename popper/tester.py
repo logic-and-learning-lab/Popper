@@ -5,13 +5,13 @@ import pkg_resources
 from pyswip import Prolog
 from pyswip.prolog import PrologError
 from contextlib import contextmanager
-from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive
+from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, format_prog2
 
 import clingo
 import clingo.script
 import pkg_resources
 from . core import Literal
-from . explain import rule_hash, prog_hash, get_raw_prog
+from . explain import rule_hash, prog_hash, get_raw_prog, prog_hash2
 from . generate import parse_model
 from collections import defaultdict
 
@@ -47,12 +47,14 @@ class Tester():
         self.num_neg = len(self.neg_index)
 
 
-        self.cached_covers_any = {}
-        self.cached_covers_any2 = {}
+        # self.cached_covers_any = {}
+        # self.cached_covers_any2 = {}
         self.cached_pos_covered = {}
         self.cached_inconsistent = {}
+        self.cached_redundant = {}
 
         self.cached_neg_covers = {}
+        self.savings = 0
 
         # weird
         self.settings.pos_index = self.pos_index
@@ -101,20 +103,10 @@ class Tester():
             xs = next(self.prolog.query(q))
             pos_covered = frozenset(xs['Xs'])
             inconsistent = False
-            # q = f'neg_index(_,{atom_str}),{body_str},!'
-            # if len(self.neg_index) > 0:
-            #     inconsistent = len(list(self.prolog.query(q))) > 0
             if len(self.neg_index) > 0:
                 q = f'neg_index(Id,{atom_str}),{body_str},!'
                 xs = list(self.prolog.query(q))
                 if len(xs) > 0:
-                    ex = xs[0]['Id']
-                    k = prog_hash(prog)
-                    if k not in self.cached_covers_any2:
-                        self.cached_covers_any2[k] = set([ex])
-                    else:
-                        self.cached_covers_any2[k].add(ex)
-                    # print(ex)
                     inconsistent = True
 
         except PrologError as err:
@@ -139,16 +131,17 @@ class Tester():
             return len(pos_covered) == len(self.pos_index)
 
     # @profile
-    def get_pos_covered(self, prog, ignore=False):
+    def get_pos_covered(self, prog, ignore=True):
         k = prog_hash(prog)
         if k in self.cached_pos_covered:
             return self.cached_pos_covered[k]
 
-        # if not ignore:
-        #     # print('\t'*10, 'calling_prolog')
-        #     # print('\t'*2, k)
-        #     print('\t'*2, 'prog', format_prog(prog))
-        #     # print('\t'*12, 'raw_prog', get_raw_prog(prog))
+        if not ignore:
+            # pass
+            # print('\t'*10, 'calling_prolog')
+            # print('\t'*2, k)
+            print('prolog', format_prog2(prog))
+            # print('\t'*12, 'raw_prog', get_raw_prog(prog))
 
         if len(prog) == 1:
             rule = list(prog)[0]
@@ -220,8 +213,6 @@ class Tester():
                 xs = frozenset(self.query('neg_covered(Xs)', 'Xs'))
                 self.cached_neg_covers[k] = xs
                 return xs
-
-
 
 
     def get_neg_uncovered(self, prog):
@@ -307,39 +298,39 @@ class Tester():
     #     #     return False
 
 
-    def covers_any3(self, prog, neg):
-        # k = rule_hash(rule)
-        rule = list(prog)[0]
-        k = prog_hash(prog)
-        if k in self.cached_covers_any:
-            for x in self.cached_covers_any[k]:
-                if x in neg:
-                    return True
-        if k in self.cached_covers_any2:
-            for x in self.cached_covers_any2[k]:
-                if x in neg:
-                    return True
-                    # print('MOOCOWJONES!!!!!!!!')
-        self.cached_covers_any[k] = set()
+    # def covers_any3(self, prog, neg):
+    #     # k = rule_hash(rule)
+    #     rule = list(prog)[0]
+    #     k = prog_hash(prog)
+    #     if k in self.cached_covers_any:
+    #         for x in self.cached_covers_any[k]:
+    #             if x in neg:
+    #                 return True
+    #     if k in self.cached_covers_any2:
+    #         for x in self.cached_covers_any2[k]:
+    #             if x in neg:
+    #                 return True
+    #                 # print('MOOCOWJONES!!!!!!!!')
+    #     self.cached_covers_any[k] = set()
 
-        # for rule in prog:
-            # print('\tcalling prolog', format_rule(rule))
+    #     # for rule in prog:
+    #         # print('\tcalling prolog', format_rule(rule))
 
-        rule = list(prog)[0]
-        head, _body = rule
-        head, ordered_body = order_rule(rule, self.settings)
-        atom_str = format_literal(head)
-        body_str = format_rule((None,ordered_body))[2:-1]
-        # q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-        q = f'member(Id,{neg}),neg_index(Id,{atom_str}),{body_str},!'
-        # print(q)
-        xs = list(self.prolog.query(q))
-        if len(xs) > 0:
-            ex = xs[0]['Id']
-            self.cached_covers_any[k].add(ex)
-            return True
-        # print(xs)
-        return False
+    #     rule = list(prog)[0]
+    #     head, _body = rule
+    #     head, ordered_body = order_rule(rule, self.settings)
+    #     atom_str = format_literal(head)
+    #     body_str = format_rule((None,ordered_body))[2:-1]
+    #     # q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+    #     q = f'member(Id,{neg}),neg_index(Id,{atom_str}),{body_str},!'
+    #     # print(q)
+    #     xs = list(self.prolog.query(q))
+    #     if len(xs) > 0:
+    #         ex = xs[0]['Id']
+    #         self.cached_covers_any[k].add(ex)
+    #         return True
+    #     # print(xs)
+    #     return False
 
         # return frozenset(xs['Xs'])
 
@@ -432,17 +423,49 @@ class Tester():
             if res:
                 yield rule
 
+    # @profile
     def has_redundant_literal(self, prog):
-        for rule in prog:
-            head, body = rule
-            if head:
-                c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-            else:
-                c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
-            res = list(self.prolog.query(f'redundant_literal({c})'))
-            if res:
-                return True
-        return False
+        # t1 = time.time()
+        k = prog_hash(prog)
+        out = None
+        if k in self.cached_redundant:
+            out = self.cached_redundant[k]
+        else:
+            for rule in prog:
+                head, body = rule
+                if head:
+                    c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+                else:
+                    c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
+                res = list(self.prolog.query(f'redundant_literal({c})'))
+                if res:
+                    self.cached_redundant[k] = True
+                    break
+                    # return True
+        self.cached_redundant[k] = False
+        out = self.cached_redundant[k]
+        # d1 = time.time()-t1
+
+        # t1 = time.time()
+        # for rule in prog:
+        #     head, body = rule
+        #     if head:
+        #         c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+        #     else:
+        #         c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
+        #     res = list(self.prolog.query(f'redundant_literal({c})'))
+        #     if res:
+        #         break
+        #         # return True
+        # # return False
+        # d2 = time.time()-t1
+        # self.savings += d1-d2
+        # print(self.savings)
+        return out
+        # if k in self.cached_redundant:
+            # return self.cached_redundant[k]
+
+
 
     def has_redundant_rule_(self, prog):
         prog_ = []

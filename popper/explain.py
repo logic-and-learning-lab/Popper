@@ -56,10 +56,41 @@ def prog_hash(prog):
     new_prog = get_raw_prog(prog)
     return hash(new_prog)
 
+
+def prog_hash2(prog):
+    xs = set()
+    for rule in prog:
+        h, b = rule
+        xs.add((h, frozenset(b)))
+    return frozenset(xs)
+
 def headless_hash(subprog):
     rule = subprog[0]
     head, body = rename_variables(rule)
     return hash(frozenset(body))
+
+def powerset(iterable):
+    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+    s = list(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+
+
+pruned = set()
+seen = set()
+
+def get_my_key(body):
+
+    # h = None
+    # if head:
+        # h = (head.predicate, head.arguments)
+    return frozenset((x.predicate, x.arguments) for x in body)
+
+# def get_my_key(body):
+
+    # h = None
+    # if head:
+        # h = (head.predicate, head.arguments)
+    # return frozenset((x[0], x.arguments) for x in body)
 
 class Explainer:
 
@@ -67,6 +98,7 @@ class Explainer:
         self.settings = settings
         self.tester = tester
         self.seen_prog = set()
+        self.savings = 0
 
     def add_seen(self, prog):
         k = prog_hash(prog)
@@ -89,8 +121,144 @@ class Explainer:
         return test_prog
 
     def explain_totally_incomplete(self, prog, directions):
-        return self.explain_totally_incomplete_aux(prog, directions, 0, set(), set())
+        return list(self.explain_totally_incomplete_aux2(prog, directions))
 
+        # t1 = time.time()
+        # xs = list(self.explain_totally_incomplete_aux(prog, directions, 0, set(), set()))
+        # d1 = time.time()-t1
+        # t1 = time.time()
+        # ys = list(self.explain_totally_incomplete_aux2(prog, directions))
+        # d2 = time.time()-t1
+        # # self.savings += (d2-d1)
+        # # print(self.savings)
+
+        # if len(xs) != len(ys):
+        #     print(len(xs), len(ys))
+        #     for x,_ in xs:
+        #     #     print('x', format_prog(x))
+        #     # for y,_ in ys:
+        #     #     print('y', format_prog(y))
+        #     # assert(False)
+        # return xs
+
+
+    def my_tmp(self, rule):
+        head, body = rule
+
+        out = []
+
+        for b in powerset(body):
+
+            if len(b) == 0:
+                continue
+
+            for h in [head, None]:
+                new_rule = (h, b)
+
+                if not has_valid_directions(new_rule):
+                    continue
+
+                if h == None and not connected(b):
+                    continue
+
+                if h != None and not head_connected(new_rule):
+                    continue
+
+                if h != None and len(b) == len(body):
+                    continue
+
+                out.append(new_rule)
+
+        def order_by_size(rule):
+            h, b = rule
+            if h:
+                return 1 + len(b)
+            return len(b)
+
+        xs = sorted(out, key=order_by_size)
+        # for x in xs:
+            # print('X\t',format_rule(x))
+        return xs
+
+
+    # @profile
+    def explain_totally_incomplete_aux2(self, prog, directions):
+        rule = list(prog)[0]
+        head1, body1 = rule
+
+        out = []
+
+        for body2 in powerset(body1):
+            k = frozenset(body2)
+            if k in seen:
+                print('CONTINUE')
+                return
+
+        for head, body in self.my_tmp(rule):
+
+            head_, body_ = rename_variables((head, body))
+
+            # print(body_)
+            k = frozenset(body_)
+            if k in seen:
+                continue
+            seen.add(k)
+
+            headless = head == None
+
+            # if headless:
+            #     if any((None,frozenset(body2)) in pruned for body2 in powerset(body_)):
+            #         continue
+
+            #     if any((None,get_my_key(body2)) in pruned for body2 in powerset(body)):
+            #         # print('asda')
+            #         continue
+            # else:
+            if any(frozenset(body2) in pruned for body2 in powerset(body_)):
+                continue
+
+            if any(get_my_key(body2) in pruned for body2 in powerset(body)):
+                # print('asda')
+                continue
+
+
+            subprog = frozenset([(head, body)])
+
+            # print('testing', format_prog(subprog))
+
+            if headless:
+                if self.tester.is_body_sat(order_body(body)):
+                    continue
+            else:
+                if self.tester.is_sat(subprog):
+                    continue
+
+            # prog2 = frozenset([(head1, body2)])
+
+            z1 = frozenset(body_)
+            z2 = get_my_key(body)
+            # if z1 != z2:
+            #     print('z1', z1)
+            #     print('z2', z2)
+            pruned.add(z1)
+            pruned.add(z2)
+
+            out.append((subprog, headless))
+
+        return out
+
+            # print(format_rule())
+            # unsat.add(raw_prog)
+            # xs = list(self.explain_totally_incomplete_aux(subprog, directions, depth+1, sat, unsat))
+            # if len(xs):
+                # yield from xs
+            # else:
+                # yield subprog, headless
+        # return pruned_subprog
+
+
+
+    # @profile
     def explain_totally_incomplete_aux(self, prog, directions, depth, sat=set(), unsat=set()):
         has_recursion = prog_is_recursive(prog)
 
@@ -148,15 +316,16 @@ class Explainer:
             else:
                 yield subprog, headless
 
+# @profile
 def has_valid_directions(rule):
     head, body = rule
 
     if head:
+        if len(head.inputs) == 0:
+            return True
+
         grounded_variables = head.inputs
         body_literals = set(body)
-
-        if head.inputs == []:
-            return rule
 
         while body_literals:
             selected_literal = None
@@ -285,11 +454,17 @@ def order_body(body):
 
     return tuple(ordered_body)
 
+cached_head_connected = {}
 def head_connected(rule):
+    k = prog_hash([rule])
+    if k in cached_head_connected:
+        return cached_head_connected[k]
+
     head, body = rule
     head_connected_vars = set(head.arguments)
     body_literals = set(body)
 
+    result = True
     while body_literals:
         changed = False
         for literal in body_literals:
@@ -298,9 +473,11 @@ def head_connected(rule):
                 body_literals = body_literals.difference({literal})
                 changed = True
         if changed == False and body_literals:
-            return False
+            result = False
+            break
 
-    return True
+    cached_head_connected[k] = result
+    return result
 
 def connected(body):
     if len(body) == 1:

@@ -121,6 +121,9 @@ class Stats:
 def format_prog(prog):
     return '\n'.join(format_rule(order_rule(rule)) for rule in order_prog(prog))
 
+def format_prog2(prog):
+    return '\n'.join(format_rule(order_rule2(rule)) for rule in order_prog(prog))
+
 def format_literal(literal):
     args = ','.join(literal.arguments)
     return f'{literal.predicate}({args})'
@@ -189,6 +192,10 @@ def rule_is_invented(rule):
     if not head:
         return False
     return head.predicate.startswith('inv')
+
+def order_rule2(rule, settings=None):
+    head, body = rule
+    return (head, sorted(body, key=lambda x: (len(x.arguments), x.predicate, x.arguments)))
 
 def order_rule(rule, settings=None):
 
