@@ -1057,11 +1057,64 @@ def find_most_general_subsumed(prog, tester, success_sets, settings):
         if tester.has_redundant_literal(new_prog):
             assert(False)
 
-        sub_prog_pos_covered = tester.get_pos_covered(new_prog, ignore=False)
+        sub_prog_pos_covered = tester.get_pos_covered(new_prog, ignore=True)
         if sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets):
             out.append(new_prog)
             for _, x in find_variants(new_rule, settings.max_vars):
                 pruned2.add(x)
+    return out
+
+
+def find_most_general_subsumed1(prog, tester, success_sets, settings):
+    head, body = list(prog)[0]
+    body = list(body)
+    out = []
+
+    if len(body) == 0:
+        return []
+
+    for i in range(len(body)):
+        new_body = body[:i] + body[i+1:]
+        new_body = frozenset(new_body)
+
+        if len(new_body) == 0:
+            continue
+
+        new_rule = (head, new_body)
+        new_prog = frozenset({new_rule})
+
+        if not head_connected(new_rule):
+            continue
+
+        if not has_valid_directions(new_rule):
+            continue
+
+        if any(frozenset((y.predicate, y.arguments) for y in x) in pruned2 for x in non_empty_powerset(new_body)):
+            continue
+
+        # AC: THE CODE BELOW ALLOWS USE TO AVOID SOME PROLOG CALLS. HOWEVER, THE OVERHEAD IS RATHER HIGH SO I DOUBT IT IS WORTH INCLUDING
+        # for x in non_empty_powerset(new_body):
+        #     head2, body2 = functional_rename_vars((head, x))
+        #     ys = frozenset((y.predicate, y.arguments) for y in body2)
+        #     if ys in pruned2 and xs not in pruned2:
+        #         BREAK + SKIP
+
+        # if tester.has_redundant_literal(new_prog):
+            # assert(False)
+
+        sub_prog_pos_covered = tester.get_pos_covered(new_prog, ignore=True)
+        subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
+
+        if not subsumed:
+            continue
+
+        xs = find_most_general_subsumed(new_prog, tester, success_sets, settings)
+        for _, x in find_variants(new_rule, settings.max_vars):
+            pruned2.add(x)
+        if len(xs) > 0:
+            return xs
+        out.append(new_prog)
+
     return out
 
 def build_constraints(settings, generator, new_cons, new_rule_handles, add_spec, add_gen, add_redund1, add_redund2, pruned_sub_incomplete, pruned_more_general_shit, pruned_sub_inconsistent, all_handles, bad_handles, prog, rule_ordering):
@@ -1188,6 +1241,10 @@ def popper(settings):
     # tmp_covered = set()
     cached_pos_covered = {}
     could_prune_later = {}
+
+
+    good_checks = 0
+    bad_checks = 0
 
     # count_check_redundant_literal2 = 0
     max_size = (1 + settings.max_body) * settings.max_rules
@@ -1364,6 +1421,11 @@ def popper(settings):
                             add_spec = True
                             if not is_recursive and not has_invention and WITH_MOST_GEN_OPTIMISATIONS:
                                 xs = find_most_general_subsumed(prog, tester, success_sets, settings)
+                                if len(xs) > 0:
+                                    good_checks +=1
+                                else:
+                                    bad_checks +=1
+                                # print(good_checks, bad_checks)
                                 for x in xs:
                                     pruned_more_general_shit = True
                                     if SHOW_PRUNED:
