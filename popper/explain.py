@@ -464,6 +464,10 @@ def head_connected(rule):
     head_connected_vars = set(head.arguments)
     body_literals = set(body)
 
+    if not any(x in head_connected_vars for literal in body for x in literal.arguments):
+        cached_head_connected[k] = False
+        return False
+
     result = True
     while body_literals:
         changed = False

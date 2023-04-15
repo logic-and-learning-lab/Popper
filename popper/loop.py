@@ -6,7 +6,7 @@ from itertools import chain, combinations
 from collections import deque
 from . explain import get_raw_prog as get_raw_prog2
 from . combine import Combiner
-from . explain import Explainer, rule_hash, head_connected, find_subprogs, get_raw_prog, seen_more_general_unsat, seen_more_specific_sat, prog_hash, has_valid_directions
+from . explain import Explainer, rule_hash, head_connected, find_subprogs, get_raw_prog, seen_more_general_unsat, seen_more_specific_sat, prog_hash, has_valid_directions, prog_hash2
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, prog_size, format_literal, theory_subsumes, rule_subsumes, format_prog, format_prog2, order_rule2
 from . core import Literal
 from . tester import Tester
@@ -465,6 +465,58 @@ def find_most_general_shit_subrule(prog, tester, settings, min_coverage, generat
             seen_ok[raw_subprog] = min_coverage
     # return pruned_subprog
 
+
+
+def find_most_general_shit_subrule2(prog, tester, settings, min_coverage):
+    rule = list(prog)[0]
+    head, body = rule
+
+    if len(body) == 0:
+        return
+
+    body = tuple(body)
+
+    out = set()
+
+    for i in range(len(body)):
+        new_body = body[:i] + body[i+1:]
+        new_rule = (head, new_body)
+        new_prog = frozenset([(head, frozenset(new_body))])
+
+        if len(new_body) == 0:
+            continue
+
+        if not head_connected(new_rule):
+            xs = find_most_general_shit_subrule(prog, tester, settings, min_coverage, generator, new_cons, all_handles)
+            out.update(xs)
+            continue
+
+        if not has_valid_directions(new_rule):
+            xs = find_most_general_shit_subrule(prog, tester, settings, min_coverage, generator, new_cons, all_handles)
+            out.update(xs)
+            continue
+
+        if any(frozenset((y.predicate, y.arguments) for y in x) in pruned2 for x in non_empty_powerset(new_body)):
+            continue
+
+        if tester.has_redundant_literal(subprog):
+            assert(False)
+            continue
+
+        pos_covered = tester.get_pos_covered(subprog)
+
+        if len(pos_covered) > min_coverage:
+            continue
+
+        xs = find_most_general_shit_subrule(new_prog, tester, settings, min_coverage)
+        if len(xs) == 0:
+            out.add(new_prog)
+            for _, x in find_variants(new_rule, settings.max_vars):
+                pruned2.add(x)
+        else:
+            out.update(xs)
+
+    return out
 
 # caching
 cached_clingo_atoms = {}
@@ -1027,7 +1079,7 @@ def non_empty_powerset(iterable):
     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
 
 # @profile
-def find_most_general_subsumed(prog, tester, success_sets, settings):
+def find_most_general_subsumed1(prog, tester, success_sets, settings):
     head, body = list(prog)[0]
     out = []
     for new_body in non_empty_powerset(body):
@@ -1064,33 +1116,75 @@ def find_most_general_subsumed(prog, tester, success_sets, settings):
                 pruned2.add(x)
     return out
 
-
-def find_most_general_subsumed1(prog, tester, success_sets, settings):
+@profile
+def find_most_general_subsumed(prog, tester, success_sets, settings, seen=set()):
+    # print('find_most_general_subsumed',format_prog2(prog))
     head, body = list(prog)[0]
     body = list(body)
-    out = []
+    out = set()
+
+    head_vars = set(head.arguments)
 
     if len(body) == 0:
+        # print('\t'*2, 'too small1')
         return []
 
     for i in range(len(body)):
         new_body = body[:i] + body[i+1:]
         new_body = frozenset(new_body)
 
+        tmp1 = frozenset((y.predicate, y.arguments) for y in new_body)
+
         if len(new_body) == 0:
+            # print('\t'*2, 'too small2')
             continue
 
         new_rule = (head, new_body)
         new_prog = frozenset({new_rule})
 
+        if tmp1 in seen:
+            continue
+        seen.add(tmp1)
+        # k = prog_hash2(new_prog)
+        # if k in seen:
+            # print('skip')
+            # continue
+        # seen.add(k)
+
+        # print('\t', format_rule(new_rule))
+
+        if not any(x in head_vars for literal in new_body for x in literal.arguments):
+            # print('\t'*2, 'bad vars')
+            continue
+
+        skip = False
+
+        for x in non_empty_powerset(new_body):
+            tmp2 = frozenset((y.predicate, y.arguments) for y in x)
+            if tmp1 == tmp2:
+                continue
+            if tmp2 in pruned2:
+                skip = True
+                break
+            if tmp2 in seen:
+                skip = True
+                break
+        if skip:
+            continue
+
+
         if not head_connected(new_rule):
+            # print('\t'*2, 'not head_connected')
+            xs = find_most_general_subsumed(new_prog, tester, success_sets, settings, seen)
+            out.update(xs)
             continue
 
-        if not has_valid_directions(new_rule):
-            continue
-
-        if any(frozenset((y.predicate, y.arguments) for y in x) in pruned2 for x in non_empty_powerset(new_body)):
-            continue
+        # if not has_valid_directions(new_rule):
+        #     # print('b', format_rule(new_rule))
+        #     print('\t'*2, 'c')
+        #     xs = find_most_general_subsumed(new_prog, tester, success_sets, settings)
+        #     out.update(xs)
+        #     continue
 
         # AC: THE CODE BELOW ALLOWS USE TO AVOID SOME PROLOG CALLS. HOWEVER, THE OVERHEAD IS RATHER HIGH SO I DOUBT IT IS WORTH INCLUDING
         # for x in non_empty_powerset(new_body):
@@ -1106,15 +1200,21 @@ def find_most_general_subsumed1(prog, tester, success_sets, settings):
         subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
 
         if not subsumed:
+            # print('\t'*2, 'not subsumed')
             continue
 
-        xs = find_most_general_subsumed(new_prog, tester, success_sets, settings)
+        # print('\t'*2, 'is subsumed')
+        xs = find_most_general_subsumed(new_prog, tester, success_sets, settings, seen)
+
+        if len(xs) > 0:
+            out.update(xs)
+            continue
+
+        # print('pruning variants', format_prog2(new_prog))
         for _, x in find_variants(new_rule, settings.max_vars):
             pruned2.add(x)
-        if len(xs) > 0:
-            return xs
-        out.append(new_prog)
 
+        out.add(new_prog)
     return out
 
 def build_constraints(settings, generator, new_cons, new_rule_handles, add_spec, add_gen, add_redund1, add_redund2, pruned_sub_incomplete, pruned_more_general_shit, pruned_sub_inconsistent, all_handles, bad_handles, prog, rule_ordering):
@@ -1535,8 +1635,8 @@ def popper(settings):
                     build_constraints(settings, generator, new_cons, new_rule_handles, add_spec, add_gen, add_redund1, add_redund2, pruned_sub_incomplete, pruned_more_general_shit, pruned_sub_inconsistent, all_handles, bad_handles, prog, rule_ordering)
 
                 # CONSTRAIN
-                with settings.stats.duration('constrain'):
-                    constrain(settings, new_cons, generator, all_ground_cons, model, new_ground_cons)
+                # with settings.stats.duration('constrain'):
+                constrain(settings, new_cons, generator, all_ground_cons, model, new_ground_cons)
 
         # if not pi_or_rec:
         if settings.single_solve:
