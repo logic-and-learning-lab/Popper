@@ -1476,10 +1476,10 @@ def popper(settings):
                         # if the programs does not cover any positive examples, check whether it is has an unsat core
                         with settings.stats.duration('find mucs'):
                             pruned_sub_incomplete = explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons)
-                            xs = find_most_gen_unsat(prog, tester, settings)
-                            for x in xs:
-                                # print(x)
-                                print('\t',format_prog2(x),'\t','asda')
+                            # xs = find_most_gen_unsat(prog, tester, settings)
+                            # for x in xs:
+                            #     # print(x)
+                            #     print('\t',format_prog2(x),'\t','asda')
                     elif combiner.solution_found and not is_recursive and not has_invention and WITH_OPTIMISATIONS:
                         min_coverage = get_min_pos_coverage(combiner.best_prog, cached_pos_covered)
                         if not AGGRESSIVE:
