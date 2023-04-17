@@ -121,10 +121,10 @@ class Explainer:
         return test_prog
 
     def explain_totally_incomplete(self, prog, directions):
-        return list(self.explain_totally_incomplete_aux2(prog, directions))
+        # return list(self.explain_totally_incomplete_aux(prog, directions))
 
         # t1 = time.time()
-        # xs = list(self.explain_totally_incomplete_aux(prog, directions, 0, set(), set()))
+        return list(self.explain_totally_incomplete_aux(prog, directions, 0, set(), set()))
         # d1 = time.time()-t1
         # t1 = time.time()
         # ys = list(self.explain_totally_incomplete_aux2(prog, directions))
@@ -181,71 +181,71 @@ class Explainer:
         return xs
 
 
-    # @profile
-    def explain_totally_incomplete_aux2(self, prog, directions):
-        rule = list(prog)[0]
-        head1, body1 = rule
+    # # @profile
+    # def explain_totally_incomplete_aux2(self, prog, directions):
+    #     rule = list(prog)[0]
+    #     head1, body1 = rule
 
-        out = []
+    #     out = []
 
-        for body2 in powerset(body1):
-            k = frozenset(body2)
-            if k in seen:
-                print('CONTINUE')
-                return
+    #     for body2 in powerset(body1):
+    #         k = frozenset(body2)
+    #         if k in seen:
+    #             print('CONTINUE')
+    #             return
 
-        for head, body in self.my_tmp(rule):
+    #     for head, body in self.my_tmp(rule):
 
-            head_, body_ = rename_variables((head, body))
+    #         head_, body_ = rename_variables((head, body))
 
-            # print(body_)
-            k = frozenset(body_)
-            if k in seen:
-                continue
-            seen.add(k)
+    #         # print(body_)
+    #         k = frozenset(body_)
+    #         if k in seen:
+    #             continue
+    #         seen.add(k)
 
-            headless = head == None
+    #         headless = head == None
 
-            # if headless:
-            #     if any((None,frozenset(body2)) in pruned for body2 in powerset(body_)):
-            #         continue
+    #         # if headless:
+    #         #     if any((None,frozenset(body2)) in pruned for body2 in powerset(body_)):
+    #         #         continue
 
-            #     if any((None,get_my_key(body2)) in pruned for body2 in powerset(body)):
-            #         # print('asda')
-            #         continue
-            # else:
-            if any(frozenset(body2) in pruned for body2 in powerset(body_)):
-                continue
+    #         #     if any((None,get_my_key(body2)) in pruned for body2 in powerset(body)):
+    #         #         # print('asda')
+    #         #         continue
+    #         # else:
+    #         if any(frozenset(body2) in pruned for body2 in powerset(body_)):
+    #             continue
 
-            if any(get_my_key(body2) in pruned for body2 in powerset(body)):
-                # print('asda')
-                continue
+    #         if any(get_my_key(body2) in pruned for body2 in powerset(body)):
+    #             # print('asda')
+    #             continue
 
 
-            subprog = frozenset([(head, body)])
+    #         subprog = frozenset([(head, body)])
 
-            # print('testing', format_prog(subprog))
+    #         # print('testing', format_prog(subprog))
 
-            if headless:
-                if self.tester.is_body_sat(order_body(body)):
-                    continue
-            else:
-                if self.tester.is_sat(subprog):
-                    continue
+    #         if headless:
+    #             if self.tester.is_body_sat(order_body(body)):
+    #                 continue
+    #         else:
+    #             if self.tester.is_sat(subprog):
+    #                 continue
 
-            # prog2 = frozenset([(head1, body2)])
+    #         # prog2 = frozenset([(head1, body2)])
 
-            z1 = frozenset(body_)
-            z2 = get_my_key(body)
-            # if z1 != z2:
-            #     print('z1', z1)
-            #     print('z2', z2)
-            pruned.add(z1)
-            pruned.add(z2)
+    #         z1 = frozenset(body_)
+    #         z2 = get_my_key(body)
+    #         # if z1 != z2:
+    #         #     print('z1', z1)
+    #         #     print('z2', z2)
+    #         pruned.add(z1)
+    #         pruned.add(z2)
 
-            out.append((subprog, headless))
+    #         out.append((subprog, headless))
 
-        return out
+    #     return out
 
             # print(format_rule())
             # unsat.add(raw_prog)

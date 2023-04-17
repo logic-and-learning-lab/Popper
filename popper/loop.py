@@ -891,10 +891,6 @@ def prune_subsumed_backtrack2(pos_covered, combiner, generator, new_cons, all_ha
             to_delete.add(prog2)
             continue
 
-        head_, body2 = functional_rename_vars((head, body))
-        if any(frozenset((y.predicate, y.arguments) for y in x) in pruned for x in non_empty_powerset(body2)):
-            assert(False)
-            continue
 
         pruned_subprog = False
 
@@ -1116,49 +1112,38 @@ def find_most_general_subsumed1(prog, tester, success_sets, settings):
                 pruned2.add(x)
     return out
 
-@profile
+# @profile
 def find_most_general_subsumed(prog, tester, success_sets, settings, seen=set()):
-    # print('find_most_general_subsumed',format_prog2(prog))
     head, body = list(prog)[0]
     body = list(body)
-    out = set()
-
-    head_vars = set(head.arguments)
 
     if len(body) == 0:
-        # print('\t'*2, 'too small1')
         return []
+
+    out = set()
+    head_vars = set(head.arguments)
 
     for i in range(len(body)):
         new_body = body[:i] + body[i+1:]
         new_body = frozenset(new_body)
 
-        tmp1 = frozenset((y.predicate, y.arguments) for y in new_body)
-
         if len(new_body) == 0:
             # print('\t'*2, 'too small2')
             continue
 
-        new_rule = (head, new_body)
-        new_prog = frozenset({new_rule})
+        tmp1 = frozenset((y.predicate, y.arguments) for y in new_body)
 
         if tmp1 in seen:
             continue
         seen.add(tmp1)
-        # k = prog_hash2(new_prog)
-        # if k in seen:
-            # print('skip')
-            # continue
-        # seen.add(k)
 
-        # print('\t', format_rule(new_rule))
+        new_rule = (head, new_body)
+        new_prog = frozenset({new_rule})
 
         if not any(x in head_vars for literal in new_body for x in literal.arguments):
-            # print('\t'*2, 'bad vars')
             continue
 
         skip = False
-
         for x in non_empty_powerset(new_body):
             tmp2 = frozenset((y.predicate, y.arguments) for y in x)
             if tmp1 == tmp2:
@@ -1166,15 +1151,10 @@ def find_most_general_subsumed(prog, tester, success_sets, settings, seen=set())
             if tmp2 in pruned2:
                 skip = True
                 break
-            if tmp2 in seen:
-                skip = True
-                break
         if skip:
             continue
 
-
         if not head_connected(new_rule):
-            # print('\t'*2, 'not head_connected')
             xs = find_most_general_subsumed(new_prog, tester, success_sets, settings, seen)
             out.update(xs)
             continue
@@ -1186,13 +1166,6 @@ def find_most_general_subsumed(prog, tester, success_sets, settings, seen=set())
         #     out.update(xs)
         #     continue
 
-        # AC: THE CODE BELOW ALLOWS USE TO AVOID SOME PROLOG CALLS. HOWEVER, THE OVERHEAD IS RATHER HIGH SO I DOUBT IT IS WORTH INCLUDING
-        # for x in non_empty_powerset(new_body):
-        #     head2, body2 = functional_rename_vars((head, x))
-        #     ys = frozenset((y.predicate, y.arguments) for y in body2)
-        #     if ys in pruned2 and xs not in pruned2:
-        #         BREAK + SKIP
-
         # if tester.has_redundant_literal(new_prog):
             # assert(False)
 
@@ -1200,18 +1173,92 @@ def find_most_general_subsumed(prog, tester, success_sets, settings, seen=set())
         subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
 
         if not subsumed:
-            # print('\t'*2, 'not subsumed')
             continue
 
-        # print('\t'*2, 'is subsumed')
         xs = find_most_general_subsumed(new_prog, tester, success_sets, settings, seen)
-
         if len(xs) > 0:
             out.update(xs)
             continue
 
-        # print('pruning variants', format_prog2(new_prog))
         for _, x in find_variants(new_rule, settings.max_vars):
+            pruned2.add(x)
+
+        out.add(new_prog)
+    return out
+
+tmp_cache = set()
+def find_most_gen_unsat(prog, tester, settings, seen=set()):
+    head, body = list(prog)[0]
+    body = list(body)
+
+    if len(body) == 0:
+        return []
+
+    out = set()
+    head_vars = set(head.arguments)
+
+    for i in range(len(body)):
+        new_body = body[:i] + body[i+1:]
+        new_body = frozenset(new_body)
+
+        if len(new_body) == 0:
+            continue
+
+        tmp1 = frozenset((y.predicate, y.arguments) for y in new_body)
+
+        if tmp1 in seen:
+            continue
+        seen.add(tmp1)
+
+        new_rule = (head, new_body)
+        new_prog = frozenset({new_rule})
+
+        if not any(x in head_vars for literal in new_body for x in literal.arguments):
+            continue
+
+        skip = False
+        for x in non_empty_powerset(new_body):
+            tmp2 = frozenset((y.predicate, y.arguments) for y in x)
+            if tmp1 == tmp2:
+                continue
+            if tmp2 in tmp_cache:
+                skip = True
+                break
+        if skip:
+            continue
+
+        skip = False
+        for x in non_empty_powerset(new_body):
+            tmp2 = frozenset((y.predicate, y.arguments) for y in x)
+            if tmp2 in pruned2:
+                print('KABBBOOM')
+                print(format_prog2(prog))
+                print(tmp2)
+                xs = find_most_gen_unsat(new_prog, tester, settings, seen)
+                out.update(xs)
+                skip = True
+                break
+        if skip:
+            continue
+
+
+
+        if not head_connected(new_rule):
+            xs = find_most_gen_unsat(new_prog, tester, settings, seen)
+            out.update(xs)
+            continue
+
+
+        if tester.is_sat(new_prog):
+            continue
+
+        xs = find_most_gen_unsat(new_prog, tester, settings, seen)
+        if len(xs) > 0:
+            out.update(xs)
+            continue
+
+        for _, x in find_variants(new_rule, settings.max_vars):
+            tmp_cache.add(x)
             pruned2.add(x)
 
         out.add(new_prog)
@@ -1429,6 +1476,10 @@ def popper(settings):
                         # if the programs does not cover any positive examples, check whether it is has an unsat core
                         with settings.stats.duration('find mucs'):
                             pruned_sub_incomplete = explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons)
+                            xs = find_most_gen_unsat(prog, tester, settings)
+                            for x in xs:
+                                # print(x)
+                                print('\t',format_prog2(x),'\t','asda')
                     elif combiner.solution_found and not is_recursive and not has_invention and WITH_OPTIMISATIONS:
                         min_coverage = get_min_pos_coverage(combiner.best_prog, cached_pos_covered)
                         if not AGGRESSIVE:
@@ -1530,6 +1581,7 @@ def popper(settings):
                                     pruned_more_general_shit = True
                                     if SHOW_PRUNED:
                                         print('\t', format_prog2(x), '\t', 'subsumed_0')
+                                        pass
                                     new_handles, con = generator.build_specialisation_constraint(x)
                                     new_cons.add(con)
                                     if not settings.single_solve:
