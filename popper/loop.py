@@ -6,7 +6,7 @@ from itertools import chain, combinations
 from collections import deque
 from . explain import get_raw_prog as get_raw_prog2
 from . combine import Combiner
-from . explain import Explainer, rule_hash, head_connected, find_subprogs, get_raw_prog, seen_more_general_unsat, seen_more_specific_sat, prog_hash, has_valid_directions, prog_hash2
+from . explain import Explainer, rule_hash, head_connected, find_subprogs, get_raw_prog, seen_more_general_unsat, seen_more_specific_sat, prog_hash, has_valid_directions, prog_hash2, order_body, connected
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, prog_size, format_literal, theory_subsumes, rule_subsumes, format_prog, format_prog2, order_rule2
 from . core import Literal
 from . tester import Tester
@@ -39,17 +39,22 @@ def parse_handles(generator, new_handles):
             out_b = frozenset((b_pred, b_args) for _, b_pred, b_args in b)
             yield (out_h, out_b)
 
-def explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons):
+savings = 0
+
+def explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons, tester):
     pruned_subprog = False
 
-    # print('explain\t', format_prog(prog))
-    # print('')
+    unsat_cores = list(explainer.explain_totally_incomplete(prog, directions))
 
-    for subprog, unsat_body in explainer.explain_totally_incomplete(prog, directions):
+    # with settings.stats.duration('B'):
+        # unsat_cores = list(find_most_gen_unsat(prog, tester, settings))
+
+    for subprog, unsat_body in unsat_cores:
         pruned_subprog = True
 
         if SHOW_PRUNED:
-            print('\t', format_prog2(subprog), '\t', 'unsat')
+            print('\t', format_prog2(subprog), '\t', 'unsat2')
+            # pass
 
         if unsat_body:
             _, body = list(subprog)[0]
@@ -57,6 +62,24 @@ def explain_incomplete(settings, generator, explainer, prog, directions, new_con
             for h, b in generator.get_ground_deep_rules(con):
                 new_ground_cons.add(b)
             continue
+        # if unsat_body:
+        #     _, body = list(subprog)[0]
+        #     ys = find_variants2(settings, (None,body))
+
+        #     my_new_cons = set()
+        #     for head2, body2 in ys:
+        #         ground_con = []
+        #         for pred, args in body2:
+        #             arity = len(args)
+        #             args2 = tuple(var_to_int[x] for x in args)
+        #             v = (True, 'body_literal', (0, pred, arity, args2))
+        #             ground_con.append(v)
+        #         my_new_con = tuple(sorted(ground_con))
+        #         my_new_cons.add(my_new_con)
+
+        #     for x in my_new_cons:
+        #         new_ground_cons.add(x)
+        #     continue
 
         new_rule_handles, con = generator.build_specialisation_constraint(subprog)
         new_cons.add(con)
@@ -842,17 +865,314 @@ def get_raw_prog(prog):
         xs.add((h, frozenset(b)))
     return frozenset(xs)
 
+GROUND_VARIANTS_ENCODING = """\
+#show bind_var/2.
+1 {bind_var(Var,Value): Value=0..max_vars-1}1:- var(Var), Var >= head_vars.
+value_type(Value,Type):- bind_var(Var,Value), var_type(Var,Type).
+:- value_type(Value,T1), value_type(Value,T2), T1 != T2.
+:- Value=0..max_vars-1, #count{Var : bind_var(Var,Value)} > 1.
+"""
+
+GROUND_VARIANTS_ENCODING2 = """\
+#show bind_var/2.
+1 {bind_var(Var,Value): Value=0..max_vars-1, not type_mismatch(Var,Value)}1:- var(Var), Var >= head_vars.
+:- Value=0..max_vars-1, #count{Var : bind_var(Var,Value)} > 1.
+type_mismatch(Var,Value):- var_type(Var,T1), known_value_type(Value,T2), T1 != T2.
+"""
+
+# def var_to_int(var):
+    # return ord(var) - ord('A')
+
+MAX_VARS=100
+int_to_var = {i:chr(ord('A') + i) for i in range(0,MAX_VARS)}
+var_to_int = {v:i for i,v in int_to_var.items()}
+
+import clingo
+
+cached_find_variants = {}
+# @profile
+def find_variants_aux(settings, rule):
+    head, body = rule
+
+    if head:
+        head_vars = frozenset(head.arguments)
+    else:
+        head_vars = frozenset()
+    body_vars = frozenset(x for literal in body for x in literal.arguments)
+
+    print('find_variants_aux',format_rule(rule))
+
+    k = hash((head_vars, body_vars))
+    if k in cached_find_variants:
+        return cached_find_variants[k]
+
+    head_types = settings.head_types
+    body_types = settings.body_types
+
+    encoding = set()
+    encoding.add(GROUND_VARIANTS_ENCODING)
+    encoding.add(f'#const max_vars={settings.max_vars}.')
+    encoding.add(f'#const head_vars={len(head_vars)}.')
+
+    if head_types:
+        for i, head_type in enumerate(head_types):
+            encoding.add(f'var_type({i},{head_type}).')
+            encoding.add(f'value_type({i},{head_type}).')
+
+    var_lookup = {}
+    if head:
+        for x in head.arguments:
+            k = var_to_int[x]
+            encoding.add(f'bind_var({k},{k}).')
+            encoding.add(f'var({k}).')
+            var_lookup[k] = x
+
+    for literal in body:
+        # map the letter to an int
+        for i, x in enumerate(literal.arguments):
+
+            if x in head_vars:
+                continue
+
+            k = var_to_int[x]
+            var_lookup[k] = x
+            encoding.add(f'var({k}).')
+            if literal.predicate in body_types:
+                var_type = body_types[literal.predicate][i]
+                encoding.add(f'var_type({k},{var_type}).')
+
+
+    encoding = '\n'.join(encoding)
+
+    solver = clingo.Control(['-Wnone'])
+    solver.configuration.solve.models = 0
+    solver.add('base', [], encoding)
+    solver.ground([("base", [])])
+
+    out = []
+
+    def on_model(m):
+        xs = m.symbols(shown = True)
+        assignment = {}
+        for x in xs:
+            args = x.arguments
+            var_var_int = args[0].number
+            value = args[1].number
+            var_var = var_lookup[var_var_int]
+            assignment[var_var] = value
+        out.append((var_lookup, assignment))
+    solver.solve(on_model=on_model)
+
+    cached_find_variants[k] = out
+    return out
+
+# def find_variants_aux2(settings, rule, max_vars=6):
+#     head, body = rule
+
+#     if head:
+#         head_vars = frozenset(head.arguments)
+#     else:
+#         head_vars = frozenset()
+#     body_vars = frozenset(x for literal in body for x in literal.arguments)
+
+#     k = hash((head_vars, body_vars))
+#     # if k in cached_find_variants:
+#         # return cached_find_variants[k]
+
+#     head_types = settings.head_types
+#     body_types = settings.body_types
+
+#     encoding = set()
+#     encoding.add(GROUND_VARIANTS_ENCODING2)
+#     encoding.add(f'#const max_vars={max_vars}.')
+#     encoding.add(f'#const head_vars={len(head_vars)}.')
+
+#     if head_types:
+#         for i, head_type in enumerate(head_types):
+#             encoding.add(f'var_type({i},{head_type}).')
+#             # encoding.add(f'value_type({i},{head_type}).')
+#             encoding.add(f'known_value_type({i},{head_type}).')
+
+
+#     var_lookup = {}
+#     if head:
+#         for x in head.arguments:
+#             k = var_to_int[x]
+#             encoding.add(f'bind_var({k},{k}).')
+#             encoding.add(f'var({k}).')
+#             var_lookup[k] = x
+
+#     for literal in body:
+#         # map the letter to an int
+#         for i, x in enumerate(literal.arguments):
+
+#             if x in head_vars:
+#                 continue
+
+#             k = var_to_int[x]
+#             var_lookup[k] = x
+#             encoding.add(f'var({k}).')
+#             if literal.predicate in body_types:
+#                 var_type = body_types[literal.predicate][i]
+#                 encoding.add(f'var_type({k},{var_type}).')
+
+
+#     encoding = '\n'.join(encoding)
+
+#     # print(format_rule(rule))
+#     # print(encoding)
+#     # exit()
+
+#     t1 = time.time()
+#     solver = clingo.Control(['-Wnone'])
+#     solver.configuration.solve.models = 0
+#     solver.add('base', [], encoding)
+#     solver.ground([("base", [])])
+
+#     out = []
+
+#     def on_model(m):
+#         xs = m.symbols(shown = True)
+#         assignment = {}
+#         for x in xs:
+#             args = x.arguments
+#             var_var_int = args[0].number
+#             value = args[1].number
+#             var_var = var_lookup[var_var_int]
+#             assignment[var_var] = value
+#         out.append((var_lookup, assignment))
+#     solver.solve(on_model=on_model)
+#     # t2 = time.time()
+#     # d1 = t2-t1
+
+#     # global max_time
+#     # if d1 > max_time:
+#     #     print('*'*30)
+#     #     print(d1)
+#     #     print(format_rule(rule))
+#     #     print('============')
+#     #     print(encoding)
+#     #     print('*'*30)
+#     #     max_time = d1
+#     cached_find_variants[k] = out
+#     return out
+
+# @profile
+def find_variants2(settings, rule):
+    head, body = rule
+    assignments = find_variants_aux(settings, rule)
+
+    new_rules = []
+
+    if head:
+        new_head = (head.predicate, head.arguments)
+    else:
+        new_head = None
+
+    for indexes, assignment in assignments:
+        new_body = []
+        for literal in body:
+            new_args = []
+            for arg in literal.arguments:
+                if arg in assignment:
+                    new_arg = int_to_var[assignment[arg]]
+                    new_args.append(new_arg)
+                else:
+                    new_args.append(arg)
+            new_body.append((literal.predicate, tuple(new_args)))
+        new_rule = (new_head, frozenset(new_body))
+        new_rules.append(new_rule)
+
+    return new_rules
+
+
+# @profile
 def find_variants(rule, max_vars=6):
     all_vars = 'ABCDEFGHIJKLM'
     all_vars = all_vars[:max_vars]
 
     head, body = rule
-    head_arity = head.arity
-    body_vars = frozenset({x for literal in body for x in literal.arguments if x not in head.arguments})
+    if head:
+        head_arity = head.arity
+        head_vars = set(head.arguments)
+    else:
+        head_arity = 0
+        head_vars = set()
+
+    body_vars = frozenset({x for literal in body for x in literal.arguments if x not in head_vars})
     num_body_vars = len(body_vars)
-    subset = all_vars[head_arity:head_arity+num_body_vars+1]
+    if head:
+        # subset = all_vars[head_arity:head_arity+num_body_vars+1]
+        subset = all_vars[head_arity:]
+        # subset = all_vars
+    else:
+        subset = all_vars
     indexes = {x:i for i, x in enumerate(body_vars)}
-    new_head = (head.predicate, head.arguments)
+    if head:
+        new_head = (head.predicate, head.arguments)
+    else:
+        new_head = None
+    new_rules = []
+    # print(body_vars, subset, indexes)
+    perms = list(permutations(subset, num_body_vars))
+    for xs in perms:
+        new_body = []
+        for literal in body:
+            new_args = []
+            for arg in literal.arguments:
+                if arg in indexes:
+                    new_args.append(xs[indexes[arg]])
+                else:
+                    new_args.append(arg)
+            new_body.append((literal.predicate, tuple(new_args)))
+        new_rule = (new_head, frozenset(new_body))
+        new_rules.append(new_rule)
+    return new_rules
+
+
+
+def find_variants3(settings, rule, max_vars=6):
+    all_vars = 'ABCDEFGHIJKLM'
+    all_vars = all_vars[:max_vars]
+
+    head_types = settings.head_types
+    body_types = settings.body_types
+
+    val_to_type = {}
+    if head_types:
+        val_to_type = {k:head_type for i, head_type in enumerate(head_types)}
+
+    head, body = rule
+    if head:
+        head_arity = head.arity
+        head_vars = set(head.arguments)
+    else:
+        head_arity = 0
+        head_vars = set()
+
+
+    for literal in body:
+        for i, x in enumerate(literal.arguments):
+            if x in head_vars:
+                continue
+            if literal.predicate not in body_types:
+                continue
+            var_type = body_types[literal.predicate][i]
+            encoding.add(f'var_type({k},{var_type}).')
+
+    body_vars = frozenset({x for literal in body for x in literal.arguments if x not in head_vars})
+    num_body_vars = len(body_vars)
+    if head:
+        # subset = all_vars[head_arity:head_arity+num_body_vars+1]
+        subset = all_vars[head_arity:]
+        # subset = all_vars
+    else:
+        subset = all_vars
+    indexes = {x:i for i, x in enumerate(body_vars)}
+    if head:
+        new_head = (head.predicate, head.arguments)
+    else:
+        new_head = None
     new_rules = []
     # print(body_vars, subset, indexes)
     for xs in permutations(subset, num_body_vars):
@@ -946,7 +1266,8 @@ def prune_subsumed_backtrack2(pos_covered, combiner, generator, new_cons, all_ha
             sub_prog_pos_covered = tester.get_pos_covered(new_prog)
             if sub_prog_pos_covered == pos_covered2:
                 if SHOW_PRUNED:
-                    print('\t', format_prog2(new_prog), '\t', 'subsumed_2')
+                    # print('\t', format_prog2(new_prog), '\t', 'subsumed_2')
+                    pass
                 to_prune.add(new_prog)
                 pruned_subprog = True
                 with settings.stats.duration('variants'):
@@ -960,7 +1281,8 @@ def prune_subsumed_backtrack2(pos_covered, combiner, generator, new_cons, all_ha
                 for _, x in find_variants((head, body), settings.max_vars):
                     pruned2.add(x)
             if SHOW_PRUNED:
-                print('\t', format_prog2(prog2), '\t', 'subsumed_1')
+                # print('\t', format_prog2(prog2), '\t', 'subsumed_1')
+                pass
             to_prune.add(prog2)
 
     for x in to_prune:
@@ -1074,7 +1396,6 @@ def non_empty_powerset(iterable):
     s = tuple(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
 
-# @profile
 def find_most_general_subsumed1(prog, tester, success_sets, settings):
     head, body = list(prog)[0]
     out = []
@@ -1112,7 +1433,6 @@ def find_most_general_subsumed1(prog, tester, success_sets, settings):
                 pruned2.add(x)
     return out
 
-# @profile
 def find_most_general_subsumed(prog, tester, success_sets, settings, seen=set()):
     head, body = list(prog)[0]
     body = list(body)
@@ -1186,82 +1506,138 @@ def find_most_general_subsumed(prog, tester, success_sets, settings, seen=set())
         out.add(new_prog)
     return out
 
-tmp_cache = set()
-def find_most_gen_unsat(prog, tester, settings, seen=set()):
-    head, body = list(prog)[0]
+
+def generalisations(rule):
+    head, body = rule
+    if len(body) == 0:
+        return
     body = list(body)
+
+    if head:
+        yield (None, frozenset(body))
+
+    if len(body) == 1:
+        return
+
+    for i in range(len(body)):
+        new_body = body[:i] + body[i+1:]
+        new_body = frozenset(new_body)
+        yield (head, new_body)
+
+
+def all_generalisations(rule):
+    out = set()
+    head, body = rule
+    if head:
+        r = (None, body)
+        out.add(r)
+
+    for new_body in non_empty_powerset(body):
+        if len(new_body) == len(body):
+            continue
+        r = (head, new_body)
+        out.add(r)
+        r = (None, new_body)
+        out.add(r)
+    return out
+
+
+
+def get_my_key(rule):
+    head, body = rule
+
+    a = None
+    if head:
+        a = (head.predicate, head.arguments)
+    b = frozenset((x.predicate, x.arguments) for x in body)
+    return (a, b)
+
+
+tmp_cache = set()
+seen_sat2 = set()
+seen_most_gen_sat = set()
+
+def find_most_gen_unsat(prog, tester, settings):
+    rule = list(prog)[0]
+    head, body = rule
 
     if len(body) == 0:
         return []
 
     out = set()
-    head_vars = set(head.arguments)
 
-    for i in range(len(body)):
-        new_body = body[:i] + body[i+1:]
-        new_body = frozenset(new_body)
+    for new_rule in generalisations(rule):
+        new_head, new_body = new_rule
 
         if len(new_body) == 0:
             continue
 
-        tmp1 = frozenset((y.predicate, y.arguments) for y in new_body)
-
-        if tmp1 in seen:
+        if not new_head and len(new_body) == 1:
             continue
-        seen.add(tmp1)
 
-        new_rule = (head, new_body)
+        if new_head:
+            head_vars = set(new_head.arguments)
+        else:
+            head_vars = set()
+
+        k1 = get_my_key(new_rule)
+        if k1 in seen_most_gen_sat:
+            continue
+        seen_most_gen_sat.add(k1)
+
+        if k1 in seen_sat2:
+            continue
+
+        if k1 in tmp_cache:
+            continue
+
+        if new_head and not any(x in head_vars for literal in new_body for x in literal.arguments):
+            continue
+
+        skip = False
+        for gen in all_generalisations(new_rule):
+            k2 = get_my_key(gen)
+            if k1 == k2:
+                continue
+            if k2 in tmp_cache:
+                skip = True
+                break
+        if skip:
+            continue
+
+        if not new_head and not connected(new_body):
+            continue
+
         new_prog = frozenset({new_rule})
 
-        if not any(x in head_vars for literal in new_body for x in literal.arguments):
-            continue
-
-        skip = False
-        for x in non_empty_powerset(new_body):
-            tmp2 = frozenset((y.predicate, y.arguments) for y in x)
-            if tmp1 == tmp2:
-                continue
-            if tmp2 in tmp_cache:
-                skip = True
-                break
-        if skip:
-            continue
-
-        skip = False
-        for x in non_empty_powerset(new_body):
-            tmp2 = frozenset((y.predicate, y.arguments) for y in x)
-            if tmp2 in pruned2:
-                print('KABBBOOM')
-                print(format_prog2(prog))
-                print(tmp2)
-                xs = find_most_gen_unsat(new_prog, tester, settings, seen)
-                out.update(xs)
-                skip = True
-                break
-        if skip:
-            continue
-
-
-
-        if not head_connected(new_rule):
-            xs = find_most_gen_unsat(new_prog, tester, settings, seen)
+        if new_head and not head_connected(new_rule):
+            xs = find_most_gen_unsat(new_prog, tester, settings)
             out.update(xs)
             continue
 
+        sat = False
 
-        if tester.is_sat(new_prog):
+        if new_head:
+            sat = tester.is_sat(new_prog)
+        else:
+            sat = tester.is_body_sat(order_body(new_body))
+
+        if sat:
+            variants = set(find_variants2(settings, new_rule))
+            seen_sat2.update(variants)
             continue
 
-        xs = find_most_gen_unsat(new_prog, tester, settings, seen)
+        xs = find_most_gen_unsat(new_prog, tester, settings)
         if len(xs) > 0:
             out.update(xs)
             continue
 
-        for _, x in find_variants(new_rule, settings.max_vars):
-            tmp_cache.add(x)
-            pruned2.add(x)
-
-        out.add(new_prog)
+        variants = set(find_variants2(settings, new_rule))
+        # print('len(variants)',len(variants))
+        # for x in variants:
+            # print('\t'*6, 'var', x)
+        tmp_cache.update(variants)
+        out.add((new_prog, new_head == None))
     return out
 
 def build_constraints(settings, generator, new_cons, new_rule_handles, add_spec, add_gen, add_redund1, add_redund2, pruned_sub_incomplete, pruned_more_general_shit, pruned_sub_inconsistent, all_handles, bad_handles, prog, rule_ordering):
@@ -1475,7 +1851,7 @@ def popper(settings):
                     if num_pos_covered == 0:
                         # if the programs does not cover any positive examples, check whether it is has an unsat core
                         with settings.stats.duration('find mucs'):
-                            pruned_sub_incomplete = explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons)
+                            pruned_sub_incomplete = explain_incomplete(settings, generator, explainer, prog, directions, new_cons, all_handles, bad_handles, new_ground_cons, tester)
                             # xs = find_most_gen_unsat(prog, tester, settings)
                             # for x in xs:
                             #     # print(x)
@@ -1494,7 +1870,8 @@ def popper(settings):
                                         pruned_more_general_shit = True
                                     for x in more_general_shit_progs:
                                         if SHOW_PRUNED:
-                                            print('\t', format_prog2(x), '\t', 'pruned_more_general_shit', len(pos_covered))
+                                            # print('\t', format_prog2(x), '\t', 'pruned_more_general_shit', len(pos_covered))
+                                            pass
                                         new_handles, con = generator.build_specialisation_constraint(x)
                                         new_cons.add(con)
                                         if not settings.single_solve:
@@ -1580,7 +1957,7 @@ def popper(settings):
                                 for x in xs:
                                     pruned_more_general_shit = True
                                     if SHOW_PRUNED:
-                                        print('\t', format_prog2(x), '\t', 'subsumed_0')
+                                        # print('\t', format_prog2(x), '\t', 'subsumed_0')
                                         pass
                                     new_handles, con = generator.build_specialisation_constraint(x)
                                     new_cons.add(con)

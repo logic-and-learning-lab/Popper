@@ -1003,8 +1003,6 @@ class Grounder():
                     # print(z)
         return out
 
-
-    # find_deep_bindings(body, head_types, self.settings.max_vars)
     def find_deep_bindings(self, body, max_rules, max_vars):
         all_vars = find_all_vars(body)
         head_types = self.settings.head_types
@@ -1111,3 +1109,108 @@ class Grounder():
 
         self.seen_deep_assignments[body_hash] = out
         return out
+
+#     # find_deep_bindings(body, head_types, self.settings.max_vars)
+#     def find_deep_bindings2(self, body, max_rules, max_vars):
+#         all_vars = find_all_vars(body)
+#         head_types = self.settings.head_types
+#         body_types = self.settings.body_types
+
+#         body_hash = grounding_hash(body, all_vars)
+#         # print(','.join(map(str,body)), all_vars, body_hash)
+#         if body_hash in self.seen_deep_assignments:
+#             # print('moo')
+#             return self.seen_deep_assignments[body_hash]
+
+# # :- Value=0..max_vars-1, #count{Var : bind_var(Var,Value)} > 1.
+# # :- bind_var(Var,Value), type(Var,T1), type(Value,T2), T1 != T2.
+
+#         encoding = set()
+#         encoding.add("""\
+# #show bind_var/2.
+# {bind_var(Var,Value)}:- var(Var), Value=0..max_vars-1.
+# value_type(Value,Type):- bind_var(Var,Value), var_type(Var,Type).
+# :- var(Var), #count{Value : bind_var(Var,Value)} != 1.
+# :- value_type(Value,T1), value_type(Value,T2), T1 != T2.
+# """)
+#         encoding.add(f'#const max_vars={max_vars}.')
+#         var_count = 0
+#         # var_index = {}
+#         var_lookup = {}
+#         if head_types:
+#             for i, head_type in enumerate(head_types):
+#                 encoding.add(f'var_type({i},{head_type}).')
+#             # encoding.add(f':- var({i}), not bind_var({i}, {i}).')
+
+#         var_count = 0
+#         var_index = {}
+#         for lit in body:
+#             pred = lit.arguments[1]
+#             for i, x in enumerate(lit.arguments[3]):
+#                 var_name = x.name
+#                 v = var_name.split('_')[1][1:]
+#                 k = ord(v)- ord('A')
+#                 # print(v, k)
+#                 var_lookup[k] = x
+#                 encoding.add(f'var({k}).')
+#                 if pred in body_types:
+#                     var_type = body_types[pred][i]
+#                     encoding.add(f'var_type({k},{var_type}).')
+
+
+
+
+#         # for rule_var, xs in rule_vars.items():
+#         #     rule_var_int = rule_var_to_int[rule_var]
+#         #     encoding.append(f'rule({rule_var_int}).')
+
+#         #     for var_var_int, var_var in enumerate(xs):
+#         #         encoding.append(f'rule_var({rule_var_int},{var_var_int}).')
+#         #         int_lookup[(rule_var_int, var_var_int)] = var_var
+#         #         tmp_lookup[(rule_var, var_var)] = var_var_int
+
+#         # for p, types in settings.body_types.items():
+#         #     for i, t in enumerate(types):
+#         #         encoding.append(f'arg_type({i},{head_type}'.)
+
+
+
+#         encoding = '\n'.join(encoding)
+
+#         # print('*'*10)
+#         # print(encoding)
+
+#         # solver = clingo.Control()
+#         solver = clingo.Control(['-Wnone'])
+#         solver.configuration.solve.models = 0
+#         solver.add('base', [], encoding)
+#         solver.ground([("base", [])])
+
+#         out = []
+
+#         def on_model(m):
+#             xs = m.symbols(shown = True)
+#             assignment = {}
+#             for x in xs:
+#                 name = x.name
+#                 args = x.arguments
+#                 if name == 'bind_var':
+#                     var_var_int = args[0].number
+#                     value = args[1].number
+#                     var_var = var_lookup[var_var_int]
+#                     assignment[var_var] = value
+
+#             for i in range(max_rules):
+#                 x = assignment.copy()
+#                 x[vo_clause('X')] = i
+#                 out.append(x)
+#             # out.append(assignment)
+#             # print(assignment)
+
+#         solver.solve(on_model=on_model)
+#         # for x in out:
+#             # print(x)
+#         # exit()
+
+#         # self.seen_deep_assignments[body_hash] = out
+#         return out
