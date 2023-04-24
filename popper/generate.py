@@ -231,6 +231,7 @@ class Generator:
         self.seen_handles = set()
         self.assigned = {}
         self.seen_symbols = {}
+        self.cached_clingo_atoms = {}
 
         encoding = []
         alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
@@ -395,6 +396,49 @@ class Generator:
         assignments = self.grounder.find_deep_bindings(body, self.settings.max_rules, self.settings.max_vars)
         # ground the rule for each variable assignment
         return set(ground_rule((False, body), assignment) for assignment in assignments)
+
+
+    def parse_handles(self, new_handles):
+        for rule in new_handles:
+            head, body = rule
+            for h, b in self.get_ground_rules(rule):
+                _, p, args = h
+                # print(h, b)
+                out_h = (p, args)
+                out_b = frozenset((b_pred, b_args) for _, b_pred, b_args in b)
+                yield (out_h, out_b)
+
+    # def constrain(self):
+    def constrain(self, new_cons, all_ground_cons, model, new_ground_cons):
+
+        all_ground_cons.update(new_ground_cons)
+        ground_bodies = set()
+        ground_bodies.update(new_ground_cons)
+
+        for con in new_cons:
+            ground_rules = self.get_ground_rules((None, con))
+            for ground_rule in ground_rules:
+                # print(con, ground_rule)
+                _ground_head, ground_body = ground_rule
+                ground_bodies.add(ground_body)
+                all_ground_cons.add(frozenset(ground_body))
+
+        nogoods = []
+        for ground_body in ground_bodies:
+            nogood = []
+            for sign, pred, args in ground_body:
+                k = hash((sign, pred, args))
+                if k in self.cached_clingo_atoms:
+                    nogood.append(self.cached_clingo_atoms[k])
+                else:
+                    x = (atom_to_symbol(pred, args), sign)
+                    self.cached_clingo_atoms[k] = x
+                    nogood.append(x)
+            nogoods.append(nogood)
+
+        with self.settings.stats.duration('constrain_clingo'):
+            for x in nogoods:
+                model.context.add_nogood(x)
 
     def build_generalisation_constraint(self, prog, rule_ordering=None):
         new_handles = set()
