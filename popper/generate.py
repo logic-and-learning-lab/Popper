@@ -258,6 +258,7 @@ class Generator:
             # solver = clingo.Control(["--heuristic=Domain", '-Wnone'])
             solver = clingo.Control(['--heuristic=Domain','-Wnone'])
             # solver = clingo.Control(['-Wnone'])
+
         else:
             # solver = clingo.Control(["-t4"])
             # solver = clingo.Control([])
@@ -270,6 +271,7 @@ class Generator:
                 #sum{K+1,Clause : body_size(Clause,K)} != n.
             """
             solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
+
 
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)

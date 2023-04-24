@@ -492,36 +492,110 @@ class Tester():
             return True
         return False
 
-    # WE ASSUME THAT THERE IS A REUNDANT RULE
-    def subsumes(self, r1, r2):
-        r2 = str(r2)
-        r2 = r2.replace('A','X')
-        r2 = r2.replace('B','Y')
-        r2 = r2.replace('C','Z')
-        q = f'subsumes_term({r1},{r2})'.replace("'",'')
-        # q = f'subsumes({r1},{r2})'.replace("'",'')
-        # print(q)
-        res = list(self.prolog.query(q))
-        return len(res) > 0
+    # # WE ASSUME THAT THERE IS A REUNDANT RULE
+    # def subsumes(self, r1, r2):
+    #     r2 = str(r2)
+    #     r2 = r2.replace('A','X')
+    #     r2 = r2.replace('B','Y')
+    #     r2 = r2.replace('C','Z')
+    #     q = f'subsumes_term({r1},{r2})'.replace("'",'')
+    #     # q = f'subsumes({r1},{r2})'.replace("'",'')
+    #     # print(q)
+    #     res = list(self.prolog.query(q))
+    #     return len(res) > 0
 
-    def find_redundant_rule_2(self, rules):
+    # def find_redundant_rule_2(self, rules):
+    #     prog_ = []
+    #     for i, rule in enumerate(rules):
+    #         c = f"{i}-[{','.join(rule)}]"
+    #         prog_.append(c)
+    #         # print(c)
+    #     prog_ = f"[{','.join(prog_)}]"
+    #     # print(prog_)
+    #     q = f'reduce_theory({prog_},K2)'
+    #     print(len(rules))
+
+    #     res = list(self.prolog.query(q))
+    #     # print(res)
+    #     # k1 = res[0]['K1']
+    #     k2 = res[0]['K2']
+    #     print(len(k2))
+    #     # pr
+    #     # return prog[k1], prog[k2]
+
+    # def find_redundant_rules(self, prog):
+    #     # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
+    #     base = []
+    #     step = []
+    #     for rule in prog:
+    #         if rule_is_recursive(rule):
+    #             step.append(rule)
+    #         else:
+    #             base.append(rule)
+    #     if len(base) > 1 and self.has_redundant_rule(base):
+    #         return self.find_redundant_rule_(base)
+    #     if len(step) > 1 and self.has_redundant_rule(step):
+    #         return self.find_redundant_rule_(step)
+    #     return None
+
+
+
+
+
+
+
+
+    def has_redundant_literal(self, prog):
+        for rule in prog:
+            head, body = rule
+            if head:
+                c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+            else:
+                c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
+            res = list(self.prolog.query(f'redundant_literal({c})'))
+            if res:
+                return True
+        return False
+
+    def has_redundant_rule_(self, prog):
         prog_ = []
-        for i, rule in enumerate(rules):
-            c = f"{i}-[{','.join(rule)}]"
+        for head, body in prog:
+            c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
             prog_.append(c)
-            # print(c)
+        prog_ = f"[{','.join(prog_)}]"
+        return len(list(self.prolog.query(f'redundant_clause({prog_})'))) > 0
+        # return self.bool_query(f'redundant_clause({prog_})')
+
+    def has_redundant_rule(self, prog):
+        # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
+
+        base = []
+        step = []
+        for rule in prog:
+            if rule_is_recursive(rule):
+                step.append(rule)
+            else:
+                base.append(rule)
+        if len(base) > 1 and self.has_redundant_rule_(base):
+            return True
+        if len(step) > 1 and self.has_redundant_rule_(step):
+            return True
+        return False
+
+    # WE ASSUME THAT THERE IS A REUNDANT RULE
+    def find_redundant_rule_(self, prog):
+        prog_ = []
+        for i, (head, body) in enumerate(prog):
+            c = f"{i}-[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+            prog_.append(c)
         prog_ = f"[{','.join(prog_)}]"
         # print(prog_)
-        q = f'reduce_theory({prog_},K2)'
-        print(len(rules))
-
+        q = f'find_redundant_rule({prog_},K1,K2)'
         res = list(self.prolog.query(q))
-        # print(res)
-        # k1 = res[0]['K1']
+        k1 = res[0]['K1']
         k2 = res[0]['K2']
-        print(len(k2))
-        # pr
-        # return prog[k1], prog[k2]
+        return prog[k1], prog[k2]
+        # return len(res) > 0
 
     def find_redundant_rules(self, prog):
         # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
@@ -537,57 +611,3 @@ class Tester():
         if len(step) > 1 and self.has_redundant_rule(step):
             return self.find_redundant_rule_(step)
         return None
-
-    # def load_recalls(self):
-    #     # recall for a subset of arguments, e.g. when A and C are ground in a call to add(A,B,C)
-    #     counts = {}
-    #     # maximum recall for a predicate symbol
-    #     counts_all = {}
-
-    #     for pred, arity in self.settings.body_preds:
-    #         counts_all[pred] = 0
-    #         counts[pred] = {}
-
-    #         args = [chr(ord('A') + i) for i in range(arity)]
-    #         args_str = ','.join(args)
-    #         atom1 = f'{pred}({args_str})'
-    #         q = f'{atom1}'
-    #         # nasty but works ok for long-running problems
-    #         # we find all facts for a given predicate symbol
-    #         for x in self.prolog.query(q):
-    #             counts_all[pred] +=1
-    #             x_args = [x[arg] for arg in args]
-
-    #             print('A', x, x_args)
-
-    #             # we now enumerate all subsets of possible input/ground arguments
-    #             # for instance, for a predicate symbol p/2 we consider p(10) and p(01), where 1 denotes input
-    #             # note that p(00) is the max recall and p(11) is 1 since it is a boolean check
-    #             binary_strings = generate_binary_strings(arity)[1:-1]
-
-    #             for var_subset in binary_strings:
-    #                 if var_subset not in counts[pred]:
-    #                     counts[pred][var_subset] = {}
-    #                 key = []
-    #                 value = []
-    #                 for i in range(len(args)):
-    #                     if var_subset[i] == '1':
-    #                         key.append(args[i])
-    #                     else:
-    #                         value.append(args[i])
-    #                 key = tuple(key)
-    #                 value = tuple(value)
-    #                 print(key, value)
-    #                 if key not in counts[pred][var_subset]:
-    #                     counts[pred][var_subset][key] = set()
-    #                 counts[pred][var_subset][key].add(value)
-
-    #     # we now calculate the maximum recall
-    #     self.settings.recall = {}
-    #     for pred, arity in self.settings.body_preds:
-    #         d1 = counts[pred]
-    #         self.settings.recall[(pred, '0'*arity)] = counts_all[pred]
-    #         for args, d2 in d1.items():
-    #             recall = max(len(xs) for xs in d2.values())
-    #             self.settings.recall[(pred, args)] = recall
-
