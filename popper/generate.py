@@ -5,7 +5,7 @@ import clingo.script
 import pkg_resources
 from . core import Literal, RuleVar, VarVar, Var
 from collections import defaultdict
-from . util import rule_is_recursive, format_rule
+from . util import rule_is_recursive, format_rule, Constraint
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 
@@ -225,13 +225,23 @@ def load_types(settings):
 
 class Generator:
 
-    def __init__(self, settings, grounder):
+    def __init__(self, settings, grounder, bkcons=[]):
         self.settings = settings
         self.grounder = grounder
         self.seen_handles = set()
         self.assigned = {}
         self.seen_symbols = {}
         self.cached_clingo_atoms = {}
+
+        # handles for rules that are minimal and unsatisfiable
+        self.bad_handles = set()
+        # new rules added to the solver, such as: seen(id):- head_literal(...), body_literal(...)
+        self.all_handles = set()
+
+        # TODO: dunno
+        self.all_ground_cons = set()
+        # TODO: dunno
+        self.new_ground_cons = set()
 
         encoding = []
         alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
@@ -245,9 +255,8 @@ class Generator:
         if settings.max_literals < max_size:
             encoding.append(f'custom_max_size({settings.max_literals}).')
 
-        if (self.settings.bkcons or self.settings.datalog) and self.settings.deduced_bkcons != '':
-            # print(self.settings.deduced_bkcons)
-            encoding.append(self.settings.deduced_bkcons)
+        if self.settings.bkcons:
+            encoding.extend(bkcons)
 
         encoding = '\n'.join(encoding)
 
@@ -255,14 +264,8 @@ class Generator:
             f.write(encoding)
 
         if self.settings.single_solve:
-            # solver = clingo.Control(["--heuristic=Domain", "-t5"])
-            # solver = clingo.Control(["--heuristic=Domain", '-Wnone'])
             solver = clingo.Control(['--heuristic=Domain','-Wnone'])
-            # solver = clingo.Control(['-Wnone'])
-
         else:
-            # solver = clingo.Control(["-t4"])
-            # solver = clingo.Control([])
             solver = clingo.Control(['-Wnone'])
             NUM_OF_LITERALS = """
             %%% External atom for number of literals in the program %%%%%
@@ -291,17 +294,17 @@ class Generator:
             self.seen_symbols[k] = symbol
         return symbol
 
-    def update_solver(self, size, handles, bad_handles, ground_cons):
+    def update_solver(self, size):
         # rules to add via Clingo's backend interface
         to_add = []
-        to_add.extend(([], x) for x in ground_cons)
+        to_add.extend(([], x) for x in self.all_ground_cons)
 
 
         new_seen_rules = set()
 
         # add handles for newly seen rules
         # for handle, rule in handles:
-        for rule in handles:
+        for rule in self.all_handles:
             head, body = rule
             head_pred, head_args = head
 
@@ -313,30 +316,26 @@ class Generator:
             to_add.append((new_head, new_body))
 
 
+        for handle in self.bad_handles:
+            # if we know that rule_xyz is bad
+            # we add the groundings of bad_stuff(R,ThisSize):- seen_rule(rule_xyz, R), R=0..MaxRules.
+            for rule_id in range(0, self.settings.max_rules):
+                h = (True, 'bad_stuff', (rule_id, size))
+                b = (True, 'seen_rule', (handle, rule_id))
+                new_rule = (h, (b,))
+                to_add.append(new_rule)
 
-
-        # bad_handles = []
-        if bad_handles:
-            for handle in bad_handles:
-                # if we know that rule_xyz is bad
-                # we add the groundings of bad_stuff(R,ThisSize):- seen_rule(rule_xyz, R), R=0..MaxRules.
-                for rule_id in range(0, self.settings.max_rules):
-                    h = (True, 'bad_stuff', (rule_id, size))
-                    b = (True, 'seen_rule', (handle, rule_id))
-                    new_rule = (h, (b,))
-                    to_add.append(new_rule)
-
-                # we now eliminate bad stuff
-                # :- seen_rule(rule_xyz,R1), bad_stuff(R2,Size), R1=0..MaxRules, R2=0..MaxRules, Size=0..ThisSize.
-                for smaller_size in range(1, size+1):
-                    for r1 in range(1, self.settings.max_rules):
-                        atom1 = (True, 'seen_rule', (handle, r1))
-                        for r2 in range(1, self.settings.max_rules):
-                            if r1 == r2:
-                                continue
-                            atom2 = (True, 'bad_stuff', (r2, smaller_size))
-                            new_rule = ([], (atom1, atom2))
-                            to_add.append(new_rule)
+            # we now eliminate bad stuff
+            # :- seen_rule(rule_xyz,R1), bad_stuff(R2,Size), R1=0..MaxRules, R2=0..MaxRules, Size=0..ThisSize.
+            for smaller_size in range(1, size+1):
+                for r1 in range(1, self.settings.max_rules):
+                    atom1 = (True, 'seen_rule', (handle, r1))
+                    for r2 in range(1, self.settings.max_rules):
+                        if r1 == r2:
+                            continue
+                        atom2 = (True, 'bad_stuff', (r2, smaller_size))
+                        new_rule = ([], (atom1, atom2))
+                        to_add.append(new_rule)
 
         with self.solver.backend() as backend:
             for head, body in to_add:
@@ -352,6 +351,12 @@ class Generator:
 
         # for x in set(handle for handle, rule in handles):
         self.seen_handles.update(new_seen_rules)
+
+
+        # RESET SO WE DO NOT KEEP ADDING THEM
+        self.all_ground_cons = set()
+        self.bad_handles = set()
+        self.all_handles = set()
 
     def update_number_of_literals(self, size):
         # 1. Release those that have already been assigned
@@ -408,12 +413,39 @@ class Generator:
                 out_b = frozenset((b_pred, b_args) for _, b_pred, b_args in b)
                 yield (out_h, out_b)
 
-    # def constrain(self):
-    def constrain(self, new_cons, all_ground_cons, model, new_ground_cons):
+    def constrain(self, tmp_new_cons, model):
+        new_cons = set()
+        handles_ = []
 
-        all_ground_cons.update(new_ground_cons)
+        for con_type, con_prog, con_prog_ordering in tmp_new_cons:
+            if con_type == Constraint.SPECIALISATION:
+                new_rule_handles, con = self.build_specialisation_constraint(con_prog, con_prog_ordering)
+                new_cons.add(con)
+                handles_.extend(new_rule_handles)
+            if con_type == Constraint.GENERALISATION:
+                new_rule_handles, con = self.build_generalisation_constraint(con_prog, con_prog_ordering)
+                new_cons.add(con)
+                handles_.extend(new_rule_handles)
+            elif con_type == Constraint.UNSAT:
+                con = self.unsat_constraint(con_prog)
+                for h, b in self.get_ground_deep_rules(con):
+                    self.new_ground_cons.add(b)
+            elif con_type == Constraint.REDUNDANCY_CONSTRAINT1:
+                bad_handle, new_rule_handles, con = self.redundancy_constraint1(con_prog, con_prog_ordering)
+                self.bad_handles.add(bad_handle)
+                new_cons.add(con)
+                handles_.extend(new_rule_handles)
+            elif con_type == Constraint.REDUNDANCY_CONSTRAINT2:
+                handles, cons = self.redundancy_constraint2(con_prog, con_prog_ordering)
+                new_cons.update(cons)
+                handles_.extend(new_rule_handles)
+
+        if self.settings.single_solve:
+            self.all_handles.update(self.parse_handles(handles_))
+
+        self.all_ground_cons.update(self.new_ground_cons)
         ground_bodies = set()
-        ground_bodies.update(new_ground_cons)
+        ground_bodies.update(self.new_ground_cons)
 
         for con in new_cons:
             ground_rules = self.get_ground_rules((None, con))
@@ -421,7 +453,7 @@ class Generator:
                 # print(con, ground_rule)
                 _ground_head, ground_body = ground_rule
                 ground_bodies.add(ground_body)
-                all_ground_cons.add(frozenset(ground_body))
+                self.all_ground_cons.add(frozenset(ground_body))
 
         nogoods = []
         for ground_body in ground_bodies:
@@ -439,6 +471,8 @@ class Generator:
         with self.settings.stats.duration('constrain_clingo'):
             for x in nogoods:
                 model.context.add_nogood(x)
+
+        self.new_ground_cons = set()
 
     def build_generalisation_constraint(self, prog, rule_ordering=None):
         new_handles = set()
@@ -532,7 +566,7 @@ class Generator:
 
     # only works with single rule programs
     # if a single rule R is unsatisfiable, then for R to appear in an optimal solution H it must be the case that H has a recursive rule that does not specialise R
-    def redundancy_constraint1(self, prog, rule_ordering={}):
+    def redundancy_constraint1(self, prog, rule_ordering=None):
         assert(len(prog) == 1)
         new_handles = set()
         literals = []
@@ -565,7 +599,7 @@ class Generator:
         return tuple(Literal('body_literal', (rule_var, body_literal.predicate, len(body_literal.arguments), tuple(vo_variable2(rule_var, v) for v in body_literal.arguments))) for body_literal in body)
 
 
-    def redundancy_constraint4(self, program, rule_ordering={}):
+    def redundancy_constraint4(self, program, rule_ordering=None):
         new_handles = set()
         new_rules = []
 
@@ -608,7 +642,7 @@ class Generator:
         con = [Literal('not_redundant', (clause_variable, prog_handle), positive = False)]
         return new_rules, tuple(con)
 
-    def redundancy_constraint2(self, prog, rule_ordering={}):
+    def redundancy_constraint2(self, prog, rule_ordering=None):
 
         lits_num_rules = defaultdict(int)
         lits_num_recursive_rules = defaultdict(int)
@@ -661,7 +695,8 @@ class Generator:
                 literals.append(Literal('num_clauses', (other_lit, num_clauses)))
             num_recursive = lits_num_recursive_rules[lit]
             literals.append(Literal('num_recursive', (lit, num_recursive)))
-            literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
+            if rule_ordering != None:
+                literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
             out_cons.append(tuple(literals))
 
             # print(':- ' + ', '.join(map(str,literals)))

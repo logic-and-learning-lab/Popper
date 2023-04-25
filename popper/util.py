@@ -1,3 +1,4 @@
+from enum import Enum
 import clingo
 import clingo.script
 import signal
@@ -19,6 +20,16 @@ MAX_RULES=2
 MAX_VARS=6
 MAX_BODY=6
 MAX_EXAMPLES=10000
+
+
+# class syntax
+class Constraint(Enum):
+    GENERALISATION = 1
+    SPECIALISATION = 2
+    UNSAT = 3
+    REDUNDANCY_CONSTRAINT1 = 4
+    REDUNDANCY_CONSTRAINT2 = 5
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper is an ILP system based on learning from failures')
@@ -346,9 +357,11 @@ class Settings:
         self.max_vars = max_vars
         self.max_rules = max_rules
 
+        self.recall = {}
         self.solution = None
         self.best_prog_score = None
-        self.deduced_bkcons = ''
+        # self.deduced_bkcons = ''
+
 
         solver = clingo.Control(['-Wnone'])
         with open(self.bias_file) as f:
@@ -394,9 +407,13 @@ class Settings:
             else:
                 self.max_rules = 1
 
+        self.single_solve = not (self.recursion_enabled or self.pi_enabled)
+
         self.logger.debug(f'Max rules: {self.max_rules}')
         self.logger.debug(f'Max vars: {self.max_vars}')
         self.logger.debug(f'Max body: {self.max_body}')
+
+        self.single_solve = not (self.recursion_enabled or self.pi_enabled)
 
     def print_incomplete_solution(self, prog, tp, fn, size):
         self.logger.info('*'*20)

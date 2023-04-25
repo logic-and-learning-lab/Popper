@@ -463,7 +463,11 @@ def build_props2(arities):
         cons.append(con1)
     return props, cons
 
-
+def get_bkcons(settings, tester):
+    out = []
+    out.extend(deduce_bk_cons(settings, tester))
+    out.extend(deduce_recalls(settings))
+    return out
 
 def deduce_bk_cons(settings, tester):
     prog = []
@@ -503,7 +507,7 @@ def deduce_bk_cons(settings, tester):
     # print(new_cons)
 
     new_props = '\n'.join(new_props)
-    new_cons = '\n'.join(new_cons)
+    # new_cons = '\n'.join(new_cons)
     encoding = [cons, prog, bias, bk, TIDY_OUTPUT, new_props]
     encoding = '\n'.join(encoding)
     # print(encoding)
@@ -550,10 +554,12 @@ def deduce_bk_cons(settings, tester):
         # print(x)
     # print(len(implies_not))
     # tester.find_redundant_rule_2(implies_not)
-    xs = out
+    xs = [x + '.' for x in out]
     # print('\n'.join(sorted(xs)))
-    print(len(xs))
-    settings.deduced_bkcons = '\n'.join(x + '.' for x in xs) + '\n' + new_cons + '\n'
+    # print(len(xs))
+    # print(new_cons)
+    return xs + new_cons
+    # settings.deduced_bkcons = '\n'.join(xs) + '\n' + new_cons + '\n'
     # settings.deduced_bkcons = '\n'.join(x + '.' for x in xs)
     # print(new_cons)
     # exit()
@@ -669,5 +675,6 @@ def deduce_recalls(settings):
         con2 = f':- body_literal(Rule,{pred},_,({fixer_str})), #count{{{subset_str}: body_literal(Rule,{pred},_,({args_str}))}} > {recall}.'
         out.append(con2)
 
-    # print('hi')
-    settings.deduced_bkcons += '\n' + '\n'.join(out)
+    print(out)
+    return out
+    # settings.deduced_bkcons += '\n' + '\n'.join(out)
