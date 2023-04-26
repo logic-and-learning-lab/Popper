@@ -106,6 +106,7 @@ def build_seen_rule(rule, is_rec):
 def build_seen_rule_literal(handle, rule_var):
     return Literal('seen_rule', (handle, rule_var))
 
+@profile
 def parse_model(model):
     directions = defaultdict(lambda: defaultdict(lambda: '?'))
     rule_index_to_body = defaultdict(set)
@@ -114,8 +115,9 @@ def parse_model(model):
 
     for atom in model:
         args = atom.arguments
+        name = atom.name
 
-        if atom.name == 'body_literal':
+        if name == 'body_literal':
             rule_index = args[0].number
             predicate = args[1].name
             atom_args = args[3].arguments
@@ -124,7 +126,7 @@ def parse_model(model):
             body_literal = (predicate, atom_args, arity)
             rule_index_to_body[rule_index].add(body_literal)
 
-        elif atom.name == 'head_literal':
+        elif name == 'head_literal':
             rule_index = args[0].number
             predicate = args[1].name
             atom_args = args[3].arguments
@@ -133,7 +135,7 @@ def parse_model(model):
             head_literal = (predicate, atom_args, arity)
             rule_index_to_head[rule_index] = head_literal
 
-        elif atom.name == 'direction_':
+        elif name == 'direction_':
             pred_name = args[0].name
             arg_index = args[1].number
             arg_dir_str = args[2].name
@@ -146,7 +148,7 @@ def parse_model(model):
                 raise Exception(f'Unrecognised argument direction "{arg_dir_str}"')
             directions[pred_name][arg_index] = arg_dir
 
-        elif atom.name == 'before':
+        elif name == 'before':
             rule1 = args[0].number
             rule2 = args[1].number
             rule_index_ordering[rule1].add(rule2)
@@ -369,6 +371,7 @@ class Generator:
     #     return set(ground_rule((head, body), assignment) for assignment in assignments)
 
 
+    # @profile
     def get_ground_deep_rules(self, body):
         # find bindings for variables in the rule
         assignments = self.grounder.find_deep_bindings2(body, self.settings.max_rules, self.settings.max_vars)
@@ -437,7 +440,8 @@ class Generator:
                     new_cons.add(x)
 
         if not self.settings.single_solve:
-            self.all_handles.update(self.parse_handles(handles_))
+            parsed_handles = self.parse_handles(handles_)
+            self.all_handles.update(parsed_handles)
 
         self.all_ground_cons.update(self.new_ground_cons)
         ground_bodies = set()
