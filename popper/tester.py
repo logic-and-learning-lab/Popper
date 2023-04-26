@@ -5,7 +5,7 @@ import pkg_resources
 from pyswip import Prolog
 from pyswip.prolog import PrologError
 from contextlib import contextmanager
-from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, format_prog2
+from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive
 
 import clingo
 import clingo.script
@@ -67,15 +67,8 @@ class Tester():
     def tmp(self):
         len(list(self.prolog.query("true"))) > 0
 
+    # @profile
     def test_prog(self, prog):
-        # with self.settings.stats.duration('cache test'):
-            # k = prog_hash(prog)
-            # if k in self.cached_pos_covered:
-                # return self.cached_pos_covered[k]
-                # print('wtf?',
-                # for rule in order_prog(prog):
-                    # print('wtf',prog_hash(prog),format_rule(order_rule(rule)))
-
         if len(prog) == 1:
             return self.test_single_rule(prog)
         try:
@@ -92,6 +85,7 @@ class Tester():
         # self.cached_pos_covered[k] = pos_covered
         return pos_covered, inconsistent
 
+    # @profile
     def test_single_rule(self, prog):
         try:
             rule = list(prog)[0]
@@ -130,18 +124,10 @@ class Tester():
             pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
             return len(pos_covered) == len(self.pos_index)
 
-    # @profile
     def get_pos_covered(self, prog, ignore=True):
         k = prog_hash(prog)
         if k in self.cached_pos_covered:
             return self.cached_pos_covered[k]
-
-        if not ignore:
-            # pass
-            # print('\t'*10, 'calling_prolog')
-            # print('\t'*2, k)
-            print('prolog', format_prog2(prog))
-            # print('\t'*12, 'raw_prog', get_raw_prog(prog))
 
         if len(prog) == 1:
             rule = list(prog)[0]
@@ -410,6 +396,7 @@ class Tester():
         _, ordered_body = order_rule((None,body), self.settings)
         body_str = ','.join(format_literal(literal) for literal in ordered_body)
         query = body_str + ',!'
+        # query = f'catch(call_with_time_limit(0.00001, ({query})),time_limit_exceeded,true)'
         return self.bool_query(query)
 
     def check_redundant_literal(self, prog):

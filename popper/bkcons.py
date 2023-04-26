@@ -21,7 +21,7 @@ TIDY_OUTPUT = """
 #defined clause/1.
 """
 
-def get_body_preds(settings):
+def get_bias_preds(settings):
     solver = clingo.Control(['-Wnone'])
     with open(settings.bias_file) as f:
         solver.add('bias', [], f.read())
@@ -44,7 +44,7 @@ def get_body_preds(settings):
         symbol = args[0]
         arity = args[1].number
         body_preds.add((symbol, arity))
-    return body_preds
+    return (head_pred, arity), body_preds
 
 
 from itertools import permutations, combinations
@@ -467,6 +467,9 @@ def get_bkcons(settings, tester):
     out = []
     out.extend(deduce_bk_cons(settings, tester))
     out.extend(deduce_recalls(settings))
+
+    # for x in out:
+        # print(x)
     return out
 
 def deduce_bk_cons(settings, tester):
@@ -474,7 +477,7 @@ def deduce_bk_cons(settings, tester):
     lookup2 = {k: f'({v})' for k,v in tmp_map.items()}
     lookup1 = {k:v for k,v in lookup2.items()}
     lookup1[1] = '(V0,)'
-    body_preds = get_body_preds(settings)
+    (head_pred, head_arity), body_preds = get_bias_preds(settings)
 
     arities = set()
     for p, a in body_preds:
@@ -493,13 +496,12 @@ def deduce_bk_cons(settings, tester):
     cons = pkg_resources.resource_string(__name__, "lp/cons.pl").decode()
     bk = bk.replace('\+','not')
 
-    # build_props(arities)
-    # build_props2(arities)
-
     new_props1, new_cons1 = build_props(arities, tester)
     new_props2, new_cons2 = build_props2(arities)
 
     # exit()
+
+
 
     new_props = new_props1 + new_props2
     new_cons = new_cons1 + new_cons2
@@ -509,6 +511,25 @@ def deduce_bk_cons(settings, tester):
     new_props = '\n'.join(new_props)
     # new_cons = '\n'.join(new_cons)
     encoding = [cons, prog, bias, bk, TIDY_OUTPUT, new_props]
+
+
+    if settings.head_types == None:
+        if head_arity == 1:
+            types = '(t,)'
+        else:
+            types = tuple(['t'] * head_arity)
+        encoding.append(f'type({head_pred},{types}).')
+
+    if len(settings.body_types) == 0:
+        # exit()
+        for p, a in body_preds:
+            if a == 1:
+                types = '(t,)'
+            else:
+                types = tuple(['t'] * a)
+            encoding.append(f'type({p},{types}).')
+
+
     encoding = '\n'.join(encoding)
     # print(encoding)
     # with open('bkcons-encoding.pl', 'w') as f:
@@ -557,7 +578,7 @@ def deduce_bk_cons(settings, tester):
     xs = [x + '.' for x in out]
     # print('\n'.join(sorted(xs)))
     # print(len(xs))
-    # print(new_cons)
+    print(xs)
     return xs + new_cons
     # settings.deduced_bkcons = '\n'.join(xs) + '\n' + new_cons + '\n'
     # settings.deduced_bkcons = '\n'.join(x + '.' for x in xs)
@@ -675,6 +696,8 @@ def deduce_recalls(settings):
         con2 = f':- body_literal(Rule,{pred},_,({fixer_str})), #count{{{subset_str}: body_literal(Rule,{pred},_,({args_str}))}} > {recall}.'
         out.append(con2)
 
-    print(out)
+    for x in settings.recall.items():
+        print(x)
+    # print(out)
     return out
     # settings.deduced_bkcons += '\n' + '\n'.join(out)

@@ -4,6 +4,7 @@
 %% 30.24s user 1.40s system 100% cpu 31.431 total
 
 enable_recursion.
+max_body(10).
 
 head_pred(f,2).
 body_pred(head,2).

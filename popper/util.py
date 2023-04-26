@@ -29,6 +29,7 @@ class Constraint(Enum):
     UNSAT = 3
     REDUNDANCY_CONSTRAINT1 = 4
     REDUNDANCY_CONSTRAINT2 = 5
+    TMP_ANDY = 6
 
 
 def parse_args():
@@ -290,6 +291,11 @@ def order_rule_datalog(rule, settings):
         seen_vars = seen_vars.union(selected_literal.arguments)
         body_literals = body_literals.difference({selected_literal})
 
+    # if not head:
+    #     print('--')
+    #     print('A',format_rule(rule))
+    #     print('B',format_rule((head, ordered_body)))
+
     return head, tuple(ordered_body)
 
 class DurationSummary:
@@ -407,6 +413,9 @@ class Settings:
             else:
                 self.max_rules = 1
 
+
+        self.head_types, self.body_types = load_types(self)
+
         self.single_solve = not (self.recursion_enabled or self.pi_enabled)
 
         self.logger.debug(f'Max rules: {self.max_rules}')
@@ -439,3 +448,33 @@ def rule_subsumes(r1, r2):
 def theory_subsumes(prog1, prog2):
     # P1 subsumes P2 if for every rule R2 in P2 there is a rule R1 in P1 such that R1 subsumes R2
     return all(any(rule_subsumes(r1, r2) for r1 in prog1) for r2 in prog2)
+
+
+def load_types(settings):
+    enc = """
+#defined clause/1.
+#defined clause_var/2.
+#defined var_type/3."""
+    # solver = clingo.Control()
+    solver = clingo.Control(['-Wnone'])
+    with open(settings.bias_file) as f:
+        solver.add('bias', [], f.read())
+    solver.add('bias', [], enc)
+    solver.ground([('bias', [])])
+
+    for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
+        head_pred = x.symbol.arguments[0].name
+        head_arity = x.symbol.arguments[1].number
+
+    head_types = None
+    body_types = {}
+    for x in solver.symbolic_atoms.by_signature('type', arity=2):
+        pred = x.symbol.arguments[0].name
+        # xs = (str(t) for t in )
+        xs = [y.name for y in x.symbol.arguments[1].arguments]
+        if pred == head_pred:
+            head_types = xs
+        else:
+            body_types[pred] = xs
+
+    return head_types, body_types

@@ -1,6 +1,6 @@
 %% speed up example
 max_vars(5).
-max_body(5).
+max_body(6).
 max_clauses(2).
 enable_recursion.
 

@@ -2,11 +2,11 @@ head_pred(ancestor, 2).
 body_pred(mother, 2).
 body_pred(father, 2).
 
-enable_pi.
+%% enable_pi.
 enable_recursion.
 
-max_body(3).
-max_vars(3).
+max_body(15).
+%% max_vars(3).
 
 % solution
 % parent(X,Y) :- mother(X,Y).

@@ -7,6 +7,8 @@ from collections import deque
 from . explain import get_raw_prog as get_raw_prog2
 from . combine import Combiner
 from . explain import Explainer, rule_hash, head_connected, find_subprogs, get_raw_prog, seen_more_general_unsat, seen_more_specific_sat, prog_hash, has_valid_directions, prog_hash2, order_body, connected
+
+from . explain2 import find_most_gen_unsat
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, prog_size, format_literal, theory_subsumes, rule_subsumes, format_prog, format_prog2, order_rule2, Constraint
 from . core import Literal
 from . tester import Tester
@@ -14,8 +16,8 @@ from . generate import Generator, Grounder, parse_model, atom_to_symbol, arg_to_
 from . bkcons import deduce_bk_cons, deduce_recalls, get_bkcons
 from . variants import find_variants
 
-AGGRESSIVE = False
 AGGRESSIVE = True
+AGGRESSIVE = False
 
 SHOW_PRUNED = True
 # SHOW_PRUNED = False
@@ -29,14 +31,27 @@ WITH_MOST_GEN_OPTIMISATIONS = True
 
 pruned = set()
 pruned2 = set()
+max_muc = 0
 
-def explain_incomplete(settings, explainer, prog, directions):
+def explain_incomplete(settings, explainer, tester, prog, directions):
     pruned_subprog = False
 
+    # if settings.recursion_enabled or settings.pi_enabled:
     unsat_cores = list(explainer.explain_totally_incomplete(prog, directions))
+    # else:
+    # t1 = time.time()
+    # unsat_cores = list(find_most_gen_unsat(prog, tester, settings))
+    # t2 = time.time()
 
-    # with settings.stats.duration('B'):
-        # unsat_cores = list(find_most_gen_unsat(prog, tester, settings))
+    # d = t2-t1
+
+    # global max_muc
+    # if d > max_muc:
+    #     print('******'*20)
+    #     print('MAX MUC!!!!', d, format_prog(prog))
+    #     print('******'*20)
+    #     max_muc = d
+
 
     out_cons = []
     for subprog, unsat_body in unsat_cores:
@@ -288,15 +303,14 @@ def find_most_general_shit_subrule(prog, tester, settings, min_coverage, d=0, se
 
 
 def get_min_pos_coverage(best_prog, cached_pos_covered):
-    min_coverage = None
-    for x in best_prog:
-        if x in cached_pos_covered:
-            v = len(cached_pos_covered[x])
-            if min_coverage == None or v < min_coverage:
-                min_coverage = v
-        else:
-            assert(False)
-    return min_coverage
+    if prog_is_recursive(best_prog):
+        return 1
+    # min_coverage = None
+    return min(len(cached_pos_covered[x]) for x in best_prog if x in cached_pos_covered)
+            # v =
+            # if min_coverage == None or v < min_coverage:
+                # min_coverage = v
+    # return min_coverage
 
 def functional_rename_vars(rule):
     head, body = rule
@@ -569,7 +583,6 @@ def prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester):
                 pass
             to_prune.add(prog2)
 
-
     for x in to_delete:
         del could_prune_later[x]
 
@@ -625,14 +638,16 @@ def find_most_general_subsumed(prog, tester, success_sets, settings, seen=set())
             out.update(xs)
             continue
 
-        # if not has_valid_directions(new_rule):
-        #     # print('b', format_rule(new_rule))
-        #     print('\t'*2, 'c')
-        #     xs = find_most_general_subsumed(new_prog, tester, success_sets, settings)
-        #     out.update(xs)
-        #     continue
+        if not has_valid_directions(new_rule):
+            xs = find_most_general_subsumed(new_prog, tester, success_sets, settings)
+            out.update(xs)
+            continue
 
-        # if tester.has_redundant_literal(new_prog):
+        if tester.has_redundant_literal(new_prog):
+            xs = find_most_general_subsumed(new_prog, tester, success_sets, settings)
+            out.update(xs)
+            continue
+            # print('tester.has_redundant_literal',format_prog(new_prog))
             # assert(False)
 
         sub_prog_pos_covered = tester.get_pos_covered(new_prog, ignore=True)
@@ -668,8 +683,8 @@ def popper(settings):
     rec_success_sets = {}
     last_size = None
 
+    bkcons = []
     if settings.bkcons:
-        bkcons = []
         with settings.stats.duration('bkcons'):
             bkcons = get_bkcons(settings, tester)
 
@@ -692,8 +707,6 @@ def popper(settings):
         # otherwise we build constraints and add them as nogoods and then again as constraints to the solver
         if not settings.single_solve:
             settings.logger.info(f'SIZE: {size} MAX_SIZE: {settings.max_literals}')
-            generator.update_number_of_literals(size)
-
             with settings.stats.duration('init'):
                 generator.update_solver(size)
 
@@ -755,7 +768,7 @@ def popper(settings):
                 if num_pos_covered == 0:
                     # if the programs does not cover any positive examples, check whether it is has an unsat core
                     with settings.stats.duration('find mucs'):
-                        pruned_sub_incomplete, cons_ = explain_incomplete(settings, explainer, prog, directions)
+                        pruned_sub_incomplete, cons_ = explain_incomplete(settings, explainer, tester, prog, directions)
                         tmp_new_cons.extend(cons_)
 
                 elif combiner.solution_found and not is_recursive and not has_invention and WITH_OPTIMISATIONS:
@@ -816,8 +829,7 @@ def popper(settings):
 
             # remove a subset of theta-subsumed rules when learning recursive programs with more than two rules
             if settings.max_rules > 2 and is_recursive:
-                for x in generator.andy_tmp_con(prog):
-                    new_cons.add(x)
+                tmp_new_cons.append((Constraint.TMP_ANDY, prog, rule_ordering))
 
             # remove generalisations of programs with redundant rules
             if is_recursive and len(prog) > 2 and tester.has_redundant_rule(prog):
@@ -935,8 +947,12 @@ def popper(settings):
                 tmp_new_cons.append((Constraint.SPECIALISATION, prog, rule_ordering))
 
             if add_gen and not pruned_sub_inconsistent:
-                if settings.recursion_enabled or settings.pi_enabled or not pruned_sub_incomplete:
-                    tmp_new_cons.append((Constraint.GENERALISATION, prog, rule_ordering))
+                if settings.recursion_enabled or settings.pi_enabled:
+                    if not pruned_sub_incomplete:
+                        tmp_new_cons.append((Constraint.GENERALISATION, prog, rule_ordering))
+                else:
+                    if not add_spec:
+                        tmp_new_cons.append((Constraint.GENERALISATION, prog, rule_ordering))
 
             if add_redund1 and not pruned_sub_incomplete:
                 tmp_new_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, prog, rule_ordering))

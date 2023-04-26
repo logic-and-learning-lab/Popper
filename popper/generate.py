@@ -5,7 +5,7 @@ import clingo.script
 import pkg_resources
 from . core import Literal, RuleVar, VarVar, Var
 from collections import defaultdict
-from . util import rule_is_recursive, format_rule, Constraint
+from . util import rule_is_recursive, format_rule, Constraint, format_prog
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 
@@ -36,9 +36,9 @@ def find_all_vars(body):
                         all_vars.add(t_arg)
     return all_vars
 
-def find_all_vars2(rule):
-    head, body = rule
-    all_vars = set(head.arguments)
+def find_all_vars2(body):
+    # head, body = rule
+    all_vars = set()
     for literal in body:
         for x in literal.arguments:
             all_vars.add(x)
@@ -194,34 +194,7 @@ def build_rule_ordering_literals(rule_index, rule_ordering):
             r2v = rule_index[r2]
             yield lt(r1v, r2v)
 
-def load_types(settings):
-    enc = """
-#defined clause/1.
-#defined clause_var/2.
-#defined var_type/3."""
-    # solver = clingo.Control()
-    solver = clingo.Control(['-Wnone'])
-    with open(settings.bias_file) as f:
-        solver.add('bias', [], f.read())
-    solver.add('bias', [], enc)
-    solver.ground([('bias', [])])
 
-    for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
-        head_pred = x.symbol.arguments[0].name
-        head_arity = x.symbol.arguments[1].number
-
-    head_types = None
-    body_types = {}
-    for x in solver.symbolic_atoms.by_signature('type', arity=2):
-        pred = x.symbol.arguments[0].name
-        # xs = (str(t) for t in )
-        xs = [y.name for y in x.symbol.arguments[1].arguments]
-        if pred == head_pred:
-            head_types = xs
-        else:
-            body_types[pred] = xs
-
-    return head_types, body_types
 
 class Generator:
 
@@ -282,8 +255,6 @@ class Generator:
         solver.ground([('base', [])])
         self.solver = solver
 
-        self.settings.head_types, self.settings.body_types = load_types(settings)
-
     def gen_symbol(self, literal, backend):
         sign, pred, args = literal
         k = hash(literal)
@@ -295,10 +266,11 @@ class Generator:
         return symbol
 
     def update_solver(self, size):
+        self.update_number_of_literals(size)
+
         # rules to add via Clingo's backend interface
         to_add = []
         to_add.extend(([], x) for x in self.all_ground_cons)
-
 
         new_seen_rules = set()
 
@@ -386,21 +358,29 @@ class Generator:
         # ground the rule for each variable assignment
         return set(ground_rule((head, body), assignment) for assignment in assignments)
 
-    def get_ground_rules2(self, rule):
-        head, body = rule
-        # find bindings for variables in the rule
-        assignments = self.grounder.find_bindings2(rule, self.settings.max_rules, self.settings.max_vars)
-        print(len(assignments))
-        # keep only standard literals
-        body = tuple(literal for literal in body if not literal.meta)
-        # ground the rule for each variable assignment
-        return set(ground_rule((head, body), assignment) for assignment in assignments)
+    # def get_ground_rules2(self, rule):
+    #     head, body = rule
+    #     # find bindings for variables in the rule
+    #     assignments = self.grounder.find_bindings2(rule, self.settings.max_rules, self.settings.max_vars)
+    #     print(len(assignments))
+    #     # keep only standard literals
+    #     body = tuple(literal for literal in body if not literal.meta)
+    #     # ground the rule for each variable assignment
+    #     return set(ground_rule((head, body), assignment) for assignment in assignments)
+
 
     def get_ground_deep_rules(self, body):
         # find bindings for variables in the rule
-        assignments = self.grounder.find_deep_bindings(body, self.settings.max_rules, self.settings.max_vars)
+        assignments = self.grounder.find_deep_bindings2(body, self.settings.max_rules, self.settings.max_vars)
+        # assignments = self.grounder.find_deep_bindings3(body, self.settings.max_rules, self.settings.max_vars)
         # ground the rule for each variable assignment
-        return set(ground_rule((False, body), assignment) for assignment in assignments)
+        xs = set(ground_rule((False, body), assignment) for assignment in assignments)
+
+        # if len(assignments) != len(xs):
+            # print('SHIT2', len(assignments), len(xs))
+            # assert(False)
+
+        return xs
 
 
     def parse_handles(self, new_handles):
@@ -413,39 +393,58 @@ class Generator:
                 out_b = frozenset((b_pred, b_args) for _, b_pred, b_args in b)
                 yield (out_h, out_b)
 
+    # @profile
     def constrain(self, tmp_new_cons, model):
         new_cons = set()
         handles_ = []
-
+        debug = False
         for con_type, con_prog, con_prog_ordering in tmp_new_cons:
             if con_type == Constraint.SPECIALISATION:
+                if debug:
+                    print('spec', format_prog(con_prog))
                 new_rule_handles, con = self.build_specialisation_constraint(con_prog, con_prog_ordering)
                 new_cons.add(con)
                 handles_.extend(new_rule_handles)
-            if con_type == Constraint.GENERALISATION:
+            elif con_type == Constraint.GENERALISATION:
+                if debug:
+                    print('gen', format_prog(con_prog))
                 new_rule_handles, con = self.build_generalisation_constraint(con_prog, con_prog_ordering)
                 new_cons.add(con)
                 handles_.extend(new_rule_handles)
             elif con_type == Constraint.UNSAT:
+                if debug:
+                    print('unsat')
                 con = self.unsat_constraint(con_prog)
-                for h, b in self.get_ground_deep_rules(con):
+                xs = self.get_ground_deep_rules(con)
+                for h, b in xs:
+                    # print(h, sorted(b))
                     self.new_ground_cons.add(b)
             elif con_type == Constraint.REDUNDANCY_CONSTRAINT1:
+                if debug:
+                    print('red1', format_prog(con_prog))
                 bad_handle, new_rule_handles, con = self.redundancy_constraint1(con_prog, con_prog_ordering)
                 self.bad_handles.add(bad_handle)
                 new_cons.add(con)
                 handles_.extend(new_rule_handles)
             elif con_type == Constraint.REDUNDANCY_CONSTRAINT2:
+                if debug:
+                    print('red2', format_prog(con_prog))
                 handles, cons = self.redundancy_constraint2(con_prog, con_prog_ordering)
                 new_cons.update(cons)
                 handles_.extend(new_rule_handles)
+            elif con_type == Constraint.TMP_ANDY:
+                for x in self.andy_tmp_con(con_prog):
+                    new_cons.add(x)
 
-        if self.settings.single_solve:
+        if not self.settings.single_solve:
             self.all_handles.update(self.parse_handles(handles_))
 
         self.all_ground_cons.update(self.new_ground_cons)
         ground_bodies = set()
         ground_bodies.update(self.new_ground_cons)
+
+        # assert(len(new_cons) == len(set(new_cons)))
+        # print(len(new_cons))
 
         for con in new_cons:
             ground_rules = self.get_ground_rules((None, con))
@@ -837,133 +836,140 @@ def body_size_literal(clause_var, body_size):
 def alldiff(args):
     return Literal('AllDifferent', args, meta=True)
 
+
+BODY_VARIANT_ENCODING = """\
+#show bind_var/2.
+value_type(Var,Type):- known_value(Var, Type).
+value_type(Value,Type):- bind_var(Var,Value), var_type(Var,Type).
+1 {bind_var(Var,Value): value(Value)} 1:- var(Var).
+:- value(Value), #count{T : value_type(Value,T)} > 1.
+:- value(Value), #count{Var : bind_var(Var,Value)} > 1.
+value(V):- V=0..max_vars-1.
+"""
+
 class Grounder():
     def __init__(self, settings):
         self.seen_assignments = {}
         self.seen_deep_assignments = {}
         self.settings = settings
 
-    def find_bindings2(self, rule, max_rules, max_vars):
+    # def find_bindings2(self, rule, max_rules, max_vars):
 
-        _, body = rule
+    #     _, body = rule
 
-        all_vars = find_all_vars2(rule)
+    #     all_vars = find_all_vars2(rule)
 
-        k = grounding_hash(body, all_vars)
-        if k in self.seen_assignments:
-            return self.seen_assignments[k]
-
-
-        print(all_vars)
+    #     k = grounding_hash(body, all_vars)
+    #     if k in self.seen_assignments:
+    #         return self.seen_assignments[k]
 
 
-        # map each rule and var_var in the program to an integer
-        rule_var_to_int = {v:i for i, v in enumerate(var for var in all_vars if isinstance(var, RuleVar))}
+    #     print(all_vars)
 
-        # transpose for later lookup
-        int_to_rule_var = {i:v for v,i in rule_var_to_int.items()}
 
-        # find all variables for each rule
-        rule_vars = {k:set() for k in rule_var_to_int}
-        for var in all_vars:
-            if isinstance(var, VarVar):
-                rule_vars[var.rule].add(var)
+    #     # map each rule and var_var in the program to an integer
+    #     rule_var_to_int = {v:i for i, v in enumerate(var for var in all_vars if isinstance(var, RuleVar))}
 
-        encoding = []
-        encoding.append(BINDING_ENCODING)
-        encoding.append(f'#const max_rules={max_rules}.')
-        encoding.append(f'#const max_vars={max_vars}.')
+    #     # transpose for later lookup
+    #     int_to_rule_var = {i:v for v,i in rule_var_to_int.items()}
 
-        int_lookup = {}
-        tmp_lookup = {}
-        for rule_var, xs in rule_vars.items():
-            rule_var_int = rule_var_to_int[rule_var]
-            encoding.append(f'rule({rule_var_int}).')
+    #     # find all variables for each rule
+    #     rule_vars = {k:set() for k in rule_var_to_int}
+    #     for var in all_vars:
+    #         if isinstance(var, VarVar):
+    #             rule_vars[var.rule].add(var)
 
-            for var_var_int, var_var in enumerate(xs):
-                encoding.append(f'rule_var({rule_var_int},{var_var_int}).')
-                int_lookup[(rule_var_int, var_var_int)] = var_var
-                tmp_lookup[(rule_var, var_var)] = var_var_int
-                # rule_var_lookup[(rule_var, i)] = var
-                # rule_var_to_int[var] = i
+    #     encoding = []
+    #     encoding.append(BINDING_ENCODING)
+    #     encoding.append(f'#const max_rules={max_rules}.')
+    #     encoding.append(f'#const max_vars={max_vars}.')
 
-        # rule_var_lookup[(rule_var, i)] = var
-        # rule_var_to_int[var] = i
-        # add constraints to the ASP program based on the AST thing
-        for lit in body:
-            if not lit.meta:
-                continue
-            if lit.predicate == '==':
-                # pass
-                var, value = lit.arguments
-                rule_var = var.rule
-                rule_var_int = rule_var_to_int[rule_var]
-                var_var_int = tmp_lookup[(rule_var, var)]
-                encoding.append(f':- not bind_var({rule_var_int},{var_var_int},{value}).')
-            elif lit.predicate == '>=':
-                var, val = lit.arguments
-                rule_var_int1 = rule_var_to_int[var]
-                # var = c_vars[var]
-                # for i in range(val):
-                # encoding.append(f':- c_var({var},{i}).')
-                encoding.append(f':- bind_rule({rule_var_int1},Val1), Val1 < {val}.')
-            elif lit.predicate == '<':
-                a, b = lit.arguments
-                if isinstance(b, int):
-                # ABSOLUTE HACK
-                    rule_var_int1 = rule_var_to_int[a]
-                    encoding.append(f':- bind_rule({rule_var_int1},Val1), Val1 >= {b}.')
-                else:
-                    rule_var_int1 = rule_var_to_int[a]
-                    rule_var_int2 = rule_var_to_int[b]
-                    encoding.append(f':- bind_rule({rule_var_int1},Val1), bind_rule({rule_var_int2},Val2), Val1>=Val2.')
+    #     int_lookup = {}
+    #     tmp_lookup = {}
+    #     for rule_var, xs in rule_vars.items():
+    #         rule_var_int = rule_var_to_int[rule_var]
+    #         encoding.append(f'rule({rule_var_int}).')
 
-        encoding = '\n'.join(encoding)
+    #         for var_var_int, var_var in enumerate(xs):
+    #             encoding.append(f'rule_var({rule_var_int},{var_var_int}).')
+    #             int_lookup[(rule_var_int, var_var_int)] = var_var
+    #             tmp_lookup[(rule_var, var_var)] = var_var_int
+    #             # rule_var_lookup[(rule_var, i)] = var
+    #             # rule_var_to_int[var] = i
 
-        print(encoding)
+    #     # rule_var_lookup[(rule_var, i)] = var
+    #     # rule_var_to_int[var] = i
+    #     # add constraints to the ASP program based on the AST thing
+    #     for lit in body:
+    #         if not lit.meta:
+    #             continue
+    #         if lit.predicate == '==':
+    #             # pass
+    #             var, value = lit.arguments
+    #             rule_var = var.rule
+    #             rule_var_int = rule_var_to_int[rule_var]
+    #             var_var_int = tmp_lookup[(rule_var, var)]
+    #             encoding.append(f':- not bind_var({rule_var_int},{var_var_int},{value}).')
+    #         elif lit.predicate == '>=':
+    #             var, val = lit.arguments
+    #             rule_var_int1 = rule_var_to_int[var]
+    #             # var = c_vars[var]
+    #             # for i in range(val):
+    #             # encoding.append(f':- c_var({var},{i}).')
+    #             encoding.append(f':- bind_rule({rule_var_int1},Val1), Val1 < {val}.')
+    #         elif lit.predicate == '<':
+    #             a, b = lit.arguments
+    #             if isinstance(b, int):
+    #             # ABSOLUTE HACK
+    #                 rule_var_int1 = rule_var_to_int[a]
+    #                 encoding.append(f':- bind_rule({rule_var_int1},Val1), Val1 >= {b}.')
+    #             else:
+    #                 rule_var_int1 = rule_var_to_int[a]
+    #                 rule_var_int2 = rule_var_to_int[b]
+    #                 encoding.append(f':- bind_rule({rule_var_int1},Val1), bind_rule({rule_var_int2},Val2), Val1>=Val2.')
 
-        # print('ASDASDA')
-        # solver = clingo.Control()
-        solver = clingo.Control(['-Wnone'])
-        # solver = clingo.Control(["-t4"])
-        # ask for all models
-        solver.configuration.solve.models = 0
-        solver.add('base', [], encoding)
-        solver.ground([("base", [])])
+    #     encoding = '\n'.join(encoding)
 
-        out = []
+    #     # print(encoding)
 
-        def on_model(m):
-            xs = m.symbols(shown = True)
-            # map a variable to a program variable
-            # print('xs', xs)
-            assignment = {}
-            for x in xs:
-                name = x.name
-                args = x.arguments
-                if name == 'bind_var':
-                    rule_var_int = args[0].number
-                    var_var_int = args[1].number
-                    value = args[2].number
-                    var_var = int_lookup[(rule_var_int, var_var_int)]
-                    assignment[var_var] = value
-                else:
-                    rule_var_int = args[0].number
-                    value = args[1].number
-                    rule_var = int_to_rule_var[rule_var_int]
-                    assignment[rule_var] = value
-            out.append(assignment)
-        solver.solve(on_model=on_model)
-        self.seen_assignments[k] = out
-        # for x in body:
-            # if x.predicate == 'seen_rule':
-                # print(encoding)
-                # print('all_vars:\t',all_vars)
-                # print('rule_vars:\t',rule_vars)
-                # print(','.join(str(y) for y in body))
-                # for z in out:
-                    # print(z)
-        return out
+    #     solver = clingo.Control(['-Wnone'])
+    #     solver.configuration.solve.models = 0
+    #     solver.add('base', [], encoding)
+    #     solver.ground([("base", [])])
+
+    #     out = []
+
+    #     def on_model(m):
+    #         xs = m.symbols(shown = True)
+    #         # map a variable to a program variable
+    #         # print('xs', xs)
+    #         assignment = {}
+    #         for x in xs:
+    #             name = x.name
+    #             args = x.arguments
+    #             if name == 'bind_var':
+    #                 rule_var_int = args[0].number
+    #                 var_var_int = args[1].number
+    #                 value = args[2].number
+    #                 var_var = int_lookup[(rule_var_int, var_var_int)]
+    #                 assignment[var_var] = value
+    #             else:
+    #                 rule_var_int = args[0].number
+    #                 value = args[1].number
+    #                 rule_var = int_to_rule_var[rule_var_int]
+    #                 assignment[rule_var] = value
+    #         out.append(assignment)
+    #     solver.solve(on_model=on_model)
+    #     self.seen_assignments[k] = out
+    #     # for x in body:
+    #         # if x.predicate == 'seen_rule':
+    #             # print(encoding)
+    #             # print('all_vars:\t',all_vars)
+    #             # print('rule_vars:\t',rule_vars)
+    #             # print(','.join(str(y) for y in body))
+    #             # for z in out:
+    #                 # print(z)
+    #     return out
 
 
     def find_bindings(self, rule, max_rules, max_vars):
@@ -1084,6 +1090,7 @@ class Grounder():
                     # print(z)
         return out
 
+    # @profile
     def find_deep_bindings(self, body, max_rules, max_vars):
         all_vars = find_all_vars(body)
         head_types = self.settings.head_types
@@ -1192,36 +1199,102 @@ class Grounder():
         return out
 
 #     # find_deep_bindings(body, head_types, self.settings.max_vars)
-#     def find_deep_bindings2(self, body, max_rules, max_vars):
+    # @profile
+    def find_deep_bindings2(self, body, max_rules, max_vars):
+        # all_vars = find_all_vars(body)
+        all_vars = find_all_vars2(body)
+
+        # body_hash = hash(frozenset((literal.predicate, literal.arguments) for literal in body))
+        body_hash = grounding_hash(body, all_vars)
+        if body_hash in self.seen_deep_assignments:
+            return self.seen_deep_assignments[body_hash]
+
+        head_types = self.settings.head_types
+        body_types = self.settings.body_types
+
+        encoding = set()
+        encoding.add(BODY_VARIANT_ENCODING)
+        encoding.add(f'#const max_vars={max_vars}.')
+        var_count = 0
+        var_lookup = {}
+        if head_types:
+            for i, head_type in enumerate(head_types):
+                encoding.add(f'var_type({i},{head_type}).')
+                encoding.add(f'known_value({i},{head_type}).')
+
+        var_count = 0
+        var_index = {}
+        for lit in body:
+            pred = lit.arguments[1]
+            for i, x in enumerate(lit.arguments[3]):
+                var_name = x.name
+                v = var_name.split('_')[1][1:]
+                k = ord(v)- ord('A')
+                # print(v, k)
+                var_lookup[k] = x
+                encoding.add(f'var({k}).')
+                if pred in body_types:
+                    var_type = body_types[pred][i]
+                    encoding.add(f'var_type({k},{var_type}).')
+
+        encoding = '\n'.join(encoding)
+
+        # print('<<'*20)
+        # print(encoding)
+        # print('>>'*20)
+
+        # solver = clingo.Control()
+        solver = clingo.Control(['-Wnone'])
+        solver.configuration.solve.models = 0
+        solver.add('base', [], encoding)
+        solver.ground([("base", [])])
+
+        out = []
+
+        def on_model(m):
+            xs = m.symbols(shown = True)
+            assignment = {}
+            for x in xs:
+                args = x.arguments
+                var_var_int = args[0].number
+                value = args[1].number
+                var_var = var_lookup[var_var_int]
+                assignment[var_var] = value
+
+            for i in range(max_rules):
+                x = assignment.copy()
+                x[vo_clause('X')] = i
+                out.append(x)
+
+        solver.solve(on_model=on_model)
+        self.seen_deep_assignments[body_hash] = out
+        return out
+
+
+
+# def find_deep_bindings3(self, body, max_rules, max_vars):
 #         all_vars = find_all_vars(body)
 #         head_types = self.settings.head_types
 #         body_types = self.settings.body_types
+#         # body_hash = grounding_hash(body, all_vars)
 
-#         body_hash = grounding_hash(body, all_vars)
-#         # print(','.join(map(str,body)), all_vars, body_hash)
-#         if body_hash in self.seen_deep_assignments:
-#             # print('moo')
-#             return self.seen_deep_assignments[body_hash]
-
-# # :- Value=0..max_vars-1, #count{Var : bind_var(Var,Value)} > 1.
-# # :- bind_var(Var,Value), type(Var,T1), type(Value,T2), T1 != T2.
+#         # if body_hash in self.seen_deep_assignments:
+#             # return self.seen_deep_assignments[body_hash]
 
 #         encoding = set()
-#         encoding.add("""\
-# #show bind_var/2.
-# {bind_var(Var,Value)}:- var(Var), Value=0..max_vars-1.
-# value_type(Value,Type):- bind_var(Var,Value), var_type(Var,Type).
-# :- var(Var), #count{Value : bind_var(Var,Value)} != 1.
-# :- value_type(Value,T1), value_type(Value,T2), T1 != T2.
-# """)
+#         encoding.add(BODY_VARIANT_ENCODING)
 #         encoding.add(f'#const max_vars={max_vars}.')
 #         var_count = 0
-#         # var_index = {}
 #         var_lookup = {}
 #         if head_types:
 #             for i, head_type in enumerate(head_types):
 #                 encoding.add(f'var_type({i},{head_type}).')
-#             # encoding.add(f':- var({i}), not bind_var({i}, {i}).')
+#                 encoding.add(f'known_value({i},{head_type}).')
+
+
+
+#         for var in all_vars:
+
 
 #         var_count = 0
 #         var_index = {}
@@ -1238,28 +1311,11 @@ class Grounder():
 #                     var_type = body_types[pred][i]
 #                     encoding.add(f'var_type({k},{var_type}).')
 
-
-
-
-#         # for rule_var, xs in rule_vars.items():
-#         #     rule_var_int = rule_var_to_int[rule_var]
-#         #     encoding.append(f'rule({rule_var_int}).')
-
-#         #     for var_var_int, var_var in enumerate(xs):
-#         #         encoding.append(f'rule_var({rule_var_int},{var_var_int}).')
-#         #         int_lookup[(rule_var_int, var_var_int)] = var_var
-#         #         tmp_lookup[(rule_var, var_var)] = var_var_int
-
-#         # for p, types in settings.body_types.items():
-#         #     for i, t in enumerate(types):
-#         #         encoding.append(f'arg_type({i},{head_type}'.)
-
-
-
 #         encoding = '\n'.join(encoding)
 
-#         # print('*'*10)
-#         # print(encoding)
+#         print('<<'*20)
+#         print(encoding)
+#         print('>>'*20)
 
 #         # solver = clingo.Control()
 #         solver = clingo.Control(['-Wnone'])
@@ -1293,5 +1349,5 @@ class Grounder():
 #             # print(x)
 #         # exit()
 
-#         # self.seen_deep_assignments[body_hash] = out
+#         self.seen_deep_assignments[body_hash] = out
 #         return out
