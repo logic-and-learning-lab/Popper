@@ -174,7 +174,6 @@ class Combiner:
                 handle = iter(handle)
 
                 while True:
-                    # FIND COMBINATION
                     # with self.settings.stats.duration('combine_solve'):
                         # get the next model from the solver
                     m = next(handle, None)
@@ -239,7 +238,6 @@ class Combiner:
                     # for rule in smaller:
                     #     print('\t',format_rule(order_rule(rule)))
                 # break to not consider no more models as we need to take into account the new constraint
-                    break
                     break
                 # print('COMBINE TIME', self.debug_count, t2-t1)
 

@@ -20,7 +20,7 @@ AGGRESSIVE = True
 AGGRESSIVE = False
 
 SHOW_PRUNED = True
-# SHOW_PRUNED = False
+SHOW_PRUNED = False
 
 WITH_OPTIMISATIONS = True
 # WITH_OPTIMISATIONS = False
@@ -84,9 +84,8 @@ def explain_incomplete(settings, explainer, tester, prog, directions):
         #         new_ground_cons.add(x)
         #     continue
 
-        out_cons.append((Constraint.SPECIALISATION, subprog, None))
-
         if not settings.recursion_enabled or settings.pi_enabled:
+            out_cons.append((Constraint.SPECIALISATION, subprog, None))
             continue
 
         if len(subprog) == 1:
@@ -943,7 +942,7 @@ def popper(settings):
                             tmp_new_cons.append((Constraint.SPECIALISATION, x, None))
 
             # BUILD CONSTRAINTS
-            if add_spec and not pruned_sub_incomplete and not pruned_more_general_shit:
+            if add_spec and not pruned_sub_incomplete and not pruned_more_general_shit and not add_redund2:
                 tmp_new_cons.append((Constraint.SPECIALISATION, prog, rule_ordering))
 
             if add_gen and not pruned_sub_inconsistent:

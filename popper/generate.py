@@ -1,3 +1,7 @@
+import time
+from pysat.formula import CNF
+from pysat.solvers import Solver
+from pysat.card import *
 import clingo
 import operator
 import numbers
@@ -5,9 +9,10 @@ import clingo.script
 import pkg_resources
 from . core import Literal, RuleVar, VarVar, Var
 from collections import defaultdict
-from . util import rule_is_recursive, format_rule, Constraint, format_prog
+from . util import rule_is_recursive, format_rule, Constraint, format_prog, order_rule, order_prog
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
+from itertools import permutations
 
 arg_lookup = {clingo.Number(i):chr(ord('A') + i) for i in range(100)}
 
@@ -94,6 +99,7 @@ def make_rule_handle(rule):
     return handle
 
 def build_seen_rule(rule, is_rec):
+    # seen_rule(handle,rule):-body_literal(....,....,...)
     rule_var = vo_clause('l')
     handle = make_rule_handle(rule)
     head = Literal('seen_rule', (handle, rule_var))
@@ -103,10 +109,12 @@ def build_seen_rule(rule, is_rec):
         body.append(gteq(rule_var, 1))
     return head, tuple(body)
 
+
+
 def build_seen_rule_literal(handle, rule_var):
     return Literal('seen_rule', (handle, rule_var))
 
-@profile
+#
 def parse_model(model):
     directions = defaultdict(lambda: defaultdict(lambda: '?'))
     rule_index_to_body = defaultdict(set)
@@ -201,6 +209,7 @@ def build_rule_ordering_literals(rule_index, rule_ordering):
 class Generator:
 
     def __init__(self, settings, grounder, bkcons=[]):
+        self.savings = 0
         self.settings = settings
         self.grounder = grounder
         self.seen_handles = set()
@@ -282,8 +291,12 @@ class Generator:
             head, body = rule
             head_pred, head_args = head
 
+            # print(head, body)
+
             if head_pred == 'seen_rule':
                 new_seen_rules.add(head_args[0])
+            else:
+                assert(False)
 
             new_head = (True, head_pred, head_args)
             new_body = frozenset((True, pred, args) for pred, args in body)
@@ -360,100 +373,70 @@ class Generator:
         # ground the rule for each variable assignment
         return set(ground_rule((head, body), assignment) for assignment in assignments)
 
-    # def get_ground_rules2(self, rule):
-    #     head, body = rule
-    #     # find bindings for variables in the rule
-    #     assignments = self.grounder.find_bindings2(rule, self.settings.max_rules, self.settings.max_vars)
-    #     print(len(assignments))
-    #     # keep only standard literals
-    #     body = tuple(literal for literal in body if not literal.meta)
-    #     # ground the rule for each variable assignment
-    #     return set(ground_rule((head, body), assignment) for assignment in assignments)
-
-
-    # @profile
-    def get_ground_deep_rules(self, body):
-        # find bindings for variables in the rule
-        assignments = self.grounder.find_deep_bindings2(body, self.settings.max_rules, self.settings.max_vars)
-        # assignments = self.grounder.find_deep_bindings3(body, self.settings.max_rules, self.settings.max_vars)
-        # ground the rule for each variable assignment
-        xs = set(ground_rule((False, body), assignment) for assignment in assignments)
-
-        # if len(assignments) != len(xs):
-            # print('SHIT2', len(assignments), len(xs))
-            # assert(False)
-
-        return xs
-
-
     def parse_handles(self, new_handles):
+        out = []
         for rule in new_handles:
             head, body = rule
             for h, b in self.get_ground_rules(rule):
                 _, p, args = h
-                # print(h, b)
                 out_h = (p, args)
                 out_b = frozenset((b_pred, b_args) for _, b_pred, b_args in b)
-                yield (out_h, out_b)
+                out.append((out_h, out_b))
+        return out
 
     # @profile
     def constrain(self, tmp_new_cons, model):
         new_cons = set()
-        handles_ = []
+        debug = True
         debug = False
-        for con_type, con_prog, con_prog_ordering in tmp_new_cons:
-            if con_type == Constraint.SPECIALISATION:
-                if debug:
-                    print('spec', format_prog(con_prog))
-                new_rule_handles, con = self.build_specialisation_constraint(con_prog, con_prog_ordering)
-                new_cons.add(con)
-                handles_.extend(new_rule_handles)
-            elif con_type == Constraint.GENERALISATION:
-                if debug:
-                    print('gen', format_prog(con_prog))
-                new_rule_handles, con = self.build_generalisation_constraint(con_prog, con_prog_ordering)
-                new_cons.add(con)
-                handles_.extend(new_rule_handles)
-            elif con_type == Constraint.UNSAT:
-                if debug:
-                    print('unsat')
-                con = self.unsat_constraint(con_prog)
-                xs = self.get_ground_deep_rules(con)
-                for h, b in xs:
-                    # print(h, sorted(b))
-                    self.new_ground_cons.add(b)
-            elif con_type == Constraint.REDUNDANCY_CONSTRAINT1:
-                if debug:
-                    print('red1', format_prog(con_prog))
-                bad_handle, new_rule_handles, con = self.redundancy_constraint1(con_prog, con_prog_ordering)
-                self.bad_handles.add(bad_handle)
-                new_cons.add(con)
-                handles_.extend(new_rule_handles)
-            elif con_type == Constraint.REDUNDANCY_CONSTRAINT2:
-                if debug:
-                    print('red2', format_prog(con_prog))
-                handles, cons = self.redundancy_constraint2(con_prog, con_prog_ordering)
-                new_cons.update(cons)
-                handles_.extend(new_rule_handles)
-            elif con_type == Constraint.TMP_ANDY:
-                for x in self.andy_tmp_con(con_prog):
-                    new_cons.add(x)
 
-        if not self.settings.single_solve:
-            parsed_handles = self.parse_handles(handles_)
-            self.all_handles.update(parsed_handles)
+        for con_type, con_prog, con_prog_ordering in tmp_new_cons:
+            if debug and con_type != Constraint.UNSAT:
+                print('')
+                print('\t','--', con_type)
+                for rule in order_prog(con_prog):
+                    print('\t', format_rule(order_rule(rule)))
+            if con_type == Constraint.SPECIALISATION:
+                new_rule_handles2, con = self.build_specialisation_constraint2(con_prog, con_prog_ordering)
+                self.all_handles.update(new_rule_handles2)
+                new_cons.add(con)
+                # ground_rules = self.get_ground_rules((None, con))
+                # for h, b in ground_rules:
+                    # print('spec', sorted(b))
+            elif con_type == Constraint.GENERALISATION:
+                new_rule_handles2, con = self.build_generalisation_constraint2(con_prog, con_prog_ordering)
+                self.all_handles.update(new_rule_handles2)
+                new_cons.add(con)
+            elif con_type == Constraint.UNSAT:
+                cons_ = self.unsat_constraint2(con_prog)
+                self.new_ground_cons.update(cons_)
+            elif con_type == Constraint.REDUNDANCY_CONSTRAINT1:
+                bad_handle, new_rule_handles2, con = self.redundancy_constraint1(con_prog, con_prog_ordering)
+                self.bad_handles.add(bad_handle)
+                self.all_handles.update(new_rule_handles2)
+                new_cons.add(con)
+                # ground_rules = self.get_ground_rules((None, con))
+                # for h, b in ground_rules:
+                #     print('red1',sorted(b))
+
+            elif con_type == Constraint.REDUNDANCY_CONSTRAINT2:
+                new_rule_handles2, cons = self.redundancy_constraint2(con_prog, con_prog_ordering)
+                self.all_handles.update(new_rule_handles2)
+                new_cons.update(cons)
+                # for con in cons:
+                #     ground_rules = self.get_ground_rules((None, con))
+                #     for h, b in ground_rules:
+                #         print('red2',sorted(b))
+            elif con_type == Constraint.TMP_ANDY:
+                new_cons.update(self.andy_tmp_con(con_prog))
 
         self.all_ground_cons.update(self.new_ground_cons)
         ground_bodies = set()
         ground_bodies.update(self.new_ground_cons)
 
-        # assert(len(new_cons) == len(set(new_cons)))
-        # print(len(new_cons))
-
         for con in new_cons:
             ground_rules = self.get_ground_rules((None, con))
             for ground_rule in ground_rules:
-                # print(con, ground_rule)
                 _ground_head, ground_body = ground_rule
                 ground_bodies.add(ground_body)
                 self.all_ground_cons.add(frozenset(ground_body))
@@ -477,7 +460,7 @@ class Generator:
 
         self.new_ground_cons = set()
 
-    def build_generalisation_constraint(self, prog, rule_ordering=None):
+    def build_generalisation_constraint2(self, prog, rule_ordering=None):
         new_handles = set()
         prog = list(prog)
         rule_index = {}
@@ -487,17 +470,24 @@ class Generator:
             head, body = rule
             rule_var = vo_clause(rule_id)
             rule_index[rule] = rule_var
-            handle = make_rule_handle(rule)
-            is_rec = rule_is_recursive(rule)
-            if is_rec:
-                recs.append((len(body), rule))
-            if handle in self.seen_handles:
-                literals.append(build_seen_rule_literal(handle, rule_var))
-                if is_rec:
-                    literals.append(gteq(rule_var, 1))
-            else:
-                new_handles.add(build_seen_rule(rule, is_rec))
+
+            if self.settings.single_solve:
                 literals.extend(tuple(build_rule_literals(rule, rule_var)))
+            else:
+                is_rec = rule_is_recursive(rule)
+                if is_rec:
+                    recs.append((len(body), rule))
+                handle = make_rule_handle(rule)
+                if handle in self.seen_handles:
+                    literals.append(build_seen_rule_literal(handle, rule_var))
+                    if is_rec:
+                        literals.append(gteq(rule_var, 1))
+                else:
+                    xs = self.build_seen_rule2(rule, is_rec)
+                    # NEW!!
+                    # self.seen_handles.update(xs)
+                    new_handles.update(xs)
+                    literals.extend(tuple(build_rule_literals(rule, rule_var)))
             literals.append(body_size_literal(rule_var, len(body)))
         if rule_ordering:
             literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
@@ -510,7 +500,48 @@ class Generator:
                         literals.append(lt(r1v, r2v))
         return new_handles, tuple(literals)
 
-    def build_specialisation_constraint(self, prog, rule_ordering=None):
+
+    def build_seen_rule2(self, rule, is_rec):
+
+        handle = make_rule_handle(rule)
+        head, body = rule
+
+        head_vars = set(head.arguments)
+        body_vars = set(x for atom in body for x in atom.arguments if x not in head_vars)
+
+        possible_values = list(range(len(head_vars), self.settings.max_vars))
+        perms = list(permutations(possible_values, len(body_vars)))
+        indexes = {x:i for i, x in enumerate(list(body_vars))}
+
+        ground_head_args = tuple(range(len(head_vars)))
+
+        out = []
+        for rule_id in range(self.settings.max_rules):
+            if is_rec and rule_id == 0:
+                continue
+            # new_head = (True, 'seen_rule', (handle, rule_id))
+            new_head = ('seen_rule', (handle, rule_id))
+            for xs in perms:
+                new_body = []
+                # new_body.append((True, 'head_literal', (rule_id, head.predicate, len(head.arguments), ground_head_args)))
+                new_body.append(('head_literal', (rule_id, head.predicate, len(head.arguments), ground_head_args)))
+                for atom in body:
+                    new_args = []
+                    for x in atom.arguments:
+                        if x in head_vars:
+                            v = ord(x)- ord('A')
+                            new_args.append(v)
+                        else:
+                            new_args.append(xs[indexes[x]])
+                    new_args = tuple(new_args)
+                    # new_body.append((True, 'body_literal', (rule_id, atom.predicate, len(atom.arguments), new_args)))
+                    new_body.append(('body_literal', (rule_id, atom.predicate, len(atom.arguments), new_args)))
+                new_rule = (new_head, frozenset(new_body))
+                out.append(new_rule)
+        return frozenset(out)
+
+    # @profile
+    def build_specialisation_constraint2(self, prog, rule_ordering=None):
         new_handles = set()
         prog = list(prog)
         rule_index = {}
@@ -520,17 +551,24 @@ class Generator:
             head, body = rule
             rule_var = vo_clause(rule_id)
             rule_index[rule] = rule_var
-            handle = make_rule_handle(rule)
-            is_rec = rule_is_recursive(rule)
-            if is_rec:
-                recs.append((len(body), rule))
-            if handle in self.seen_handles:
-                literals.append(build_seen_rule_literal(handle, rule_var))
-                if is_rec:
-                    literals.append(gteq(rule_var, 1))
-            else:
-                new_handles.add(build_seen_rule(rule, is_rec))
+
+            if self.settings.single_solve:
                 literals.extend(tuple(build_rule_literals(rule, rule_var)))
+            else:
+                is_rec = rule_is_recursive(rule)
+                if is_rec:
+                    recs.append((len(body), rule))
+                handle = make_rule_handle(rule)
+                if handle in self.seen_handles:
+                    literals.append(build_seen_rule_literal(handle, rule_var))
+                    if is_rec:
+                        literals.append(gteq(rule_var, 1))
+                else:
+                    xs = self.build_seen_rule2(rule, is_rec)
+                    # NEW!!
+                    # self.seen_handles.update(xs)
+                    new_handles.update(xs)
+                    literals.extend(tuple(build_rule_literals(rule, rule_var)))
             literals.append(lt(rule_var, len(prog)))
         literals.append(Literal('clause', (len(prog), ), positive = False))
         if rule_ordering:
@@ -570,80 +608,31 @@ class Generator:
     # only works with single rule programs
     # if a single rule R is unsatisfiable, then for R to appear in an optimal solution H it must be the case that H has a recursive rule that does not specialise R
     def redundancy_constraint1(self, prog, rule_ordering=None):
-        assert(len(prog) == 1)
+
         new_handles = set()
         literals = []
 
         rule_id = 0
         rule = list(prog)[0]
-        assert(not rule_is_recursive(rule))
         head, body = rule
         rule_var = vo_clause(rule_id)
         handle = make_rule_handle(rule)
-
         if handle in self.seen_handles:
             literals.append(build_seen_rule_literal(handle, rule_var))
         else:
-            # new_handles.add((handle, build_seen_rule(rule)))
-            new_handles.add(build_seen_rule(rule, False))
-            literals.extend(build_rule_literals(rule, rule_var))
+            xs = self.build_seen_rule2(rule, False)
+            new_handles.update(xs)
+            literals.extend(tuple(build_rule_literals(rule, rule_var)))
+
+        # UNSURE
+        # if self.settings.max_rules > 2:
         literals.append(gteq(rule_var, 1))
         literals.append(Literal('recursive_clause',(rule_var, head.predicate, len(head.arguments))))
         literals.append(Literal('num_recursive', (head.predicate, 1)))
-        # print('RED1', format_rule(rule))
-        # print('\n'.join(str(x) for x in literals))
+        # else:
+            # literals.append(gteq(rule_var, 1))
+
         return handle, new_handles, tuple(literals)
-
-    # def redundant_rules_check(self, rule1, rule2):-
-
-
-    def unsat_constraint(self, body):
-        rule_var = vo_clause('X')
-        return tuple(Literal('body_literal', (rule_var, body_literal.predicate, len(body_literal.arguments), tuple(vo_variable2(rule_var, v) for v in body_literal.arguments))) for body_literal in body)
-
-
-    def redundancy_constraint4(self, program, rule_ordering=None):
-        new_handles = set()
-        new_rules = []
-
-        prog_handle = "prog"
-        for clause in program:
-            clause_handle = make_rule_handle(clause)
-            prog_handle += '_' + clause_handle
-        clause_variable = vo_clause('')
-
-        # rules encoding which clauses specialises any clause of the program
-        for rule in program:
-            handle = make_rule_handle(rule)
-
-            if handle not in self.seen_handles:
-                # new_handles.add((handle, build_seen_rule(rule)))
-                new_handles.add(build_seen_rule(rule))
-
-            h = Literal('specialises', (clause_variable, prog_handle))
-            b = tuple([build_seen_rule_literal(handle, clause_variable)])
-            new_rules.append((h, b))
-
-        # # rules exhaustively checking for all cases where a clause is not redundant
-        clause_var1 = vo_clause('1')
-        clause_var2 = vo_clause('2')
-        r1 = (Literal('not_redundant', (clause_variable, prog_handle)), (Literal('specialises', (clause_variable, prog_handle), positive = False),))
-        r2 = (Literal('not_redundant', (clause_var1, prog_handle)), (Literal('specialises', (clause_var1, prog_handle)),Literal('depends_on', (clause_var1, clause_var2)), Literal('specialises', (clause_var2, prog_handle), positive = False)))
-        r3 = (Literal('not_redundant', (clause_var1, prog_handle)), (Literal('specialises', (clause_var1, prog_handle)), Literal('depends_on', (clause_var2, clause_var1)), Literal('specialises', (clause_var2, prog_handle), positive = False)))
-        # r4 = (None, (Literal('not_redundant', (clause_variable, prog_handle), positive = False),))
-        # new_rules.extend([r1,r2,r3])
-        # new_rules.extend([r1])
-
-        # for x in new_rules:
-        #     h, b = x
-        #     print(h, ', '.join(map(str,b)))
-            # print(x, type(x))
-            # h,b = x
-            # print(h, ','.join(str(y) for y in b))
-        # a rule is redundant iff it is not not redundant - if there is a redundant rule, we prune
-
-        con = [Literal('not_redundant', (clause_variable, prog_handle), positive = False)]
-        return new_rules, tuple(con)
 
     def redundancy_constraint2(self, prog, rule_ordering=None):
 
@@ -683,14 +672,19 @@ class Generator:
                 handle = make_rule_handle(rule)
 
                 is_rec = rule_is_recursive(rule)
+                if is_rec:
+                    literals.append(gteq(rule_var, 1))
+                else:
+                    literals.append(lt(rule_var, 1))
 
                 if handle in self.seen_handles:
                     literals.append(build_seen_rule_literal(handle, rule_var))
-                    if is_rec:
-                        literals.append(gteq(rule_var, 1))
                 else:
-                    new_handles.add(build_seen_rule(rule, is_rec))
-                    literals.append(build_seen_rule_literal(handle, rule_var))
+                    xs = self.build_seen_rule2(rule, is_rec)
+                    # NEW!!
+                    # self.seen_handles.update(xs)
+                    new_handles.update(xs)
+                    literals.extend(tuple(build_rule_literals(rule, rule_var)))
 
             for other_lit, num_clauses in lits_num_rules.items():
                 if other_lit == lit:
@@ -706,76 +700,21 @@ class Generator:
 
         return new_handles, out_cons
 
+    # def redundant_rules_check(self, rule1, rule2):-
+
+    def unsat_constraint2(self, body):
+        assignments = self.grounder.find_deep_bindings4(body, self.settings.max_rules, self.settings.max_vars)
+        out = []
+        for rule_id in range(0, self.settings.max_rules):
+            for assignment in assignments:
+                rule = []
+                for atom in body:
+                    args2 = tuple(assignment[x] for x in atom.arguments)
+                    rule.append((True, 'body_literal', (rule_id, atom.predicate, len(atom.arguments), args2)))
+                out.append(frozenset(rule))
+        return out
 
 
-    def redundancy_constraint3(self, prog, rule_ordering={}):
-
-        lits_num_rules = defaultdict(int)
-        lits_num_recursive_rules = defaultdict(int)
-        for rule in prog:
-            head, _ = rule
-            lits_num_rules[head.predicate] += 1
-            if rule_is_recursive(rule):
-                lits_num_recursive_rules[head.predicate] += 1
-
-        recursively_called = set()
-        while True:
-            something_added = False
-            for rule in prog:
-                head, body = rule
-                is_rec = rule_is_recursive(rule)
-                for body_literal in body:
-                    if body_literal.predicate not in lits_num_rules:
-                        continue
-                    if (body_literal.predicate != head.predicate and is_rec) or (head.predicate in recursively_called):
-                        something_added |= not body_literal.predicate in recursively_called
-                        recursively_called.add(body_literal.predicate)
-            if not something_added:
-                break
-
-        new_handles = set()
-        out_cons = []
-        for lit in lits_num_rules.keys() - recursively_called:
-            rule_index = {}
-            literals = []
-            recs = []
-            for rule_id, rule in enumerate(prog):
-                head, body = rule
-                rule_var = vo_clause(rule_id)
-                rule_index[rule] = rule_var
-                handle = make_rule_handle(rule)
-
-                if rule_is_recursive(rule):
-                    recs.append((len(body), rule))
-                if handle in self.seen_handles:
-                    literals.append(build_seen_rule_literal(handle, rule_var))
-                    if rule_is_recursive(rule):
-                        literals.append(gteq(rule_var, 1))
-                else:
-                    new_handles.add(build_seen_rule(rule))
-                    literals.append(build_seen_rule_literal(handle, rule_var))
-
-            for other_lit, num_clauses in lits_num_rules.items():
-                if other_lit == lit:
-                    continue
-                literals.append(Literal('num_clauses', (other_lit, num_clauses)))
-            num_recursive = lits_num_recursive_rules[lit]
-            literals.append(Literal('num_recursive', (lit, num_recursive)))
-            literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
-
-
-            for k1, r1 in recs:
-                r1v = rule_index[r1]
-                for k2, r2 in recs:
-                    r2v = rule_index[r2]
-                    if k1 < k2:
-                        literals.append(lt(r1v, r2v))
-
-            out_cons.append(tuple(literals))
-
-            # print(':- ' + ', '.join(map(str,literals)))
-
-        return new_handles, out_cons
 
 
 BINDING_ENCODING = """\
@@ -856,125 +795,7 @@ class Grounder():
         self.seen_assignments = {}
         self.seen_deep_assignments = {}
         self.settings = settings
-
-    # def find_bindings2(self, rule, max_rules, max_vars):
-
-    #     _, body = rule
-
-    #     all_vars = find_all_vars2(rule)
-
-    #     k = grounding_hash(body, all_vars)
-    #     if k in self.seen_assignments:
-    #         return self.seen_assignments[k]
-
-
-    #     print(all_vars)
-
-
-    #     # map each rule and var_var in the program to an integer
-    #     rule_var_to_int = {v:i for i, v in enumerate(var for var in all_vars if isinstance(var, RuleVar))}
-
-    #     # transpose for later lookup
-    #     int_to_rule_var = {i:v for v,i in rule_var_to_int.items()}
-
-    #     # find all variables for each rule
-    #     rule_vars = {k:set() for k in rule_var_to_int}
-    #     for var in all_vars:
-    #         if isinstance(var, VarVar):
-    #             rule_vars[var.rule].add(var)
-
-    #     encoding = []
-    #     encoding.append(BINDING_ENCODING)
-    #     encoding.append(f'#const max_rules={max_rules}.')
-    #     encoding.append(f'#const max_vars={max_vars}.')
-
-    #     int_lookup = {}
-    #     tmp_lookup = {}
-    #     for rule_var, xs in rule_vars.items():
-    #         rule_var_int = rule_var_to_int[rule_var]
-    #         encoding.append(f'rule({rule_var_int}).')
-
-    #         for var_var_int, var_var in enumerate(xs):
-    #             encoding.append(f'rule_var({rule_var_int},{var_var_int}).')
-    #             int_lookup[(rule_var_int, var_var_int)] = var_var
-    #             tmp_lookup[(rule_var, var_var)] = var_var_int
-    #             # rule_var_lookup[(rule_var, i)] = var
-    #             # rule_var_to_int[var] = i
-
-    #     # rule_var_lookup[(rule_var, i)] = var
-    #     # rule_var_to_int[var] = i
-    #     # add constraints to the ASP program based on the AST thing
-    #     for lit in body:
-    #         if not lit.meta:
-    #             continue
-    #         if lit.predicate == '==':
-    #             # pass
-    #             var, value = lit.arguments
-    #             rule_var = var.rule
-    #             rule_var_int = rule_var_to_int[rule_var]
-    #             var_var_int = tmp_lookup[(rule_var, var)]
-    #             encoding.append(f':- not bind_var({rule_var_int},{var_var_int},{value}).')
-    #         elif lit.predicate == '>=':
-    #             var, val = lit.arguments
-    #             rule_var_int1 = rule_var_to_int[var]
-    #             # var = c_vars[var]
-    #             # for i in range(val):
-    #             # encoding.append(f':- c_var({var},{i}).')
-    #             encoding.append(f':- bind_rule({rule_var_int1},Val1), Val1 < {val}.')
-    #         elif lit.predicate == '<':
-    #             a, b = lit.arguments
-    #             if isinstance(b, int):
-    #             # ABSOLUTE HACK
-    #                 rule_var_int1 = rule_var_to_int[a]
-    #                 encoding.append(f':- bind_rule({rule_var_int1},Val1), Val1 >= {b}.')
-    #             else:
-    #                 rule_var_int1 = rule_var_to_int[a]
-    #                 rule_var_int2 = rule_var_to_int[b]
-    #                 encoding.append(f':- bind_rule({rule_var_int1},Val1), bind_rule({rule_var_int2},Val2), Val1>=Val2.')
-
-    #     encoding = '\n'.join(encoding)
-
-    #     # print(encoding)
-
-    #     solver = clingo.Control(['-Wnone'])
-    #     solver.configuration.solve.models = 0
-    #     solver.add('base', [], encoding)
-    #     solver.ground([("base", [])])
-
-    #     out = []
-
-    #     def on_model(m):
-    #         xs = m.symbols(shown = True)
-    #         # map a variable to a program variable
-    #         # print('xs', xs)
-    #         assignment = {}
-    #         for x in xs:
-    #             name = x.name
-    #             args = x.arguments
-    #             if name == 'bind_var':
-    #                 rule_var_int = args[0].number
-    #                 var_var_int = args[1].number
-    #                 value = args[2].number
-    #                 var_var = int_lookup[(rule_var_int, var_var_int)]
-    #                 assignment[var_var] = value
-    #             else:
-    #                 rule_var_int = args[0].number
-    #                 value = args[1].number
-    #                 rule_var = int_to_rule_var[rule_var_int]
-    #                 assignment[rule_var] = value
-    #         out.append(assignment)
-    #     solver.solve(on_model=on_model)
-    #     self.seen_assignments[k] = out
-    #     # for x in body:
-    #         # if x.predicate == 'seen_rule':
-    #             # print(encoding)
-    #             # print('all_vars:\t',all_vars)
-    #             # print('rule_vars:\t',rule_vars)
-    #             # print(','.join(str(y) for y in body))
-    #             # for z in out:
-    #                 # print(z)
-    #     return out
-
+        self.cached4 = {}
 
     def find_bindings(self, rule, max_rules, max_vars):
 
@@ -1084,274 +905,112 @@ class Grounder():
             out.append(assignment)
         solver.solve(on_model=on_model)
         self.seen_assignments[k] = out
-        # for x in body:
-            # if x.predicate == 'seen_rule':
-                # print(encoding)
-                # print('all_vars:\t',all_vars)
-                # print('rule_vars:\t',rule_vars)
-                # print(','.join(str(y) for y in body))
-                # for z in out:
-                    # print(z)
         return out
 
-    # @profile
-    def find_deep_bindings(self, body, max_rules, max_vars):
-        all_vars = find_all_vars(body)
+
+    def find_deep_bindings4(self, body, max_rules, max_vars):
+        all_vars = set(x for atom in body for x in atom.arguments)
         head_types = self.settings.head_types
         body_types = self.settings.body_types
 
-        body_hash = grounding_hash(body, all_vars)
-        # print(','.join(map(str,body)), all_vars, body_hash)
-        if body_hash in self.seen_deep_assignments:
-            # print('moo')
-            return self.seen_deep_assignments[body_hash]
+        var_type_lookup = {}
+        var_to_index = {}
+        index_to_var = {}
 
+        # MAP A->0, B->1
+        for x in all_vars:
+            k = ord(x)- ord('A')
+            var_to_index[x] = k
+            index_to_var[k] = x
 
-        encoding = set()
-        encoding.add("""\
-#show bind_var/2.
-% bind a rule_id to a value
-{bind_var(Var,Value)}:-
-    var(Var),
-    Value=0..max_vars-1.
-% a rule value cannot be bound to more than one rule
-
-:- var(Var), #count{Value : bind_var(Var,Value)} != 1.
-:- Value=0..max_vars-1, #count{Var : bind_var(Var,Value)} > 1.
-:- bind_var(Var,Value), type(Var,T1), type(Value,T2), T1 != T2.
-""")
-        encoding.add(f'#const max_vars={max_vars}.')
-        var_count = 0
-        # var_index = {}
-        var_lookup = {}
+        head_vars = set()
         if head_types:
-            for i, head_type in enumerate(head_types):
-                encoding.add(f'type({i},{head_type}).')
-            # encoding.add(f':- var({i}), not bind_var({i}, {i}).')
+            for k, head_type in enumerate(head_types):
+                var_type_lookup[k] = head_type
+                head_vars.add(k)
 
-        var_count = 0
-        var_index = {}
-        for lit in body:
-            pred = lit.arguments[1]
-            for i, x in enumerate(lit.arguments[3]):
-                var_name = x.name
-                v = var_name.split('_')[1][1:]
-                k = ord(v)- ord('A')
-                # print(v, k)
-                var_lookup[k] = x
-                encoding.add(f'var({k}).')
-                if pred in body_types:
-                    var_type = body_types[pred][i]
-                    encoding.add(f'type({k},{var_type}).')
+        body_vars = set()
+        for atom in body:
+            pred = atom.predicate
+            if pred not in body_types:
+                continue
+            for i, x in enumerate(atom.arguments):
+                k = ord(x)- ord('A')
+                body_vars.add(k)
+                var_type = body_types[pred][i]
+                var_type_lookup[k] = var_type
 
+        # if cache:
+        if body_vars:
+            key = hash(frozenset((k,v) for k,v in var_type_lookup.items() if k in body_vars))
+        else:
+            key = hash(frozenset(all_vars))
+        if key in self.cached4:
+            return self.cached4[key]
 
+        formula = CNF()
+        bad_ks = set()
+        for x in body_vars:
+            if x not in var_type_lookup:
+                continue
+            for y in head_vars:
+                if x == y:
+                    continue
+                if y not in var_type_lookup:
+                    continue
+                if var_type_lookup[x] == var_type_lookup[y]:
+                    continue
+                k = (x, y)
+                bad_ks.add(k)
 
+        solver_vars = list(var_to_index.values())
+        solver_values = list(range(0, max_vars))
+        var_lookup = {}
+        solver_index = {}
+        index = 1
 
-        # for rule_var, xs in rule_vars.items():
-        #     rule_var_int = rule_var_to_int[rule_var]
-        #     encoding.append(f'rule({rule_var_int}).')
+        for x in solver_vars:
+            x_clause = []
+            for y in solver_values:
+                # match x to y
+                k = (x,y)
+                if k in bad_ks:
+                    continue
+                var_lookup[k] = index
+                solver_index[index] = k
+                index+=1
+                x_clause.append(var_lookup[k])
+            formula.append(x_clause)
+            for z in CardEnc.equals(lits=x_clause, encoding=EncType.pairwise).clauses:
+                formula.append(z)
 
-        #     for var_var_int, var_var in enumerate(xs):
-        #         encoding.append(f'rule_var({rule_var_int},{var_var_int}).')
-        #         int_lookup[(rule_var_int, var_var_int)] = var_var
-        #         tmp_lookup[(rule_var, var_var)] = var_var_int
+        for y in solver_values:
+            y_clause = []
+            for x in solver_vars:
+                k = (x,y)
+                if k in bad_ks:
+                    continue
+                y_clause.append(var_lookup[k])
+            for z in CardEnc.atmost(lits=y_clause, encoding=EncType.pairwise).clauses:
+                formula.append(z)
 
-        # for p, types in settings.body_types.items():
-        #     for i, t in enumerate(types):
-        #         encoding.append(f'arg_type({i},{head_type}'.)
-
-
-
-        encoding = '\n'.join(encoding)
-
-        # print('*'*10)
-        # print(encoding)
-
-        # solver = clingo.Control()
-        solver = clingo.Control(['-Wnone'])
-        solver.configuration.solve.models = 0
-        solver.add('base', [], encoding)
-        solver.ground([("base", [])])
+        solver = Solver(name='m22')
+        for x in formula.clauses:
+            solver.add_clause(x)
 
         out = []
-
-        def on_model(m):
-            xs = m.symbols(shown = True)
+        for m in solver.enum_models():
             assignment = {}
-            for x in xs:
-                name = x.name
-                args = x.arguments
-                if name == 'bind_var':
-                    var_var_int = args[0].number
-                    value = args[1].number
-                    var_var = var_lookup[var_var_int]
-                    assignment[var_var] = value
+            for x in m:
+                if x < 0:
+                    continue
+                x, y = solver_index[x]
+                assignment[index_to_var[x]] = y
+            out.append(assignment)
 
-            for i in range(max_rules):
-                x = assignment.copy()
-                x[vo_clause('X')] = i
-                out.append(x)
-            # out.append(assignment)
-            # print(assignment)
-
-        solver.solve(on_model=on_model)
-        # for x in out:
-            # print(x)
-        # exit()
-
-        self.seen_deep_assignments[body_hash] = out
+        # if cache:
+        self.cached4[key] = out
         return out
 
-#     # find_deep_bindings(body, head_types, self.settings.max_vars)
-    # @profile
-    def find_deep_bindings2(self, body, max_rules, max_vars):
-        # all_vars = find_all_vars(body)
-        all_vars = find_all_vars2(body)
-
-        # body_hash = hash(frozenset((literal.predicate, literal.arguments) for literal in body))
-        body_hash = grounding_hash(body, all_vars)
-        if body_hash in self.seen_deep_assignments:
-            return self.seen_deep_assignments[body_hash]
-
-        head_types = self.settings.head_types
-        body_types = self.settings.body_types
-
-        encoding = set()
-        encoding.add(BODY_VARIANT_ENCODING)
-        encoding.add(f'#const max_vars={max_vars}.')
-        var_count = 0
-        var_lookup = {}
-        if head_types:
-            for i, head_type in enumerate(head_types):
-                encoding.add(f'var_type({i},{head_type}).')
-                encoding.add(f'known_value({i},{head_type}).')
-
-        var_count = 0
-        var_index = {}
-        for lit in body:
-            pred = lit.arguments[1]
-            for i, x in enumerate(lit.arguments[3]):
-                var_name = x.name
-                v = var_name.split('_')[1][1:]
-                k = ord(v)- ord('A')
-                # print(v, k)
-                var_lookup[k] = x
-                encoding.add(f'var({k}).')
-                if pred in body_types:
-                    var_type = body_types[pred][i]
-                    encoding.add(f'var_type({k},{var_type}).')
-
-        encoding = '\n'.join(encoding)
-
-        # print('<<'*20)
-        # print(encoding)
-        # print('>>'*20)
-
-        # solver = clingo.Control()
-        solver = clingo.Control(['-Wnone'])
-        solver.configuration.solve.models = 0
-        solver.add('base', [], encoding)
-        solver.ground([("base", [])])
-
-        out = []
-
-        def on_model(m):
-            xs = m.symbols(shown = True)
-            assignment = {}
-            for x in xs:
-                args = x.arguments
-                var_var_int = args[0].number
-                value = args[1].number
-                var_var = var_lookup[var_var_int]
-                assignment[var_var] = value
-
-            for i in range(max_rules):
-                x = assignment.copy()
-                x[vo_clause('X')] = i
-                out.append(x)
-
-        solver.solve(on_model=on_model)
-        self.seen_deep_assignments[body_hash] = out
-        return out
-
-
-
-# def find_deep_bindings3(self, body, max_rules, max_vars):
-#         all_vars = find_all_vars(body)
-#         head_types = self.settings.head_types
-#         body_types = self.settings.body_types
-#         # body_hash = grounding_hash(body, all_vars)
-
-#         # if body_hash in self.seen_deep_assignments:
-#             # return self.seen_deep_assignments[body_hash]
-
-#         encoding = set()
-#         encoding.add(BODY_VARIANT_ENCODING)
-#         encoding.add(f'#const max_vars={max_vars}.')
-#         var_count = 0
-#         var_lookup = {}
-#         if head_types:
-#             for i, head_type in enumerate(head_types):
-#                 encoding.add(f'var_type({i},{head_type}).')
-#                 encoding.add(f'known_value({i},{head_type}).')
-
-
-
-#         for var in all_vars:
-
-
-#         var_count = 0
-#         var_index = {}
-#         for lit in body:
-#             pred = lit.arguments[1]
-#             for i, x in enumerate(lit.arguments[3]):
-#                 var_name = x.name
-#                 v = var_name.split('_')[1][1:]
-#                 k = ord(v)- ord('A')
-#                 # print(v, k)
-#                 var_lookup[k] = x
-#                 encoding.add(f'var({k}).')
-#                 if pred in body_types:
-#                     var_type = body_types[pred][i]
-#                     encoding.add(f'var_type({k},{var_type}).')
-
-#         encoding = '\n'.join(encoding)
-
-#         print('<<'*20)
-#         print(encoding)
-#         print('>>'*20)
-
-#         # solver = clingo.Control()
-#         solver = clingo.Control(['-Wnone'])
-#         solver.configuration.solve.models = 0
-#         solver.add('base', [], encoding)
-#         solver.ground([("base", [])])
-
-#         out = []
-
-#         def on_model(m):
-#             xs = m.symbols(shown = True)
-#             assignment = {}
-#             for x in xs:
-#                 name = x.name
-#                 args = x.arguments
-#                 if name == 'bind_var':
-#                     var_var_int = args[0].number
-#                     value = args[1].number
-#                     var_var = var_lookup[var_var_int]
-#                     assignment[var_var] = value
-
-#             for i in range(max_rules):
-#                 x = assignment.copy()
-#                 x[vo_clause('X')] = i
-#                 out.append(x)
-#             # out.append(assignment)
-#             # print(assignment)
-
-#         solver.solve(on_model=on_model)
-#         # for x in out:
-#             # print(x)
-#         # exit()
-
-#         self.seen_deep_assignments[body_hash] = out
-#         return out
+        # solver.solve(on_model=on_model)
+        # return out

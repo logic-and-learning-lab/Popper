@@ -14,18 +14,18 @@ body_pred(c3,1).
 body_pred(c4,1).
 body_pred(c5,1).
 
-%% type(next_value,(ex,int)).
-%% type(does,(ex,agent,action)).
-%% type(true_value,(ex,int)).
-%% type(my_succ,(int,int)).
-%% type(pressButton,(action,)).
-%% type(noop,(action,)).
-%% type(player,(agent,)).
-%% type(c1,(int,)).
-%% type(c2,(int,)).
-%% type(c3,(int,)).
-%% type(c4,(int,)).
-%% type(c5,(int,)).
+type(next_value,(ex,int)).
+type(does,(ex,agent,action)).
+type(true_value,(ex,int)).
+type(my_succ,(int,int)).
+type(pressButton,(action,)).
+type(noop,(action,)).
+type(player,(agent,)).
+type(c1,(int,)).
+type(c2,(int,)).
+type(c3,(int,)).
+type(c4,(int,)).
+type(c5,(int,)).
 
 %% BECAUSE WE DO NOT LEARN FROM INTERPRETATIONS
 tmp(next_value).
