@@ -8,7 +8,7 @@ from . explain import get_raw_prog as get_raw_prog2
 from . combine import Combiner
 from . explain import Explainer, rule_hash, head_connected, find_subprogs, get_raw_prog, seen_more_general_unsat, seen_more_specific_sat, prog_hash, has_valid_directions, prog_hash2, order_body, connected
 
-from . explain2 import find_most_gen_unsat
+# from . explain2 import find_most_gen_unsat
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, prog_size, format_literal, theory_subsumes, rule_subsumes, format_prog, format_prog2, order_rule2, Constraint
 from . core import Literal
 from . tester import Tester
@@ -20,7 +20,7 @@ AGGRESSIVE = True
 AGGRESSIVE = False
 
 SHOW_PRUNED = True
-SHOW_PRUNED = False
+# SHOW_PRUNED = False
 
 WITH_OPTIMISATIONS = True
 # WITH_OPTIMISATIONS = False
@@ -58,7 +58,10 @@ def explain_incomplete(settings, explainer, tester, prog, directions):
         pruned_subprog = True
 
         if SHOW_PRUNED:
-            print('\t', format_prog2(subprog), '\t', 'unsat2', unsat_body)
+            # print('\t', format_prog2(subprog),'\t', 'unsat2', unsat_body)
+            print('\t', 'unsat2')
+            for rule in order_prog(subprog):
+                print('\t\t', format_rule(order_rule(rule)))
 
         if unsat_body:
             _, body = list(subprog)[0]
@@ -84,7 +87,7 @@ def explain_incomplete(settings, explainer, tester, prog, directions):
         #         new_ground_cons.add(x)
         #     continue
 
-        if not settings.recursion_enabled or settings.pi_enabled:
+        if not (settings.recursion_enabled or settings.pi_enabled):
             out_cons.append((Constraint.SPECIALISATION, subprog, None))
             continue
 
@@ -959,7 +962,6 @@ def popper(settings):
             if add_redund2 and not pruned_sub_incomplete:
                 tmp_new_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, prog, rule_ordering))
 
-            # BUILD CONSTRAINTS
             # CONSTRAIN
             with settings.stats.duration('constrain'):
                 generator.constrain(tmp_new_cons, model)

@@ -400,9 +400,6 @@ class Generator:
                 new_rule_handles2, con = self.build_specialisation_constraint2(con_prog, con_prog_ordering)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
-                # ground_rules = self.get_ground_rules((None, con))
-                # for h, b in ground_rules:
-                    # print('spec', sorted(b))
             elif con_type == Constraint.GENERALISATION:
                 new_rule_handles2, con = self.build_generalisation_constraint2(con_prog, con_prog_ordering)
                 self.all_handles.update(new_rule_handles2)
@@ -415,18 +412,10 @@ class Generator:
                 self.bad_handles.add(bad_handle)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
-                # ground_rules = self.get_ground_rules((None, con))
-                # for h, b in ground_rules:
-                #     print('red1',sorted(b))
-
             elif con_type == Constraint.REDUNDANCY_CONSTRAINT2:
                 new_rule_handles2, cons = self.redundancy_constraint2(con_prog, con_prog_ordering)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.update(cons)
-                # for con in cons:
-                #     ground_rules = self.get_ground_rules((None, con))
-                #     for h, b in ground_rules:
-                #         print('red2',sorted(b))
             elif con_type == Constraint.TMP_ANDY:
                 new_cons.update(self.andy_tmp_con(con_prog))
 
@@ -446,12 +435,12 @@ class Generator:
             nogood = []
             for sign, pred, args in ground_body:
                 k = hash((sign, pred, args))
-                if k in self.cached_clingo_atoms:
-                    nogood.append(self.cached_clingo_atoms[k])
-                else:
+                try:
+                    x = self.cached_clingo_atoms[k]
+                except KeyError:
                     x = (atom_to_symbol(pred, args), sign)
                     self.cached_clingo_atoms[k] = x
-                    nogood.append(x)
+                nogood.append(x)
             nogoods.append(nogood)
 
         with self.settings.stats.duration('constrain_clingo'):
@@ -501,6 +490,39 @@ class Generator:
         return new_handles, tuple(literals)
 
 
+    # def build_generalisation_constraint3(self, prog, rule_ordering=None):
+    #     head, body = list(prog)[0]
+
+    #     head_vars = set(head.arguments)
+    #     body_vars = set(x for atom in body for x in atom.arguments if x not in head_vars)
+
+    #     bo
+
+    #     possible_values = list(range(len(head_vars), self.settings.max_vars))
+    #     perms = list(permutations(possible_values, len(body_vars)))
+    #     indexes = {x:i for i, x in enumerate(list(body_vars))}
+
+    #     ground_head_args = tuple(range(len(head_vars)))
+
+    #     out = []
+    #     for xs in perms:
+    #         con = []
+    #         con.append((True, 'head_literal', (0, head.predicate, len(head.arguments), ground_head_args)))
+    #         for atom in body:
+    #             new_args = []
+    #             for x in atom.arguments:
+    #                 if x in head_vars:
+    #                     v = ord(x)- ord('A')
+    #                     new_args.append(v)
+    #                 else:
+    #                     new_args.append(xs[indexes[x]])
+    #             new_args = tuple(new_args)
+    #             con.append((True, 'body_literal', (0, atom.predicate, len(atom.arguments), new_args)))
+    #         con.append((True, 'body_size', (0, body_size)))
+    #         out.append(frozenset(con))
+    #     return out
+
+
     def build_seen_rule2(self, rule, is_rec):
 
         handle = make_rule_handle(rule)
@@ -539,6 +561,35 @@ class Generator:
                 new_rule = (new_head, frozenset(new_body))
                 out.append(new_rule)
         return frozenset(out)
+
+    def build_specialisation_constraint3(self, prog, rule_ordering=None):
+        head, body = list(prog)[0]
+
+        head_vars = set(head.arguments)
+        body_vars = set(x for atom in body for x in atom.arguments if x not in head_vars)
+
+        possible_values = list(range(len(head_vars), self.settings.max_vars))
+        perms = list(permutations(possible_values, len(body_vars)))
+        indexes = {x:i for i, x in enumerate(list(body_vars))}
+
+        ground_head_args = tuple(range(len(head_vars)))
+
+        out = []
+        for xs in perms:
+            con = []
+            con.append((True, 'head_literal', (0, head.predicate, len(head.arguments), ground_head_args)))
+            for atom in body:
+                new_args = []
+                for x in atom.arguments:
+                    if x in head_vars:
+                        v = ord(x)- ord('A')
+                        new_args.append(v)
+                    else:
+                        new_args.append(xs[indexes[x]])
+                new_args = tuple(new_args)
+                con.append((True, 'body_literal', (0, atom.predicate, len(atom.arguments), new_args)))
+            out.append(frozenset(con))
+        return out
 
     # @profile
     def build_specialisation_constraint2(self, prog, rule_ordering=None):

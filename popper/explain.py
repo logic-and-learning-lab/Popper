@@ -121,25 +121,8 @@ class Explainer:
         return test_prog
 
     def explain_totally_incomplete(self, prog, directions):
-        # return list(self.explain_totally_incomplete_aux(prog, directions))
-
-        # t1 = time.time()
-        return list(self.explain_totally_incomplete_aux(prog, directions, 0, set(), set()))
-        # d1 = time.time()-t1
-        # t1 = time.time()
-        # ys = list(self.explain_totally_incomplete_aux2(prog, directions))
-        # d2 = time.time()-t1
-        # # self.savings += (d2-d1)
-        # # print(self.savings)
-
-        # if len(xs) != len(ys):
-        #     print(len(xs), len(ys))
-        #     for x,_ in xs:
-        #     #     print('x', format_prog(x))
-        #     # for y,_ in ys:
-        #     #     print('y', format_prog(y))
-        #     # assert(False)
-        # return xs
+        # return list(self.explain_totally_incomplete_aux(prog, directions, 0, set(), set()))
+        return list(self.explain_totally_incomplete_aux2(prog, directions, set(), set()))
 
 
     def my_tmp(self, rule):
@@ -180,89 +163,92 @@ class Explainer:
             # print('X\t',format_rule(x))
         return xs
 
+    def explain_totally_incomplete_aux2(self, prog, directions, sat=set(), unsat=set()):
+        has_recursion = prog_is_recursive(prog)
 
-    # # @profile
-    # def explain_totally_incomplete_aux2(self, prog, directions):
-    #     rule = list(prog)[0]
-    #     head1, body1 = rule
+        # print('--')
+        # print(format_prog(prog))
+        # print('\t', format_prog(x))
 
-    #     out = []
+        out = []
+        for subprog in generalisations(prog, has_recursion):
 
-    #     for body2 in powerset(body1):
-    #         k = frozenset(body2)
-    #         if k in seen:
-    #             print('CONTINUE')
-    #             return
+            headless = is_headless(subprog)
 
-    #     for head, body in self.my_tmp(rule):
+            if headless:
+                k = headless_hash(subprog)
+            else:
+                k = prog_hash(subprog)
 
-    #         head_, body_ = rename_variables((head, body))
+            if k in self.seen_prog:
+                continue
 
-    #         # print(body_)
-    #         k = frozenset(body_)
-    #         if k in seen:
-    #             continue
-    #         seen.add(k)
+            raw_prog = get_raw_prog(subprog)
 
-    #         headless = head == None
+            self.seen_prog.add(k)
 
-    #         # if headless:
-    #         #     if any((None,frozenset(body2)) in pruned for body2 in powerset(body_)):
-    #         #         continue
+            if seen_more_general_unsat(raw_prog, unsat):
+                continue
 
-    #         #     if any((None,get_my_key(body2)) in pruned for body2 in powerset(body)):
-    #         #         # print('asda')
-    #         #         continue
-    #         # else:
-    #         if any(frozenset(body2) in pruned for body2 in powerset(body_)):
-    #             continue
+            if not prog_is_ok(subprog):
+                xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat)
+                out.extend(xs)
+                continue
 
-    #         if any(get_my_key(body2) in pruned for body2 in powerset(body)):
-    #             # print('asda')
-    #             continue
+            if self.tester.has_redundant_literal(subprog):
+                xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat)
+                out.extend(xs)
+                continue
 
+            if len(subprog) > 2 and self.tester.has_redundant_rule(subprog):
+                xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat)
+                out.extend(xs)
+                continue
 
-    #         subprog = frozenset([(head, body)])
+            test_prog = self.build_test_prog(subprog, directions)
 
-    #         # print('testing', format_prog(subprog))
+            # print('asda1', format_prog(subprog), raw_prog)
+            # print('asda2', test_prog)
 
-    #         if headless:
-    #             if self.tester.is_body_sat(order_body(body)):
-    #                 continue
-    #         else:
-    #             if self.tester.is_sat(subprog):
-    #                 continue
-
-    #         # prog2 = frozenset([(head1, body2)])
-
-    #         z1 = frozenset(body_)
-    #         z2 = get_my_key(body)
-    #         # if z1 != z2:
-    #         #     print('z1', z1)
-    #         #     print('z2', z2)
-    #         pruned.add(z1)
-    #         pruned.add(z2)
-
-    #         out.append((subprog, headless))
-
-    #     return out
+            if headless:
+                body = test_prog[0][1]
+                if self.tester.is_body_sat(order_body(body)):
+                    sat.add(raw_prog)
+                    continue
+            else:
+                if self.tester.is_sat(test_prog):
+                    sat.add(raw_prog)
+                    continue
 
             # print(format_rule())
-            # unsat.add(raw_prog)
-            # xs = list(self.explain_totally_incomplete_aux(subprog, directions, depth+1, sat, unsat))
-            # if len(xs):
-                # yield from xs
-            # else:
-                # yield subprog, headless
-        # return pruned_subprog
+            # print('UNSAT', format_prog(subprog), raw_prog)
+            unsat.add(raw_prog)
+            xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat)
+            if len(xs):
+                out.extend(xs)
+            else:
+                out.append((subprog, headless))
+        return out
 
-
-
-    # @profile
     def explain_totally_incomplete_aux(self, prog, directions, depth, sat=set(), unsat=set()):
         has_recursion = prog_is_recursive(prog)
 
+        # print('--')
+        # print(format_prog(prog))
+        # for x in find_subprogs(prog, has_recursion):
+        #     print('\t', 'a', format_prog(x))
+        #     for rule in x:
+        #         print('\t', a, format_rule(rule))
+
+        # for subprog in generalisations(prog, has_recursion):
+        #     if not prog_is_ok(subprog):
+        #         continue
+        #     print('\t', '')
+        #     for rule in subprog:
+        #         print('\t', 'b', format_rule(rule))
+
         for subprog in find_subprogs(prog, has_recursion):
+        # for subprog in generalisations(prog, has_recursion):
 
             headless = is_headless(subprog)
 
@@ -428,6 +414,57 @@ def find_subprogs(prog, recursive):
         rule = prog[i]
         for subrule in find_subrules(rule, force_head, recursive):
             yield prog[:i] + [subrule] + prog[i+1:]
+
+
+def generalisations(prog, recursive):
+
+    if len(prog) == 1:
+        rule = list(prog)[0]
+        head, body = rule
+
+        if head and len(body) > 0:
+            new_rule = (None, body)
+            new_prog = [new_rule]
+            yield new_prog
+
+        if len(body) > 1:
+            body = list(body)
+            for i in range(len(body)):
+                new_body = body[:i] + body[i+1:]
+                new_rule = (head, frozenset(new_body))
+                new_prog = [new_rule]
+                yield new_prog
+
+    else:
+
+        prog = list(prog)
+        for i in range(len(prog)):
+            subrule = prog[i]
+            for new_subrule in generalisations([subrule],rule_is_recursive(subrule)):
+                new_prog = prog[:i] + new_subrule + prog[i+1:]
+                yield new_prog
+
+
+def prog_is_ok(prog):
+    for rule in prog:
+        head, body = rule
+        if head and not head_connected(rule):
+            return False
+
+        if not head and not connected(body):
+            return False
+
+        if not has_valid_directions(rule):
+            return False
+
+    if len(prog) > 1 and any(h == None for h, b in prog):
+        return False
+
+    if len(prog) > 1 and sum(1 for rule in prog if not rule_is_recursive(rule)) > 1:
+        return False
+
+    return True
+
 
 def order_body(body):
     ordered_body = []
