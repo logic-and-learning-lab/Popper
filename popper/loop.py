@@ -28,14 +28,11 @@ WITH_OPTIMISATIONS = True
 WITH_MOST_GEN_OPTIMISATIONS = True
 # WITH_MOST_GEN_OPTIMISATIONS = False
 
-
 pruned = set()
 pruned2 = set()
-max_muc = 0
+
 
 def explain_incomplete(settings, explainer, tester, prog, directions):
-    pruned_subprog = False
-
     unsat_cores = list(explainer.explain_totally_incomplete(prog, directions))
 
     out_cons = []
@@ -43,10 +40,8 @@ def explain_incomplete(settings, explainer, tester, prog, directions):
         pruned_subprog = True
 
         if SHOW_PRUNED:
-            # print('\t', format_prog2(subprog),'\t', 'unsat2', unsat_body)
-            print('\t', 'unsat2')
-            for rule in order_prog(subprog):
-                print('\t\t', format_rule(order_rule(rule)))
+            for i, rule in enumerate(order_prog(subprog)):
+                print('\t', format_rule(order_rule(rule)), '\t', f'unsat{i}')
 
         if unsat_body:
             _, body = list(subprog)[0]
@@ -62,7 +57,7 @@ def explain_incomplete(settings, explainer, tester, prog, directions):
 
         out_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, subprog, None))
 
-    return pruned_subprog, out_cons
+    return out_cons
 
 def explain_inconsistent(settings, tester, prog):
     out_cons = []
@@ -272,12 +267,7 @@ def find_most_general_shit_subrule(prog, tester, settings, min_coverage, d=0, se
 def get_min_pos_coverage(best_prog, cached_pos_covered):
     if prog_is_recursive(best_prog):
         return 1
-    # min_coverage = None
     return min(len(cached_pos_covered[x]) for x in best_prog if x in cached_pos_covered)
-            # v =
-            # if min_coverage == None or v < min_coverage:
-                # min_coverage = v
-    # return min_coverage
 
 def functional_rename_vars(rule):
     head, body = rule
@@ -635,6 +625,87 @@ def find_most_general_subsumed(prog, tester, success_sets, settings, seen=set())
     return out
 
 
+
+
+def check_whether_ok(prog, tester, success_sets, settings,  min_coverage, check_coverage=False, check_subsumed=False, seen=set()):
+
+    assert(check_coverage or check_subsumed)
+
+    head, body = list(prog)[0]
+    body = list(body)
+
+    if len(body) == 0:
+        return []
+
+    out = set()
+    head_vars = set(head.arguments)
+
+    for i in range(len(body)):
+        new_body = body[:i] + body[i+1:]
+        new_body = frozenset(new_body)
+
+        if len(new_body) == 0:
+            continue
+
+        tmp1 = frozenset((y.predicate, y.arguments) for y in new_body)
+
+        if tmp1 in seen:
+            continue
+        seen.add(tmp1)
+
+        new_rule = (head, new_body)
+        new_prog = frozenset({new_rule})
+
+        if not any(x in head_vars for literal in new_body for x in literal.arguments):
+            continue
+
+        skip = False
+        for x in non_empty_powerset(new_body):
+            tmp2 = frozenset((y.predicate, y.arguments) for y in x)
+            if tmp1 == tmp2:
+                continue
+            if tmp2 in pruned2:
+                skip = True
+                break
+        if skip:
+            continue
+
+        if not head_connected(new_rule):
+            xs = check_whether_ok(new_prog, tester, success_sets, settings, min_coverage, check_coverage, check_subsumed, seen)
+            out.update(xs)
+            continue
+
+        if not has_valid_directions(new_rule):
+            xs = check_whether_ok(new_prog, tester, success_sets, settings, min_coverage, check_coverage, check_subsumed, seen)
+            out.update(xs)
+            continue
+
+        if tester.has_redundant_literal(new_prog):
+            xs = check_whether_ok(new_prog, tester, success_sets, settings, min_coverage, check_coverage, check_subsumed, seen)
+            out.update(xs)
+            continue
+
+        sub_prog_pos_covered = tester.get_pos_covered(new_prog, ignore=True)
+        subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
+
+        prune = check_subsumed and subsumed
+        prune = prune or check_coverage and len(sub_prog_pos_covered) <= min_coverage
+
+        if not prune:
+            continue
+
+        xs = check_whether_ok(new_prog, tester, success_sets, settings, min_coverage, check_coverage, check_subsumed, seen)
+        if len(xs) > 0:
+            out.update(xs)
+            continue
+
+        for _, x in find_variants(new_rule, settings.max_vars):
+            pruned2.add(x)
+
+        out.add(new_prog)
+    return out
+
+
 def popper(settings):
     with settings.stats.duration('load data'):
         tester = Tester(settings)
@@ -735,25 +806,57 @@ def popper(settings):
                 if num_pos_covered == 0:
                     # if the programs does not cover any positive examples, check whether it is has an unsat core
                     with settings.stats.duration('find mucs'):
-                        pruned_sub_incomplete, cons_ = explain_incomplete(settings, explainer, tester, prog, directions)
+                        cons_ = explain_incomplete(settings, explainer, tester, prog, directions)
                         tmp_new_cons.extend(cons_)
+                        pruned_sub_incomplete = len(cons_) > 0
 
-                elif combiner.solution_found and not is_recursive and not has_invention and WITH_OPTIMISATIONS:
-                    min_coverage = get_min_pos_coverage(combiner.best_prog, cached_pos_covered)
-                    if not AGGRESSIVE:
-                        min_coverage = 2
-                    # if we have a solution, any better solution must cover at least two examples
-                    if len(pos_covered) < min_coverage:
-                        add_spec = True
-                        if WITH_MOST_GEN_OPTIMISATIONS:
-                            with settings.stats.duration('find most gen incomplete'):
-                                more_general_shit_progs = find_most_general_shit_subrule(prog, tester, settings, min_coverage)
-                                if len(more_general_shit_progs):
-                                    pruned_more_general_shit = True
-                                for x in more_general_shit_progs:
-                                    if SHOW_PRUNED:
-                                        print('\t', format_prog2(x), '\t', 'pruned_more_general_shit', len(pos_covered))
-                                    tmp_new_cons.append((Constraint.SPECIALISATION, x, None))
+            # check whether subsumed by a seen program
+            subsumed = False
+            if not is_recursive and num_pos_covered > 0:
+                subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets)
+                if subsumed:
+                    add_spec = True
+                if not has_invention and WITH_OPTIMISATIONS and WITH_MOST_GEN_OPTIMISATIONS:
+                    covers_too_few = False
+                    min_coverage = None
+                    if combiner.solution_found:
+                        min_coverage = get_min_pos_coverage(combiner.best_prog, cached_pos_covered)
+                        if not AGGRESSIVE:
+                            min_coverage = 2
+                        covers_too_few = num_pos_covered < min_coverage
+                        if covers_too_few:
+                            add_spec = True
+                    if subsumed or covers_too_few:
+                        xs = check_whether_ok(prog, tester, success_sets, settings,  min_coverage, check_coverage=covers_too_few, check_subsumed=subsumed)
+                        if len(xs) > 0:
+                            pruned_more_general_shit = True
+                        for x in xs:
+                            if SHOW_PRUNED:
+                                if subsumed and not covers_too_few:
+                                    print('\t', format_prog2(x), '\t', 'subsumed_gen')
+                                elif not subsumed and covers_too_few:
+                                    print('\t', format_prog2(x), '\t', 'covers_too_few_gen', len(pos_covered))
+                                else:
+                                    print('\t', format_prog2(x), '\t', 'not ok', len(pos_covered))
+                            tmp_new_cons.append((Constraint.SPECIALISATION, x, None))
+
+
+                # elif combiner.solution_found and not is_recursive and not has_invention and WITH_OPTIMISATIONS:
+                #     min_coverage = get_min_pos_coverage(combiner.best_prog, cached_pos_covered)
+                #     if not AGGRESSIVE:
+                #         min_coverage = 2
+                #     # if we have a solution, any better solution must cover at least two examples
+                #     if len(pos_covered) < min_coverage:
+                #         add_spec = True
+                #         if WITH_MOST_GEN_OPTIMISATIONS:
+                #             with settings.stats.duration('find most gen incomplete'):
+                #                 more_general_shit_progs = find_most_general_shit_subrule(prog, tester, settings, min_coverage)
+                #                 if len(more_general_shit_progs):
+                #                     pruned_more_general_shit = True
+                #                 for x in more_general_shit_progs:
+                #                     if SHOW_PRUNED:
+                #                         print('\t', format_prog2(x), '\t', 'pruned_more_general_shit', len(pos_covered))
+                #                     tmp_new_cons.append((Constraint.SPECIALISATION, x, None))
 
             if inconsistent:
                 # if inconsistent, prune generalisations
@@ -811,23 +914,23 @@ def popper(settings):
                     tmp_new_cons.append((Constraint.GENERALISATION, [r1,r2], None))
 
             # check whether subsumed by a seen program
-            subsumed = False
+            # subsumed = False
 
-            # WHY DO WE HAVE A RECURSIVE CHECK???
-            if num_pos_covered > 0 and not is_recursive:
-                with settings.stats.duration('check_subsumed'):
-                    subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets)
-                    # if so, prune specialisations
-                    if subsumed:
-                        add_spec = True
-                        if not is_recursive and not has_invention and WITH_MOST_GEN_OPTIMISATIONS:
-                            xs = find_most_general_subsumed(prog, tester, success_sets, settings)
-                            for x in xs:
-                                pruned_more_general_shit = True
-                                if SHOW_PRUNED:
-                                    print('\t', format_prog2(x), '\t', 'subsumed_0')
-                                    pass
-                                tmp_new_cons.append((Constraint.SPECIALISATION, x, None))
+            # # WHY DO WE HAVE A RECURSIVE CHECK???
+            # if num_pos_covered > 0 and not is_recursive:
+            #     with settings.stats.duration('check_subsumed'):
+            #         subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets)
+            #         # if so, prune specialisations
+            #         if subsumed:
+            #             add_spec = True
+            #             if not is_recursive and not has_invention and WITH_MOST_GEN_OPTIMISATIONS:
+            #                 xs = find_most_general_subsumed(prog, tester, success_sets, settings)
+            #                 for x in xs:
+            #                     pruned_more_general_shit = True
+            #                     if SHOW_PRUNED:
+            #                         print('\t', format_prog2(x), '\t', 'subsumed_0')
+            #                         pass
+            #                     tmp_new_cons.append((Constraint.SPECIALISATION, x, None))
 
             # if not add_spec and False:
             # # if not add_spec:
