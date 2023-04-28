@@ -6,7 +6,7 @@ from itertools import chain, combinations
 from collections import deque
 from . explain import get_raw_prog as get_raw_prog2
 from . combine import Combiner
-from . explain import Explainer, rule_hash, head_connected, find_subprogs, get_raw_prog, seen_more_general_unsat, seen_more_specific_sat, prog_hash, has_valid_directions, prog_hash2, order_body, connected
+from . explain import Explainer, head_connected, get_raw_prog, seen_more_general_unsat, prog_hash, has_valid_directions, order_body, connected
 
 # from . explain2 import find_most_gen_unsat
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, prog_size, format_literal, theory_subsumes, rule_subsumes, format_prog, format_prog2, order_rule2, Constraint
@@ -36,22 +36,7 @@ max_muc = 0
 def explain_incomplete(settings, explainer, tester, prog, directions):
     pruned_subprog = False
 
-    # if settings.recursion_enabled or settings.pi_enabled:
     unsat_cores = list(explainer.explain_totally_incomplete(prog, directions))
-    # else:
-    # t1 = time.time()
-    # unsat_cores = list(find_most_gen_unsat(prog, tester, settings))
-    # t2 = time.time()
-
-    # d = t2-t1
-
-    # global max_muc
-    # if d > max_muc:
-    #     print('******'*20)
-    #     print('MAX MUC!!!!', d, format_prog(prog))
-    #     print('******'*20)
-    #     max_muc = d
-
 
     out_cons = []
     for subprog, unsat_body in unsat_cores:
@@ -68,25 +53,6 @@ def explain_incomplete(settings, explainer, tester, prog, directions):
             out_cons.append((Constraint.UNSAT, body, None))
             continue
 
-        # if unsat_body:
-        #     _, body = list(subprog)[0]
-        #     ys = find_variants2(settings, (None,body))
-
-        #     my_new_cons = set()
-        #     for head2, body2 in ys:
-        #         ground_con = []
-        #         for pred, args in body2:
-        #             arity = len(args)
-        #             args2 = tuple(var_to_int[x] for x in args)
-        #             v = (True, 'body_literal', (0, pred, arity, args2))
-        #             ground_con.append(v)
-        #         my_new_con = tuple(sorted(ground_con))
-        #         my_new_cons.add(my_new_con)
-
-        #     for x in my_new_cons:
-        #         new_ground_cons.add(x)
-        #     continue
-
         if not (settings.recursion_enabled or settings.pi_enabled):
             out_cons.append((Constraint.SPECIALISATION, subprog, None))
             continue
@@ -97,7 +63,6 @@ def explain_incomplete(settings, explainer, tester, prog, directions):
         out_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, subprog, None))
 
     return pruned_subprog, out_cons
-
 
 def explain_inconsistent(settings, tester, prog):
     out_cons = []

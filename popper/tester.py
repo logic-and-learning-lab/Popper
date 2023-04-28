@@ -11,7 +11,7 @@ import clingo
 import clingo.script
 import pkg_resources
 from . core import Literal
-from . explain import rule_hash, prog_hash, get_raw_prog, prog_hash2
+from . explain import prog_hash, get_raw_prog
 from . generate import parse_model
 from collections import defaultdict
 
@@ -396,7 +396,7 @@ class Tester():
         _, ordered_body = order_rule((None,body), self.settings)
         body_str = ','.join(format_literal(literal) for literal in ordered_body)
         query = body_str + ',!'
-        # query = f'catch(call_with_time_limit(0.00001, ({query})),time_limit_exceeded,true)'
+        query = f'catch(call_with_time_limit(0.1, ({query})),time_limit_exceeded,true)'
         return self.bool_query(query)
 
     def check_redundant_literal(self, prog):
