@@ -28,7 +28,6 @@ WITH_MOST_GEN_OPTIMISATIONS = True
 pruned = set()
 pruned2 = set()
 
-
 def explain_incomplete(settings, explainer, tester, prog, directions):
     unsat_cores = list(explainer.explain_totally_incomplete(prog, directions))
 
@@ -698,6 +697,40 @@ def check_whether_ok(prog, tester, success_sets, settings,  min_coverage, check_
         out.add(new_prog)
     return out
 
+def explain_none_functional(settings, tester, prog):
+    new_cons = []
+
+    if len(prog) == 1:
+        return new_cons
+
+    base = []
+    rec = []
+    for rule in prog:
+        if rule_is_recursive(rule):
+            rec.append(rule)
+        else:
+            base.append(rule)
+
+    pruned_subprog = False
+    for rule in base:
+        subprog = frozenset([rule])
+        if tester.is_non_functional(subprog):
+            new_cons.append((Constraint.GENERALISATION, subprog , None))
+            pruned_subprog = True
+
+    if pruned_subprog:
+        return new_cons
+
+    if len(rec) == 1:
+        return new_cons
+
+    for r1 in base:
+        for r2 in rec:
+            subprog = frozenset([r1,r2])
+            if tester.is_non_functional(subprog):
+                new_cons.append((Constraint.GENERALISATION, subprog , None))
+
+    return new_cons
 
 def popper(settings):
     with settings.stats.duration('load data'):
@@ -709,42 +742,31 @@ def popper(settings):
 
     num_pos = len(settings.pos_index)
 
-    # track the success sets of tested hypotheses
-    success_sets = {}
-    rec_success_sets = {}
-    last_size = None
-
     bkcons = []
     if settings.bkcons or settings.datalog:
         with settings.stats.duration('recalls'):
             bkcons.extend(deduce_recalls(settings))
 
-
     if settings.bkcons:
         with settings.stats.duration('bkcons'):
-            t1 = time.time()
-            old = deduce_bk_cons(settings, tester)
-            print('old', time.time() - t1)
-            # for x in old:
-                # print('old', x)
-            # bkcons.extend(deduce_bk_cons(settings, tester))
-            t1 = time.time()
-            new = deduce_bk_cons2(settings, tester)
-            # new = deduce_bk_cons1(settings, tester)
-            # for x in new:
-                # print('new', x)
-            print('new', len(new), time.time() - t1)
+            bkcons.extend(deduce_bk_cons(settings, tester))
 
-    # exit()
     # generator that builds programs
     with settings.stats.duration('init'):
         generator = Generator(settings, grounder, bkcons)
 
+    # track the success sets of tested hypotheses
+    success_sets = {}
+    rec_success_sets = {}
+
+    # track coverage of individual rules
     cached_pos_covered = {}
+
+    # maintain a set of programs that we have not yet pruned
     could_prune_later = {}
 
-    # count_check_redundant_literal2 = 0
     max_size = (1 + settings.max_body) * settings.max_rules
+    last_size = None
 
     for size in range(1, max_size+1):
         if size > settings.max_literals:
@@ -769,13 +791,13 @@ def popper(settings):
 
             new_cons = []
 
-            # GENERATE A PROGRAM
-            with settings.stats.duration('generate_clingo'):
+            # generate a program
+            with settings.stats.duration('generate'):
                 model = generator.get_model()
                 if model is None:
                     break
 
-            with settings.stats.duration('generate_parse'):
+            with settings.stats.duration('parse'):
                 atoms = model.symbols(shown = True)
                 prog, rule_ordering, directions = parse_model(atoms)
 
@@ -797,7 +819,7 @@ def popper(settings):
             is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
             has_invention = settings.pi_enabled and prog_has_invention(prog)
 
-            # TEST A PROGRAM
+            # test a program
             with settings.stats.duration('test'):
                 pos_covered, inconsistent = tester.test_prog(prog)
 
@@ -859,12 +881,19 @@ def popper(settings):
                 add_spec = True
 
             # if consistent and partially complete, test whether functional
-            if not inconsistent and settings.functional_test and num_pos_covered > 0 and tester.is_non_functional(prog) and not pruned_more_general_shit:
-                # if not functional, rule out generalisations and set as inconsistent
-                add_gen = True
-                # v.important: do not prune specialisations!
-                add_spec = False
-                inconsistent = True
+            if not inconsistent and settings.functional_test and num_pos_covered > 0 and not pruned_more_general_shit:
+                if tester.is_non_functional(prog):
+                    # if not functional, rule out generalisations and set as inconsistent
+                    add_gen = True
+                    # v.important: do not prune specialisations!
+                    add_spec = False
+                    inconsistent = True
+
+                    # check whether any subprograms are non-functional
+                    with settings.stats.duration('explain_none_functional'):
+                        cons_ = explain_none_functional(settings, tester, prog)
+                        if cons_:
+                            new_cons.extend(cons_)
 
             # if it does not cover any example, prune specialisations
             if num_pos_covered == 0:

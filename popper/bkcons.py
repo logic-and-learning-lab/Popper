@@ -101,7 +101,7 @@ def build_props(settings, arities, tester=None):
     # for x in pairs:
     #     print(x)
 
-    print('len(pairs)',len(pairs))
+    # print('len(pairs)',len(pairs))
 
     pairs = sorted(pairs)
     pairs2 = set()
@@ -127,7 +127,7 @@ def build_props(settings, arities, tester=None):
 
     # for x in pairs2:
         # print('good',x)
-    print('len(pairs2)',len(pairs2))
+    # print('len(pairs2)',len(pairs2))
 
     pairs3 = set()
     for xs, ys in pairs2:
@@ -158,9 +158,9 @@ def build_props(settings, arities, tester=None):
     # for x in pairs3:
         # print('good', x)
 
-    print('len(pairs3)',len(pairs3))
+    # print('len(pairs3)',len(pairs3))
 
-    print('implies_not2', len(pairs3))
+    # print('implies_not2', len(pairs3))
     props = []
     cons = []
     for xs, ys in pairs3:
@@ -212,27 +212,27 @@ def build_props(settings, arities, tester=None):
         if not ys_set.issubset(xs_set):
             continue
 
-        # # IMPLIES
-        # key = f'{left}_{right}'
+        # IMPLIES
+        key = f'{left}_{right}'
 
 
-        # # if the vars are identical then remove symmetries
-        # sym_con = ''
-        # if xs == ys:
-        #     sym_con = 'P!=Q,'
+        # if the vars are identical then remove symmetries
+        sym_con = ''
+        if xs == ys:
+            sym_con = 'P!=Q,'
 
-        # l1 = f'prop({key},(P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), holds(Q,({atom_right})), not {key}_aux((P,Q)).'
-        # l2 = f'{key}_aux((P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), not holds(Q,({atom_right})).'
-        # props.extend([l1, l2])
+        l1 = f'prop({key},(P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), holds(Q,({atom_right})), not {key}_aux((P,Q)).'
+        l2 = f'{key}_aux((P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), not holds(Q,({atom_right})).'
+        props.extend([l1, l2])
 
 
-        # # rule_vars = xs_set | ys_set
-        # rule_vars = ys_set
-        # checker = ','.join(f'var_appears_more_than_twice(Rule,{v})' for v in rule_vars)
-        # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})), {checker}.'
-        # # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
-        # # print(con1)
-        # cons.append(con1)
+        # rule_vars = xs_set | ys_set
+        rule_vars = ys_set
+        checker = ','.join(f'var_appears_more_than_twice(Rule,{v})' for v in rule_vars)
+        con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})), {checker}.'
+        # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
+        # print(con1)
+        cons.append(con1)
 
 
 
@@ -415,7 +415,7 @@ def rename_variables(xs, ys):
 def build_props2(settings, arities):
     premise1 = []
 
-    # arities = [x for x in arities if x < 3]
+    arities = [x for x in arities if x < 3]
     # arities = [x for x in arities if x < 2]
 
     myvars = all_myvars[:settings.max_vars]
@@ -597,30 +597,30 @@ def build_props2(settings, arities):
         if not zs_set.issubset(xs_ys_set):
             continue
 
-        # # # IMPLIES
-        # key = f'{a1}_{a2}_{a3}'
+        # # IMPLIES
+        key = f'{a1}_{a2}_{a3}'
 
 
-        # aux_key = f'{key}_subsumed'
-        # aux1 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop({a1}_{a3},(P,R)).'
-        # aux2 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop({a2}_{a3},(Q,R)).'
-        # props.extend([aux1, aux2])
+        aux_key = f'{key}_subsumed'
+        aux1 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop({a1}_{a3},(P,R)).'
+        aux2 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop({a2}_{a3},(Q,R)).'
+        props.extend([aux1, aux2])
 
 
-        # l1 = f'prop({key},(P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not {key}_aux((P,Q,R)), not {aux_key}(P,Q,R).'
-        # l2 = f'{key}_aux((P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not holds(R,({smoothed})).'
+        l1 = f'prop({key},(P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not {key}_aux((P,Q,R)), not {aux_key}(P,Q,R).'
+        l2 = f'{key}_aux((P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not holds(R,({smoothed})).'
 
 
-        # props.extend([l1, l2])
+        props.extend([l1, l2])
 
 
-        # # rule_vars = xs_set | ys_set
-        # rule_vars = zs_set
-        # checker = ','.join(f'var_appears_more_than_twice(Rule,{v})' for v in rule_vars)
-        # con1 = f':- prop({key},(P,Q,R)), body_literal(Rule,P,_,({atom1})), body_literal(Rule,Q,_,({atom2})), body_literal(Rule,R,_,({atom3})), {checker}.'
-        # # # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
-        # # # print(con1)
-        # cons.append(con1)
+        # rule_vars = xs_set | ys_set
+        rule_vars = zs_set
+        checker = ','.join(f'var_appears_more_than_twice(Rule,{v})' for v in rule_vars)
+        con1 = f':- prop({key},(P,Q,R)), body_literal(Rule,P,_,({atom1})), body_literal(Rule,Q,_,({atom2})), body_literal(Rule,R,_,({atom3})), {checker}.'
+        # # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
+        # # print(con1)
+        cons.append(con1)
 
     props = sorted(list(set(props)))
     return props, cons
@@ -1029,9 +1029,9 @@ def deduce_bk_cons(settings, tester):
     cons = pkg_resources.resource_string(__name__, "lp/cons.pl").decode()
     bk = bk.replace('\+','not')
 
-    new_props1, new_cons1 = build_props_new(settings, arities, tester)
+    # new_props1, new_cons1 = build_props_new(settings, arities, tester)
+    new_props1, new_cons1 = build_props(settings, arities, tester)
 
-    # exit()
     new_props2, new_cons2 = build_props2(settings, arities)
 
     # exit()
@@ -1117,25 +1117,25 @@ def deduce_bk_cons(settings, tester):
 
     xs = [x + '.' for x in out]
     # print('\n'.join(sorted(xs)))
-    print(f'old: {len(xs)}')
-    with open('TMP.pl','w') as f:
-        for i,x in enumerate(xs):
-            ys = x.split('(')[1:]
-            key = ys[0][4:-1]
-            # print(key)
-            key = key.split('_')
-            preds = ys[1][:-3].split(',')
-            # print(key, preds)
-            tmp = []
-            for x, y in zip(key, preds):
-                # print(x, y)
-                moo = ','.join(x.strip().upper())
-                moo = f'{y}({moo})'
-                tmp.append(moo)
-            tmp = ','.join(tmp)
-            v = f'rule({i},({tmp})).'
-            print(v)
-            f.write(v + '\n')
+    # print(f'old: {len(xs)}')
+    # with open('TMP.pl','w') as f:
+    #     for i,x in enumerate(xs):
+    #         ys = x.split('(')[1:]
+    #         key = ys[0][4:-1]
+    #         # print(key)
+    #         key = key.split('_')
+    #         preds = ys[1][:-3].split(',')
+    #         # print(key, preds)
+    #         tmp = []
+    #         for x, y in zip(key, preds):
+    #             # print(x, y)
+    #             moo = ','.join(x.strip().upper())
+    #             moo = f'{y}({moo})'
+    #             tmp.append(moo)
+    #         tmp = ','.join(tmp)
+    #         v = f'rule({i},({tmp})).'
+    #         print(v)
+    #         f.write(v + '\n')
 
     return xs + new_cons
     # settings.deduced_bkcons = '\n'.join(xs) + '\n' + new_cons + '\n'
