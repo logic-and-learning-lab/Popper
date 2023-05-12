@@ -151,12 +151,17 @@ class Explainer:
 
             headless = is_headless(subprog)
 
+
             if headless:
+                # print('testing A')
+                # print(format_prog(test_prog))
                 body = test_prog[0][1]
                 if self.tester.is_body_sat(order_body(body)):
                     sat.add(raw_prog)
                     continue
             else:
+                # print('testing B')
+                # print(format_prog(test_prog))
                 if self.tester.is_sat(test_prog):
                     sat.add(raw_prog)
                     continue
@@ -280,6 +285,7 @@ def prog_is_ok(prog):
     if len(prog) == 1:
         return True
 
+    # if more than two rules then there must be recursion
     has_recursion = False
     for rule in prog:
         h, b = rule
@@ -296,7 +302,44 @@ def prog_is_ok(prog):
     if not has_recursion:
         return False
 
+
+    if needs_datalog(prog) and not tmp(prog):
+        return False
+
     return True
+
+def needs_datalog(prog):
+    for rule in prog:
+        rec_outputs = set()
+        non_rec_inputs = set()
+        head, body = rule
+        for literal in body:
+            if literal.predicate == head.predicate:
+                rec_outputs.update(literal.outputs)
+            else:
+                # if any(x in xr)
+                non_rec_inputs.update(literal.inputs)
+        if any(x in rec_outputs for x in non_rec_inputs):
+            return True
+    return False
+
+
+def tmp(prog):
+    for rule in prog:
+        head, body = rule
+        body_args = set(x for atom in body for x in atom.arguments)
+        if any(x not in body_args for x in head.arguments):
+            return False
+    return True
+
+
+
+
+# f(A,B):- empty(A).
+# f(A,B):- tail(A,D),f(D,C),increment(C,B).
+
+# if an output argument of a recursive literal is used as an input argument to another literal then all head arguments must appear in the body
+
 
 def order_body(body):
     ordered_body = []

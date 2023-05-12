@@ -17,7 +17,7 @@ AGGRESSIVE = True
 AGGRESSIVE = False
 
 SHOW_PRUNED = True
-# SHOW_PRUNED = False
+SHOW_PRUNED = False
 
 WITH_OPTIMISATIONS = True
 # WITH_OPTIMISATIONS = False
@@ -735,7 +735,7 @@ def popper(settings):
                 # print('new', x)
             print('new', len(new), time.time() - t1)
 
-    exit()
+    # exit()
     # generator that builds programs
     with settings.stats.duration('init'):
         generator = Generator(settings, grounder, bkcons)
