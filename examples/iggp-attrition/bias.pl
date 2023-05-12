@@ -63,3 +63,9 @@ bad_body(P,A,Vars):-
     body_pred(P,A),
     var_pos(Var,Vars,0),
     Var != 0.
+
+
+%% :- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
+
+:- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
+:- clause(C), #count{V : clause_var(C,V),var_type(C,V,action)} > 3.

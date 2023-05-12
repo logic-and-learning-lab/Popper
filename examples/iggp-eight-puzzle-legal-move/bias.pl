@@ -119,3 +119,8 @@ direction(successor,(in,out)).
 direction(tile,(in,)).
 direction(P,(in,)):-
 	constant(P,_).
+
+
+
+:- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 1.
+:- clause(C), #count{V : clause_var(C,V),var_type(C,V,mypos)} > 3.

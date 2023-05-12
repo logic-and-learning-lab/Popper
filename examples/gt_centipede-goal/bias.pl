@@ -49,3 +49,8 @@ body_pred(P,1):-
 
 type(P,(T,)):-
 	constant(P,T).
+
+
+%% :- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
+:- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
+:- clause(C), #count{V : clause_var(C,V),var_type(C,V,action)} > 3.

@@ -216,6 +216,7 @@ class Generator:
         self.assigned = {}
         self.seen_symbols = {}
         self.cached_clingo_atoms = {}
+        self.handle = None
 
         # handles for rules that are minimal and unsatisfiable
         self.bad_handles = set()
@@ -265,6 +266,13 @@ class Generator:
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver
+
+
+
+    def get_model(self):
+        if self.handle == None:
+            self.handle = iter(self.solver.solve(yield_ = True))
+        return next(self.handle, None)
 
     def gen_symbol(self, literal, backend):
         sign, pred, args = literal
@@ -344,6 +352,8 @@ class Generator:
         self.all_ground_cons = set()
         self.bad_handles = set()
         self.all_handles = set()
+
+        self.handle = iter(self.solver.solve(yield_ = True))
 
     def update_number_of_literals(self, size):
         # 1. Release those that have already been assigned

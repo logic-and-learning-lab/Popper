@@ -284,39 +284,39 @@ class Tester():
     #     #     return False
 
 
-    # def covers_any3(self, prog, neg):
-    #     # k = rule_hash(rule)
-    #     rule = list(prog)[0]
-    #     k = prog_hash(prog)
-    #     if k in self.cached_covers_any:
-    #         for x in self.cached_covers_any[k]:
-    #             if x in neg:
-    #                 return True
-    #     if k in self.cached_covers_any2:
-    #         for x in self.cached_covers_any2[k]:
-    #             if x in neg:
-    #                 return True
-    #                 # print('MOOCOWJONES!!!!!!!!')
-    #     self.cached_covers_any[k] = set()
+    def covers_any3(self, prog, neg):
+        # k = rule_hash(rule)
+        rule = list(prog)[0]
+        # k = prog_hash(prog)
+        # if k in self.cached_covers_any:
+        #     for x in self.cached_covers_any[k]:
+        #         if x in neg:
+        #             return True
+        # if k in self.cached_covers_any2:
+        #     for x in self.cached_covers_any2[k]:
+        #         if x in neg:
+        #             return True
+        #             # print('MOOCOWJONES!!!!!!!!')
+        # self.cached_covers_any[k] = set()
 
-    #     # for rule in prog:
-    #         # print('\tcalling prolog', format_rule(rule))
+        # for rule in prog:
+            # print('\tcalling prolog', format_rule(rule))
 
-    #     rule = list(prog)[0]
-    #     head, _body = rule
-    #     head, ordered_body = order_rule(rule, self.settings)
-    #     atom_str = format_literal(head)
-    #     body_str = format_rule((None,ordered_body))[2:-1]
-    #     # q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-    #     q = f'member(Id,{neg}),neg_index(Id,{atom_str}),{body_str},!'
-    #     # print(q)
-    #     xs = list(self.prolog.query(q))
-    #     if len(xs) > 0:
-    #         ex = xs[0]['Id']
-    #         self.cached_covers_any[k].add(ex)
-    #         return True
-    #     # print(xs)
-    #     return False
+        rule = list(prog)[0]
+        head, _body = rule
+        head, ordered_body = order_rule(rule, self.settings)
+        atom_str = format_literal(head)
+        body_str = format_rule((None,ordered_body))[2:-1]
+        # q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+        q = f'member(Id,{neg}),neg_index(Id,{atom_str}),{body_str},!'
+        # print(q)
+        xs = list(self.prolog.query(q))
+        if len(xs) > 0:
+            ex = xs[0]['Id']
+            # self.cached_covers_any[k].add(ex)
+            return True
+        # print(xs)
+        return False
 
         # return frozenset(xs['Xs'])
 

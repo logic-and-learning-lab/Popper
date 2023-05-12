@@ -32,6 +32,7 @@ type(c_twocoins,(cell_value,)).
 %% :-
 %%     clause(C),
 %%     #count{V : clause_var(C,V),var_type(C,V,agent)} > 1.
-%% :-
-%%     clause(C),
-%%     #count{V : clause_var(C,V),var_type(C,V,cell_value)} > 3.
+
+
+:- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 1.
+:- clause(C), #count{V : clause_var(C,V),var_type(C,V,cell_value)} > 3.

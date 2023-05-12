@@ -1,3 +1,19 @@
+import time
+from pysat.formula import CNF
+from pysat.solvers import Solver
+from pysat.card import *
+import clingo
+import operator
+import numbers
+import clingo.script
+import pkg_resources
+from . core import Literal, RuleVar, VarVar, Var
+from collections import defaultdict
+from . util import rule_is_recursive, format_rule, Constraint, format_prog, order_rule, order_prog
+clingo.script.enable_python()
+from clingo import Function, Number, Tuple_
+from itertools import permutations
+
 import clingo
 import clingo.script
 from . core import Literal
@@ -48,7 +64,7 @@ def get_bias_preds(settings):
 
 
 from itertools import permutations, combinations
-myvars = ['A','B','C','D','E','F','G','H']
+all_myvars = ['A','B','C','D','E','F','G','H']
 
 def connected(xs, ys):
     xs = set(xs)
@@ -59,14 +75,14 @@ def connected(xs, ys):
 
 def uses_in_order(xs, ys):
     zs = set(xs) | set(ys)
-    for i in myvars[:len(zs)]:
+    for i in all_myvars[:len(zs)]:
         if i not in zs:
             return False
     return True
 
-def build_props(arities, tester=None):
+def build_props(settings, arities, tester=None):
 
-    # arities = [x for x in arities if x < 3]
+    myvars = all_myvars[:settings.max_vars]
 
     pairs = set()
     for a1 in arities:
@@ -83,8 +99,9 @@ def build_props(arities, tester=None):
 
     # print('pairs1')
     # for x in pairs:
-        # print(x)
-    # print('len(pairs)',len(pairs))
+    #     print(x)
+
+    print('len(pairs)',len(pairs))
 
     pairs = sorted(pairs)
     pairs2 = set()
@@ -104,6 +121,13 @@ def build_props(arities, tester=None):
         out_ys, var_count = tmp(ys, var_count)
         # out_zs, var_count = tmp(zs, var_count)
         pairs2.add((out_xs, out_ys))
+
+    # for x in set(pairs) - pairs2:
+        # print('bad',x)
+
+    # for x in pairs2:
+        # print('good',x)
+    print('len(pairs2)',len(pairs2))
 
     pairs3 = set()
     for xs, ys in pairs2:
@@ -128,39 +152,15 @@ def build_props(arities, tester=None):
         k = (out_xs, out_ys)
         pairs3.add(k)
 
-    # for x in sorted(pairs3):
-        # print(x)
+    # for x in pairs2 - pairs3:
+        # print('bad3', x)
 
+    # for x in pairs3:
+        # print('good', x)
 
-    # pairs2 = set(tuple(sorted(xs)) for xs in pairs2)
-    # print('len(pairs2)',len(pairs2))
+    print('len(pairs3)',len(pairs3))
 
-    # pairs3 = list(sorted(pairs3))
-
-    # subsumed = set()
-
-    # pairs3 = list(pairs3)
-    # for i in range(len(pairs3)):
-    #     for j in range(i+1, len(pairs3)):
-    #         a = [list(x) for x in pairs3[i]]
-    #         b = [list(x) for x in pairs3[j]]
-    #         if tester.subsumes(a,b):
-    #             subsumed.add((b,a))
-    #             # print(a, 'subsumes', b)
-    #         elif tester.subsumes(b,a):
-    #             subsumed.add((a,b))
-    #             # print(b, 'subsumes', a)
-
-
-
-
-
-    # print('pairs2')
-    # for x in sorted(pairs3):
-    #     print(x)
-    # print('len(pairs)',len(pairs))
-    # print('len(pairs2)',len(pairs2))
-    # print('len(pairs3)',len(pairs3))
+    print('implies_not2', len(pairs3))
     props = []
     cons = []
     for xs, ys in pairs3:
@@ -212,38 +212,213 @@ def build_props(arities, tester=None):
         if not ys_set.issubset(xs_set):
             continue
 
-        # IMPLIES
-        key = f'{left}_{right}'
+        # # IMPLIES
+        # key = f'{left}_{right}'
 
 
-        # if the vars are identical then remove symmetries
-        sym_con = ''
-        if xs == ys:
-            sym_con = 'P!=Q,'
+        # # if the vars are identical then remove symmetries
+        # sym_con = ''
+        # if xs == ys:
+        #     sym_con = 'P!=Q,'
 
-        l1 = f'prop({key},(P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), holds(Q,({atom_right})), not {key}_aux((P,Q)).'
-        l2 = f'{key}_aux((P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), not holds(Q,({atom_right})).'
-        props.extend([l1, l2])
+        # l1 = f'prop({key},(P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), holds(Q,({atom_right})), not {key}_aux((P,Q)).'
+        # l2 = f'{key}_aux((P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), not holds(Q,({atom_right})).'
+        # props.extend([l1, l2])
 
 
-        # rule_vars = xs_set | ys_set
-        rule_vars = ys_set
-        checker = ','.join(f'var_appears_more_than_twice(Rule,{v})' for v in rule_vars)
-        con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})), {checker}.'
-        # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
-        # print(con1)
-        cons.append(con1)
+        # # rule_vars = xs_set | ys_set
+        # rule_vars = ys_set
+        # checker = ','.join(f'var_appears_more_than_twice(Rule,{v})' for v in rule_vars)
+        # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})), {checker}.'
+        # # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
+        # # print(con1)
+        # cons.append(con1)
 
 
 
     return props, cons
 
+def has_unordered_vars(xs, ys):
+    lookup = {}
+    def tmp(vs, next_var):
+        out = []
+        for v in vs:
+            if v not in lookup:
+                lookup[v] = next_var
+                next_var+=1
+            k = lookup[v]
+            out.append(chr(ord('A') + k))
+        return tuple(out), next_var
+    var_count = 0
+    out_xs, var_count = tmp(xs, var_count)
+    out_ys, var_count = tmp(ys, var_count)
+    z1 = tuple(sorted([xs, ys]))
+    z2 = tuple(sorted([out_xs, out_ys]))
+    return z1 != z2
 
-def build_props2(arities):
+def build_props_new(settings, arities, tester=None):
+
+    myvars = all_myvars[:settings.max_vars]
+
+    arities = sorted(arities, reverse=True)
+
+    pairs = set()
+    for a1 in arities:
+        xs = tuple(myvars[:a1])
+        xs_set = set(xs)
+        # print(xs)
+        for a2 in arities:
+            for ys in permutations(myvars,a2):
+                # print('\t',ys)
+                if not connected(xs, ys):
+                    continue
+                if not uses_in_order(xs, ys):
+                    continue
+                if has_unordered_vars(xs, ys):
+                    continue
+                z = tuple(sorted([xs, ys]))
+                # print(z)
+                pairs.add(z)
+
+    pairs3 = set()
+    for xs, ys in pairs:
+        lookup = {}
+        def tmp(vs, next_var):
+            out = []
+            for v in vs:
+                if v not in lookup:
+                    lookup[v] = next_var
+                    next_var+=1
+                k = lookup[v]
+                out.append(chr(ord('A') + k))
+            return tuple(out), next_var
+        var_count = 0
+
+        zs = sorted([xs, ys], key=lambda x: len(x), reverse=True)
+        # xs1, ys1 = xs, ys
+        xs, ys = zs
+        out_xs, var_count = tmp(xs, var_count)
+        out_ys, var_count = tmp(ys, var_count)
+        # out_zs, var_count = tmp(zs, var_count)
+        k = (out_xs, out_ys)
+        pairs3.add(k)
+
+    # for x in pairs - pairs3:
+    #     print('bad3', x)
+
+    # for x in pairs3:
+    #     print('good', x)
+
+    # print('len(pairs)',len(pairs))
+    # print('len(pairs3)',len(pairs3))
+
+    # print('implies_not2', len(pairs3))
+    props = []
+    cons = []
+    for xs, ys in pairs3:
+        xs_set = set(xs)
+        ys_set = set(ys)
+
+        left = ''.join(x.lower() for x in xs)
+        right = ''.join(y.lower() for y in ys)
+
+        t_left = ','.join(f'T{x}' for x in xs)
+        t_right = ','.join(f'T{y}' for y in ys)
+
+        zs = []
+        for y in ys:
+            if y not in xs_set:
+                zs.append('_')
+            else:
+                zs.append(y)
+
+        atom_left = ','.join(xs)
+        atom_right = ','.join(zs)
+
+        if len(xs) == 1:
+            t_left += ','
+            atom_left += ','
+        if len(ys) == 1:
+            t_right += ','
+            atom_right += ','
+
+        # # IMPLIES NOT
+        # key = f'not_{left}_implies_{right}'
+        key = f'not_{left}_{right}'
+
+
+
+        # if the vars are identical then remove symmetries
+        sym_con = ''
+        if xs == ys:
+            sym_con = 'P<Q,'
+
+        l1 = f'prop({key},(P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), not {key}_aux((P,Q)).'
+        l2 = f'{key}_aux((P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), holds(Q,({atom_right})).'
+        props.extend([l1, l2])
+
+
+        con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
+        cons.append(con1)
+
+        if not ys_set.issubset(xs_set):
+            continue
+
+        # # IMPLIES
+        # key = f'{left}_{right}'
+
+
+        # # if the vars are identical then remove symmetries
+        # sym_con = ''
+        # if xs == ys:
+        #     sym_con = 'P!=Q,'
+
+        # l1 = f'prop({key},(P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), holds(Q,({atom_right})), not {key}_aux((P,Q)).'
+        # l2 = f'{key}_aux((P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), not holds(Q,({atom_right})).'
+        # props.extend([l1, l2])
+
+
+        # # rule_vars = xs_set | ys_set
+        # rule_vars = ys_set
+        # checker = ','.join(f'var_appears_more_than_twice(Rule,{v})' for v in rule_vars)
+        # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})), {checker}.'
+        # # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
+        # # print(con1)
+        # cons.append(con1)
+
+
+
+    return props, cons
+
+def rename_variables(xs, ys):
+    lookup = {}
+    def tmp(vs, next_var):
+        # print(type(vs), vs)
+        # exit()
+        out = []
+        for v in vs:
+            if v not in lookup:
+                lookup[v] = next_var
+                next_var+=1
+            k = lookup[v]
+            out.append(chr(ord('A') + k))
+        return tuple(out), next_var
+    var_count = 0
+    xs, var_count = tmp(xs, var_count)
+    ys, var_count = tmp(ys, var_count)
+    # xs, ys = sorted([xs, ys], key=lambda x: len(x), reverse=True)
+    xs = ''.join(x.lower() for x in xs)
+    ys = ''.join(y.lower() for y in ys)
+    return xs, ys
+
+
+def build_props2(settings, arities):
     premise1 = []
 
-    arities = [x for x in arities if x < 3]
+    # arities = [x for x in arities if x < 3]
     # arities = [x for x in arities if x < 2]
+
+    myvars = all_myvars[:settings.max_vars]
 
     pairs = []
     for a1 in arities:
@@ -287,49 +462,13 @@ def build_props2(arities):
         out_zs, var_count = tmp(zs, var_count)
         pairs2.add((out_xs, out_ys, out_zs))
 
-    # print(len(pairs2))
-    # pairs2 = set(tuple(sorted(xs)) for xs in pairs2)
-    # print('len(pairs2)',len(pairs2))
-
-    # pairs2 = list(pairs2)
-
-    # for i in range(len(pairs2)):
-    #     for j in range(i, len(pairs2)):
-    #         print(pairs2[i], pairs2[j])
-
-
-    # pairs3 = set()
-    # for xs, ys, zs in pairs2:
-    #     lookup = {}
-    #     def tmp(vs, next_var):
-    #         out = []
-    #         for v in vs:
-    #             if v not in lookup:
-    #                 lookup[v] = next_var
-    #                 next_var+=1
-    #             k = lookup[v]
-    #             out.append(chr(ord('A') + k))
-    #         return tuple(out), next_var
-    #     var_count = 0
-
-    #     zs = sorted([xs, ys], key=lambda x: len(x), reverse=True)
-    #     # xs1, ys1 = xs, ys
-    #     xs, ys = zs
-    #     out_xs, var_count = tmp(xs, var_count)
-    #     out_ys, var_count = tmp(ys, var_count)
-    #     # out_zs, var_count = tmp(zs, var_count)
-    #     k = (out_xs, out_ys)
-    #     pairs3.add(k)
-
-    # print(len(pairs3))
-
-    # for x in sorted(pairs2):
-        # print(x)
-
 
     seen = set()
     seen_map = {}
     pairs3 = set()
+
+
+
     for xs, ys, zs in pairs2:
         k = (frozenset((xs, ys)), zs)
         if k in seen:
@@ -361,6 +500,7 @@ def build_props2(arities):
         # print(x)
     props = []
     cons = []
+    seen = set()
     for xs, ys, zs in pairs:
         xs_set = set(xs)
         ys_set = set(ys)
@@ -405,6 +545,13 @@ def build_props2(arities):
         # # IMPLIES NOT
         key = f'not_{a1}_{a2}_{a3}'
 
+        if frozenset([a1, a2, a3]) in seen:
+            pass
+            # print('skip')
+            continue
+        seen.add(frozenset([a1, a2, a3]))
+
+
 
         # # if the vars are identical then remove symmetries
         sym_con = ''
@@ -415,10 +562,23 @@ def build_props2(arities):
         if ys == zs:
             sym_con += 'Q<R,'
 
+
+
         aux_key = f'{key}_subsumed'
-        aux1 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a1}_{a3},(P,R)).'
-        aux2 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a2}_{a3},(Q,R)).'
-        props.extend([aux1, aux2])
+        aux1 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a1}_{a2},(P,Q)).'
+        aux2 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a1}_{a3},(P,R)).'
+        aux3 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a2}_{a3},(Q,R)).'
+        props.extend([aux1, aux2, aux3])
+        # props.extend([aux2, aux3])
+
+        a1_, a2_ = rename_variables(a1, a2)
+        aux1 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a1_}_{a2_},(P,Q)).'
+        a1_, a3_ = rename_variables(a1, a3)
+        aux2 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a1_}_{a3_},(P,R)).'
+        a2_, a3_ = rename_variables(a2, a3)
+        aux3 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a2_}_{a3_},(Q,R)).'
+        props.extend([aux1, aux2, aux3])
+
 
         l1 = f'prop({key},(P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not {key}_aux((P,Q,R)), not {aux_key}(P,Q,R).'
         l2 = f'{key}_aux((P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), holds(R,({atom3})), not {aux_key}(P,Q,R).'
@@ -437,40 +597,413 @@ def build_props2(arities):
         if not zs_set.issubset(xs_ys_set):
             continue
 
-        # # IMPLIES
-        key = f'{a1}_{a2}_{a3}'
+        # # # IMPLIES
+        # key = f'{a1}_{a2}_{a3}'
 
 
-        aux_key = f'{key}_subsumed'
-        aux1 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop({a1}_{a3},(P,R)).'
-        aux2 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop({a2}_{a3},(Q,R)).'
-        props.extend([aux1, aux2])
+        # aux_key = f'{key}_subsumed'
+        # aux1 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop({a1}_{a3},(P,R)).'
+        # aux2 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop({a2}_{a3},(Q,R)).'
+        # props.extend([aux1, aux2])
 
 
-        l1 = f'prop({key},(P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not {key}_aux((P,Q,R)), not {aux_key}(P,Q,R).'
-        l2 = f'{key}_aux((P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not holds(R,({smoothed})).'
+        # l1 = f'prop({key},(P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not {key}_aux((P,Q,R)), not {aux_key}(P,Q,R).'
+        # l2 = f'{key}_aux((P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not holds(R,({smoothed})).'
 
 
-        props.extend([l1, l2])
+        # props.extend([l1, l2])
 
 
-        # rule_vars = xs_set | ys_set
-        rule_vars = zs_set
-        checker = ','.join(f'var_appears_more_than_twice(Rule,{v})' for v in rule_vars)
-        con1 = f':- prop({key},(P,Q,R)), body_literal(Rule,P,_,({atom1})), body_literal(Rule,Q,_,({atom2})), body_literal(Rule,R,_,({atom3})), {checker}.'
-        # # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
-        # # print(con1)
-        cons.append(con1)
+        # # rule_vars = xs_set | ys_set
+        # rule_vars = zs_set
+        # checker = ','.join(f'var_appears_more_than_twice(Rule,{v})' for v in rule_vars)
+        # con1 = f':- prop({key},(P,Q,R)), body_literal(Rule,P,_,({atom1})), body_literal(Rule,Q,_,({atom2})), body_literal(Rule,R,_,({atom3})), {checker}.'
+        # # # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
+        # # # print(con1)
+        # cons.append(con1)
+
+    props = sorted(list(set(props)))
     return props, cons
+
 
 def get_bkcons(settings, tester):
     out = []
+    t1 = time.time()
     out.extend(deduce_bk_cons(settings, tester))
+    d1 = time.time() - t1
     out.extend(deduce_recalls(settings))
 
+    # print(f'old: {d1}')
+    # print('')
+
+    # t1 = time.time()
+    # deduce_bk_cons1(settings, tester)
+    # d2 = time.time() - t1
+    # print(f'new1: {d2}')
+    # print('')
+
+    # t1 = time.time()
+    # deduce_bk_cons2(settings, tester)
+    # d2 = time.time() - t1
+    # print(f'new2: {d2}')
+    # print('')
+
+
+    # t1 = time.time()
+    # deduce_bk_cons3(settings, tester)
+    # d2 = time.time() - t1
+    # print(f'new3: {d2}')
+    # print('')
+
+    # t1 = time.time()
+    # deduce_bk_cons4(settings, tester)
+    # d2 = time.time() - t1
+    # print(f'new4: {d2}')
+    # exit()
     # for x in out:
         # print(x)
     return out
+
+
+def arg_to_symbol(arg):
+    if isinstance(arg, tuple):
+        return Tuple_(tuple(arg_to_symbol(a) for a in arg))
+    if isinstance(arg, numbers.Number):
+        return Number(arg)
+    if isinstance(arg, str):
+        return Function(arg)
+    assert False, f'Unhandled argtype({type(arg)}) in aspsolver.py arg_to_symbol()'
+
+def atom_to_symbol(pred, args):
+    xs = tuple(arg_to_symbol(arg) for arg in args)
+    return Function(name = pred, arguments = xs)
+
+
+def tmpprint(body):
+    out = []
+    for x in sorted(body, key=lambda x: (-x.arity, x.arguments, x.predicate)):
+        out.append(f'{x.predicate}{x.arguments}')
+    return ', '.join(out)
+
+
+def deduce_bk_cons1(settings, tester):
+    # solver = clingo.Control(['--heuristic=Domain','-Wnone'])
+    solver = clingo.Control(['-Wnone'])
+    solver.configuration.solve.models = 0
+    disco = pkg_resources.resource_string(__name__, "lp/disco.pl").decode()
+    encoding = []
+    encoding.append(disco)
+    with open(settings.bias_file) as f:
+        encoding.append(f.read())
+    encoding.append(f'max_clauses({settings.max_rules}).')
+    encoding.append(f'max_vars({settings.max_vars}).')
+    encoding = '\n'.join(encoding)
+    # print(encoding)
+    solver.add('base', [], encoding)
+    solver.ground([('base', [])])
+
+    some_vars = list(range(settings.max_vars))
+
+    testing_time = 0
+    model_count = 0
+    num_unsat = 0
+    with solver.solve(yield_ = True) as handle:
+        for model in handle:
+            model_count+=1
+            # print('model', model)
+            atoms = model.symbols(shown = True)
+            body = []
+            for atom in atoms:
+                # if atom.name == 'size':
+                    # continue
+                args = atom.arguments
+                predicate = args[0].name
+                atom_args = args[1].arguments
+                atom_args = tuple(arg_lookup[arg] for arg in atom_args)
+                atom = Literal(predicate, atom_args, '?')
+                body.append(atom)
+
+
+
+            t1 = time.time()
+            is_sat = tester.is_body_sat(body)
+            t2 = time.time()
+            testing_time += (t2-t1)
+            if is_sat:
+                # print('sat', tmpprint(body))
+                pass
+            else:
+                # print('unsat', tmpprint(body))
+                # num_vars = len(set(x for atom in body for x in atom.arguments))
+                # perms = list(permutations(some_vars, num_vars))
+                num_unsat+=1
+
+                # for xs in perms:
+                #     nogood = []
+                #     for atom in body:
+                #         args = []
+                #         for x in atom.arguments:
+                #             z = xs[ord(x) - ord('A')]
+                #             args.append(z)
+                #         args = tuple(args)
+                #         x = atom_to_symbol('body_literal',(atom.predicate, args))
+                #         nogood.append((x, True))
+                #     model.context.add_nogood(nogood)
+
+    print(f'model_count: {model_count}')
+    print(f'num_unsat: {num_unsat}')
+    print(f'testing_time: {testing_time}')
+
+# @profile
+def deduce_bk_cons2(settings, tester):
+    solver = clingo.Control(['--heuristic=Domain','-Wnone'])
+    # solver = clingo.Control(['-Wnone'])
+    solver.configuration.solve.models = 0
+    disco = pkg_resources.resource_string(__name__, "lp/disco.pl").decode()
+    encoding = []
+    encoding.append(disco)
+    with open(settings.bias_file) as f:
+        encoding.append(f.read())
+    encoding.append(f'max_clauses({settings.max_rules}).')
+    encoding.append(f'max_vars({settings.max_vars}).')
+    encoding = '\n'.join(encoding)
+    # print(encoding)
+    solver.add('base', [], encoding)
+    solver.ground([('base', [])])
+
+    some_vars = list(range(settings.max_vars))
+
+    testing_time = 0
+    model_count = 0
+    num_unsat = 0
+
+    cached_clingo_atoms = {}
+    with solver.solve(yield_ = True) as handle:
+        for model in handle:
+            model_count+=1
+            # print('model', model)
+            atoms = model.symbols(shown = True)
+            body = []
+            for atom in atoms:
+                # if atom.name == 'size':
+                    # continue
+                args = atom.arguments
+                predicate = args[0].name
+                atom_args = args[1].arguments
+                atom_args = tuple(arg_lookup[arg] for arg in atom_args)
+                atom = Literal(predicate, atom_args, '?')
+                body.append(atom)
+
+
+
+            t1 = time.time()
+            is_sat = tester.is_body_sat(body)
+            t2 = time.time()
+            testing_time += (t2-t1)
+
+            prog = [(None,body)]
+
+
+            # print(tmpprint(body))
+            # print(format_prog(prog))
+            if is_sat:
+                # print('sat', tmpprint(body))
+                pass
+                # print('\tsat')
+            else:
+                # if tester.has_redundant_literal(prog):
+                    # print('pooo')
+                # print('\tunsat')
+                # print('unsat', tmpprint(body))
+                # print('unsat', tmpprint(body))
+                num_vars = len(set(x for atom in body for x in atom.arguments))
+                perms = list(permutations(some_vars, num_vars))
+                num_unsat+=1
+
+                for xs in perms:
+                    # print(xs)
+                    tmp = []
+                    nogood = []
+                    for atom in body:
+                        args = tuple(xs[ord(x) - ord('A')] for x in atom.arguments)
+                        # x = atom_to_symbol('body_literal',(atom.predicate, args))
+                        tmp.append( atom.predicate + '(' + ','.join(chr(x + ord('A'))  for x in args) + ')')
+                        k = hash((atom.predicate, args))
+                        try:
+                            x = cached_clingo_atoms[k]
+                        except KeyError:
+                            x = atom_to_symbol('body_literal',(atom.predicate, args))
+                            cached_clingo_atoms[k] = x
+                        nogood.append((x, True))
+                    # print('\t',','.join(sorted(tmp)))
+                    model.context.add_nogood(nogood)
+
+    # print(f'model_count: {model_count}')
+    # print(f'num_unsat: {num_unsat}')
+    # print(f'testing_time: {testing_time}')
+
+    return [0] * num_unsat
+
+
+def deduce_bk_cons3(settings, tester):
+    solver = clingo.Control(['--heuristic=Domain','-Wnone'])
+    # solver = clingo.Control(['-Wnone'])
+    solver.configuration.solve.models = 0
+    disco = pkg_resources.resource_string(__name__, "lp/disco.pl").decode()
+    encoding = []
+    encoding.append(disco)
+    with open(settings.bias_file) as f:
+        encoding.append(f.read())
+    encoding.append(f'max_clauses({settings.max_rules}).')
+    encoding.append(f'max_vars({settings.max_vars}).')
+    encoding = '\n'.join(encoding)
+    # print(encoding)
+    solver.add('base', [], encoding)
+    solver.ground([('base', [])])
+
+    some_vars = list(range(settings.max_vars))
+
+    testing_time = 0
+    model_count = 0
+    num_unsat = 0
+    with solver.solve(yield_ = True) as handle:
+        for model in handle:
+            model_count+=1
+            # print('model', model)
+            atoms = model.symbols(shown = True)
+            body = []
+            for atom in atoms:
+                # if atom.name == 'size':
+                    # continue
+                args = atom.arguments
+                predicate = args[0].name
+                atom_args = args[1].arguments
+                atom_args = tuple(arg_lookup[arg] for arg in atom_args)
+                atom = Literal(predicate, atom_args, '?')
+                body.append(atom)
+
+
+
+            t1 = time.time()
+            is_sat = tester.is_body_sat(body)
+            t2 = time.time()
+            testing_time += (t2-t1)
+
+            prog = [(None,body)]
+
+
+            # print(tmpprint(body))
+            # print(format_prog(prog))
+            # if is_sat:
+                # print('sat', tmpprint(body))
+                # pass
+            # else:
+                # if tester.has_redundant_literal(prog):
+                    # print('pooo')
+                # print('unsat', tmpprint(body))
+                # print('unsat', tmpprint(body))
+            num_vars = len(set(x for atom in body for x in atom.arguments))
+            perms = list(permutations(some_vars, num_vars))
+            num_unsat+=1
+
+            for xs in perms:
+                nogood = []
+                if is_sat:
+                    x = atom_to_symbol('size',(len(body),))
+                    nogood.append((x, True))
+                for atom in body:
+                    args = []
+                    for x in atom.arguments:
+                        z = xs[ord(x) - ord('A')]
+                        args.append(z)
+                    args = tuple(args)
+                    x = atom_to_symbol('body_literal',(atom.predicate, args))
+                    nogood.append((x, True))
+                model.context.add_nogood(nogood)
+
+    print(f'model_count: {model_count}')
+    print(f'num_unsat: {num_unsat}')
+    print(f'testing_time: {testing_time}')
+
+
+
+def deduce_bk_cons4(settings, tester):
+    disco = pkg_resources.resource_string(__name__, "lp/disco.pl").decode()
+
+    some_vars = list(range(settings.max_vars))
+
+    testing_time = 0
+    model_count = 0
+    num_unsat = 0
+
+    cons = set()
+
+    for size in [2,3]:
+
+        encoding = []
+        encoding.append(disco)
+        with open(settings.bias_file) as f:
+            encoding.append(f.read())
+        encoding.append(f'max_clauses({settings.max_rules}).')
+        encoding.append(f'max_vars({settings.max_vars}).')
+        encoding.append(f':- not size({size}).')
+        encoding.extend(cons)
+        encoding = '\n'.join(encoding)
+
+        # print(encoding)
+
+        solver = clingo.Control(['-Wnone'])
+        solver.configuration.solve.models = 0
+        solver.add('base', [], encoding)
+        solver.ground([('base', [])])
+
+
+        with solver.solve(yield_ = True) as handle:
+            for model in handle:
+                model_count+=1
+                # print('model', model)
+                atoms = model.symbols(shown = True)
+                body = []
+                for atom in atoms:
+                    args = atom.arguments
+                    predicate = args[0].name
+                    atom_args = args[1].arguments
+                    atom_args = tuple(arg_lookup[arg] for arg in atom_args)
+                    atom = Literal(predicate, atom_args, '?')
+                    body.append(atom)
+
+                t1 = time.time()
+                is_sat = tester.is_body_sat(body)
+                t2 = time.time()
+                testing_time += (t2-t1)
+                if is_sat:
+                    # print('sat', tmpprint(body))
+                    pass
+                else:
+                    # print('unsat', tmpprint(body))
+                    num_vars = len(set(x for atom in body for x in atom.arguments))
+                    perms = list(permutations(some_vars, num_vars))
+                    num_unsat+=1
+
+                    for xs in perms:
+                        nogood = []
+                        for atom in body:
+                            args = []
+                            for x in atom.arguments:
+                                z = xs[ord(x) - ord('A')]
+                                args.append(z)
+                            args = tuple(args)
+                            # x = atom_to_symbol('body_literal',(atom.predicate, args))
+                            nogood.append(f'body_literal({atom.predicate}, {args})')
+                        nogood = ':- ' + ','.join(nogood) + '.'
+                        cons.add(nogood)
+                        # model.context.add_nogood(nogood)
+
+    print(f'model_count: {model_count}')
+    print(f'num_unsat: {num_unsat}')
+    print(f'testing_time: {testing_time}')
+
+
 
 def deduce_bk_cons(settings, tester):
     prog = []
@@ -496,10 +1029,15 @@ def deduce_bk_cons(settings, tester):
     cons = pkg_resources.resource_string(__name__, "lp/cons.pl").decode()
     bk = bk.replace('\+','not')
 
-    new_props1, new_cons1 = build_props(arities, tester)
-    new_props2, new_cons2 = build_props2(arities)
+    new_props1, new_cons1 = build_props_new(settings, arities, tester)
 
     # exit()
+    new_props2, new_cons2 = build_props2(settings, arities)
+
+    # exit()
+
+    # for x in new_props2:
+        # print(x)
 
 
 
@@ -575,10 +1113,30 @@ def deduce_bk_cons(settings, tester):
         # print(x)
     # print(len(implies_not))
     # tester.find_redundant_rule_2(implies_not)
+
+
     xs = [x + '.' for x in out]
     # print('\n'.join(sorted(xs)))
-    # print(len(xs))
-    print(xs)
+    print(f'old: {len(xs)}')
+    with open('TMP.pl','w') as f:
+        for i,x in enumerate(xs):
+            ys = x.split('(')[1:]
+            key = ys[0][4:-1]
+            # print(key)
+            key = key.split('_')
+            preds = ys[1][:-3].split(',')
+            # print(key, preds)
+            tmp = []
+            for x, y in zip(key, preds):
+                # print(x, y)
+                moo = ','.join(x.strip().upper())
+                moo = f'{y}({moo})'
+                tmp.append(moo)
+            tmp = ','.join(tmp)
+            v = f'rule({i},({tmp})).'
+            print(v)
+            f.write(v + '\n')
+
     return xs + new_cons
     # settings.deduced_bkcons = '\n'.join(xs) + '\n' + new_cons + '\n'
     # settings.deduced_bkcons = '\n'.join(x + '.' for x in xs)
@@ -696,8 +1254,8 @@ def deduce_recalls(settings):
         con2 = f':- body_literal(Rule,{pred},_,({fixer_str})), #count{{{subset_str}: body_literal(Rule,{pred},_,({args_str}))}} > {recall}.'
         out.append(con2)
 
-    for x in settings.recall.items():
-        print(x)
+    # for x in settings.recall.items():
+        # print(x)
     # print(out)
     return out
     # settings.deduced_bkcons += '\n' + '\n'.join(out)
