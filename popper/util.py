@@ -49,6 +49,8 @@ def parse_args():
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
     parser.add_argument('--bkcons', default=False, action='store_true', help='EXPERIMENTAL FEATURE: deduce background constraints from Datalog background')
     parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
+    parser.add_argument('--showcons', default=False, action='store_true', help='Show constraints deduced during the search')
+    parser.add_argument('--aggressive', default=False, action='store_true', help='Run Popper in an aggressive form which is not guaranteed to find an optimal solution')
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
@@ -310,7 +312,7 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False):
+    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False, showcons=False, aggressive=False):
 
         if cmd_line:
             args = parse_args()
@@ -328,6 +330,8 @@ class Settings:
             max_rules = args.max_rules
             functional_test = args.functional_test
             datalog = args.datalog
+            showcons = args.showcons
+            aggressive = args.aggressive
         else:
             if kbpath:
                 self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
@@ -354,6 +358,8 @@ class Settings:
         self.show_stats = show_stats
         self.bkcons = bkcons
         self.datalog = datalog
+        self.showcons = showcons
+        self.aggressive = aggressive
         self.max_literals = max_literals
         self.functional_test = functional_test
         self.timeout = timeout
@@ -366,8 +372,6 @@ class Settings:
         self.recall = {}
         self.solution = None
         self.best_prog_score = None
-        # self.deduced_bkcons = ''
-
 
         solver = clingo.Control(['-Wnone'])
         with open(self.bias_file) as f:

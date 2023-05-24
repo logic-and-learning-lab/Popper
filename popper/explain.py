@@ -95,7 +95,6 @@ class Explainer:
     def explain_totally_incomplete(self, prog, directions):
         return list(self.explain_totally_incomplete_aux2(prog, directions, set(), set()))
 
-    # @profile
     def explain_totally_incomplete_aux2(self, prog, directions, sat=set(), unsat=set()):
         has_recursion = prog_is_recursive(prog)
 

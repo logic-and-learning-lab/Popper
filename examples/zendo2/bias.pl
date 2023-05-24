@@ -1,4 +1,4 @@
-max_body(15).
+max_body(6).
 
 head_pred(zendo,1).
 body_pred(piece,2).
@@ -34,22 +34,22 @@ type(lhs,(piece,)).
 type(rhs,(piece,)).
 type(strange,(piece,)).
 
-%% direction(zendo,(in,)).
-%% direction(piece,(in,out)).
-%% direction(contact,(in,out)).
-%% direction(coord1,(in,out)).
-%% direction(coord2,(in,out)).
-%% direction(size,(in,out)).
-%% direction(blue,(in,)).
-%% direction(green,(in,)).
-%% direction(red,(in,)).
-%% direction(small,(in,)).
-%% direction(medium,(in,)).
-%% direction(large,(in,)).
-%% direction(upright,(in,)).
-%% direction(lhs,(in,)).
-%% direction(rhs,(in,)).
-%% direction(strange,(in,)).
+direction(zendo,(in,)).
+direction(piece,(in,out)).
+direction(contact,(in,out)).
+direction(coord1,(in,out)).
+direction(coord2,(in,out)).
+direction(size,(in,out)).
+direction(blue,(in,)).
+direction(green,(in,)).
+direction(red,(in,)).
+direction(small,(in,)).
+direction(medium,(in,)).
+direction(large,(in,)).
+direction(upright,(in,)).
+direction(lhs,(in,)).
+direction(rhs,(in,)).
+direction(strange,(in,)).
 
 :-
     clause(C),
