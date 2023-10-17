@@ -1,4 +1,3 @@
-max_body(6).
 %% ********** SOLUTION **********
 %% Precision:1.00 Recall:1.00 TP:50 FN:0 TN:50 FP:0 Size:19
 %% zendo(A):- piece(A,C),rhs(C),contact(C,D),size(D,B),large(B).

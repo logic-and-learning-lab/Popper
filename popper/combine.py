@@ -2,7 +2,7 @@ import clingo
 import time
 import pickle
 import itertools
-from . util import format_rule, prog_size, format_prog, flatten, reduce_prog, prog_is_recursive, rule_size, rule_is_recursive, order_rule
+from . util import format_rule, calc_prog_size, format_prog, flatten, reduce_prog, prog_is_recursive, rule_size, rule_is_recursive, order_rule
 
 # for when we have a complete solution
 # same as above but no weak constraint over examples covered
@@ -202,12 +202,8 @@ class Combiner:
                     if not self.settings.recursion_enabled and not self.settings.pi_enabled:
                         best_prog = rules
                         best_fn = fn
-                        # TODO: only do at the end!!!!!!!!
                         if not self.solution_found:
-                            self.pos_covered = self.tester.get_pos_covered(model_prog, ignore=True)
-                        # print('asda', self.debug_count, best_fn)
-                        # for rule in model_prog:
-                        #     print(format_rule(rule))
+                            self.pos_covered = [atom.arguments[0].number for atom in atoms if atom.name == 'covered']
                         continue
 
                     # check whether recursive program is inconsistent
@@ -217,8 +213,6 @@ class Combiner:
                         self.pos_covered, _ = self.tester.test_prog(model_prog)
                         best_prog = rules
                         best_fn = fn
-                        # if fn > 0 and self.tester.is_complete(model_prog):
-                        # if fn > 0 and len(self.pos_covered) == len(self.settings.pos):
                         if fn > 0 and len(self.pos_covered) == len(self.settings.pos_index):
                             best_fn = 0
                         continue
@@ -231,7 +225,7 @@ class Combiner:
                     str_encoding += con + '\n'
                     # self.constraints.add(con)
                     self.big_encoding.add(con)
-                    # print('-- RUBBISH --', self.debug_count, best_fn, prog_size(model_prog))
+                    # print('-- RUBBISH --', self.debug_count, best_fn, calc_prog_size(model_prog))
                     # for rule in model_prog:
                     #     print('\t',format_rule(order_rule(rule)))
                     # print('subprog')
@@ -337,7 +331,7 @@ class Combiner:
 
         new_solution = reduce_prog(new_solution)
         self.settings.solution = new_solution
-        size = prog_size(new_solution)
+        size = calc_prog_size(new_solution)
 
         tn = self.tester.num_neg
         fp = 0

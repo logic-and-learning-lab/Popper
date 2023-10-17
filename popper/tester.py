@@ -87,6 +87,8 @@ class Tester():
 
     # @profile
     def test_single_rule(self, prog):
+        pos_covered = frozenset()
+        inconsistent = False
         try:
             rule = list(prog)[0]
             head, _body = rule

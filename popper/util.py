@@ -163,7 +163,7 @@ def print_prog_score(prog, score):
     print(format_prog(order_prog(prog)))
     print('*'*30)
 
-def prog_size(prog):
+def calc_prog_size(prog):
     return sum(rule_size(rule) for rule in prog)
 
 def rule_size(rule):
