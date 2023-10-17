@@ -87,100 +87,6 @@ def explain_inconsistent(settings, tester, prog):
     return out_cons
 
 
-seen_shit_subprog = set()
-
-def find_most_general_shit_subrule(prog, tester, settings, min_coverage, d=0, seen_poo=set(), seen_ok={}, all_seen_crap=set()):
-    rule = list(prog)[0]
-    head, body = rule
-
-    if len(body) == 0:
-        return []
-
-    body = tuple(body)
-
-    pruned_subprog = None
-
-    head_vars = set(head.arguments)
-    rule_vars = set()
-    rule_vars.update(head_vars)
-
-
-    out_progs = []
-
-    for lit in body:
-        rule_vars.update(lit.arguments)
-
-    for i in range(len(body)):
-        new_body = body[:i] + body[i+1:]
-        new_rule = (head, new_body)
-        subprog = frozenset([(head, frozenset(new_body))])
-        raw_subprog = get_raw_prog2(subprog)
-
-        if len(new_body) == 0:
-            continue
-
-        k = prog_hash(subprog)
-
-        if k in seen_shit_subprog:
-            continue
-        seen_shit_subprog.add(k)
-
-
-        if not head_connected(new_rule):
-            continue
-
-        if not has_valid_directions(new_rule):
-            continue
-
-        if has_messed_up_vars([new_rule]):
-            new_rule2 = functional_rename_vars(new_rule)
-            k2 = prog_hash([new_rule2])
-            if k2 in seen_shit_subprog:
-                seen_shit_subprog.add(k)
-                continue
-
-        if any(frozenset((y.predicate, y.arguments) for y in x) in pruned2 for x in non_empty_powerset(new_body)):
-            continue
-
-        head2, body2 = functional_rename_vars((head, new_body))
-        if any(frozenset((y.predicate, y.arguments) for y in z) in pruned2 for z in non_empty_powerset(body2)):
-            continue
-
-        # if any(frozenset((y.predicate, y.arguments) for y in z) in pruned2 for z in non_empty_powerset(new_body)):
-        #     print('PRUNED_H', format_prog2(subprog))
-
-        # if any(frozenset((y.predicate, y.arguments) for y in z) in pruned2 for z in non_empty_powerset(body2)):
-        #     print('PRUNED_I', format_prog2(subprog))
-
-        if tester.has_redundant_literal(subprog):
-            xs = find_most_general_shit_subrule(subprog, tester, settings, min_coverage, d+1, seen_poo, seen_ok, all_seen_crap)
-            out_progs.extend(xs)
-            continue
-
-        t1 = time.time()
-        pos_covered = tester.get_pos_covered(subprog)
-
-        if len(pos_covered) <= min_coverage:
-            seen_poo.add(raw_subprog)
-            xs = find_most_general_shit_subrule(subprog, tester, settings, min_coverage,  d+1, seen_poo, seen_ok, all_seen_crap)
-            if len(xs) != 0:
-                out_progs.extend(xs)
-            else:
-                out_progs.append(subprog)
-                with settings.stats.duration('variants'):
-                    for _, x in find_variants(new_rule, settings.max_vars):
-                        print('adding to pruned2', format_prog2(x))
-                        pruned2.add(x)
-        else:
-            seen_ok[raw_subprog] = min_coverage
-    return out_progs
-
-
-def get_min_pos_coverage(best_prog, cached_pos_covered):
-    if prog_is_recursive(best_prog):
-        return 1
-    return min(len(cached_pos_covered[x]) for x in best_prog if x in cached_pos_covered)
-
 def functional_rename_vars(rule):
     head, body = rule
     seen_args = set()
@@ -223,144 +129,119 @@ def has_messed_up_vars(prog):
     return False
 
 
-def prune_smaller_backtrack4(min_coverage, cached_pos_covered, could_prune_later, settings, tester):
+def non_empty_powerset(iterable):
+    s = tuple(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
 
-    if not settings.aggressive:
-        min_coverage = 1
+def subsumed_or_covers_too_few(prog, tester, success_sets, settings,  min_coverage, check_coverage=False, check_subsumed=False, seen=set()):
+    head, body = list(prog)[0]
+    body = list(body)
 
-    to_dump = set()
-    to_prune = set()
+    if len(body) == 0:
+        return []
 
-    zs = sorted(could_prune_later.items(), key=lambda x: len(list(x[0])[0][1]), reverse=False)
-    for prog2, pos_covered2 in zs:
+    out = set()
+    head_vars = set(head.arguments)
 
-        if len(pos_covered2) >= min_coverage:
+    # try the body with one literal removed (the literal at position i)
+    for i in range(len(body)):
+        new_body = body[:i] + body[i+1:]
+        new_body = frozenset(new_body)
+
+        if len(new_body) == 0:
             continue
 
-        to_dump.add(prog2)
+        # check whether we have seen this body before
+        k1 = frozenset((y.predicate, y.arguments) for y in new_body)
+        if k1 in seen:
+            continue
+        seen.add(k1)
 
-        head, body = list(prog2)[0]
+        new_rule = (head, new_body)
+        new_prog = frozenset({new_rule})
 
-        if any(frozenset((y.predicate, y.arguments) for y in x) in pruned2 for x in non_empty_powerset(body)):
+        # ensure at least one head variable is in the body
+        if not any(x in head_vars for literal in new_body for x in literal.arguments):
             continue
 
-        skip = False
-
-        for x in non_empty_powerset(body):
-            head2, body2 = functional_rename_vars((head, x))
-            if frozenset((y.predicate, y.arguments) for y in body2) in pruned2:
-                skip = True
-                break
-            # continue
-
-        if skip:
+        # check whether we have pruned any subset (HORRIBLE CODE)
+        if any(frozenset((y.predicate, y.arguments) for y in x) in pruned2 for x in non_empty_powerset(new_body)):
             continue
 
-        head2, body2 = functional_rename_vars((head, body))
-        for z in non_empty_powerset(body2):
-            moo = frozenset((y.predicate, y.arguments) for y in z)
-            if moo not in pruned2:
-                continue
+        if not head_connected(new_rule):
+            xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, settings, min_coverage, check_coverage, check_subsumed, seen)
+            out.update(xs)
+            continue
+
+        if not has_valid_directions(new_rule):
+            xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, settings, min_coverage, check_coverage, check_subsumed, seen)
+            out.update(xs)
+            continue
+
+        if tester.has_redundant_literal(new_prog):
+            xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, settings, min_coverage, check_coverage, check_subsumed, seen)
+            out.update(xs)
+            continue
 
 
-            asda = set()
-            renamed_ok = False
-            for x in non_empty_powerset(body):
-                asda.add(frozenset((y.predicate, y.arguments) for y in x))
-                head3, body3 = functional_rename_vars((head, x))
-                p1 = frozenset((y.predicate, y.arguments) for y in body3)
-                if p1 in pruned2:
-                    renamed_ok = True
+        sub_prog_pos_covered = tester.get_pos_covered(new_prog, ignore=True)
+        subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
 
+        prune = check_subsumed and subsumed
+        prune = prune or (check_coverage and len(sub_prog_pos_covered) < 2)
 
-            print('PISS1', sorted(moo))
-            print(format_prog2(prog2))
-            print('moo in asda', moo in asda)
-            print('renamed ok', renamed_ok)
-            # for p in asda:
-                # print('p', sorted(p))
-            print('\t',format_rule(order_rule2((head, body))))
-            for k in non_empty_powerset(body):
-                if frozenset((y.predicate, y.arguments) for y in k) in pruned2:
-                    print('SHIT MY PANTS')
-            print('\t',format_rule(order_rule2((head2, body2))))
-            xs = find_variants((head, body), settings.max_vars)
-            ys = find_variants((head2, body2), settings.max_vars)
-            print(set(xs) == set(ys))
-            if set(xs) != set(ys):
-                for x in xs:
-                    if x not in ys:
-                        print('x', x)
-                for y in ys:
-                    if y not in xs:
-                        print('y', y)
-            assert(False)
+        if not prune:
+            continue
 
-        for z in non_empty_powerset(body2):
-            moo = frozenset((y.predicate, y.arguments) for y in z)
-            if moo not in pruned2:
-                continue
-            print('PISS2', moo)
-            print('\t',format_rule(order_rule2((head, body))))
-            print('\t',format_rule(order_rule2((head2, body2))))
-            xs = find_variants((head, body), settings.max_vars)
-            ys = find_variants((head2, body2), settings.max_vars)
-            print(set(xs) == set(ys))
-            if set(xs) != set(ys):
-                for x in xs:
-                    if x not in ys:
-                        print('x', x)
-                for y in ys:
-                    if y not in xs:
-                        print('y', y)
-            assert(False)
+        xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, settings, min_coverage, check_coverage, check_subsumed, seen)
+        if len(xs) > 0:
+            out.update(xs)
+            continue
 
-        z = frozenset((y.predicate, y.arguments) for y in body)
-        print('adding to pruned2', z)
-        pruned2.add(z)
+        # for each pruned program, add the variants to the list of pruned programs
+        # doing so reduces the number of pointless checks
+        for _, x in find_variants(new_rule, settings.max_vars):
+            pruned2.add(x)
 
-        with settings.stats.duration('variants'):
-            for _, x in find_variants((head, body), settings.max_vars):
-                print('adding to pruned2_vars', x)
-                pruned2.add(x)
+        out.add(new_prog)
+    return out
 
-        if min_coverage > 1:
-            with settings.stats.duration('find most gen incomplete'):
-                pruned_smaller = find_most_general_shit_subrule(prog2, tester, settings, min_coverage)
-                print('smaerller adding to pruned2_vars', pruned_smaller)
-                pruned2.update(pruned_smaller)
-                # TODO1!!!!!
-                # assert(False)
+def explain_none_functional(settings, tester, prog):
+    new_cons = []
+
+    if len(prog) == 1:
+        return new_cons
+
+    base = []
+    rec = []
+    for rule in prog:
+        if rule_is_recursive(rule):
+            rec.append(rule)
         else:
-            pruned_smaller = set()
+            base.append(rule)
 
-        if len(pruned_smaller) == 0:
-            to_prune.add(prog2)
-            if settings.showcons:
-                print('\t', format_prog2(prog2), 'smaller_1', len(pos_covered2))
-        else:
-            for pruned_pruned_smaller_prog in pruned_smaller:
-                to_prune.add(pruned_pruned_smaller_prog)
+    pruned_subprog = False
+    for rule in base:
+        subprog = frozenset([rule])
+        if tester.is_non_functional(subprog):
+            new_cons.append((Constraint.GENERALISATION, subprog , None))
+            pruned_subprog = True
 
-                if settings.showcons:
-                    print('\t', format_prog2(pruned_pruned_smaller_prog), '\t', 'smaller_2', len(pos_covered2))
+    if pruned_subprog:
+        return new_cons
 
-                head, body = list(pruned_pruned_smaller_prog)[0]
-                z = frozenset((y.predicate, y.arguments) for y in body)
-                print('more here', z)
-                pruned2.add(z)
-                with settings.stats.duration('variants'):
-                    for _, x in find_variants((head, body), settings.max_vars):
-                        print('\t\t\tMOO3', sorted(x))
-                        pruned2.add(x)
+    if len(rec) == 1:
+        return new_cons
 
-    for x in to_dump:
-        del could_prune_later[x]
+    for r1 in base:
+        for r2 in rec:
+            subprog = frozenset([r1,r2])
+            if tester.is_non_functional(subprog):
+                new_cons.append((Constraint.GENERALISATION, subprog , None))
 
-    return to_prune
+    return new_cons
 
-# When we learn the new promising program, we want to prune previously unpruned programs that are subsumed by this new one
-def prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester):
+def prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester, check_coverage):
     to_prune = set()
     to_delete = set()
     seen = set()
@@ -369,10 +250,15 @@ def prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester):
     zs = sorted(could_prune_later.items(), key=lambda x: len(list(x[0])[0][1]), reverse=False)
     for prog2, pos_covered2 in zs:
 
-        # print('X', format_prog2(prog2))
 
-        if not pos_covered2.issubset(pos_covered):
+        should_prune = check_coverage and len(pos_covered2) == 1
+        should_prune = should_prune or pos_covered2.issubset(pos_covered)
+
+        if not should_prune:
             continue
+
+        if check_coverage and len(pos_covered2) == 1 and not pos_covered2.issubset(pos_covered):
+            assert(False)
 
         head, body = list(prog2)[0]
 
@@ -467,16 +353,31 @@ def prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester):
             # print('X7', format_prog2([new_rule]))
 
             sub_prog_pos_covered = tester.get_pos_covered(new_prog)
-            if sub_prog_pos_covered == pos_covered2:
+
+            should_prune_sub=False
+
+            sub_prog_subsumed = sub_prog_pos_covered == pos_covered2
+            if sub_prog_subsumed:
+                should_prune_sub= True
                 if settings.showcons:
-                    print('\t', format_prog2(new_prog), '\t', 'subsumed_2')
-                    # assert(False)
-                    pass
+                    # print('\t', format_prog2(new_prog), '\t', 'subsumed_2')
+                    print('\t', format_prog2(new_prog), '\t', 'subsumed_backtrack (generalisation)')
+
+
+            if not sub_prog_subsumed and check_coverage and len(sub_prog_pos_covered) == 1:
+                should_prune_sub= True
+                if settings.showcons:
+                    print('\t', format_prog2(new_prog), '\t', 'COVERS TOO FEW')
+                assert(False)
+
+            # if sub_covers_too_few and not sub_prog_subsumed:
+                # assert(False)
+
+            if should_prune_sub:
                 to_prune.add(new_prog)
                 pruned_subprog = True
                 with settings.stats.duration('variants'):
                     for _, x in find_variants(new_rule):
-                        # print('ARRRRR', format_prog2(x))
                         pruned2.add(x)
 
         to_delete.add(prog2)
@@ -487,7 +388,7 @@ def prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester):
                     # print('hello, pruned2', x)
                     pruned2.add(x)
             if settings.showcons:
-                print('\t', format_prog2(prog2), '\t', 'subsumed_1')
+                print('\t', format_prog2(prog2), '\t', 'subsumed_backtrack')
                 pass
             to_prune.add(prog2)
 
@@ -496,118 +397,10 @@ def prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester):
 
     return to_prune
 
-def non_empty_powerset(iterable):
-    s = tuple(iterable)
-    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
-
-
-def subsumed_or_covers_too_few(prog, tester, success_sets, settings,  min_coverage, check_coverage=False, check_subsumed=False, seen=set()):
-    head, body = list(prog)[0]
-    body = list(body)
-
-    if len(body) == 0:
-        return []
-
-    out = set()
-    head_vars = set(head.arguments)
-
-    # try the body with one literal removed (the literal at position i)
-    for i in range(len(body)):
-        new_body = body[:i] + body[i+1:]
-        new_body = frozenset(new_body)
-
-        if len(new_body) == 0:
-            continue
-
-        # check whether we have seen this body before
-        k1 = frozenset((y.predicate, y.arguments) for y in new_body)
-        if k1 in seen:
-            continue
-        seen.add(k1)
-
-        new_rule = (head, new_body)
-        new_prog = frozenset({new_rule})
-
-        # ensure at least one head variable is in the body
-        if not any(x in head_vars for literal in new_body for x in literal.arguments):
-            continue
-
-        # check whether we have pruned any subset (HORRIBLE CODE)
-        if any(frozenset((y.predicate, y.arguments) for y in x) in pruned2 for x in non_empty_powerset(new_body)):
-            continue
-
-        if not head_connected(new_rule):
-            xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, settings, min_coverage, check_coverage, check_subsumed, seen)
-            out.update(xs)
-            continue
-
-        if not has_valid_directions(new_rule):
-            xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, settings, min_coverage, check_coverage, check_subsumed, seen)
-            out.update(xs)
-            continue
-
-        if tester.has_redundant_literal(new_prog):
-            xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, settings, min_coverage, check_coverage, check_subsumed, seen)
-            out.update(xs)
-            continue
-
-
-        sub_prog_pos_covered = tester.get_pos_covered(new_prog, ignore=True)
-        subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
-
-        prune = check_subsumed and subsumed
-        prune = prune or (check_coverage and len(sub_prog_pos_covered) <= min_coverage)
-
-        if not prune:
-            continue
-
-        xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, settings, min_coverage, check_coverage, check_subsumed, seen)
-        if len(xs) > 0:
-            out.update(xs)
-            continue
-
-        # for each pruned program, add the variants to the list of pruned programs
-        # doing so reduces the number of pointless checks
-        for _, x in find_variants(new_rule, settings.max_vars):
-            pruned2.add(x)
-
-        out.add(new_prog)
-    return out
-
-def explain_none_functional(settings, tester, prog):
-    new_cons = []
-
-    if len(prog) == 1:
-        return new_cons
-
-    base = []
-    rec = []
-    for rule in prog:
-        if rule_is_recursive(rule):
-            rec.append(rule)
-        else:
-            base.append(rule)
-
-    pruned_subprog = False
-    for rule in base:
-        subprog = frozenset([rule])
-        if tester.is_non_functional(subprog):
-            new_cons.append((Constraint.GENERALISATION, subprog , None))
-            pruned_subprog = True
-
-    if pruned_subprog:
-        return new_cons
-
-    if len(rec) == 1:
-        return new_cons
-
-    for r1 in base:
-        for r2 in rec:
-            subprog = frozenset([r1,r2])
-            if tester.is_non_functional(subprog):
-                new_cons.append((Constraint.GENERALISATION, subprog , None))
-
-    return new_cons
+def is_subsumed(pos_covered, prog_size, success_sets):
+    subsumed = pos_covered in success_sets and success_sets[pos_covered] <= prog_size
+    subsumed = subsumed or any(pos_covered.issubset(xs) and prog_size2 <= prog_size for xs, prog_size2 in success_sets.items())
+    return subsumed
 
 def popper(settings):
     with settings.stats.duration('load data'):
@@ -638,9 +431,6 @@ def popper(settings):
     success_sets2 = {}
     rec_success_sets = {}
 
-    # track coverage of individual rules
-    cached_pos_covered = {}
-
     # maintain a set of programs that we have not yet pruned
     could_prune_later = {}
 
@@ -662,7 +452,7 @@ def popper(settings):
         while True:
             pruned_sub_incomplete = False
             pruned_sub_inconsistent = False
-            pruned_more_general_shit = False
+            pruned_more_general = False
             add_spec = False
             add_gen = False
             add_redund1 = False
@@ -705,10 +495,6 @@ def popper(settings):
 
             num_pos_covered = len(pos_covered)
 
-            # TODO: GENERALISE TO RECURSION + PI
-            if len(prog) == 1:
-                cached_pos_covered[list(prog)[0]] = pos_covered
-
             if num_pos_covered == 0:
                 add_spec = True
 
@@ -724,47 +510,44 @@ def popper(settings):
             # check whether subsumed by a seen program
             subsumed = False
             if not is_recursive and num_pos_covered > 0:
-                subsumed1 = pos_covered in success_sets
-                subsumed1 = subsumed1 or any(pos_covered.issubset(xs) for xs in success_sets)
+                subsumed = pos_covered in success_sets
+                subsumed = subsumed or any(pos_covered.issubset(xs) for xs in success_sets)
 
                 # TODO: FIX FOR FG
-                subsumed2 = pos_covered in success_sets2 and success_sets2[pos_covered] <= prog_size
-                subsumed2 = subsumed1 or any(pos_covered.issubset(xs) and prog_size2 <= prog_size for xs, prog_size2 in success_sets.items())
-                assert(subsumed1 == subsumed2)
-                subsumed = subsumed1
+                subsumed2 = is_subsumed(pos_covered, prog_size, success_sets2)
+                assert(subsumed2 == subsumed)
 
 
                 if subsumed:
                     add_spec = True
+
                 if not has_invention and WITH_OPTIMISATIONS:
                     # TODO: FIX FOR FG IDEA
                     # we check whether a program does not cover enough examples to be useful
                     covers_too_few = False
                     min_coverage = None
                     if combiner.solution_found:
-                        min_coverage = get_min_pos_coverage(combiner.best_prog, cached_pos_covered)
-                        if not settings.aggressive:
-                            min_coverage = 2
-                        covers_too_few = num_pos_covered < min_coverage
-                        # if the program does not cover enough examples, we prove it specialisations
+                        covers_too_few = num_pos_covered < 2
+                        # if the program does not cover enough examples, we prune it specialisations
                         if covers_too_few:
                             add_spec = True
+
                     if subsumed or covers_too_few:
                         # If a program is subsumed or doesn't cover enough examples, we search for the most general subprogram that also is also subsumed or doesn't cover enough examples
                         # only applies to non-recursive and non-PI programs
                         xs = subsumed_or_covers_too_few(prog, tester, success_sets, settings,  min_coverage, check_coverage=covers_too_few, check_subsumed=subsumed, seen=set())
-                        pruned_more_general_shit = len(xs) > 0
+                        pruned_more_general = len(xs) > 0
                         if settings.showcons:
-                            if subsumed and not pruned_more_general_shit:
+                            if subsumed and not pruned_more_general:
                                 print('\t', format_prog2(prog), '\t', 'subsumed')
-                            if covers_too_few and not subsumed and not pruned_more_general_shit:
+                            if covers_too_few and not subsumed and not pruned_more_general:
                                 print('\t', format_prog2(prog), '\t', 'covers_too_few')
                         for x in xs:
                             if settings.showcons:
                                 if subsumed:
-                                    print('\t', format_prog2(x), '\t', 'subsumed (gen)')
+                                    print('\t', format_prog2(x), '\t', 'subsumed (generalisation)')
                                 elif covers_too_few:
-                                    print('\t', format_prog2(x), '\t', 'covers_too_few (gen)', len(pos_covered))
+                                    print('\t', format_prog2(x), '\t', 'covers_too_few (generalisation)', len(pos_covered))
                             new_cons.append((Constraint.SPECIALISATION, x, None))
 
             if inconsistent:
@@ -780,7 +563,7 @@ def popper(settings):
                 add_spec = True
 
             # if consistent and partially complete, test whether functional
-            if not inconsistent and settings.functional_test and num_pos_covered > 0 and not pruned_more_general_shit:
+            if not inconsistent and settings.functional_test and num_pos_covered > 0 and not pruned_more_general:
                 if tester.is_non_functional(prog):
                     # if not functional, rule out generalisations and set as inconsistent
                     add_gen = True
@@ -827,7 +610,7 @@ def popper(settings):
                         print('\t','r2',format_rule(order_rule(r2)))
                     new_cons.append((Constraint.GENERALISATION, [r1,r2], None))
 
-            if not add_spec and not pruned_more_general_shit and not pruned_sub_incomplete:
+            if not add_spec and not pruned_more_general and not pruned_sub_incomplete:
                 could_prune_later[prog] = pos_covered
 
             seen_better_rec = False
@@ -835,7 +618,7 @@ def popper(settings):
                 seen_better_rec = pos_covered in rec_success_sets or any(pos_covered.issubset(xs) for xs in rec_success_sets)
 
             # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
-            if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general_shit:
+            if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general:
 
                 # update success sets
                 success_sets[pos_covered] = prog
@@ -859,13 +642,6 @@ def popper(settings):
                     if size >= settings.max_literals:
                         return
 
-                    if not has_invention and not is_recursive and WITH_OPTIMISATIONS:
-                        min_coverage = get_min_pos_coverage(combiner.best_prog, cached_pos_covered)
-                        with settings.stats.duration('prune smaller backtrack'):
-                            xs = prune_smaller_backtrack4(min_coverage, cached_pos_covered, could_prune_later, settings, tester)
-                            for x in xs:
-                                new_cons.append((Constraint.SPECIALISATION, x, None))
-
                     if settings.single_solve:
                         # AC: sometimes adding these size constraints can take longer
                         for i in range(combiner.max_size, max_size+1):
@@ -874,12 +650,12 @@ def popper(settings):
 
                 if not has_invention and not is_recursive and WITH_OPTIMISATIONS:
                     with settings.stats.duration('prune subsumed backtrack'):
-                        xs = prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester)
+                        xs = prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester, check_coverage=combiner.solution_found)
                         for x in xs:
                             new_cons.append((Constraint.SPECIALISATION, x, None))
 
             # BUILD CONSTRAINTS
-            if add_spec and not pruned_sub_incomplete and not pruned_more_general_shit and not add_redund2:
+            if add_spec and not pruned_sub_incomplete and not pruned_more_general and not add_redund2:
                 new_cons.append((Constraint.SPECIALISATION, prog, rule_ordering))
 
             if add_gen and not pruned_sub_inconsistent:

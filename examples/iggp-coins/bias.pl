@@ -1,8 +1,8 @@
 %% allow_singletons.
-%% max_vars(5).
-max_body(15). % makes the example a little quicker to run
+%% /max_vars(5).
+%% max_body(15). % makes the example a little quicker to run
 %% max_body(5). % makes the example a little quicker to run
-%% max_body(6). % makes the example a little quicker to run
+max_body(6). % makes the example a little quicker to run
 head_pred(next_cell,3).
 body_pred(does_jump,4).
 body_pred(my_succ,2).
@@ -34,5 +34,5 @@ type(c_twocoins,(cell_value,)).
 %%     #count{V : clause_var(C,V),var_type(C,V,agent)} > 1.
 
 
-:- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 1.
-:- clause(C), #count{V : clause_var(C,V),var_type(C,V,cell_value)} > 3.
+%% :- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 1.
+%% :- clause(C), #count{V : clause_var(C,V),var_type(C,V,cell_value)} > 3.
