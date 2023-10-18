@@ -1,4 +1,4 @@
-max_vars(6).
+max_vars(10).
 max_body(15).
 
 head_pred(next_value,2).

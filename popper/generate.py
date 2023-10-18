@@ -9,7 +9,7 @@ import clingo.script
 import pkg_resources
 from . core import Literal, RuleVar, VarVar, Var
 from collections import defaultdict
-from . util import rule_is_recursive, format_rule, Constraint, format_prog, order_rule, order_prog
+from . util import rule_is_recursive, format_rule, Constraint, format_prog, order_rule, order_prog, bias_order
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
@@ -243,6 +243,28 @@ class Generator:
         if self.settings.bkcons:
             encoding.extend(bkcons)
 
+        # FG Heuristic for single solve
+        # - considering a default order of minimum rules, then minimum literals, and then minimum variables
+        # - considering a preference for minimum hspace size parameters configuration
+        if settings.order_space and settings.single_solve:
+            horder = bias_order(settings)
+            iorder = 1
+            for (size, n_vars, n_rules, _) in horder:
+                encoding.append(f'h_order({iorder},{size},{n_vars},{n_rules}).')
+                iorder += 1
+            HSPACE_HEURISTIC = """
+            #heuristic hspace(N). [1000-N@30,true]
+            hspace(N) :- h_order(N,K,V,R), size(K), size_vars(V), size_rules(R).
+            """
+            encoding.append(HSPACE_HEURISTIC)
+        else:
+            DEFAULT_HEURISTIC = """
+            #heuristic size_rules(R). [1500-R@30,true]
+            #heuristic size(N). [1000-N@20,true]
+            #heuristic size_vars(V). [500-V@10,true]
+            """
+            encoding.append(DEFAULT_HEURISTIC)
+
         encoding = '\n'.join(encoding)
 
         # with open('ENCODING-GEN.pl', 'w') as f:
@@ -281,7 +303,10 @@ class Generator:
                 solver.add('number_of_rules', ['r'], NUM_OF_RULES)
 
 
+
         solver.configuration.solve.models = 0
+
+
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver

@@ -19,7 +19,8 @@
 #show before/2.
 #show size/1.
 
-#heuristic size(N). [1000-N,true]
+%% #heuristic size(N). [1000-N,true]
+
 
 max_size(K):-
     custom_max_size(K).
@@ -33,6 +34,12 @@ size(N):-
     N = 2..MaxSize,
     #sum{K+1,Rule : body_size(Rule,K)} == N.
 :- not size(_).
+
+size_vars(V):-
+    #max{K : clause_var(_,K)} == V + 1.
+
+size_rules(R):-
+    #max{K : clause(K)} == R + 1.
 
 pi_or_rec:-
     recursive.

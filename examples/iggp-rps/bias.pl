@@ -1,6 +1,6 @@
 %% allow_singletons.
 max_vars(7).
-max_body(15).
+max_body(9).
 
 head_pred(next_score,3).
 body_pred(my_true_score,3).
@@ -17,6 +17,13 @@ type(does,(ex,player,action)).
 type(beats,(action,action)).
 type(player,(player,)).
 type(different,(player,player)).
+
+
+
+
+
+
+
 
 %% %% BECAUSE WE DO NOT LEARN FROM INTERPRETATIONS
 :-

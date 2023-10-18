@@ -458,19 +458,24 @@ def popper(settings):
 
     search_order = bias_order(settings)
 
+    print(search_order)
+
     # for size in range(1, max_size+1):
     for (size, n_vars, n_rules, _) in search_order:
         if size > settings.max_literals:
             #break # Here we have to continue the loop given that we might be jumping back and forth over the size
             continue
 
-        print(size, n_vars, n_rules)
+        # print(size, n_vars, n_rules)
 
         # code is odd/crap:
         # if there is no PI or recursion, we only add nogoods
         # otherwise we build constraints and add them as nogoods and then again as constraints to the solver
         if not settings.single_solve:
-            settings.logger.info(f'SIZE: {size} MAX_SIZE: {settings.max_literals}')
+            if settings.order_space:
+                settings.logger.info(f'SIZE: {size} VARS: {n_vars} RULES: {n_rules} MAX_SIZE: {settings.max_literals}')
+            else:
+                settings.logger.info(f'SIZE: {size} MAX_SIZE: {settings.max_literals}')
             with settings.stats.duration('init'):
                 generator.update_solver(size, n_vars, n_rules)
 
@@ -507,7 +512,8 @@ def popper(settings):
             if settings.single_solve:
                 if last_size == None or prog_size != last_size:
                     last_size = prog_size
-                    settings.logger.info(f'Searching programs of size: {prog_size}')
+                    if not settings.order_space:
+                        settings.logger.info(f'Searching programs of size: {prog_size}')
                 if last_size > settings.max_literals and not settings.order_space:
                     return
 

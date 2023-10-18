@@ -3,6 +3,8 @@
 %% f(A,B) :- tail(A,D),tail(D,C),element(C,B),f(D,B).
 %% 30.24s user 1.40s system 100% cpu 31.431 total
 
+
+max_vars(8).
 enable_recursion.
 
 head_pred(f,2).

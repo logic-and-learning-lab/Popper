@@ -4,7 +4,8 @@
 %% zendo(A):- piece(A,C),contact(C,D),size(D,B),large(B),blue(D).
 %% zendo(A):- piece(A,C),red(C),coord1(C,B),piece(A,D),blue(D),coord1(D,B).
 
-max_body(15).
+max_vars(9).
+max_body(9).
 
 head_pred(zendo,1).
 body_pred(piece,2).
