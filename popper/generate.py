@@ -245,8 +245,8 @@ class Generator:
 
         encoding = '\n'.join(encoding)
 
-        with open('ENCODING-GEN.pl', 'w') as f:
-            f.write(encoding)
+        # with open('ENCODING-GEN.pl', 'w') as f:
+            # f.write(encoding)
 
         if self.settings.single_solve:
             solver = clingo.Control(['--heuristic=Domain','-Wnone'])
@@ -260,6 +260,25 @@ class Generator:
                 #sum{K+1,Clause : body_size(Clause,K)} != n.
             """
             solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
+
+            if self.settings.no_bias:
+                NUM_OF_VARS = """
+                %%% External atom for number of variables in the program %%%%%
+                #external size_in_vars(v).
+                :-
+                    size_in_vars(v),
+                    #max{V : clause_var(_,V)} != v - 1.
+                """
+                solver.add('number_of_vars', ['v'], NUM_OF_VARS)
+
+                NUM_OF_RULES = """
+                %%% External atom for number of rules in the program %%%%%
+                #external size_in_rules(r).
+                :-
+                    size_in_rules(r),
+                    #max{R : clause(R)} != r - 1.
+                """
+                solver.add('number_of_rules', ['r'], NUM_OF_RULES)
 
 
         solver.configuration.solve.models = 0
@@ -284,8 +303,10 @@ class Generator:
             self.seen_symbols[k] = symbol
         return symbol
 
-    def update_solver(self, size):
+    def update_solver(self, size, num_vars, num_rules):
         self.update_number_of_literals(size)
+        self.update_number_of_vars(num_vars)
+        self.update_number_of_rules(num_rules)
 
         # rules to add via Clingo's backend interface
         to_add = []
@@ -311,6 +332,8 @@ class Generator:
             to_add.append((new_head, new_body))
 
 
+        if self.settings.no_bias:
+            self.bad_handles = []
         for handle in self.bad_handles:
             # if we know that rule_xyz is bad
             # we add the groundings of bad_stuff(R,ThisSize):- seen_rule(rule_xyz, R), R=0..MaxRules.
@@ -359,6 +382,8 @@ class Generator:
         # 1. Release those that have already been assigned
         for atom, truth_value in self.assigned.items():
             if atom[0] == 'size_in_literals' and truth_value:
+                if atom[1] == size:
+                    continue
                 self.assigned[atom] = False
                 symbol = clingo.Function('size_in_literals', [clingo.Number(atom[1])])
                 self.solver.release_external(symbol)
@@ -373,6 +398,49 @@ class Generator:
         # Clingo updates their cffi API
         symbol = clingo.Function('size_in_literals', [clingo.Number(size)])
         self.solver.assign_external(symbol, True)
+
+    def update_number_of_vars(self, size):
+        # 1. Release those that have already been assigned
+        for atom, truth_value in self.assigned.items():
+            if atom[0] == 'size_in_vars' and truth_value:
+                if atom[1] == size:
+                    continue
+                self.assigned[atom] = False
+                symbol = clingo.Function('size_in_vars', [clingo.Number(atom[1])])
+                self.solver.release_external(symbol)
+
+        # 2. Ground the new size
+        self.solver.ground([('number_of_vars', [clingo.Number(size)])])
+
+        # 3. Assign the new size
+        self.assigned[('size_in_vars', size)] = True
+
+        # @NOTE: Everything passed to Clingo must be Symbol. Refactor after
+        # Clingo updates their cffi API
+        symbol = clingo.Function('size_in_vars', [clingo.Number(size)])
+        self.solver.assign_external(symbol, True)
+
+    def update_number_of_rules(self, size):
+        # 1. Release those that have already been assigned
+        for atom, truth_value in self.assigned.items():
+            if atom[0] == 'size_in_rules' and truth_value:
+                if atom[1] == size:
+                    continue
+                self.assigned[atom] = False
+                symbol = clingo.Function('size_in_rules', [clingo.Number(atom[1])])
+                self.solver.release_external(symbol)
+
+        # 2. Ground the new size
+        self.solver.ground([('number_of_rules', [clingo.Number(size)])])
+
+        # 3. Assign the new size
+        self.assigned[('size_in_rules', size)] = True
+
+        # @NOTE: Everything passed to Clingo must be Symbol. Refactor after
+        # Clingo updates their cffi API
+        symbol = clingo.Function('size_in_rules', [clingo.Number(size)])
+        self.solver.assign_external(symbol, True)
+
 
     def get_ground_rules(self, rule):
         head, body = rule

@@ -1,6 +1,6 @@
 %% allow_singletons.
 max_vars(7).
-max_body(15).
+max_body(30).
 
 head_pred(goal,3).
 body_pred(my_input,2).
@@ -252,5 +252,5 @@ type(int_100,(int,)).
     #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
 
 
-:- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
-:- clause(C), #count{V : clause_var(C,V),var_type(C,V,action)} > 3.
+%% :- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
+%% :- clause(C), #count{V : clause_var(C,V),var_type(C,V,action)} > 3.

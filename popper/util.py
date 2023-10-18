@@ -8,6 +8,7 @@ import logging
 from time import perf_counter
 from contextlib import contextmanager
 from .core import Literal
+from math import comb
 
 clingo.script.enable_python()
 
@@ -50,7 +51,8 @@ def parse_args():
     parser.add_argument('--bkcons', default=False, action='store_true', help='EXPERIMENTAL FEATURE: deduce background constraints from Datalog background')
     parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
     parser.add_argument('--showcons', default=False, action='store_true', help='Show constraints deduced during the search')
-    parser.add_argument('--aggressive', default=False, action='store_true', help='Run Popper in an aggressive form which is not guaranteed to find an optimal solution')
+    parser.add_argument('--no-bias', default=False, action='store_true', help='EXPERIMENTAL FEATURE: do not use language bias')
+    parser.add_argument('--order-space', default=False, action='store_true', help='EXPERIMENTAL FEATURE: search space ordered by size')
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
@@ -312,7 +314,7 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False, showcons=False, aggressive=False):
+    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False, showcons=False, no_bias=False, order_space=False):
 
         if cmd_line:
             args = parse_args()
@@ -331,7 +333,8 @@ class Settings:
             functional_test = args.functional_test
             datalog = args.datalog
             showcons = args.showcons
-            aggressive = args.aggressive
+            no_bias = args.no_bias
+            order_space = args.order_space
         else:
             if kbpath:
                 self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
@@ -359,7 +362,7 @@ class Settings:
         self.bkcons = bkcons
         self.datalog = datalog
         self.showcons = showcons
-        self.aggressive = aggressive
+        # self.aggressive = aggressive
         self.max_literals = max_literals
         self.functional_test = functional_test
         self.timeout = timeout
@@ -368,6 +371,8 @@ class Settings:
         self.max_body = max_body
         self.max_vars = max_vars
         self.max_rules = max_rules
+        self.no_bias = no_bias
+        self.order_space = order_space
 
         self.recall = {}
         self.solution = None
@@ -387,11 +392,17 @@ class Settings:
         """)
         solver.ground([('bias', [])])
 
+        self.max_arity = 0
+        for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
+            self.max_arity = max(self.max_arity, x.symbol.arguments[1].number)
+
+
         self.body_preds = set()
         for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
             pred = x.symbol.arguments[0].name
             arity = x.symbol.arguments[1].number
             self.body_preds.add((pred, arity))
+            self.max_arity = max(self.max_arity, arity)
 
         for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
             self.max_body = x.symbol.arguments[0].number
@@ -482,3 +493,30 @@ def load_types(settings):
             body_types[pred] = xs
 
     return head_types, body_types
+
+def bias_order(settings):
+    # if settings.search_order is None:
+    ret = []
+    predicates = len(settings.body_preds) + 1
+    arity = settings.max_arity
+    min_rules = settings.max_rules
+    if settings.no_bias:
+        min_rules = 1
+    for size_rules in range(min_rules,settings.max_rules+1):
+        max_size = (1 + settings.max_body) * size_rules
+        for size_literals in range(1,max_size+1):
+            minimum_vars = settings.max_vars
+            if settings.no_bias:
+                minimum_vars = 1
+            for size_vars in range(minimum_vars,settings.max_vars+1):
+                # FG We should not search for configurations with more variables than the possible variables for the number of litereals considered
+                # There must be at least one variable repeated, otherwise all the literals are disconnected
+                max_possible_vars = (size_literals * arity) - 1
+                if size_vars > max_possible_vars:
+                    break
+                hspace = comb(predicates * pow(size_vars,arity),size_literals)
+                ret.append((size_literals,size_vars,size_rules,hspace))
+    if settings.order_space:
+        ret.sort(key=lambda tup: tup[3])
+    settings.search_order = ret
+    return settings.search_order

@@ -1,8 +1,4 @@
-%% allow_singletons.
-%% /max_vars(5).
-%% max_body(15). % makes the example a little quicker to run
-%% max_body(5). % makes the example a little quicker to run
-max_body(6). % makes the example a little quicker to run
+max_body(15).
 head_pred(next_cell,3).
 body_pred(does_jump,4).
 body_pred(my_succ,2).

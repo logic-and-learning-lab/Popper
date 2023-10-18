@@ -1,6 +1,5 @@
-allow_singletons.
-max_vars(7).
-max_body(15).
+max_vars(7.
+max_body(20).
 constant(agent_player, agent).
 constant(score_0, score).
 constant(score_25, score).
@@ -70,7 +69,3 @@ body_pred(P,1):-
 
 type(P,(T,)):-
 	constant(P,T).
-
-
-:- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 1.
-:- clause(C), #count{V : clause_var(C,V),var_type(C,V,word)} > 3.

@@ -1,6 +1,4 @@
-%% max_vars(6).
-max_body(15).
-
+max_body(30).
 
 head_pred(next_score,3).
 body_pred(does,3).
@@ -66,6 +64,5 @@ bad_body(P,A,Vars):-
 
 
 %% :- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
-
-:- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
-:- clause(C), #count{V : clause_var(C,V),var_type(C,V,action)} > 3.
+%% :- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
+%% :- clause(C), #count{V : clause_var(C,V),var_type(C,V,action)} > 3.
