@@ -184,11 +184,14 @@ def subsumed_or_covers_too_few(prog, tester, success_sets, success_sets2, settin
             continue
 
         sub_prog_pos_covered = tester.get_pos_covered(new_prog, ignore=True)
-        subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
 
-        subsumed2 = is_subsumed(sub_prog_pos_covered, calc_prog_size(new_prog), success_sets2)
-        # @AC
-        # subsumed2 != subsumed1!!!
+
+        if settings.order_space:
+            # this check does not assume that we search by increasing program size
+            subsumed = is_subsumed(sub_prog_pos_covered, calc_prog_size(new_prog), success_sets2)
+        else:
+            # this check assumes that we search by increasing program size
+            subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
 
         prune = check_subsumed and subsumed
         prune = prune or (check_coverage and len(sub_prog_pos_covered) == 1)
@@ -258,19 +261,20 @@ def prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester, 
     zs = sorted(could_prune_later.items(), key=lambda x: len(list(x[0])[0][1]), reverse=False)
     for prog2, pos_covered2 in zs:
 
-
-        should_prune = check_coverage and len(pos_covered2) == 1
+        should_prune = check_coverage and len(pos_covered2) == 1 and not settings.order_space
 
         # TODO: FOR FG
-        # subsumed = pos_covered2.issubset(pos_covered) and calc_prog_size(prog2) >= prog_size
+        if settings.order_space:
+            subsumed = pos_covered2.issubset(pos_covered)
+        else:
+            subsumed = pos_covered2.issubset(pos_covered) and calc_prog_size(prog2) >= prog_size
 
-        should_prune = should_prune or pos_covered2.issubset(pos_covered)
-
+        should_prune = should_prune or subsumed
         if not should_prune:
             continue
 
-        if check_coverage and len(pos_covered2) == 1 and not pos_covered2.issubset(pos_covered):
-            assert(False)
+        # if check_coverage and len(pos_covered2) == 1 and not pos_covered2.issubset(pos_covered):
+            # assert(False)
 
         head, body = list(prog2)[0]
 
@@ -366,29 +370,29 @@ def prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester, 
 
             sub_prog_pos_covered = tester.get_pos_covered(new_prog)
 
-            should_prune_sub=False
+            # prune if we have a solution and the subprogram only covers one example
+            sub_covers_too_few = check_coverage and len(sub_prog_pos_covered) == 1 and not settings.order_space
 
             # TODO: FOR FG
-            # subsumed = pos_covered2.issubset(pos_covered) and calc_prog_size(prog2) >= prog_size
+            if settings.order_space:
+                sub_prog_subsumed = False
+            else:
+                sub_prog_subsumed = sub_prog_pos_covered == pos_covered2
 
-            sub_prog_subsumed = sub_prog_pos_covered == pos_covered2
             if sub_prog_subsumed:
-                should_prune_sub= True
+                # should_prune_sub= True
                 if settings.showcons:
                     # print('\t', format_prog2(new_prog), '\t', 'subsumed_2')
                     print('\t', format_prog2(new_prog), '\t', 'subsumed_backtrack (generalisation)')
 
 
-            if not sub_prog_subsumed and check_coverage and len(sub_prog_pos_covered) == 1:
-                should_prune_sub= True
+            if not sub_prog_subsumed and sub_covers_too_few:
+                # should_prune_sub= True
                 if settings.showcons:
                     print('\t', format_prog2(new_prog), '\t', 'COVERS TOO FEW')
                 assert(False)
 
-            if check_coverage and len(sub_prog_pos_covered) == 1 and not sub_prog_subsumed:
-                assert(False)
-
-            if should_prune_sub:
+            if sub_prog_subsumed or sub_covers_too_few:
                 to_prune.add(new_prog)
                 pruned_subprog = True
                 with settings.stats.duration('variants'):
@@ -404,7 +408,7 @@ def prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester, 
                     pruned2.add(x)
             if settings.showcons:
                 print('\t', format_prog2(prog2), '\t', 'subsumed_backtrack')
-                pass
+                # pass
             to_prune.add(prog2)
 
     for x in to_delete:
@@ -531,13 +535,12 @@ def popper(settings):
             # check whether subsumed by a seen program
             subsumed = False
             if not is_recursive and num_pos_covered > 0:
-                subsumed = pos_covered in success_sets
-                subsumed = subsumed or any(pos_covered.issubset(xs) for xs in success_sets)
 
-                # TODO: FIX FOR FG
-                subsumed2 = is_subsumed(pos_covered, prog_size, success_sets2)
-                assert(subsumed2 == subsumed)
-
+                if settings.order_space:
+                    subsumed = is_subsumed(pos_covered, prog_size, success_sets2)
+                else:
+                    subsumed = pos_covered in success_sets
+                    subsumed = subsumed or any(pos_covered.issubset(xs) for xs in success_sets)
 
                 if subsumed:
                     add_spec = True
@@ -547,7 +550,7 @@ def popper(settings):
                     # we check whether a program does not cover enough examples to be useful
                     covers_too_few = False
                     min_coverage = None
-                    if combiner.solution_found:
+                    if combiner.solution_found and not settings.order_space:
                         covers_too_few = num_pos_covered == 1
                         # if the program does not cover enough examples, we prune it specialisations
                         if covers_too_few:
@@ -637,12 +640,14 @@ def popper(settings):
 
             seen_better_rec = False
             if is_recursive and not inconsistent and not subsumed and not add_gen and num_pos_covered > 0:
+                # TODO: FIX FOR FG
                 seen_better_rec = pos_covered in rec_success_sets or any(pos_covered.issubset(xs) for xs in rec_success_sets)
 
             # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
             if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general:
 
                 # update success sets
+                # AC TODO: FIX
                 success_sets[pos_covered] = prog
                 success_sets2[pos_covered] = prog_size
                 if is_recursive:
