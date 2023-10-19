@@ -1,5 +1,5 @@
-max_vars(10).
-max_body(15).
+%% max_vars(6).
+%% max_body(6).
 
 head_pred(next_value,2).
 body_pred(does,3).

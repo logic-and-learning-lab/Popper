@@ -458,7 +458,9 @@ def popper(settings):
 
     search_order = bias_order(settings)
 
-    print(search_order)
+    # print(search_order)
+    for x in search_order:
+        print(x)
 
     # for size in range(1, max_size+1):
     for (size, n_vars, n_rules, _) in search_order:

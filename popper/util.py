@@ -495,6 +495,11 @@ def load_types(settings):
     return head_types, body_types
 
 def bias_order(settings):
+
+    if not (settings.no_bias or settings.order_space):
+        max_size = (1 + settings.max_body) * settings.max_rules
+        return [(size_literals, settings.max_vars, settings.max_rules, None) for size_literals in range(1, max_size+1)]
+
     # if settings.search_order is None:
     ret = []
     predicates = len(settings.body_preds) + 1
@@ -502,21 +507,33 @@ def bias_order(settings):
     min_rules = settings.max_rules
     if settings.no_bias:
         min_rules = 1
-    for size_rules in range(min_rules,settings.max_rules+1):
+    for size_rules in range(min_rules, settings.max_rules+1):
         max_size = (1 + settings.max_body) * size_rules
-        for size_literals in range(1,max_size+1):
+        for size_literals in range(1, max_size+1):
+            # print(size_literals)
             minimum_vars = settings.max_vars
             if settings.no_bias:
                 minimum_vars = 1
-            for size_vars in range(minimum_vars,settings.max_vars+1):
+            for size_vars in range(minimum_vars, settings.max_vars+1):
                 # FG We should not search for configurations with more variables than the possible variables for the number of litereals considered
                 # There must be at least one variable repeated, otherwise all the literals are disconnected
                 max_possible_vars = (size_literals * arity) - 1
+                print(f'size_literals:{size_literals} size_vars:{size_vars} size_rules:{size_rules} max_possible_vars:{max_possible_vars}')
                 if size_vars > max_possible_vars:
                     break
-                hspace = comb(predicates * pow(size_vars,arity),size_literals)
-                ret.append((size_literals,size_vars,size_rules,hspace))
+
+                hspace = comb(predicates * pow(size_vars, arity), size_literals)
+
+                # AC @ FG: handy code to skip pointless unsat calls
+                if hspace == 0:
+                    continue
+                if size_rules > 1 and size_literals < 5:
+                    continue
+                ret.append((size_literals, size_vars, size_rules, hspace))
+
     if settings.order_space:
-        ret.sort(key=lambda tup: tup[3])
+        ret.sort(key=lambda tup: (tup[3],tup[0]))
+
+
     settings.search_order = ret
     return settings.search_order
