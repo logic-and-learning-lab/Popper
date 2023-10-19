@@ -133,7 +133,7 @@ def non_empty_powerset(iterable):
     s = tuple(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
 
-def subsumed_or_covers_too_few(prog, tester, success_sets, success_sets2, settings,  min_coverage, check_coverage=False, check_subsumed=False, seen=set()):
+def subsumed_or_covers_too_few(prog, tester, success_sets, settings, check_coverage=False, check_subsumed=False, seen=set()):
     head, body = list(prog)[0]
     body = list(body)
 
@@ -169,17 +169,17 @@ def subsumed_or_covers_too_few(prog, tester, success_sets, success_sets2, settin
             continue
 
         if not head_connected(new_rule):
-            xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, success_sets2, settings, min_coverage, check_coverage, check_subsumed, seen)
+            xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, settings, check_coverage, check_subsumed, seen)
             out.update(xs)
             continue
 
         if not has_valid_directions(new_rule):
-            xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, success_sets2, settings, min_coverage, check_coverage, check_subsumed, seen)
+            xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, settings, check_coverage, check_subsumed, seen)
             out.update(xs)
             continue
 
         if tester.has_redundant_literal(new_prog):
-            xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, success_sets2, settings, min_coverage, check_coverage, check_subsumed, seen)
+            xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, settings, check_coverage, check_subsumed, seen)
             out.update(xs)
             continue
 
@@ -188,7 +188,7 @@ def subsumed_or_covers_too_few(prog, tester, success_sets, success_sets2, settin
 
         if settings.order_space:
             # this check does not assume that we search by increasing program size
-            subsumed = is_subsumed(sub_prog_pos_covered, calc_prog_size(new_prog), success_sets2)
+            subsumed = is_subsumed(sub_prog_pos_covered, calc_prog_size(new_prog), success_sets)
         else:
             # this check assumes that we search by increasing program size
             subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
@@ -204,7 +204,7 @@ def subsumed_or_covers_too_few(prog, tester, success_sets, success_sets2, settin
         if not prune:
             continue
 
-        xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, success_sets2, settings, min_coverage, check_coverage, check_subsumed, seen)
+        xs = subsumed_or_covers_too_few(new_prog, tester, success_sets, settings, check_coverage, check_subsumed, seen)
         if len(xs) > 0:
             out.update(xs)
             continue
@@ -380,9 +380,7 @@ def prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester, 
                 sub_prog_subsumed = sub_prog_pos_covered == pos_covered2
 
             if sub_prog_subsumed:
-                # should_prune_sub= True
                 if settings.showcons:
-                    # print('\t', format_prog2(new_prog), '\t', 'subsumed_2')
                     print('\t', format_prog2(new_prog), '\t', 'subsumed_backtrack (generalisation)')
 
 
@@ -447,7 +445,6 @@ def popper(settings):
 
     # track the success sets of tested hypotheses
     success_sets = {}
-    success_sets2 = {}
     rec_success_sets = {}
 
     # maintain a set of programs that we have not yet pruned
@@ -458,17 +455,10 @@ def popper(settings):
 
     search_order = bias_order(settings)
 
-    # print(search_order)
-    for x in search_order:
-        print(x)
-
-    # for size in range(1, max_size+1):
     for (size, n_vars, n_rules, _) in search_order:
         if size > settings.max_literals:
             #break # Here we have to continue the loop given that we might be jumping back and forth over the size
             continue
-
-        # print(size, n_vars, n_rules)
 
         # code is odd/crap:
         # if there is no PI or recursion, we only add nogoods
@@ -478,6 +468,7 @@ def popper(settings):
                 settings.logger.info(f'SIZE: {size} VARS: {n_vars} RULES: {n_rules} MAX_SIZE: {settings.max_literals}')
             else:
                 settings.logger.info(f'SIZE: {size} MAX_SIZE: {settings.max_literals}')
+
             with settings.stats.duration('init'):
                 generator.update_solver(size, n_vars, n_rules)
 
@@ -544,8 +535,9 @@ def popper(settings):
             subsumed = False
             if not is_recursive and num_pos_covered > 0:
 
+                # if we do not search by increasing size, we need to use a strict form of subsumption
                 if settings.order_space:
-                    subsumed = is_subsumed(pos_covered, prog_size, success_sets2)
+                    subsumed = is_subsumed(pos_covered, prog_size, success_sets)
                 else:
                     subsumed = pos_covered in success_sets
                     subsumed = subsumed or any(pos_covered.issubset(xs) for xs in success_sets)
@@ -554,32 +546,27 @@ def popper(settings):
                     add_spec = True
 
                 if not has_invention and WITH_OPTIMISATIONS:
-                    # TODO: FIX FOR FG IDEA
                     # we check whether a program does not cover enough examples to be useful
-                    covers_too_few = False
-                    min_coverage = None
-                    if combiner.solution_found and not settings.order_space:
-                        covers_too_few = num_pos_covered == 1
-                        # if the program does not cover enough examples, we prune it specialisations
-                        if covers_too_few:
-                            assert(subsumed)
-                            add_spec = True
+                    # if the program only not cover enough examples, we prune it specialisations
+                    covers_too_few = combiner.solution_found and not settings.order_space and num_pos_covered == 1
+                    if covers_too_few:
+                        add_spec = True
 
                     if subsumed or covers_too_few:
                         # If a program is subsumed or doesn't cover enough examples, we search for the most general subprogram that also is also subsumed or doesn't cover enough examples
                         # only applies to non-recursive and non-PI programs
-                        xs = subsumed_or_covers_too_few(prog, tester, success_sets, success_sets2, settings,  min_coverage, check_coverage=covers_too_few, check_subsumed=subsumed, seen=set())
+                        xs = subsumed_or_covers_too_few(prog, tester, success_sets, settings, check_coverage=covers_too_few, check_subsumed=subsumed, seen=set())
                         pruned_more_general = len(xs) > 0
-                        if settings.showcons:
-                            if subsumed and not pruned_more_general:
+                        if settings.showcons and not pruned_more_general:
+                            if subsumed:
                                 print('\t', format_prog2(prog), '\t', 'subsumed')
-                            if covers_too_few and not subsumed and not pruned_more_general:
+                            else:
                                 print('\t', format_prog2(prog), '\t', 'covers_too_few')
                         for x in xs:
                             if settings.showcons:
                                 if subsumed:
                                     print('\t', format_prog2(x), '\t', 'subsumed (generalisation)')
-                                elif covers_too_few:
+                                else:
                                     print('\t', format_prog2(x), '\t', 'covers_too_few (generalisation)', len(pos_covered))
                             new_cons.append((Constraint.SPECIALISATION, x, None))
 
@@ -648,18 +635,20 @@ def popper(settings):
 
             seen_better_rec = False
             if is_recursive and not inconsistent and not subsumed and not add_gen and num_pos_covered > 0:
-                # TODO: FIX FOR FG
-                seen_better_rec = pos_covered in rec_success_sets or any(pos_covered.issubset(xs) for xs in rec_success_sets)
+                if settings.order_space:
+                    # this check does not assume that we search by increasing program size
+                    subsumed = is_subsumed(pos_covered, prog_size, rec_success_sets)
+                else:
+                    # this check assumes that we search by increasing program size
+                    seen_better_rec = pos_covered in rec_success_sets or any(pos_covered.issubset(xs) for xs in rec_success_sets)
 
             # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
             if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general:
 
                 # update success sets
-                # AC TODO: FIX
-                success_sets[pos_covered] = prog
-                success_sets2[pos_covered] = prog_size
+                success_sets[pos_covered] = prog_size
                 if is_recursive:
-                    rec_success_sets[pos_covered] = prog
+                    rec_success_sets[pos_covered] = prog_size
 
                 # COMBINE
                 with settings.stats.duration('combine'):
@@ -696,9 +685,6 @@ def popper(settings):
             if add_gen and not pruned_sub_inconsistent:
                 if settings.recursion_enabled or settings.pi_enabled:
                     if not pruned_sub_incomplete:
-                        new_cons.append((Constraint.GENERALISATION, prog, rule_ordering))
-                else:
-                    if not add_spec:
                         new_cons.append((Constraint.GENERALISATION, prog, rule_ordering))
 
             if add_redund1 and not pruned_sub_incomplete:

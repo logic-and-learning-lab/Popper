@@ -1,10 +1,3 @@
-%% python3 popper.py examples/find-dupl --eval-timeout=0.01
-%% f(A,B) :- head(A,B).
-%% f(A,B) :- tail(A,D),tail(D,C),element(C,B),f(D,B).
-%% 30.24s user 1.40s system 100% cpu 31.431 total
-
-
-max_vars(7).
 enable_recursion.
 
 head_pred(f,2).
