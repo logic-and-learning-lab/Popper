@@ -22,3 +22,11 @@ type(different,(player,player)).
 :-
     clause(C),
     #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
+
+:-
+    clause(C),
+    #count{V : clause_var(C,V),var_type(C,V,player)} > 2.
+
+:-
+    clause(C),
+    #count{V : clause_var(C,V),var_type(C,V,action)} > 3.
