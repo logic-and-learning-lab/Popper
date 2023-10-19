@@ -1,11 +1,4 @@
-%% ********** SOLUTION **********
-%% Precision:1.00 Recall:1.00 TP:50 FN:0 TN:50 FP:0 Size:19
-%% zendo(A):- piece(A,C),rhs(C),contact(C,D),size(D,B),large(B).
-%% zendo(A):- piece(A,C),contact(C,D),size(D,B),large(B),blue(D).
-%% zendo(A):- piece(A,C),red(C),coord1(C,B),piece(A,D),blue(D),coord1(D,B).
-
-max_vars(9).
-max_body(9).
+max_body(7).
 
 head_pred(zendo,1).
 body_pred(piece,2).
@@ -40,23 +33,6 @@ type(upright,(piece,)).
 type(lhs,(piece,)).
 type(rhs,(piece,)).
 type(strange,(piece,)).
-
-direction(zendo,(in,)).
-direction(piece,(in,out)).
-direction(contact,(in,out)).
-direction(coord1,(in,out)).
-direction(coord2,(in,out)).
-direction(size,(in,out)).
-direction(blue,(in,)).
-direction(green,(in,)).
-direction(red,(in,)).
-direction(small,(in,)).
-direction(medium,(in,)).
-direction(large,(in,)).
-direction(upright,(in,)).
-direction(lhs,(in,)).
-direction(rhs,(in,)).
-direction(strange,(in,)).
 
 :-
     clause(C),

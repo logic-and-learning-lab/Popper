@@ -1,8 +1,7 @@
-max_vars(5).
-max_body(5).
 max_clauses(3).
-
 enable_recursion.
+
+max_body(7).
 
 body_pred(head,2).
 body_pred(tail,2).
@@ -13,8 +12,6 @@ body_pred(odd,1).
 body_pred(one,1).
 body_pred(zero,1).
 body_pred(decrement,2).
-%% body_pred(increment,2). % METAGOL CRASHES WHEN GIVEN
-%% body_pred(element,2). % CANNOT USE IN EVERYTHING BECAUSE OF MEMBER PROBLEM
 
 type(cons,(element,list,list)).
 direction(cons,(in,in,out)).

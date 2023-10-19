@@ -1,3 +1,5 @@
+max_body(7).
+
 head_pred(rsg, 2).
 body_pred(up, 2).
 body_pred(down, 2).

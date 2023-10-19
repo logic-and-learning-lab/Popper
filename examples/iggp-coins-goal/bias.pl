@@ -1,5 +1,4 @@
-max_vars(6).
-max_body(15).
+max_body(7).
 
 head_pred(goal,3).
 body_pred(my_true_cell,3).

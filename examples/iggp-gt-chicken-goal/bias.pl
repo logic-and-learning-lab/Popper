@@ -1,6 +1,4 @@
-max_vars(6).
-max_body(15).
-max_clauses(1).
+max_body(7).
 
 head_pred(goal,3).
 body_pred(true_whiteScore,2).
@@ -133,13 +131,6 @@ body_pred(P,1):-
 
 type(P,(T,)):-
 	constant(P,T).
-
-%% :-
-%% 	clause(C),
-%% 	#count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
-%% :-
-%% 	clause(C),
-%% 	#count{V : clause_var(C,V),var_type(C,V,action)} > 2.
 
 :- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
 :- clause(C), #count{V : clause_var(C,V),var_type(C,V,action)} > 2.

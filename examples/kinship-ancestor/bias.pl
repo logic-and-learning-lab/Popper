@@ -1,4 +1,4 @@
-max_clauses(4).
+max_clauses(3).
 enable_recursion.
 
 head_pred(ancestor,2).

@@ -1,6 +1,6 @@
 %% allow_singletons.
 max_vars(6).
-max_body(15).
+max_body(7).
 constant(agent_red, agent).
 constant(agent_blue, agent).
 constant(mypos_1, mypos).

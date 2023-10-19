@@ -1,6 +1,8 @@
 max_clauses(3).
 enable_recursion.
 
+max_body(7).
+
 head_pred(f,2).
 body_pred(empty,1).
 body_pred(odd,1).

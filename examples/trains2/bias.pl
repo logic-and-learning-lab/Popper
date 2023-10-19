@@ -1,5 +1,4 @@
-max_vars(6).
-max_body(9).
+max_body(7).
 
 head_pred(f,1).
 body_pred(has_car,2).
@@ -34,20 +33,3 @@ type(three_load,(load,)).
 type(circle,(load,)).
 type(triangle,(load,)).
 type(rectangle,(load,)).
-
-%% direction(f,(in,)).
-%% direction(has_car,(in,out)).
-%% direction(has_load,(in,out)).
-%% direction(short,(in,)).
-%% direction(long,(in,)).
-%% direction(two_wheels,(in,)).
-%% direction(three_wheels,(in,)).
-%% direction(roof_open,(in,)).
-%% direction(roof_closed,(in,)).
-%% direction(zero_load,(in,)).
-%% direction(one_load,(in,)).
-%% direction(two_load,(in,)).
-%% direction(three_load,(in,)).
-%% direction(circle,(in,)).
-%% direction(triangle,(in,)).
-%% direction(rectangle,(in,)).

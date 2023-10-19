@@ -1,5 +1,6 @@
 %% allow_singletons.
 max_vars(7).
+max_body(7).
 
 head_pred(next_score,3).
 body_pred(my_true_score,3).
@@ -21,7 +22,3 @@ type(different,(player,player)).
 :-
     clause(C),
     #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
-
-
-%% :- clause(C), #count{V : clause_var(C,V),var_type(C,V,player)} > 2.
-%% :- clause(C), #count{V : clause_var(C,V),var_type(C,V,action)} > 3.

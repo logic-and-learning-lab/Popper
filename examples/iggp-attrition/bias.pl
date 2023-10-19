@@ -1,5 +1,4 @@
-max_vars(8).
-max_body(30).
+max_body(7).
 
 head_pred(next_score,3).
 body_pred(does,3).

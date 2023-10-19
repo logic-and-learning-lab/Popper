@@ -1,5 +1,5 @@
-max_vars(7.
-max_body(20).
+max_body(7).
+
 constant(agent_player, agent).
 constant(score_0, score).
 constant(score_25, score).

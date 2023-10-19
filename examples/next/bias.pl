@@ -1,6 +1,6 @@
 enable_recursion.
 
-max_body(8).
+max_body(7).
 
 head_pred(next_list,2).
 body_pred(head,2).

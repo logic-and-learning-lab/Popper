@@ -1,7 +1,5 @@
-%% speed up example
 max_vars(5).
-max_body(6).
-max_clauses(2).
+max_body(7).
 enable_recursion.
 
 head_pred(f,1).

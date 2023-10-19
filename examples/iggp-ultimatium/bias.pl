@@ -1,5 +1,5 @@
 max_vars(7).
-max_body(6).
+max_body(7).
 constant(agent_white, agent).
 constant(agent_black, agent).
 constant(index_0, index).
@@ -138,7 +138,6 @@ body_pred(P,1):-
 
 type(P,(T,)):-
 	constant(P,T).
-
 
 :- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
 :- clause(C), #count{V : clause_var(C,V),var_type(C,V,action)} > 3.
