@@ -490,7 +490,7 @@ def popper(settings):
     explainer = Explainer(settings, tester)
     grounder = Grounder(settings)
 
-    # settings.solver = 'maxsat'
+    settings.solver = 'maxsat'
     settings.solver = 'clingo'
     settings.nonoise = not settings.noisy
     # TODO AC: FIX
@@ -650,10 +650,13 @@ def popper(settings):
                 saved_scores[prog] = [fp, fn, prog_size]
                 if not min_score:
                     min_score = prog_size
+                # print(mdl, settings.best_mdl)
 
                 if mdl < settings.best_mdl:
                     # if settings.delete_combine:
                         # combiner.update_deleted_progs(settings.best_mdl-min_score, mdl-min_score)
+                    # HORRIBLE
+                    combiner.best_cost = mdl
                     settings.best_prog_score = score
                     settings.solution = prog
                     settings.best_mdl = mdl
@@ -859,11 +862,13 @@ def popper(settings):
                 # if we find a new solution, update the maximum program size
                 # if only adding nogoods, eliminate larger programs
                 if new_hypothesis_found:
+                    print('new_hypothesis_found', settings.best_mdl, combiner.best_cost)
                     new_hypothesis, conf_matrix = is_new_solution_found
                     tp, fn, tn, fp, hypothesis_size = conf_matrix
                     settings.best_prog_score = conf_matrix
                     settings.solution = new_hypothesis
                     best_score = mdl_score(fn, fp, hypothesis_size)
+                    print('new_hypothesis_found', settings.best_mdl, best_score)
                     settings.print_incomplete_solution2(new_hypothesis, tp, fn, tn, fp, hypothesis_size)
 
                     if settings.noisy and best_score < settings.best_mdl:
