@@ -35,6 +35,13 @@ size(N):-
     #sum{K+1,Rule : body_size(Rule,K)} == N.
 :- not size(_).
 
+program_bounds(0..K):-
+    max_size(K).
+program_size_at_least(M):-
+    size(N),
+    program_bounds(M),
+    M <= N.
+
 size_vars(V):-
     #max{K : clause_var(_,K)} == V + 1.
 

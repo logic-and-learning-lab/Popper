@@ -493,18 +493,25 @@ class Generator:
         debug = True
         debug = False
 
-        for con_type, con_prog, con_prog_ordering in tmp_new_cons:
+        # for con_type, con_prog, con_prog_ordering in tmp_new_cons:
+        for xs in tmp_new_cons:
+            con_type = xs[0]
+            con_prog = xs[1]
+            con_prog_ordering = xs[2]
+            # con_prog, con_prog_ordering
             if debug and con_type != Constraint.UNSAT:
                 print('')
                 print('\t','--', con_type)
                 for rule in order_prog(con_prog):
                     print('\t', format_rule(order_rule(rule)))
             if con_type == Constraint.SPECIALISATION:
-                new_rule_handles2, con = self.build_specialisation_constraint2(con_prog, con_prog_ordering)
+                con_size = xs[3]
+                new_rule_handles2, con = self.build_specialisation_constraint2(con_prog, con_prog_ordering, spec_size=con_size)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
             elif con_type == Constraint.GENERALISATION:
-                new_rule_handles2, con = self.build_generalisation_constraint2(con_prog, con_prog_ordering)
+                con_size = xs[3]
+                new_rule_handles2, con = self.build_generalisation_constraint2(con_prog, con_prog_ordering, gen_size=con_size)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
             elif con_type == Constraint.UNSAT:
@@ -521,6 +528,10 @@ class Generator:
                 new_cons.update(cons)
             elif con_type == Constraint.TMP_ANDY:
                 new_cons.update(self.andy_tmp_con(con_prog))
+            elif con_type == Constraint.BANISH:
+                new_rule_handles2, con = self.build_banish_constraint(con_prog, con_prog_ordering)
+                self.all_handles.update(new_rule_handles2)
+                new_cons.add(con)
 
         self.all_ground_cons.update(self.new_ground_cons)
         ground_bodies = set()
@@ -672,6 +683,45 @@ class Generator:
 
         if spec_size:
             literals.append(Literal('program_size_at_least', (spec_size,)))
+
+        if rule_ordering:
+            literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
+        else:
+            for k1, r1 in recs:
+                r1v = rule_index[r1]
+                for k2, r2 in recs:
+                    r2v = rule_index[r2]
+                    if k1 < k2:
+                        literals.append(lt(r1v, r2v))
+        return new_handles, tuple(literals)
+
+    def build_banish_constraint(self, prog, rule_ordering=None):
+        new_handles = set()
+        prog = list(prog)
+        rule_index = {}
+        literals = []
+        recs = []
+        for rule_id, rule in enumerate(prog):
+            head, body = rule
+            rule_var = vo_clause(rule_id)
+            rule_index[rule] = rule_var
+            if self.settings.single_solve:
+                literals.extend(tuple(build_rule_literals(rule, rule_var)))
+            else:
+                is_rec = rule_is_recursive(rule)
+                if is_rec:
+                    recs.append((len(body), rule))
+                handle = make_rule_handle(rule)
+                if handle in self.seen_handles:
+                    literals.append(build_seen_rule_literal(handle, rule_var))
+                    if is_rec:
+                        literals.append(gteq(rule_var, 1))
+                else:
+                    xs = self.build_seen_rule2(rule, is_rec)
+                    new_handles.update(xs)
+                    literals.extend(tuple(build_rule_literals(rule, rule_var)))
+            literals.append(body_size_literal(rule_var, len(body)))
+        literals.append(Literal('clause', (len(prog), ), positive=False))
 
         if rule_ordering:
             literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))

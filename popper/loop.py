@@ -1,12 +1,13 @@
 import time
 import numbers
+import collections
 from itertools import permutations
 from itertools import chain, combinations
 from collections import deque
 from . explain import get_raw_prog as get_raw_prog2
-from . combine import Combiner
-from . explain import Explainer, head_connected, get_raw_prog, seen_more_general_unsat, prog_hash, has_valid_directions, order_body, connected
-from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, theory_subsumes, rule_subsumes, format_prog, format_prog2, order_rule2, Constraint, bias_order
+# from . combine import Combiner
+from . explain import Explainer, head_connected, get_raw_prog, seen_more_general_unsat, has_valid_directions, order_body, connected
+from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, theory_subsumes, rule_subsumes, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score
 from . core import Literal
 from . tester import Tester
 from . generate import Generator, Grounder, parse_model, atom_to_symbol, arg_to_symbol
@@ -14,7 +15,7 @@ from . bkcons import deduce_bk_cons, deduce_recalls
 from . variants import find_variants
 
 WITH_OPTIMISATIONS = True
-WITH_OPTIMISATIONS = False
+# WITH_OPTIMISATIONS = False
 
 pruned2 = set()
 
@@ -39,7 +40,7 @@ def explain_incomplete(settings, explainer, tester, prog, directions):
             continue
 
         if not (settings.recursion_enabled or settings.pi_enabled):
-            out_cons.append((Constraint.SPECIALISATION, subprog, None))
+            out_cons.append((Constraint.SPECIALISATION, subprog, None, None))
             continue
 
         if len(subprog) == 1:
@@ -68,7 +69,7 @@ def explain_inconsistent(settings, tester, prog):
     for rule in base:
         subprog = frozenset([rule])
         if tester.is_inconsistent(subprog):
-            out_cons.append((Constraint.GENERALISATION, subprog, None))
+            out_cons.append((Constraint.GENERALISATION, subprog, None, None))
             pruned_subprog = True
 
     if pruned_subprog:
@@ -81,7 +82,7 @@ def explain_inconsistent(settings, tester, prog):
         for r2 in rec:
             subprog = frozenset([r1,r2])
             if tester.is_inconsistent(subprog):
-                out_cons.append((Constraint.GENERALISATION, subprog, None))
+                out_cons.append((Constraint.GENERALISATION, subprog, None, None))
                 pruned_subprog = True
 
     return out_cons
@@ -235,7 +236,7 @@ def explain_none_functional(settings, tester, prog):
     for rule in base:
         subprog = frozenset([rule])
         if tester.is_non_functional(subprog):
-            new_cons.append((Constraint.GENERALISATION, subprog , None))
+            new_cons.append((Constraint.GENERALISATION, subprog , None, None))
             pruned_subprog = True
 
     if pruned_subprog:
@@ -248,7 +249,7 @@ def explain_none_functional(settings, tester, prog):
         for r2 in rec:
             subprog = frozenset([r1,r2])
             if tester.is_non_functional(subprog):
-                new_cons.append((Constraint.GENERALISATION, subprog , None))
+                new_cons.append((Constraint.GENERALISATION, subprog , None, None))
 
     return new_cons
 
@@ -419,6 +420,59 @@ def is_subsumed(pos_covered, prog_size, success_sets):
     subsumed = subsumed or any(pos_covered.issubset(xs) and prog_size >= prog_size2 for xs, prog_size2 in success_sets.items())
     return subsumed
 
+def build_constraints_previous_hypotheses(generator, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen, score, best_size):
+    cons = []
+    print(f"new best score {score}")
+    for k in [k for k in seen_hyp_spec if k > score+num_pos+best_size]:
+        to_delete = []
+        for prog, tp, fn, tn, fp, size, rule_ordering in seen_hyp_spec[k]:
+            # mdl = mdl_score(tuple((tp, fn, tn, fp, size)))
+            mdl = mdl_score(fn, fp, size)
+            if score+num_pos+best_size < fp+size+mdl:
+                spec_size = score-mdl+num_pos+best_size
+                if spec_size <= size:
+                    to_delete.append([prog, tp, fn, tn, fp, size, rule_ordering])
+                # _, con = generator.build_specialisation_constraint(prog, rule_ordering, spec_size=spec_size)
+                # cons.add(con)
+                cons.append((Constraint.SPECIALISATION, prog, rule_ordering, spec_size))
+        for to_del in to_delete:
+            seen_hyp_spec[k].remove(to_del)
+    for k in [k for k in seen_hyp_gen if k > score + num_neg + best_size]:
+        to_delete = []
+        for prog, tp, fn, tn, fp, size, rule_ordering in seen_hyp_gen[k]:
+            # mdl = mdl_score(tuple((tp, fn, tn, fp, size)))
+            mdl = mdl_score(fn, fp, size)
+            if score + num_neg + best_size < fn + size + mdl:
+                gen_size = score - mdl + num_neg + best_size
+                if gen_size <= size:
+                    to_delete.append([prog, tp, fn, tn, fp, size, rule_ordering])
+                # _, con = generator.build_generalisation_constraint(prog, rule_ordering, gen_size=gen_size)
+                # cons.add(con)
+                cons.append((Constraint.GENERALISATION, prog, rule_ordering, gen_size))
+        for to_del in to_delete:
+            seen_hyp_gen[k].remove(to_del)
+    return cons
+
+def load_solver(settings, tester):
+    if settings.solver == "clingo":
+        if settings.noisy:
+            from . combine_mdl import Combiner
+            return Combiner(settings, tester)
+            print('HELLO')
+
+        else:
+            from . combine import Combiner
+            return Combiner(settings, tester)
+    else:
+        from . combine_ms import Combiner
+        settings.maxsat_timeout = None
+        settings.lex = True
+        # settings.best_mdl = False
+        settings.lex_via_weights = False
+        settings.stats.maxsat_calls = 0
+        settings.exact_maxsat_solver="rc2"
+        return Combiner(settings, tester)
+
 def popper(settings):
     with settings.stats.duration('load data'):
         tester = Tester(settings)
@@ -426,24 +480,37 @@ def popper(settings):
     explainer = Explainer(settings, tester)
     grounder = Grounder(settings)
 
-    settings.solver = 'maxsat'
+    # settings.solver = 'maxsat'
     settings.solver = 'clingo'
-    settings.nonoise = True
-
-    if settings.solver == "clingo":
-        from . combine import Combiner
-    else:
-        from . combine_ms import Combiner
-        settings.maxsat_timeout = None
-        settings.lex = True
-        settings.best_mdl = False
-        settings.lex_via_weights = False
-        settings.stats.maxsat_calls = 0
-        settings.exact_maxsat_solver="rc2"
-
-    combiner = Combiner(settings, tester)
+    settings.nonoise = not settings.noisy
+    # TODO AC: FIX
+    settings.solution_found = False
 
     num_pos = len(settings.pos_index)
+    num_neg = len(settings.neg_index)
+
+    if settings.noisy:
+        min_score = None
+        saved_scores = dict()
+        settings.best_prog_score = 0, num_pos, num_neg, 0, 0
+        # settings.best_prog = []
+        settings.best_mdl = num_pos
+        # print(settings.best_mdl, num_pos)
+        max_size = min((1 + settings.max_body) * settings.max_rules, num_pos)
+        # AC: WHAT ARE THESE?
+        seen_hyp_spec = collections.defaultdict(list)
+        seen_hyp_gen = collections.defaultdict(list)
+    else:
+        max_size = (1 + settings.max_body) * settings.max_rules
+
+    combiner = load_solver(settings, tester)
+
+    # print(settings.best_mdl)
+    # assert(False)
+
+
+
+
 
     # deduce bk cons
     bkcons = []
@@ -465,6 +532,7 @@ def popper(settings):
 
     # track the success sets of tested hypotheses
     success_sets = {}
+    success_sets_noise = {}
     rec_success_sets = {}
 
     # maintain a set of programs that we have not yet pruned
@@ -500,6 +568,10 @@ def popper(settings):
             add_gen = False
             add_redund1 = False
             add_redund2 = False
+            # check whether subsumed by a seen program
+            subsumed = False
+            spec_size = None
+            gen_size = None
 
             new_cons = []
 
@@ -535,87 +607,48 @@ def popper(settings):
 
             # test a program
             with settings.stats.duration('test'):
-                pos_covered, inconsistent = tester.test_prog(prog)
+                if settings.noisy:
+                    # TODO: DO WE ALWAYS NEED TO TEST AGAINST ALL EXAMPLES
+                    pos_covered, neg_covered = tester.test_prog_all(prog)
+                    inconsistent = len(neg_covered) > 0
+                else:
+                    pos_covered, inconsistent = tester.test_prog(prog)
 
             num_pos_covered = len(pos_covered)
 
-            if num_pos_covered == 0:
-                add_spec = True
 
-            if not has_invention:
-                explainer.add_seen(prog)
-                if num_pos_covered == 0:
-                    # if the programs does not cover any positive examples, check whether it is has an unsat core
-                    with settings.stats.duration('find mucs'):
-                        cons_ = explain_incomplete(settings, explainer, tester, prog, directions)
-                        new_cons.extend(cons_)
-                        pruned_sub_incomplete = len(cons_) > 0
+            # if non-separable program covers all examples, stop
+            if not inconsistent and num_pos_covered == num_pos and not settings.order_space:
+                # settings.best_prog = prog
+                settings.solution = prog
+                settings.best_prog_score = num_pos, 0, num_neg, 0, prog_size
+                settings.best_mdl = prog_size
+                return
 
-            # check whether subsumed by a seen program
-            subsumed = False
-            if not is_recursive and num_pos_covered > 0:
+            if settings.noisy:
+                tp = len(pos_covered)
+                fp = len(neg_covered)
+                fn = num_pos-tp
+                tn = num_neg-fp
+                score = tp, fn, tn, fp, prog_size
+                mdl = mdl_score(fn, fp, prog_size)
+                if settings.debug:
+                    settings.logger.debug(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} mdl:{mdl}')
 
-                # if we do not search by increasing size, we need to use a strict form of subsumption
-                if settings.order_space:
-                    subsumed = is_subsumed(pos_covered, prog_size, success_sets)
-                else:
-                    subsumed = pos_covered in success_sets
-                    subsumed = subsumed or any(pos_covered.issubset(xs) for xs in success_sets)
+                saved_scores[prog] = [fp, fn, prog_size]
+                if not min_score:
+                    min_score = prog_size
 
-                if subsumed:
-                    add_spec = True
-
-                if not has_invention and WITH_OPTIMISATIONS:
-                    # we check whether a program does not cover enough examples to be useful
-                    # if the program only not cover enough examples, we prune it specialisations
-                    covers_too_few = combiner.solution_found and not settings.order_space and num_pos_covered == 1
-                    if covers_too_few:
-                        add_spec = True
-
-                    if subsumed or covers_too_few:
-                        # If a program is subsumed or doesn't cover enough examples, we search for the most general subprogram that also is also subsumed or doesn't cover enough examples
-                        # only applies to non-recursive and non-PI programs
-                        xs = subsumed_or_covers_too_few(prog, tester, success_sets, settings, check_coverage=covers_too_few, check_subsumed=subsumed, seen=set())
-                        pruned_more_general = len(xs) > 0
-                        if settings.showcons and not pruned_more_general:
-                            if subsumed:
-                                print('\t', format_prog2(prog), '\t', 'subsumed')
-                            else:
-                                print('\t', format_prog2(prog), '\t', 'covers_too_few')
-                        for x in xs:
-                            if settings.showcons:
-                                if subsumed:
-                                    print('\t', format_prog2(x), '\t', 'subsumed (generalisation)')
-                                else:
-                                    print('\t', format_prog2(x), '\t', 'covers_too_few (generalisation)', len(pos_covered))
-                            new_cons.append((Constraint.SPECIALISATION, x, None))
-
-            if inconsistent:
-                # if inconsistent, prune generalisations
-                add_gen = True
-                if is_recursive:
-                    combiner.add_inconsistent(prog)
-                    with settings.stats.duration('find sub inconsistent'):
-                        cons_ = explain_inconsistent(settings, tester, prog)
-                        new_cons.extend(cons_)
-            else:
-                # if consistent, prune specialisations
-                add_spec = True
-
-            # if consistent and partially complete, test whether functional
-            if not inconsistent and settings.functional_test and num_pos_covered > 0 and not pruned_more_general:
-                if tester.is_non_functional(prog):
-                    # if not functional, rule out generalisations and set as inconsistent
-                    add_gen = True
-                    # V.IMPORTANT: do not prune specialisations!
-                    add_spec = False
-                    inconsistent = True
-
-                    # check whether any subprograms are non-functional
-                    with settings.stats.duration('explain_none_functional'):
-                        cons_ = explain_none_functional(settings, tester, prog)
-                        if cons_:
-                            new_cons.extend(cons_)
+                if mdl < settings.best_mdl:
+                    # if settings.delete_combine:
+                        # combiner.update_deleted_progs(settings.best_mdl-min_score, mdl-min_score)
+                    settings.best_prog_score = score
+                    settings.solution = prog
+                    settings.best_mdl = mdl
+                    settings.max_literals = mdl-1
+                    print('ASDA')
+                    settings.print_incomplete_solution2(prog, tp, fn, tn, fp, prog_size)
+                    new_cons.extend(build_constraints_previous_hypotheses(generator, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen, mdl, prog_size))
 
             # if it does not cover any example, prune specialisations
             if num_pos_covered == 0:
@@ -626,12 +659,141 @@ def popper(settings):
                     if len(prog) == 1 and not settings.pi_enabled:
                         add_redund1 = True
 
+            # if consistent, prune specialisations
+            if not inconsistent:
+                add_spec = True
+
+            #  if covers all positive examples prune generalisations
+            if num_pos_covered == num_pos:
+                add_gen = True
+
+            if not has_invention:
+                explainer.add_seen(prog)
+                if num_pos_covered == 0:
+                    # if the programs does not cover any positive examples, check whether it is has an unsat core
+                    with settings.stats.duration('find mucs'):
+                        cons_ = explain_incomplete(settings, explainer, tester, prog, directions)
+                        new_cons.extend(cons_)
+                        pruned_sub_incomplete = len(cons_) > 0
+
+            if not settings.noisy:
+                if not is_recursive and num_pos_covered > 0:
+                    # if we do not search by increasing size, we need to use a strict form of subsumption
+                    if settings.order_space:
+                        subsumed = is_subsumed(pos_covered, prog_size, success_sets)
+                    else:
+                        subsumed = pos_covered in success_sets
+                        subsumed = subsumed or any(pos_covered.issubset(xs) for xs in success_sets)
+
+                    if subsumed:
+                        add_spec = True
+
+                    if not has_invention and WITH_OPTIMISATIONS:
+                        # we check whether a program does not cover enough examples to be useful
+                        # if the program only not cover enough examples, we prune it specialisations
+                        covers_too_few = settings.solution_found and not settings.order_space and num_pos_covered == 1
+                        if covers_too_few:
+                            add_spec = True
+
+                        if subsumed or covers_too_few:
+                            # If a program is subsumed or doesn't cover enough examples, we search for the most general subprogram that also is also subsumed or doesn't cover enough examples
+                            # only applies to non-recursive and non-PI programs
+                            xs = subsumed_or_covers_too_few(prog, tester, success_sets, settings, check_coverage=covers_too_few, check_subsumed=subsumed, seen=set())
+                            pruned_more_general = len(xs) > 0
+                            if settings.showcons and not pruned_more_general:
+                                if subsumed:
+                                    print('\t', format_prog2(prog), '\t', 'subsumed')
+                                else:
+                                    print('\t', format_prog2(prog), '\t', 'covers_too_few')
+                            for x in xs:
+                                if settings.showcons:
+                                    if subsumed:
+                                        print('\t', format_prog2(x), '\t', 'subsumed (generalisation)')
+                                    else:
+                                        print('\t', format_prog2(x), '\t', 'covers_too_few (generalisation)', len(pos_covered))
+                                new_cons.append((Constraint.SPECIALISATION, x, None, None))
+
+                if inconsistent:
+                    # if inconsistent, prune generalisations
+                    add_gen = True
+                    if is_recursive:
+                        combiner.add_inconsistent(prog)
+                        with settings.stats.duration('find sub inconsistent'):
+                            cons_ = explain_inconsistent(settings, tester, prog)
+                            new_cons.extend(cons_)
+                else:
+                    # if consistent, prune specialisations
+                    add_spec = True
+
+                # if consistent and partially complete, test whether functional
+                if not inconsistent and settings.functional_test and num_pos_covered > 0 and not pruned_more_general:
+                    if tester.is_non_functional(prog):
+                        # if not functional, rule out generalisations and set as inconsistent
+                        add_gen = True
+                        # V.IMPORTANT: do not prune specialisations!
+                        add_spec = False
+                        inconsistent = True
+
+                        # check whether any subprograms are non-functional
+                        with settings.stats.duration('explain_none_functional'):
+                            cons_ = explain_none_functional(settings, tester, prog)
+                            if cons_:
+                                new_cons.extend(cons_)
+
+                seen_better_rec = False
+                if is_recursive and not inconsistent and not subsumed and not add_gen and num_pos_covered > 0:
+                    if settings.order_space:
+                        # this check does not assume that we search by increasing program size
+                        subsumed = is_subsumed(pos_covered, prog_size, rec_success_sets)
+                    else:
+                        # this check assumes that we search by increasing program size
+                        seen_better_rec = pos_covered in rec_success_sets or any(pos_covered.issubset(xs) for xs in rec_success_sets)
+
+            if settings.noisy:
+                # if a program of size k covers less than k positive examples, we can prune its specialisations
+                # otherwise no useful mdl induction has taken place
+                if tp < prog_size:
+                    add_spec = True
+
+                # we can prune specialisations with size greater than prog_size+fp or tp
+                # only prune if the specialisation bounds are smaller than existing bounds
+                spec_size_ = min([tp, fp + prog_size])
+                if spec_size_ <= prog_size:
+                    add_spec = True
+                elif len(prog) == 1 and spec_size_ < settings.max_body + 1 and spec_size_ < settings.max_literals:
+                    spec_size = spec_size_
+                elif len(prog) > 1 and spec_size_ < settings.max_literals:
+                    spec_size = spec_size_
+
+                # only prune if the generalisation bounds are smaller than existing bounds
+                gen_size_ = min([fn + prog_size, num_pos-fp, settings.best_mdl - mdl + num_pos + prog_size])
+                if gen_size_ <= prog_size:
+                    add_gen = True
+                if gen_size_ < settings.max_literals:
+                    gen_size = gen_size_
+
+                if not add_spec:
+                    with settings.stats.duration('spec_subset'):
+                        # print(type(prog))
+                        for i in range(len(prog)):
+                            (head, body) = list(prog)[i]
+                            for subbody in chain.from_iterable(combinations(body, k) for k in range(1, len(body))):
+                                subprog = list(prog)[:i] + [(head, subbody)] + list(prog)[i + 1:]
+                                subprog = frozenset(subprog)
+                                if subprog in saved_scores:
+                                    [old_fp, old_fn, old_size] = saved_scores[subprog]
+                                    if rule_vars((head, subbody)) == rule_vars(list(prog)[i]) and old_fp + old_fn + old_size <= fn + fp + size:
+                                        settings.stats.pruned_count += 1
+                                        add_spec = True
+                                        break
+                                        break
+
             # remove generalisations of programs with redundant literals
             if is_recursive:
                 for rule in prog:
                     if tester.has_redundant_literal([rule]):
                         add_gen = True
-                        new_cons.append((Constraint.GENERALISATION,[rule], None))
+                        new_cons.append((Constraint.GENERALISATION, [rule], None, None))
                         if settings.showcons:
                             print('\t', format_rule(rule), '\t', 'has_redundant_literal')
 
@@ -647,81 +809,108 @@ def popper(settings):
                     if settings.showcons:
                         print('\t','r1',format_rule(order_rule(r1)))
                         print('\t','r2',format_rule(order_rule(r2)))
-                    new_cons.append((Constraint.GENERALISATION, [r1,r2], None))
+                    new_cons.append((Constraint.GENERALISATION, [r1,r2], None, None))
 
             if not add_spec and not pruned_more_general and not pruned_sub_incomplete:
                 could_prune_later[prog] = pos_covered
 
-            seen_better_rec = False
-            if is_recursive and not inconsistent and not subsumed and not add_gen and num_pos_covered > 0:
-                if settings.order_space:
-                    # this check does not assume that we search by increasing program size
-                    subsumed = is_subsumed(pos_covered, prog_size, rec_success_sets)
-                else:
-                    # this check assumes that we search by increasing program size
-                    seen_better_rec = pos_covered in rec_success_sets or any(pos_covered.issubset(xs) for xs in rec_success_sets)
 
-            # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
-            if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general:
+            call_combine = False
+            if settings.noisy:
+                call_combine = not is_recursive and not has_invention and tp >= prog_size+fp and num_pos_covered >= prog_size and fp+prog_size < settings.best_mdl
+                # print(tp >= prog_size+fp)
+                # print(num_pos_covered >= prog_size)
+                # print(fp+prog_size < settings.best_mdl)
+            else:
+                # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
+                call_combine = not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general
 
+            if call_combine:
                 # update success sets
-                success_sets[pos_covered] = prog_size
-                if is_recursive:
-                    rec_success_sets[pos_covered] = prog_size
+                if settings.noisy:
+                    success_sets_noise[tuple([pos_covered, neg_covered])] = prog
+                else:
+                    success_sets[pos_covered] = prog_size
+                    if is_recursive:
+                        rec_success_sets[pos_covered] = prog_size
 
                 # COMBINE
                 with settings.stats.duration('combine'):
+                    print('calling combine')
+                    t1 = time.time()
                     is_new_solution_found = combiner.update_best_prog([(prog, pos_covered, [])])
+                    print('combine time', time.time()-t1)
 
                 new_hypothesis_found = is_new_solution_found != None
 
                 # if we find a new solution, update the maximum program size
                 # if only adding nogoods, eliminate larger programs
                 if new_hypothesis_found:
-                    # print('here')
                     new_hypothesis, conf_matrix = is_new_solution_found
                     tp, fn, tn, fp, hypothesis_size = conf_matrix
-                    settings.best_prog_score = (tp, fn, tn, fp, hypothesis_size)
-                    settings.print_incomplete_solution(new_hypothesis, tp, fn, hypothesis_size)
+                    settings.best_prog_score = conf_matrix
                     settings.solution = new_hypothesis
+                    best_score = mdl_score(fn, fp, hypothesis_size)
 
+                    if settings.noisy:
+                        print('MASDA', best_score, hypothesis_size)
+                        # settings.print_incomplete_solution2(new_hypothesis, tp, fn, tn, fp, hypothesis_size)
+                        settings.print_incomplete_solution2(new_hypothesis, tp, fn, tn, fp, hypothesis_size)
+                    else:
+                        settings.print_incomplete_solution(new_hypothesis, tp, fn, hypothesis_size)
 
-                if new_hypothesis_found and fn == 0:
+                    if settings.noisy and best_score < settings.best_mdl:
+                        settings.max_literals = settings.best_mdl - 1
+                        new_cons.extend(build_constraints_previous_hypotheses(generator, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen, settings.best_mdl, prog_size))
+                        if settings.single_solve:
+                            # AC: sometimes adding these size constraints can take longer
+                            for i in range(best_score, max_size+1):
+                                size_con = [(atom_to_symbol("size", (i,)), True)]
+                                model.context.add_nogood(size_con)
 
-                    # if non-separable program covers all examples, stop
-                    if not inconsistent and num_pos_covered == num_pos and not settings.order_space:
-                        return
+                    if not settings.noisy and fp == 0 and fn == 0:
+                        settings.solution_found = True
+                        settings.max_literals = hypothesis_size-1
+                        if size >= settings.max_literals and not settings.order_space:
+                            return
 
-                    settings.max_literals = hypothesis_size-1
-                    if size >= settings.max_literals and not settings.order_space:
-                        return
-
-                    if settings.single_solve:
                         # AC: sometimes adding these size constraints can take longer
                         for i in range(hypothesis_size, max_size+1):
                             size_con = [(atom_to_symbol("size", (i,)), True)]
                             model.context.add_nogood(size_con)
 
-                if not has_invention and not is_recursive and WITH_OPTIMISATIONS:
+                if not settings.noisy and not has_invention and not is_recursive and WITH_OPTIMISATIONS:
                     with settings.stats.duration('prune subsumed backtrack'):
-                        xs = prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester, prog_size, check_coverage=combiner.solution_found)
+                        xs = prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester, prog_size, check_coverage=settings.solution_found)
                         for x in xs:
-                            new_cons.append((Constraint.SPECIALISATION, x, None))
+                            new_cons.append((Constraint.SPECIALISATION, x, None, None))
 
             # BUILD CONSTRAINTS
             if add_spec and not pruned_sub_incomplete and not pruned_more_general and not add_redund2:
-                new_cons.append((Constraint.SPECIALISATION, prog, rule_ordering))
+                new_cons.append((Constraint.SPECIALISATION, prog, rule_ordering, None))
+
+            if settings.noisy and not add_spec and spec_size and not pruned_sub_incomplete:
+                if spec_size <= settings.max_literals and ((is_recursive or has_invention or spec_size <= settings.max_body)):
+                    new_cons.append((Constraint.SPECIALISATION, prog, rule_ordering, spec_size))
+                    seen_hyp_spec[fp+prog_size+mdl].append([prog, tp, fn, tn, fp, prog_size, rule_ordering])
 
             if add_gen and not pruned_sub_inconsistent:
                 if settings.recursion_enabled or settings.pi_enabled:
                     if not pruned_sub_incomplete:
-                        new_cons.append((Constraint.GENERALISATION, prog, rule_ordering))
+                        new_cons.append((Constraint.GENERALISATION, prog, rule_ordering, None))
+            if settings.noisy and not add_gen and gen_size and not pruned_sub_inconsistent:
+                if gen_size <= settings.max_literals and (settings.recursion_enabled or settings.pi_enabled) and not pruned_sub_incomplete:
+                    new_cons.append((Constraint.GENERALISATION, prog, rule_ordering, gen_size))
+                    seen_hyp_gen[fn+prog_size+mdl].append([prog, tp, fn, tn, fp, prog_size, rule_ordering])
 
             if add_redund1 and not pruned_sub_incomplete:
                 new_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, prog, rule_ordering))
 
             if add_redund2 and not pruned_sub_incomplete:
                 new_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, prog, rule_ordering))
+
+            if settings.noisy and not add_spec and not add_gen:
+                new_cons.append((Constraint.BANISH, prog, rule_ordering))
 
             # CONSTRAIN
             with settings.stats.duration('constrain'):

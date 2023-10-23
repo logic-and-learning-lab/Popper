@@ -31,6 +31,7 @@ class Constraint(Enum):
     REDUNDANCY_CONSTRAINT1 = 4
     REDUNDANCY_CONSTRAINT2 = 5
     TMP_ANDY = 6
+    BANISH = 7
 
 
 def parse_args():
@@ -214,8 +215,12 @@ def order_rule2(rule, settings=None):
     head, body = rule
     return (head, sorted(body, key=lambda x: (len(x.arguments), x.predicate, x.arguments)))
 
-def mdl_score(score):
-    _, fn, _, fp, size = score
+# def mdl_score(score):
+#     _, fn, _, fp, size = score
+#     return fn + fp + size
+
+def mdl_score(fn, fp, size):
+    # _, fn, _, fp, size = score
     return fn + fp + size
 
 def order_rule(rule, settings=None):
@@ -446,13 +451,13 @@ class Settings:
 
         self.single_solve = not (self.recursion_enabled or self.pi_enabled)
 
-    def print_incomplete_solution(self, prog, tp, fn, size):
-        self.logger.info('*'*20)
-        self.logger.info('New best hypothesis:')
-        self.logger.info(f'tp:{tp} fn:{fn} size:{size}')
-        for rule in order_prog(prog):
-            self.logger.info(format_rule(order_rule(rule)))
-        self.logger.info('*'*20)
+    # def print_incomplete_solution(self, prog, tp, fn, size):
+    #     self.logger.info('*'*20)
+    #     self.logger.info('New best hypothesis:')
+    #     self.logger.info(f'tp:{tp} fn:{fn} size:{size}')
+    #     for rule in order_prog(prog):
+    #         self.logger.info(format_rule(order_rule(rule)))
+    #     self.logger.info('*'*20)
 
     def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
         self.logger.info('*'*20)
