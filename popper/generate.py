@@ -552,7 +552,7 @@ class Generator:
 
         self.new_ground_cons = set()
 
-    def build_generalisation_constraint2(self, prog, rule_ordering=None):
+    def build_generalisation_constraint2(self, prog, rule_ordering=None, gen_size=False):
         new_handles = set()
         prog = list(prog)
         rule_index = {}
@@ -581,6 +581,10 @@ class Generator:
                     new_handles.update(xs)
                     literals.extend(tuple(build_rule_literals(rule, rule_var)))
             literals.append(body_size_literal(rule_var, len(body)))
+
+        if gen_size:
+            literals.append(Literal('program_size_at_least', (gen_size,)))
+
         if rule_ordering:
             literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
         else:
@@ -591,39 +595,6 @@ class Generator:
                     if k1 < k2:
                         literals.append(lt(r1v, r2v))
         return new_handles, tuple(literals)
-
-
-    # def build_generalisation_constraint3(self, prog, rule_ordering=None):
-    #     head, body = list(prog)[0]
-
-    #     head_vars = set(head.arguments)
-    #     body_vars = set(x for atom in body for x in atom.arguments if x not in head_vars)
-
-    #     bo
-
-    #     possible_values = list(range(len(head_vars), self.settings.max_vars))
-    #     perms = list(permutations(possible_values, len(body_vars)))
-    #     indexes = {x:i for i, x in enumerate(list(body_vars))}
-
-    #     ground_head_args = tuple(range(len(head_vars)))
-
-    #     out = []
-    #     for xs in perms:
-    #         con = []
-    #         con.append((True, 'head_literal', (0, head.predicate, len(head.arguments), ground_head_args)))
-    #         for atom in body:
-    #             new_args = []
-    #             for x in atom.arguments:
-    #                 if x in head_vars:
-    #                     v = ord(x)- ord('A')
-    #                     new_args.append(v)
-    #                 else:
-    #                     new_args.append(xs[indexes[x]])
-    #             new_args = tuple(new_args)
-    #             con.append((True, 'body_literal', (0, atom.predicate, len(atom.arguments), new_args)))
-    #         con.append((True, 'body_size', (0, body_size)))
-    #         out.append(frozenset(con))
-    #     return out
 
 
     def build_seen_rule2(self, rule, is_rec):
@@ -665,37 +636,10 @@ class Generator:
                 out.append(new_rule)
         return frozenset(out)
 
-    def build_specialisation_constraint3(self, prog, rule_ordering=None):
-        head, body = list(prog)[0]
 
-        head_vars = set(head.arguments)
-        body_vars = set(x for atom in body for x in atom.arguments if x not in head_vars)
-
-        possible_values = list(range(len(head_vars), self.settings.max_vars))
-        perms = list(permutations(possible_values, len(body_vars)))
-        indexes = {x:i for i, x in enumerate(list(body_vars))}
-
-        ground_head_args = tuple(range(len(head_vars)))
-
-        out = []
-        for xs in perms:
-            con = []
-            con.append((True, 'head_literal', (0, head.predicate, len(head.arguments), ground_head_args)))
-            for atom in body:
-                new_args = []
-                for x in atom.arguments:
-                    if x in head_vars:
-                        v = ord(x)- ord('A')
-                        new_args.append(v)
-                    else:
-                        new_args.append(xs[indexes[x]])
-                new_args = tuple(new_args)
-                con.append((True, 'body_literal', (0, atom.predicate, len(atom.arguments), new_args)))
-            out.append(frozenset(con))
-        return out
 
     # @profile
-    def build_specialisation_constraint2(self, prog, rule_ordering=None):
+    def build_specialisation_constraint2(self, prog, rule_ordering=None, spec_size=False):
         new_handles = set()
         prog = list(prog)
         rule_index = {}
@@ -725,6 +669,10 @@ class Generator:
                     literals.extend(tuple(build_rule_literals(rule, rule_var)))
             literals.append(lt(rule_var, len(prog)))
         literals.append(Literal('clause', (len(prog), ), positive = False))
+
+        if spec_size:
+            literals.append(Literal('program_size_at_least', (spec_size,)))
+
         if rule_ordering:
             literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
         else:

@@ -14,7 +14,7 @@ from . bkcons import deduce_bk_cons, deduce_recalls
 from . variants import find_variants
 
 WITH_OPTIMISATIONS = True
-# WITH_OPTIMISATIONS = False
+WITH_OPTIMISATIONS = False
 
 pruned2 = set()
 
@@ -425,12 +425,32 @@ def popper(settings):
 
     explainer = Explainer(settings, tester)
     grounder = Grounder(settings)
+
+    settings.solver = 'maxsat'
+    settings.solver = 'clingo'
+    settings.nonoise = True
+
+    if settings.solver == "clingo":
+        from . combine import Combiner
+    else:
+        from . combine_ms import Combiner
+        settings.maxsat_timeout = None
+        settings.lex = True
+        settings.best_mdl = False
+        settings.lex_via_weights = False
+        settings.stats.maxsat_calls = 0
+        settings.exact_maxsat_solver="rc2"
+
     combiner = Combiner(settings, tester)
 
     num_pos = len(settings.pos_index)
 
     # deduce bk cons
     bkcons = []
+    if settings.bkcons:
+        settings.datalog = True
+    if settings.datalog:
+        settings.bkcons = True
     if settings.bkcons or settings.datalog:
         with settings.stats.duration('recalls'):
             bkcons.extend(deduce_recalls(settings))
@@ -608,13 +628,12 @@ def popper(settings):
 
             # remove generalisations of programs with redundant literals
             if is_recursive:
-                with settings.stats.duration('has_redundant_literal'):
-                    for rule in prog:
-                        if tester.has_redundant_literal([rule]):
-                            add_gen = True
-                            new_cons.append((Constraint.GENERALISATION,[rule], None))
-                            if settings.showcons:
-                                print('\t', format_rule(rule), '\t', 'has_redundant_literal')
+                for rule in prog:
+                    if tester.has_redundant_literal([rule]):
+                        add_gen = True
+                        new_cons.append((Constraint.GENERALISATION,[rule], None))
+                        if settings.showcons:
+                            print('\t', format_rule(rule), '\t', 'has_redundant_literal')
 
             # remove a subset of theta-subsumed rules when learning recursive programs with more than two rules
             if settings.max_rules > 2 and is_recursive:
@@ -652,23 +671,34 @@ def popper(settings):
 
                 # COMBINE
                 with settings.stats.duration('combine'):
-                    new_solution_found = combiner.update_best_prog(prog, pos_covered)
+                    is_new_solution_found = combiner.update_best_prog([(prog, pos_covered, [])])
+
+                new_hypothesis_found = is_new_solution_found != None
 
                 # if we find a new solution, update the maximum program size
                 # if only adding nogoods, eliminate larger programs
-                if new_solution_found:
+                if new_hypothesis_found:
+                    # print('here')
+                    new_hypothesis, conf_matrix = is_new_solution_found
+                    tp, fn, tn, fp, hypothesis_size = conf_matrix
+                    settings.best_prog_score = (tp, fn, tn, fp, hypothesis_size)
+                    settings.print_incomplete_solution(new_hypothesis, tp, fn, hypothesis_size)
+                    settings.solution = new_hypothesis
+
+
+                if new_hypothesis_found and fn == 0:
 
                     # if non-separable program covers all examples, stop
                     if not inconsistent and num_pos_covered == num_pos and not settings.order_space:
                         return
 
-                    settings.max_literals = combiner.max_size-1
+                    settings.max_literals = hypothesis_size-1
                     if size >= settings.max_literals and not settings.order_space:
                         return
 
                     if settings.single_solve:
                         # AC: sometimes adding these size constraints can take longer
-                        for i in range(combiner.max_size, max_size+1):
+                        for i in range(hypothesis_size, max_size+1):
                             size_con = [(atom_to_symbol("size", (i,)), True)]
                             model.context.add_nogood(size_con)
 

@@ -53,6 +53,7 @@ def parse_args():
     parser.add_argument('--showcons', default=False, action='store_true', help='Show constraints deduced during the search')
     parser.add_argument('--no-bias', default=False, action='store_true', help='EXPERIMENTAL FEATURE: do not use language bias')
     parser.add_argument('--order-space', default=False, action='store_true', help='EXPERIMENTAL FEATURE: search space ordered by size')
+    parser.add_argument('--noisy', default=False, action='store_true', help='tell Popper that there is noise')
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
@@ -213,6 +214,10 @@ def order_rule2(rule, settings=None):
     head, body = rule
     return (head, sorted(body, key=lambda x: (len(x.arguments), x.predicate, x.arguments)))
 
+def mdl_score(score):
+    _, fn, _, fp, size = score
+    return fn + fp + size
+
 def order_rule(rule, settings=None):
 
     if settings and settings.bkcons:
@@ -314,7 +319,7 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False, showcons=False, no_bias=False, order_space=False):
+    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False, showcons=False, no_bias=False, order_space=False, noisy=False):
 
         if cmd_line:
             args = parse_args()
@@ -335,6 +340,7 @@ class Settings:
             showcons = args.showcons
             no_bias = args.no_bias
             order_space = args.order_space
+            noisy=args.noisy
         else:
             if kbpath:
                 self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
@@ -373,6 +379,7 @@ class Settings:
         self.max_rules = max_rules
         self.no_bias = no_bias
         self.order_space = order_space
+        self.noisy = noisy
 
         self.recall = {}
         self.solution = None
@@ -446,6 +453,15 @@ class Settings:
         for rule in order_prog(prog):
             self.logger.info(format_rule(order_rule(rule)))
         self.logger.info('*'*20)
+
+    def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
+        self.logger.info('*'*20)
+        self.logger.info('New best hypothesis:')
+        self.logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} score:{size+fn+fp}')
+        for rule in order_prog(prog):
+            self.logger.info(format_rule(order_rule(rule)))
+        self.logger.info('*'*20)
+
 
 
 # TODO: THIS CHECK IS NOT COMPLETE
