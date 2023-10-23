@@ -422,7 +422,7 @@ def is_subsumed(pos_covered, prog_size, success_sets):
 
 def build_constraints_previous_hypotheses(generator, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen, score, best_size):
     cons = []
-    print(f"new best score {score}")
+    # print(f"new best score {score}")
     for k in [k for k in seen_hyp_spec if k > score+num_pos+best_size]:
         to_delete = []
         for prog, tp, fn, tn, fp, size, rule_ordering in seen_hyp_spec[k]:
@@ -466,12 +466,22 @@ def load_solver(settings, tester):
     else:
         from . combine_ms import Combiner
         settings.maxsat_timeout = None
-        settings.lex = True
-        # settings.best_mdl = False
-        settings.lex_via_weights = False
         settings.stats.maxsat_calls = 0
         settings.exact_maxsat_solver="rc2"
+        if settings.noisy:
+            settings.lex = False
+        else:
+            settings.lex = True
+            settings.best_mdl = False
+            settings.lex_via_weights = False
         return Combiner(settings, tester)
+
+        # settings.lex = True
+
+
+
+
+
 
 def popper(settings):
     with settings.stats.duration('load data'):
@@ -538,6 +548,8 @@ def popper(settings):
     # maintain a set of programs that we have not yet pruned
     could_prune_later = {}
 
+    to_combine = []
+
     max_size = (1 + settings.max_body) * settings.max_rules
     last_size = None
 
@@ -568,10 +580,10 @@ def popper(settings):
             add_gen = False
             add_redund1 = False
             add_redund2 = False
-            # check whether subsumed by a seen program
             subsumed = False
             spec_size = None
             gen_size = None
+            size_change = False
 
             new_cons = []
 
@@ -593,14 +605,14 @@ def popper(settings):
                 settings.logger.debug(f'Program {settings.stats.total_programs}:')
                 settings.logger.debug(format_prog(prog))
 
-            # messy way to track program size
-            if settings.single_solve:
-                if last_size == None or prog_size != last_size:
-                    last_size = prog_size
-                    if not settings.order_space:
-                        settings.logger.info(f'Searching programs of size: {prog_size}')
-                if last_size > settings.max_literals and not settings.order_space:
-                    return
+
+            if last_size == None or prog_size != last_size:
+                size_change = True
+                last_size = prog_size
+                settings.logger.info(f'Searching programs of size: {prog_size}')
+
+            if settings.single_solve and last_size > settings.max_literals:
+                break
 
             is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
             has_invention = settings.pi_enabled and prog_has_invention(prog)
@@ -616,7 +628,6 @@ def popper(settings):
 
             num_pos_covered = len(pos_covered)
 
-
             # if non-separable program covers all examples, stop
             if not inconsistent and num_pos_covered == num_pos and not settings.order_space:
                 # settings.best_prog = prog
@@ -624,6 +635,7 @@ def popper(settings):
                 settings.best_prog_score = num_pos, 0, num_neg, 0, prog_size
                 settings.best_mdl = prog_size
                 return
+
 
             if settings.noisy:
                 tp = len(pos_covered)
@@ -646,7 +658,6 @@ def popper(settings):
                     settings.solution = prog
                     settings.best_mdl = mdl
                     settings.max_literals = mdl-1
-                    print('ASDA')
                     settings.print_incomplete_solution2(prog, tp, fn, tn, fp, prog_size)
                     new_cons.extend(build_constraints_previous_hypotheses(generator, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen, mdl, prog_size))
 
@@ -724,6 +735,7 @@ def popper(settings):
                 else:
                     # if consistent, prune specialisations
                     add_spec = True
+                    neg_covered = frozenset()
 
                 # if consistent and partially complete, test whether functional
                 if not inconsistent and settings.functional_test and num_pos_covered > 0 and not pruned_more_general:
@@ -786,7 +798,6 @@ def popper(settings):
                                         settings.stats.pruned_count += 1
                                         add_spec = True
                                         break
-                                        break
 
             # remove generalisations of programs with redundant literals
             if is_recursive:
@@ -817,29 +828,31 @@ def popper(settings):
 
             call_combine = False
             if settings.noisy:
-                call_combine = not is_recursive and not has_invention and tp >= prog_size+fp and num_pos_covered >= prog_size and fp+prog_size < settings.best_mdl
-                # print(tp >= prog_size+fp)
-                # print(num_pos_covered >= prog_size)
-                # print(fp+prog_size < settings.best_mdl)
+                if not is_recursive and not has_invention and tp >= prog_size+fp and num_pos_covered >= prog_size and fp+prog_size < settings.best_mdl:
+                    success_sets_noise[tuple([pos_covered, neg_covered])] = prog
+                    call_combine = True
             else:
                 # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
-                call_combine = not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general
-
-            if call_combine:
-                # update success sets
-                if settings.noisy:
-                    success_sets_noise[tuple([pos_covered, neg_covered])] = prog
-                else:
+                if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general:
+                    call_combine = True
                     success_sets[pos_covered] = prog_size
                     if is_recursive:
                         rec_success_sets[pos_covered] = prog_size
 
+            if call_combine:
+                to_combine.append((prog, pos_covered, neg_covered))
+
+            if to_combine and (len(to_combine) >= settings.batch_size or size_change):
+
                 # COMBINE
                 with settings.stats.duration('combine'):
-                    print('calling combine')
+                    # is_new_solution_found = combiner.update_best_prog([(prog, pos_covered, [])])
+                    print('calling combine', len(to_combine))
                     t1 = time.time()
-                    is_new_solution_found = combiner.update_best_prog([(prog, pos_covered, [])])
-                    print('combine time', time.time()-t1)
+                    is_new_solution_found = combiner.update_best_prog(to_combine)
+                    print(f'combine time: {time.time()-t1}')
+
+                to_combine=[]
 
                 new_hypothesis_found = is_new_solution_found != None
 
@@ -851,13 +864,7 @@ def popper(settings):
                     settings.best_prog_score = conf_matrix
                     settings.solution = new_hypothesis
                     best_score = mdl_score(fn, fp, hypothesis_size)
-
-                    if settings.noisy:
-                        print('MASDA', best_score, hypothesis_size)
-                        # settings.print_incomplete_solution2(new_hypothesis, tp, fn, tn, fp, hypothesis_size)
-                        settings.print_incomplete_solution2(new_hypothesis, tp, fn, tn, fp, hypothesis_size)
-                    else:
-                        settings.print_incomplete_solution(new_hypothesis, tp, fn, hypothesis_size)
+                    settings.print_incomplete_solution2(new_hypothesis, tp, fn, tn, fp, hypothesis_size)
 
                     if settings.noisy and best_score < settings.best_mdl:
                         settings.max_literals = settings.best_mdl - 1
@@ -872,6 +879,7 @@ def popper(settings):
                         settings.solution_found = True
                         settings.max_literals = hypothesis_size-1
                         if size >= settings.max_literals and not settings.order_space:
+                            print('POOPER')
                             return
 
                         # AC: sometimes adding these size constraints can take longer
@@ -917,8 +925,34 @@ def popper(settings):
                 generator.constrain(new_cons, model)
 
         # if not pi_or_rec:
+        if to_combine:
+            # TODO: AWFUL: FIX REFACOTRING
+            # COMBINE
+            with settings.stats.duration('combine'):
+                # is_new_solution_found = combiner.update_best_prog([(prog, pos_covered, [])])
+                print('calling combine', len(to_combine))
+                t1 = time.time()
+                is_new_solution_found = combiner.update_best_prog(to_combine)
+                print(f'combine time: {time.time()-t1}')
+
+            to_combine=[]
+
+            new_hypothesis_found = is_new_solution_found != None
+
+            # if we find a new solution, update the maximum program size
+            # if only adding nogoods, eliminate larger programs
+            if new_hypothesis_found:
+                new_hypothesis, conf_matrix = is_new_solution_found
+                tp, fn, tn, fp, hypothesis_size = conf_matrix
+                settings.best_prog_score = conf_matrix
+                settings.solution = new_hypothesis
+                best_score = mdl_score(fn, fp, hypothesis_size)
+                settings.print_incomplete_solution2(new_hypothesis, tp, fn, tn, fp, hypothesis_size)
         if settings.single_solve:
             break
+        # print('I AM HERE!!!!!!', len(to_combine))
+    # print('PLEASE NOOOOO', len(to_combine))
+    assert(len(to_combine) == 0)
 
 def learn_solution(settings):
     timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)

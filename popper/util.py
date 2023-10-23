@@ -21,6 +21,7 @@ MAX_RULES=2
 MAX_VARS=6
 MAX_BODY=6
 MAX_EXAMPLES=10000
+BATCH_SIZE=1
 
 
 # class syntax
@@ -48,6 +49,7 @@ def parse_args():
     parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
     parser.add_argument('--max-rules', type=int, default=MAX_RULES, help=f'Maximum number of rules allowed in recursive program (default: {MAX_RULES})')
     parser.add_argument('--max-examples', type=int, default=MAX_EXAMPLES, help=f'Maximum number of examples per label (positive or negative) to learn from (default: {MAX_EXAMPLES})')
+    parser.add_argument('--batch-size', type=int, default=BATCH_SIZE, help=f'combine batch size (default: {BATCH_SIZE})')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
     parser.add_argument('--bkcons', default=False, action='store_true', help='EXPERIMENTAL FEATURE: deduce background constraints from Datalog background')
     parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
@@ -55,6 +57,7 @@ def parse_args():
     parser.add_argument('--no-bias', default=False, action='store_true', help='EXPERIMENTAL FEATURE: do not use language bias')
     parser.add_argument('--order-space', default=False, action='store_true', help='EXPERIMENTAL FEATURE: search space ordered by size')
     parser.add_argument('--noisy', default=False, action='store_true', help='tell Popper that there is noise')
+
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
@@ -154,18 +157,6 @@ def format_rule(rule):
     body_str = ','.join(format_literal(literal) for literal in body)
     return f'{head_str}:- {body_str}.'
 
-def print_prog_score(prog, score):
-    tp, fn, tn, fp, size = score
-    precision = 'n/a'
-    if (tp+fp) > 0:
-        precision = f'{tp / (tp+fp):0.2f}'
-    recall = 'n/a'
-    if (tp+fn) > 0:
-        recall = f'{tp / (tp+fn):0.2f}'
-    print('*'*10 + ' SOLUTION ' + '*'*10)
-    print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
-    print(format_prog(order_prog(prog)))
-    print('*'*30)
 
 def calc_prog_size(prog):
     return sum(rule_size(rule) for rule in prog)
@@ -312,6 +303,19 @@ def order_rule_datalog(rule, settings):
 
     return head, tuple(ordered_body)
 
+def print_prog_score(prog, score):
+    tp, fn, tn, fp, size = score
+    precision = 'n/a'
+    if (tp+fp) > 0:
+        precision = f'{tp / (tp+fp):0.2f}'
+    recall = 'n/a'
+    if (tp+fn) > 0:
+        recall = f'{tp / (tp+fn):0.2f}'
+    print('*'*10 + ' SOLUTION ' + '*'*10)
+    print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size} MDL:{size+fn+fp}')
+    print(format_prog(order_prog(prog)))
+    print('*'*30)
+
 class DurationSummary:
     def __init__(self, operation, called, total, mean, maximum):
         self.operation = operation
@@ -324,7 +328,7 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False, showcons=False, no_bias=False, order_space=False, noisy=False):
+    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False, showcons=False, no_bias=False, order_space=False, noisy=False, batch_size=BATCH_SIZE):
 
         if cmd_line:
             args = parse_args()
@@ -346,6 +350,7 @@ class Settings:
             no_bias = args.no_bias
             order_space = args.order_space
             noisy=args.noisy
+            batch_size=args.batch_size
         else:
             if kbpath:
                 self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
@@ -385,6 +390,7 @@ class Settings:
         self.no_bias = no_bias
         self.order_space = order_space
         self.noisy = noisy
+        self.batch_size = batch_size
 
         self.recall = {}
         self.solution = None
@@ -459,10 +465,11 @@ class Settings:
     #         self.logger.info(format_rule(order_rule(rule)))
     #     self.logger.info('*'*20)
 
+
     def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
         self.logger.info('*'*20)
         self.logger.info('New best hypothesis:')
-        self.logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} score:{size+fn+fp}')
+        self.logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} mdl:{size+fn+fp}')
         for rule in order_prog(prog):
             self.logger.info(format_rule(order_rule(rule)))
         self.logger.info('*'*20)
