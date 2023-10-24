@@ -104,6 +104,17 @@ sat:-
     pos_index(_,Atom),
     test_ex(Atom),!.
 
+succeeds_k_times(Goal,Body,Times):-
+    Counter = counter(0),
+    Goal,
+    once(Body),
+    arg(1, Counter, N0),
+    N is N0 + 1,
+    ((N>=Times -> true,!);
+    (nb_setarg(1, Counter, N),
+    fail)).
+
+
 %% ========== FUNCTIONAL CHECKS ==========
 non_functional:-
     pos(Atom),

@@ -21,7 +21,7 @@ pruned2 = set()
 
 # find unsat cores
 def explain_incomplete(settings, explainer, tester, prog, directions):
-    unsat_cores = list(explainer.explain_totally_incomplete(prog, directions))
+    unsat_cores = list(explainer.explain_totally_incomplete(prog, directions, settings.noisy))
 
     out_cons = []
     for subprog, unsat_body in unsat_cores:
@@ -435,6 +435,7 @@ def build_constraints_previous_hypotheses(generator, num_pos, num_neg, seen_hyp_
                 # _, con = generator.build_specialisation_constraint(prog, rule_ordering, spec_size=spec_size)
                 # cons.add(con)
                 cons.append((Constraint.SPECIALISATION, prog, rule_ordering, spec_size))
+                # print('SPEC', format_prog(prog))
         for to_del in to_delete:
             seen_hyp_spec[k].remove(to_del)
     for k in [k for k in seen_hyp_gen if k > score + num_neg + best_size]:
@@ -449,6 +450,7 @@ def build_constraints_previous_hypotheses(generator, num_pos, num_neg, seen_hyp_
                 # _, con = generator.build_generalisation_constraint(prog, rule_ordering, gen_size=gen_size)
                 # cons.add(con)
                 cons.append((Constraint.GENERALISATION, prog, rule_ordering, gen_size))
+                # print('GEN', format_prog(prog))
         for to_del in to_delete:
             seen_hyp_gen[k].remove(to_del)
     return cons
@@ -491,7 +493,7 @@ def popper(settings):
     grounder = Grounder(settings)
 
     settings.solver = 'maxsat'
-    settings.solver = 'clingo'
+    # settings.solver = 'clingo'
     settings.nonoise = not settings.noisy
     # TODO AC: FIX
     settings.solution_found = False
@@ -683,7 +685,7 @@ def popper(settings):
 
             if not has_invention:
                 explainer.add_seen(prog)
-                if num_pos_covered == 0:
+                if num_pos_covered == 0 or (settings.noisy and len(pos_covered) < prog_size):
                     # if the programs does not cover any positive examples, check whether it is has an unsat core
                     with settings.stats.duration('find mucs'):
                         cons_ = explain_incomplete(settings, explainer, tester, prog, directions)
@@ -787,7 +789,7 @@ def popper(settings):
                 if gen_size_ < settings.max_literals:
                     gen_size = gen_size_
 
-                if not add_spec:
+                if not add_spec and False:
                     with settings.stats.duration('spec_subset'):
                         # print(type(prog))
                         for i in range(len(prog)):
@@ -795,10 +797,15 @@ def popper(settings):
                             for subbody in chain.from_iterable(combinations(body, k) for k in range(1, len(body))):
                                 subprog = list(prog)[:i] + [(head, subbody)] + list(prog)[i + 1:]
                                 subprog = frozenset(subprog)
+                                # print('\t'*3,format_prog(subprog))
                                 if subprog in saved_scores:
+                                    # print('\t'*3,format_prog(subprog))
+                                    # assert(False)
                                     [old_fp, old_fn, old_size] = saved_scores[subprog]
                                     if rule_vars((head, subbody)) == rule_vars(list(prog)[i]) and old_fp + old_fn + old_size <= fn + fp + size:
                                         settings.stats.pruned_count += 1
+                                        print('MOOOO')
+                                        assert(False)
                                         add_spec = True
                                         break
 
@@ -850,10 +857,10 @@ def popper(settings):
                 # COMBINE
                 with settings.stats.duration('combine'):
                     # is_new_solution_found = combiner.update_best_prog([(prog, pos_covered, [])])
-                    print('calling combine', len(to_combine))
-                    t1 = time.time()
+                    # print('calling combine', len(to_combine))
+                    # t1 = time.time()
                     is_new_solution_found = combiner.update_best_prog(to_combine)
-                    print(f'combine time: {time.time()-t1}')
+                    # print(f'combine time: {time.time()-t1}')
 
                 to_combine=[]
 
@@ -862,13 +869,15 @@ def popper(settings):
                 # if we find a new solution, update the maximum program size
                 # if only adding nogoods, eliminate larger programs
                 if new_hypothesis_found:
-                    print('new_hypothesis_found', settings.best_mdl, combiner.best_cost)
+                    # if settings.noisy:
+                        # print('new_hypothesis_found', settings.best_mdl, combiner.best_cost)
                     new_hypothesis, conf_matrix = is_new_solution_found
                     tp, fn, tn, fp, hypothesis_size = conf_matrix
                     settings.best_prog_score = conf_matrix
                     settings.solution = new_hypothesis
                     best_score = mdl_score(fn, fp, hypothesis_size)
-                    print('new_hypothesis_found', settings.best_mdl, best_score)
+                    # if settings.noisy:
+                        # print('new_hypothesis_found', settings.best_mdl, best_score)
                     settings.print_incomplete_solution2(new_hypothesis, tp, fn, tn, fp, hypothesis_size)
 
                     if settings.noisy and best_score < settings.best_mdl:
@@ -908,9 +917,10 @@ def popper(settings):
                     seen_hyp_spec[fp+prog_size+mdl].append([prog, tp, fn, tn, fp, prog_size, rule_ordering])
 
             if add_gen and not pruned_sub_inconsistent:
-                if settings.recursion_enabled or settings.pi_enabled:
+                if settings.noisy or settings.recursion_enabled or settings.pi_enabled:
                     if not pruned_sub_incomplete:
                         new_cons.append((Constraint.GENERALISATION, prog, rule_ordering, None))
+
             if settings.noisy and not add_gen and gen_size and not pruned_sub_inconsistent:
                 if gen_size <= settings.max_literals and (settings.recursion_enabled or settings.pi_enabled) and not pruned_sub_incomplete:
                     new_cons.append((Constraint.GENERALISATION, prog, rule_ordering, gen_size))
@@ -935,11 +945,10 @@ def popper(settings):
             # COMBINE
             with settings.stats.duration('combine'):
                 # is_new_solution_found = combiner.update_best_prog([(prog, pos_covered, [])])
-                print('calling combine', len(to_combine))
-                t1 = time.time()
+                # print('calling combine', len(to_combine))
+                # t1 = time.time()
                 is_new_solution_found = combiner.update_best_prog(to_combine)
-                print(f'combine time: {time.time()-t1}')
-
+                # print(f'combine time: {time.time()-t1}')
             to_combine=[]
 
             new_hypothesis_found = is_new_solution_found != None

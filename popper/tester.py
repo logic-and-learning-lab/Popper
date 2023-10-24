@@ -5,7 +5,7 @@ import pkg_resources
 from pyswip import Prolog
 from pyswip.prolog import PrologError
 from contextlib import contextmanager
-from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive
+from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, rule_size
 
 import clingo
 import clingo.script
@@ -415,15 +415,22 @@ class Tester():
                     return self.reduce_inconsistent(subprog)
         return program
 
-    def is_sat(self, prog):
+    def is_sat(self, prog, noise=False):
         if len(prog) == 1:
             rule = list(prog)[0]
             head, _body = rule
             head, ordered_body = order_rule(rule, self.settings)
-            head = f'pos_index(_,{format_literal(head)})'
-            x = format_rule((None,ordered_body))[2:-1]
-            x = f'{head},{x},!'
-            return self.bool_query(x)
+            if noise:
+                # print('MOOOOO')
+                new_head = f'pos_index(ID,{format_literal(head)})'
+                x = format_rule((None,ordered_body))[2:-1]
+                x = f'succeeds_k_times({new_head},({x}),{rule_size(rule)}).'
+                return self.bool_query(x)
+            else:
+                head = f'pos_index(_,{format_literal(head)})'
+                x = format_rule((None,ordered_body))[2:-1]
+                x = f'{head},{x},!'
+                return self.bool_query(x)
         else:
             with self.using(prog):
                 return self.bool_query('sat')
