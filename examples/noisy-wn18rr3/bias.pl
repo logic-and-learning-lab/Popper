@@ -1,6 +1,7 @@
-max_body(6).
+%% max_body(6).
+max_body(5).
 max_vars(5).
-allow_singletons.
+%% allow_singletons.
 head_pred(verbgroup,2).
 body_pred(synsetdomaintopicof,2).
 body_pred(alsosee,2).
