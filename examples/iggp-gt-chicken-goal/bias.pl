@@ -1,5 +1,3 @@
-max_body(7).
-
 head_pred(goal,3).
 body_pred(true_whiteScore,2).
 body_pred(true_blackScore,2).
@@ -131,6 +129,3 @@ body_pred(P,1):-
 
 type(P,(T,)):-
 	constant(P,T).
-
-:- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
-:- clause(C), #count{V : clause_var(C,V),var_type(C,V,action)} > 2.

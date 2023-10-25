@@ -1,4 +1,3 @@
-max_body(7).
 constant(agent_wolf, agent).
 constant(agent_sheep, agent).
 constant(int_0, int).

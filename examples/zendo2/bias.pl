@@ -1,5 +1,3 @@
-max_body(7).
-
 head_pred(zendo,1).
 body_pred(piece,2).
 body_pred(contact,2).

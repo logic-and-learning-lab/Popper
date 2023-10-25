@@ -1,5 +1,3 @@
-max_body(7).
-
 head_pred(next_score,3).
 body_pred(does,3).
 body_pred(my_true_claim_made_by,2).
@@ -61,8 +59,3 @@ bad_body(P,A,Vars):-
     body_pred(P,A),
     var_pos(Var,Vars,0),
     Var != 0.
-
-
-%% :- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
-%% :- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 2.
-%% :- clause(C), #count{V : clause_var(C,V),var_type(C,V,action)} > 3.

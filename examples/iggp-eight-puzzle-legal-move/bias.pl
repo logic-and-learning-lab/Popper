@@ -1,5 +1,3 @@
-max_body(7).
-
 constant(agent_robot, agent).
 constant(mypos_1, mypos).
 constant(mypos_2, mypos).
@@ -118,8 +116,3 @@ direction(successor,(in,out)).
 direction(tile,(in,)).
 direction(P,(in,)):-
 	constant(P,_).
-
-
-
-:- clause(C), #count{V : clause_var(C,V),var_type(C,V,agent)} > 1.
-:- clause(C), #count{V : clause_var(C,V),var_type(C,V,mypos)} > 3.

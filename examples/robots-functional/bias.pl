@@ -1,4 +1,3 @@
-max_body(7).
 enable_recursion.
 
 head_pred(f,2).

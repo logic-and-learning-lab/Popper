@@ -1,5 +1,3 @@
-max_body(7).
-
 head_pred(goal,3).
 body_pred(my_true_cell,3).
 body_pred(role,1).
@@ -8,7 +6,6 @@ body_pred(c_zerocoins,1).
 body_pred(c_onecoin,1).
 body_pred(c_twocoins,1).
 body_pred(my_true_step,2).
-
 body_pred(pos_1,1).
 body_pred(pos_2,1).
 body_pred(pos_3,1).
@@ -17,7 +14,6 @@ body_pred(pos_5,1).
 body_pred(pos_6,1).
 body_pred(pos_7,1).
 body_pred(pos_8,1).
-
 body_pred(score_0,1).
 body_pred(score_1,1).
 body_pred(score_2,1).

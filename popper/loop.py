@@ -517,19 +517,11 @@ def popper(settings):
 
     combiner = load_solver(settings, tester)
 
-    # print(settings.best_mdl)
-    # assert(False)
-
-
-
-
 
     # deduce bk cons
     bkcons = []
     if settings.bkcons:
         settings.datalog = True
-    if settings.datalog:
-        settings.bkcons = True
     if settings.bkcons or settings.datalog:
         with settings.stats.duration('recalls'):
             bkcons.extend(deduce_recalls(settings))
@@ -568,8 +560,8 @@ def popper(settings):
         if not settings.single_solve:
             if settings.order_space:
                 settings.logger.info(f'SIZE: {size} VARS: {n_vars} RULES: {n_rules} MAX_SIZE: {settings.max_literals}')
-            else:
-                settings.logger.info(f'SIZE: {size} MAX_SIZE: {settings.max_literals}')
+            # else:
+                # settings.logger.info(f'SIZE: {size} MAX_SIZE: {settings.max_literals}')
 
             with settings.stats.duration('init'):
                 generator.update_solver(size, n_vars, n_rules)
@@ -611,7 +603,7 @@ def popper(settings):
             if last_size == None or prog_size != last_size:
                 size_change = True
                 last_size = prog_size
-                settings.logger.info(f'Searching programs of size: {prog_size}')
+                settings.logger.info(f'Generating programs of size: {prog_size}')
 
             if settings.single_solve and last_size > settings.max_literals:
                 break
@@ -888,10 +880,11 @@ def popper(settings):
                             for i in range(best_score, max_size+1):
                                 size_con = [(atom_to_symbol("size", (i,)), True)]
                                 model.context.add_nogood(size_con)
-
+                    # print("HERE!!!", tp, fn, tn, fp)
                     if not settings.noisy and fp == 0 and fn == 0:
                         settings.solution_found = True
                         settings.max_literals = hypothesis_size-1
+
                         if size >= settings.max_literals and not settings.order_space:
                             print('POOPER')
                             return
@@ -962,6 +955,14 @@ def popper(settings):
                 settings.solution = new_hypothesis
                 best_score = mdl_score(fn, fp, hypothesis_size)
                 settings.print_incomplete_solution2(new_hypothesis, tp, fn, tn, fp, hypothesis_size)
+
+                if not settings.noisy and fp == 0 and fn == 0:
+                    settings.solution_found = True
+                    settings.max_literals = hypothesis_size-1
+
+                    if size >= settings.max_literals and not settings.order_space:
+                        print('POOPER')
+                        return
         if settings.single_solve:
             break
         # print('I AM HERE!!!!!!', len(to_combine))
