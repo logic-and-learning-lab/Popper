@@ -878,6 +878,7 @@ def popper(settings):
                     settings.print_incomplete_solution2(new_hypothesis, tp, fn, tn, fp, hypothesis_size)
 
                     if settings.noisy and best_score < settings.best_mdl:
+                        settings.best_mdl = best_score
                         settings.max_literals = settings.best_mdl - 1
                         new_cons.extend(build_constraints_previous_hypotheses(generator, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen, settings.best_mdl, prog_size))
                         if settings.single_solve:

@@ -40,6 +40,7 @@ class Combiner:
         self.saved_progs = collections.defaultdict(set)
         self.rule_to_prog = collections.defaultdict(list)
         self.debug = 0
+        self.best_cost = None
 
         # add example atoms
         self.big_encoding.add(self.example_prog)
