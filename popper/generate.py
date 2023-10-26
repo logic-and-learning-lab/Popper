@@ -247,7 +247,7 @@ class Generator:
         # - considering a default order of minimum rules, then minimum literals, and then minimum variables
         # - considering a preference for minimum hspace size parameters configuration
         if settings.order_space and settings.single_solve:
-            horder = bias_order(settings)
+            horder = bias_order(settings, max_size)
             iorder = 1
             for (size, n_vars, n_rules, _) in horder:
                 encoding.append(f'h_order({iorder},{size},{n_vars},{n_rules}).')

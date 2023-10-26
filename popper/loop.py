@@ -602,7 +602,8 @@ def popper(settings):
             if last_size == None or prog_size != last_size:
                 size_change = True
                 last_size = prog_size
-                settings.logger.info(f'Generating programs of size: {prog_size}')
+                if not settings.order_space:
+                    settings.logger.info(f'Generating programs of size: {prog_size}')
 
             if settings.single_solve and last_size > settings.max_literals:
                 break

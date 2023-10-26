@@ -551,7 +551,7 @@ def bias_order(settings, max_size):
                 # FG We should not search for configurations with more variables than the possible variables for the number of litereals considered
                 # There must be at least one variable repeated, otherwise all the literals are disconnected
                 max_possible_vars = (size_literals * arity) - 1
-                print(f'size_literals:{size_literals} size_vars:{size_vars} size_rules:{size_rules} max_possible_vars:{max_possible_vars}')
+                # print(f'size_literals:{size_literals} size_vars:{size_vars} size_rules:{size_rules} max_possible_vars:{max_possible_vars}')
                 if size_vars > max_possible_vars:
                     break
 
