@@ -912,6 +912,9 @@ def popper(settings):
                 if settings.noisy or settings.recursion_enabled or settings.pi_enabled:
                     if not pruned_sub_incomplete:
                         new_cons.append((Constraint.GENERALISATION, prog, rule_ordering, None))
+                else:
+                    if not add_spec:
+                        new_cons.append((Constraint.GENERALISATION, prog, rule_ordering, None))
 
             if settings.noisy and not add_gen and gen_size and not pruned_sub_inconsistent:
                 if gen_size <= settings.max_literals and (settings.recursion_enabled or settings.pi_enabled) and not pruned_sub_incomplete:
