@@ -120,8 +120,8 @@ class Combiner:
         with self.settings.stats.duration('combine.build.string'):
             str_encoding = '\n'.join(encoding)
 
-        with open('sat/mdl.pl','w') as f:
-            f.write(str_encoding)
+        # with open('sat/mdl.pl','w') as f:
+        #     f.write(str_encoding)
 
         best_prog = []
         best_cost = None
