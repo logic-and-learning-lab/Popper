@@ -836,6 +836,11 @@ def popper(settings):
                 # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
                 if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general:
                     call_combine = True
+
+                if settings.order_space and not inconsistent and not subsumed and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general:
+                    call_combine = True
+
+                if call_combine:
                     success_sets[pos_covered] = prog_size
                     if is_recursive:
                         rec_success_sets[pos_covered] = prog_size

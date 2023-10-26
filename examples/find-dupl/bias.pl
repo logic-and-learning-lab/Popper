@@ -4,14 +4,14 @@ head_pred(f,2).
 body_pred(head,2).
 body_pred(tail,2).
 body_pred(element,2).
-body_pred(increment,2).
-body_pred(decrement,2).
-body_pred(geq,2).
-body_pred(empty,1).
-body_pred(even,1).
-body_pred(odd,1).
-body_pred(one,1).
-body_pred(zero,1).
+%% body_pred(increment,2).
+%% body_pred(decrement,2).
+%% body_pred(geq,2).
+%% body_pred(empty,1).
+%% body_pred(even,1).
+%% body_pred(odd,1).
+%% body_pred(one,1).
+%% body_pred(zero,1).
 
 type(f,(list,element)).
 type(head,(list,element)).
@@ -38,3 +38,5 @@ direction(even,(in,)).
 direction(odd,(in,)).
 direction(one,(in,)).
 direction(zero,(out,)).
+
+max_vars(4).
