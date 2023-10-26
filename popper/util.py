@@ -303,7 +303,7 @@ def order_rule_datalog(rule, settings):
 
     return head, tuple(ordered_body)
 
-def print_prog_score(prog, score):
+def print_prog_score(prog, score, noisy):
     tp, fn, tn, fp, size = score
     precision = 'n/a'
     if (tp+fp) > 0:
@@ -312,7 +312,10 @@ def print_prog_score(prog, score):
     if (tp+fn) > 0:
         recall = f'{tp / (tp+fn):0.2f}'
     print('*'*10 + ' SOLUTION ' + '*'*10)
-    print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size} MDL:{size+fn+fp}')
+    if noisy:
+        print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size} MDL:{size+fn+fp}')
+    else:
+      print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')  
     print(format_prog(order_prog(prog)))
     print('*'*30)
 
@@ -469,7 +472,10 @@ class Settings:
     def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
         self.logger.info('*'*20)
         self.logger.info('New best hypothesis:')
-        self.logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} mdl:{size+fn+fp}')
+        if self.noisy:
+            self.logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} mdl:{size+fn+fp}')
+        else:
+            self.logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size}')
         for rule in order_prog(prog):
             self.logger.info(format_rule(order_rule(rule)))
         self.logger.info('*'*20)
@@ -522,11 +528,10 @@ def load_types(settings):
 
     return head_types, body_types
 
-def bias_order(settings):
+def bias_order(settings, max_size):
 
     if not (settings.no_bias or settings.order_space):
-        max_size = (1 + settings.max_body) * settings.max_rules
-        return [(size_literals, settings.max_vars, settings.max_rules, None) for size_literals in range(1, max_size+1)]
+        return [(size_literals, settings.max_vars, settings.max_rules, None) for size_literals in range(1, max_size)]
 
     # if settings.search_order is None:
     ret = []

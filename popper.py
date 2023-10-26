@@ -7,7 +7,7 @@ if __name__ == '__main__':
     settings = Settings(cmd_line=True)
     prog, score, stats = learn_solution(settings)
     if prog != None:
-        print_prog_score(prog, score)
+        print_prog_score(prog, score, settings.noisy)
     else:
         print('NO SOLUTION')
     if settings.show_stats:

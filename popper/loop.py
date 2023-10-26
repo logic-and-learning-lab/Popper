@@ -507,16 +507,16 @@ def popper(settings):
         settings.best_prog_score = 0, num_pos, num_neg, 0, 0
         # settings.best_prog = []
         settings.best_mdl = num_pos
-        # print(settings.best_mdl, num_pos)
         max_size = min((1 + settings.max_body) * settings.max_rules, num_pos)
-        # AC: WHAT ARE THESE?
+        
+        # these are used to save hypotheses for which we pruned spec / gen from a certain size only
+        # once we update the best mdl score, we can prune spec / gen from a better size for some of these
         seen_hyp_spec = collections.defaultdict(list)
         seen_hyp_gen = collections.defaultdict(list)
     else:
         max_size = (1 + settings.max_body) * settings.max_rules
 
     combiner = load_solver(settings, tester)
-
 
     # deduce bk cons
     bkcons = []
@@ -544,10 +544,9 @@ def popper(settings):
 
     to_combine = []
 
-    max_size = (1 + settings.max_body) * settings.max_rules
     last_size = None
 
-    search_order = bias_order(settings)
+    search_order = bias_order(settings, max_size)
 
     for (size, n_vars, n_rules, _) in search_order:
         if size > settings.max_literals:
