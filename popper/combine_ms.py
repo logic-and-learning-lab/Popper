@@ -1,3 +1,5 @@
+# code written by Andreas Niskanen (andreas.niskanen@helsinki.fi)
+
 import clingo
 import time
 import pickle

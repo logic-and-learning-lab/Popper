@@ -1,3 +1,6 @@
+# code written by Andreas Niskanen (andreas.niskanen@helsinki.fi)
+
+
 import os, subprocess, sys, tempfile
 import time
 import uuid
