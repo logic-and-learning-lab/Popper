@@ -263,76 +263,76 @@ class Combiner:
         return best_prog, best_fn + best_fp + best_size
 
     def build_encoding(self, new_progs):
-        with self.settings.stats.duration('combine.add'):
-            encoding = []
+        # with self.settings.stats.duration('combine.add'):
+        encoding = []
 
-            for i in range(1, self.programs_seen+1):
-                for clause in self.program_clauses[i]:
-                    encoding.append(clause)
-
-            for clause in self.hard_clauses:
+        for i in range(1, self.programs_seen+1):
+            for clause in self.program_clauses[i]:
                 encoding.append(clause)
-            all_rule_vars = []
 
-            for [new_prog, _, _] in new_progs:
-                self.programs_seen += 1
+        for clause in self.hard_clauses:
+            encoding.append(clause)
+        all_rule_vars = []
 
-                for ex in self.prog_pos_covered[new_prog]:
-                    self.programs_covering_example[ex].append(self.programs_seen)
+        for [new_prog, _, _] in new_progs:
+            self.programs_seen += 1
 
-                if self.settings.nonoise:
-                    assert(len(self.prog_neg_covered[new_prog]) == 0)
-                for ex in self.prog_neg_covered[new_prog]:
-                    self.programs_covering_example[ex].append(self.programs_seen)
+            for ex in self.prog_pos_covered[new_prog]:
+                self.programs_covering_example[ex].append(self.programs_seen)
 
-                prog_rules = set()
-                rule_vars = []
-                for rule in new_prog:
-                    rule_hash = get_rule_hash(rule)
-                    rule_id = self.rulehash_to_id[rule_hash]
-                    rule_size = self.ruleid_to_size[rule_id]
-                    prog_rules.add(rule_id)
-                    if rule_id not in self.rule_var:
-                        self.rule_var[rule_id] = self.vpool.id("rule({0}))".format(rule_id))
-                        self.rule_var_softs.add((self.rule_var[rule_id], rule_size))
-                        self.rule_size_sum += rule_size
-                    rule_vars.append(self.rule_var[rule_id])
-                    if self.settings.lex and self.settings.recursion_enabled:
-                        if rule_is_recursive(rule):
-                            self.recursive_rules.append(rule_id)
-                        else:
-                            self.base_rules.append(rule_id)
-                all_rule_vars += rule_vars
+            if self.settings.nonoise:
+                assert(len(self.prog_neg_covered[new_prog]) == 0)
+            for ex in self.prog_neg_covered[new_prog]:
+                self.programs_covering_example[ex].append(self.programs_seen)
 
-                if len(rule_vars) == 1:
-                    self.program_var[self.programs_seen] = rule_vars[0]
-                    self.program_clauses[self.programs_seen] = []
-                else:
-                    self.program_var[self.programs_seen] = self.vpool.id("program({0})".format(self.programs_seen))
-                    pvar = self.program_var[self.programs_seen]
+            prog_rules = set()
+            rule_vars = []
+            for rule in new_prog:
+                rule_hash = get_rule_hash(rule)
+                rule_id = self.rulehash_to_id[rule_hash]
+                rule_size = self.ruleid_to_size[rule_id]
+                prog_rules.add(rule_id)
+                if rule_id not in self.rule_var:
+                    self.rule_var[rule_id] = self.vpool.id("rule({0}))".format(rule_id))
+                    self.rule_var_softs.add((self.rule_var[rule_id], rule_size))
+                    self.rule_size_sum += rule_size
+                rule_vars.append(self.rule_var[rule_id])
+                if self.settings.lex and self.settings.recursion_enabled:
+                    if rule_is_recursive(rule):
+                        self.recursive_rules.append(rule_id)
+                    else:
+                        self.base_rules.append(rule_id)
+            all_rule_vars += rule_vars
 
-                    clause = [pvar] + [-var for var in rule_vars]
+            if len(rule_vars) == 1:
+                self.program_var[self.programs_seen] = rule_vars[0]
+                self.program_clauses[self.programs_seen] = []
+            else:
+                self.program_var[self.programs_seen] = self.vpool.id("program({0})".format(self.programs_seen))
+                pvar = self.program_var[self.programs_seen]
+
+                clause = [pvar] + [-var for var in rule_vars]
+                encoding.append(clause)
+                self.program_clauses[self.programs_seen] = [clause]
+                for var in rule_vars:
+                    clause = [-pvar, var]
                     encoding.append(clause)
-                    self.program_clauses[self.programs_seen] = [clause]
-                    for var in rule_vars:
-                        clause = [-pvar, var]
-                        encoding.append(clause)
-                        self.program_clauses[self.programs_seen].append(clause)
+                    self.program_clauses[self.programs_seen].append(clause)
 
-            #encoding.append(all_rule_vars)
-            if self.settings.lex and self.settings.recursion_enabled:
-                encoding.append([self.rule_var[rule_id] for rule_id in self.base_rules])
+        #encoding.append(all_rule_vars)
+        if self.settings.lex and self.settings.recursion_enabled:
+            encoding.append([self.rule_var[rule_id] for rule_id in self.base_rules])
 
-            for ex in self.settings.pos_index:
-                encoding.append([-self.example_covered_var[ex]] + [self.program_var[p] for p in self.programs_covering_example[ex]])
-                #for p in self.programs_covering_example[ex]:
-                #    encoding.append([self.example_covered_var[ex], -self.program_var[p]])
-            if not self.settings.nonoise:
-                for ex in self.settings.neg_index:
-                    #encoding.append([-self.example_covered_var[ex]] + [self.program_var[p] for p in self.programs_covering_example[ex]])
-                    for p in self.programs_covering_example[ex]:
-                        encoding.append([self.example_covered_var[ex], -self.program_var[p]])
-            return encoding
+        for ex in self.settings.pos_index:
+            encoding.append([-self.example_covered_var[ex]] + [self.program_var[p] for p in self.programs_covering_example[ex]])
+            #for p in self.programs_covering_example[ex]:
+            #    encoding.append([self.example_covered_var[ex], -self.program_var[p]])
+        if not self.settings.nonoise:
+            for ex in self.settings.neg_index:
+                #encoding.append([-self.example_covered_var[ex]] + [self.program_var[p] for p in self.programs_covering_example[ex]])
+                for p in self.programs_covering_example[ex]:
+                    encoding.append([self.example_covered_var[ex], -self.program_var[p]])
+        return encoding
 
     def select_solution(self, new_progs, timeout):
         encoding = self.build_encoding(new_progs)

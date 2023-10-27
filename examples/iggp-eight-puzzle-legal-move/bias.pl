@@ -103,16 +103,3 @@ body_pred(P,1):-
 
 type(P,(T,)):-
 	constant(P,T).
-
-direction(legal_move,(in,in,in,in)).
-direction(true_cell,(in,out,out,out)).
-direction(true_step,(in,out)).
-direction(input_move,(in,out,out)).
-direction(role,(in,)).
-direction(index,(in,)).
-direction(succ,(in,out)).
-direction(scoremap,(in,out)).
-direction(successor,(in,out)).
-direction(tile,(in,)).
-direction(P,(in,)):-
-	constant(P,_).

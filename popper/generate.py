@@ -99,7 +99,6 @@ def make_rule_handle(rule):
     return handle
 
 def build_seen_rule(rule, is_rec):
-    # seen_rule(handle,rule):-body_literal(....,....,...)
     rule_var = vo_clause('l')
     handle = make_rule_handle(rule)
     head = Literal('seen_rule', (handle, rule_var))
@@ -109,12 +108,9 @@ def build_seen_rule(rule, is_rec):
         body.append(gteq(rule_var, 1))
     return head, tuple(body)
 
-
-
 def build_seen_rule_literal(handle, rule_var):
     return Literal('seen_rule', (handle, rule_var))
 
-#
 def parse_model(model):
     directions = defaultdict(lambda: defaultdict(lambda: '?'))
     rule_index_to_body = defaultdict(set)
@@ -143,6 +139,7 @@ def parse_model(model):
             head_literal = (predicate, atom_args, arity)
             rule_index_to_head[rule_index] = head_literal
 
+        # TODO AC: STOP READING THESE THE MODELS
         elif name == 'direction_':
             pred_name = args[0].name
             arg_index = args[1].number
@@ -557,9 +554,9 @@ class Generator:
                 nogood.append(x)
             nogoods.append(nogood)
 
-        with self.settings.stats.duration('constrain_clingo'):
-            for x in nogoods:
-                model.context.add_nogood(x)
+        # with self.settings.stats.duration('constrain_clingo'):
+        for x in nogoods:
+            model.context.add_nogood(x)
 
         self.new_ground_cons = set()
 

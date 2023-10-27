@@ -129,10 +129,10 @@ class Combiner:
 
         # solver = clingo.Control([f'-t{self.settings.threads}'])
         solver = clingo.Control([])
-        with self.settings.stats.duration('combine.add'):
-            solver.add('base', [], str_encoding)
-        with self.settings.stats.duration('combine.ground'):
-            solver.ground([('base', [])])
+        # with self.settings.stats.duration('combine.add'):
+        solver.add('base', [], str_encoding)
+        # with self.settings.stats.duration('combine.ground'):
+        solver.ground([('base', [])])
 
         with solver.solve(yield_ = True) as handle:
             handle = iter(handle)

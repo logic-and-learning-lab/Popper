@@ -394,17 +394,17 @@ def prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester, 
             if sub_prog_subsumed or sub_covers_too_few:
                 to_prune.add(new_prog)
                 pruned_subprog = True
-                with settings.stats.duration('variants'):
-                    for _, x in find_variants(new_rule):
-                        pruned2.add(x)
+                # with settings.stats.duration('variants'):
+                for _, x in find_variants(new_rule):
+                    pruned2.add(x)
 
         to_delete.add(prog2)
 
         if pruned_subprog == False:
-            with settings.stats.duration('variants'):
-                for _, x in find_variants((head, body), settings.max_vars):
-                    # print('hello, pruned2', x)
-                    pruned2.add(x)
+            # with settings.stats.duration('variants'):
+            for _, x in find_variants((head, body), settings.max_vars):
+                # print('hello, pruned2', x)
+                pruned2.add(x)
             if settings.showcons:
                 print('\t', format_prog2(prog2), '\t', 'subsumed_backtrack')
                 # pass
@@ -849,6 +849,12 @@ def popper(settings):
             if call_combine:
                 to_combine.append((prog, pos_covered, neg_covered))
 
+                if not settings.noisy and not has_invention and not is_recursive and WITH_OPTIMISATIONS:
+                    with settings.stats.duration('prune backtrack'):
+                        xs = prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester, prog_size, check_coverage=settings.solution_found)
+                        for x in xs:
+                            new_cons.append((Constraint.SPECIALISATION, x, None, None))
+
             if to_combine and (len(to_combine) >= settings.batch_size or size_change):
 
                 # COMBINE
@@ -899,12 +905,6 @@ def popper(settings):
                         for i in range(hypothesis_size, max_size+1):
                             size_con = [(atom_to_symbol("size", (i,)), True)]
                             model.context.add_nogood(size_con)
-
-                if not settings.noisy and not has_invention and not is_recursive and WITH_OPTIMISATIONS:
-                    with settings.stats.duration('prune subsumed backtrack'):
-                        xs = prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester, prog_size, check_coverage=settings.solution_found)
-                        for x in xs:
-                            new_cons.append((Constraint.SPECIALISATION, x, None, None))
 
             # BUILD CONSTRAINTS
             if add_spec and not pruned_sub_incomplete and not pruned_more_general and not add_redund2:
