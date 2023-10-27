@@ -618,18 +618,25 @@ def popper(settings):
                     pos_covered, neg_covered = tester.test_prog_all(prog)
                     inconsistent = len(neg_covered) > 0
                 else:
-                    pos_covered, inconsistent = tester.test_prog(prog)
+                    if settings.recursion_enabled or settings.pi_enabled:
+                        pos_covered, inconsistent = tester.test_prog(prog)
+                    else:
+                        # check pos examples
+                        pos_covered = tester.test_prog_pos(prog)
+                        inconsistent = True
+                        # if no positive example is covered, no need to check negative examples
+                        if len(pos_covered) > 0:
+                            if not settings.solution_found or len(pos_covered) > 1:
+                                inconsistent = tester.test_prog_inconsistent(prog)
 
             num_pos_covered = len(pos_covered)
 
             # if non-separable program covers all examples, stop
             if not inconsistent and num_pos_covered == num_pos and not settings.order_space:
-                # settings.best_prog = prog
                 settings.solution = prog
                 settings.best_prog_score = num_pos, 0, num_neg, 0, prog_size
                 settings.best_mdl = prog_size
                 return
-
 
             if settings.noisy:
                 tp = len(pos_covered)

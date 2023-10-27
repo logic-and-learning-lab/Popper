@@ -98,6 +98,32 @@ class Tester():
             neg_covered = set()
         return pos_covered, neg_covered
 
+    def test_prog_pos(self, prog):
+        if len(prog) == 1:
+            return self.test_single_rule_pos(prog)
+        try:
+            with self.using(prog):
+                pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
+        except PrologError as err:
+            print('PROLOG ERROR',err)
+            pos_covered = set()
+        return pos_covered
+
+    # @profile
+    def test_prog_inconsistent(self, prog):
+        if len(prog) == 1:
+            return self.test_single_inconsistent(prog)
+        try:
+            with self.using(prog):
+                if len(self.neg_index) > 0:
+                    return len(list(self.prolog.query("inconsistent"))) > 0
+        except PrologError as err:
+            print('PROLOG ERROR',err)
+            # pos_covered = set()
+            # inconsistent = True
+        # self.cached_pos_covered[k] = pos_covered
+        return True
+
     # @profile
     def test_single_rule(self, prog):
         pos_covered = frozenset()
@@ -122,6 +148,24 @@ class Tester():
             print('PROLOG ERROR',err)
         return pos_covered, inconsistent
 
+    def test_single_inconsistent(self, prog):
+        inconsistent = False
+        try:
+            rule = list(prog)[0]
+            head, _body = rule
+            head, ordered_body = order_rule(rule, self.settings)
+            atom_str = format_literal(head)
+            body_str = format_rule((None,ordered_body))[2:-1]
+            inconsistent = False
+            if len(self.neg_index) > 0:
+                q = f'neg_index(Id,{atom_str}),{body_str},!'
+                xs = list(self.prolog.query(q))
+                if len(xs) > 0:
+                    inconsistent = True
+        except PrologError as err:
+            print('PROLOG ERROR',err)
+        return inconsistent
+
     def test_single_rule_all(self, prog):
         pos_covered = frozenset()
         neg_covered = frozenset()
@@ -142,6 +186,42 @@ class Tester():
         except PrologError as err:
             print('PROLOG ERROR',err)
         return pos_covered, neg_covered
+
+
+
+    def test_single_rule_pos(self, prog):
+        pos_covered = frozenset()
+        try:
+            rule = list(prog)[0]
+            head, _body = rule
+            head, ordered_body = order_rule(rule, self.settings)
+            atom_str = format_literal(head)
+            body_str = format_rule((None,ordered_body))[2:-1]
+            q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+            xs = next(self.prolog.query(q))
+            pos_covered = frozenset(xs['Xs'])
+
+        except PrologError as err:
+            print('PROLOG ERROR',err)
+        return pos_covered
+
+    def test_single_rule_neg(self, prog):
+        # pos_covered = frozenset()
+        neg_covered = frozenset()
+        try:
+            rule = list(prog)[0]
+            head, _body = rule
+            head, ordered_body = order_rule(rule, self.settings)
+            atom_str = format_literal(head)
+            body_str = format_rule((None,ordered_body))[2:-1]
+            if len(self.neg_index) > 0:
+                q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+                xs = next(self.prolog.query(q))
+                neg_covered = frozenset(xs['Xs'])
+
+        except PrologError as err:
+            print('PROLOG ERROR',err)
+        return neg_covered
 
 
     def is_inconsistent(self, prog):
