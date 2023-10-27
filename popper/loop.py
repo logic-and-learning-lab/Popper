@@ -611,12 +611,24 @@ def popper(settings):
             is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
             has_invention = settings.pi_enabled and prog_has_invention(prog)
 
+            # TODO: refactor out for readability
             # test a program
             with settings.stats.duration('test'):
                 if settings.noisy:
-                    # TODO: DO WE ALWAYS NEED TO TEST AGAINST ALL EXAMPLES
                     pos_covered, neg_covered = tester.test_prog_all(prog)
                     inconsistent = len(neg_covered) > 0
+
+                    # @CH can you look into this optimisation please?
+                    # if settings.recursion_enabled or settings.pi_enabled:
+                    #     pos_covered, neg_covered = tester.test_prog_all(prog)
+                    #     inconsistent = len(neg_covered) > 0
+                    # else:
+                    #     pos_covered = tester.test_single_rule_pos(prog)
+                    #     if len(pos_covered) > prog_size:
+                    #         neg_covered = tester.test_single_rule_neg(prog)
+                    #     else:
+                    #         neg_covered = ???
+
                 else:
                     if settings.recursion_enabled or settings.pi_enabled:
                         pos_covered, inconsistent = tester.test_prog(prog)

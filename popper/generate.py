@@ -111,6 +111,7 @@ def build_seen_rule(rule, is_rec):
 def build_seen_rule_literal(handle, rule_var):
     return Literal('seen_rule', (handle, rule_var))
 
+# @profile
 def parse_model(model):
     directions = defaultdict(lambda: defaultdict(lambda: '?'))
     rule_index_to_body = defaultdict(set)
