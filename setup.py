@@ -18,8 +18,9 @@ setuptools.setup(
     install_requires=[
         'clingo',
         'pyswip'
-    ],                                             
+    ],
     url="https://github.com/logic-and-learning-lab/Popper",
+    scripts=['bin/popper-ilp'],
     packages=setuptools.find_packages()
     # classifiers=(                                 # Classifiers help people find your
         # "Programming Language :: Python :: 3"    # projects. See all possible classifiers
