@@ -589,7 +589,7 @@ def popper(settings):
             with settings.stats.duration('parse'):
                 atoms = model.symbols(shown = True)
                 if settings.pi_enabled:
-                    prog, rule_ordering, directions = parse_model_pi(atoms)
+                    prog, rule_ordering, directions = parse_model_pi(settings, atoms)
                 elif settings.recursion_enabled:
                     prog, rule_ordering, directions = parse_model_recursion(settings, atoms)
                 else:

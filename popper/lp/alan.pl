@@ -13,7 +13,7 @@
 #defined allow_singletons/0.
 #defined custom_max_size/1.
 
-#show head_literal/4.
+%% #show head_literal/4.
 #show body_literal/4.
 #show before/2.
 %% #show size/1.

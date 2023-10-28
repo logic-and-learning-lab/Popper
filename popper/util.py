@@ -5,6 +5,7 @@ import signal
 import argparse
 import os
 import logging
+from itertools import permutations
 from collections import defaultdict
 from time import perf_counter
 from contextlib import contextmanager
@@ -448,13 +449,6 @@ class Settings:
                 head_modes = tuple(self.directions[head_pred][i] for i in range(head_arity))
                 self.head_literal = Literal(head_pred, head_args, head_modes)
 
-        self.body_preds = set()
-        for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
-            pred = x.symbol.arguments[0].name
-            arity = x.symbol.arguments[1].number
-            self.body_preds.add((pred, arity))
-            self.max_arity = max(self.max_arity, arity)
-
         for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
             self.max_body = x.symbol.arguments[0].number
 
@@ -465,6 +459,43 @@ class Settings:
         for x in solver.symbolic_atoms.by_signature('max_clauses', arity=1):
             self.max_rules = x.symbol.arguments[0].number
 
+
+        self.body_preds = set()
+        for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
+            pred = x.symbol.arguments[0].name
+            arity = x.symbol.arguments[1].number
+            self.body_preds.add((pred, arity))
+            self.max_arity = max(self.max_arity, arity)
+
+        arg_lookup = {i:chr(ord('A') + i) for i in range(100)}
+        self.cached_atom_args = {}
+        for i in range(1, self.max_arity+1):
+            for args in permutations(range(0, self.max_vars), i):
+                k = tuple(clingo.Number(x) for x in args)
+                v = tuple(arg_lookup[x] for x in args)
+                self.cached_atom_args[k] = v
+
+        if not self.pi_enabled:
+            self.body_modes = {}
+            self.cached_literals = {}
+            for pred, arity in self.body_preds:
+                self.body_modes[pred] = tuple(directions[pred][i] for i in range(arity))
+
+            for pred, arity in self.body_preds:
+                for k, args in self.cached_atom_args.items():
+                    if len(args) != arity:
+                        continue
+                    literal = Literal(pred, args, self.body_modes[pred])
+                    self.cached_literals[(pred, k)] = literal
+
+            pred = self.head_literal.predicate
+            arity = self.head_literal.arity
+            self.body_modes[pred] = tuple(directions[pred][i] for i in range(arity))
+            for k, args in self.cached_atom_args.items():
+                if len(args) != arity:
+                    continue
+                literal = Literal(pred, args, self.body_modes[pred])
+                self.cached_literals[(pred, k)] = literal
 
         if self.max_rules == None:
             if self.recursion_enabled or self.pi_enabled:

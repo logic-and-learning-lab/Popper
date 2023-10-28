@@ -111,51 +111,13 @@ def build_seen_rule(rule, is_rec):
 def build_seen_rule_literal(handle, rule_var):
     return Literal('seen_rule', (handle, rule_var))
 
-# def parse_model(model, directions):
-#     rule_index_to_body = defaultdict(set)
-#     rule_index_to_head = {}
-
-#     for atom in model:
-#         args = atom.arguments
-#         name = atom.name
-
-#         if name == 'body_literal':
-#             rule_index = 0
-#             predicate = args[1].name
-#             atom_args = args[3].arguments
-#             atom_args = tuple(arg_lookup[arg] for arg in atom_args)
-#             arity = len(atom_args)
-#             body_literal = (predicate, atom_args, arity)
-#             rule_index_to_body[rule_index].add(body_literal)
-
-#     prog = []
-#     rule_lookup = {}
-
-#     for rule_index in rule_index_to_head:
-#         head = settings.head_literal
-#         body = set()
-#         for (body_pred, body_args, body_arity) in rule_index_to_body[rule_index]:
-#             body_modes = tuple(directions[body_pred][i] for i in range(body_arity))
-#             body.add(Literal(body_pred, body_args, body_modes))
-#         body = frozenset(body)
-#         rule = head, body
-#         prog.append((rule))
-#         rule_lookup[rule_index] = rule
-
-#     rule_ordering = defaultdict(set)
-#     for r1_index, lower_rule_indices in rule_index_ordering.items():
-#         r1 = rule_lookup[r1_index]
-#         rule_ordering[r1] = set(rule_lookup[r2_index] for r2_index in lower_rule_indices)
-
-#     return frozenset(prog), rule_ordering, directions
-
-# @profile
 def parse_model_recursion(settings, model):
     rule_index_to_body = defaultdict(set)
     rule_index_to_head = {}
     rule_index_ordering = defaultdict(set)
 
     head = settings.head_literal
+    cached_literals = settings.cached_literals
 
     for atom in model:
         name = atom.name
@@ -163,11 +125,9 @@ def parse_model_recursion(settings, model):
             args = atom.arguments
             rule_index = args[0].number
             predicate = args[1].name
-            atom_args = args[3].arguments
-            atom_args = tuple(arg_lookup[arg] for arg in atom_args)
-            arity = len(atom_args)
-            body_literal = (predicate, atom_args, arity)
-            rule_index_to_body[rule_index].add(body_literal)
+            atom_args = tuple(args[3].arguments)
+            literal = cached_literals[(predicate, atom_args)]
+            rule_index_to_body[rule_index].add(literal)
         elif name == 'head_literal':
             args = atom.arguments
             rule_index = args[0].number
@@ -176,18 +136,10 @@ def parse_model_recursion(settings, model):
     prog = []
     rule_lookup = {}
 
-
     directions = settings.directions
 
     for rule_index in rule_index_to_head:
-        # head_pred, head_args, head_arity = rule_index_to_head[rule_index]
-        # head_modes = tuple(directions[head_pred][i] for i in range(head_arity))
-        # head = Literal(head_pred, head_args, head_modes)
-        body = set()
-        for (body_pred, body_args, body_arity) in rule_index_to_body[rule_index]:
-            body_modes = tuple(directions[body_pred][i] for i in range(body_arity))
-            body.add(Literal(body_pred, body_args, body_modes))
-        body = frozenset(body)
+        body = frozenset(rule_index_to_body[rule_index])
         rule = head, body
         prog.append((rule))
         rule_lookup[rule_index] = rule
@@ -200,27 +152,20 @@ def parse_model_recursion(settings, model):
     return frozenset(prog), rule_ordering, directions
 
 def parse_model_single_rule(settings, model):
-    directions = settings.directions
     head = settings.head_literal
     body = set()
+    directions = settings.directions
+    cached_literals = settings.cached_literals
     for atom in model:
-        # TODO: REMOVE THE SHOW STATEMENT IN THE ASP CODE AND DROP THIS CHECK
-        if atom.name != 'body_literal':
-            continue
         args = atom.arguments
         predicate = args[1].name
-        atom_args = args[3].arguments
-        # TODO: PRECOMPUTE THESE?
-        atom_args = tuple(arg_lookup[arg] for arg in atom_args)
-        arity = len(atom_args)
-        # TODO: PRECOMPUTE THESE?
-        body_modes = tuple(directions[predicate][i] for i in range(arity))
-        literal = Literal(predicate, atom_args, body_modes)
+        atom_args = tuple(args[3].arguments)
+        literal = cached_literals[(predicate, atom_args)]
         body.add(literal)
     rule = head, frozenset(body)
     return frozenset([rule]), defaultdict(set), directions
 
-def parse_model_pi(model):
+def parse_model_pi(settings, model):
     directions = defaultdict(lambda: defaultdict(lambda: '?'))
     rule_index_to_body = defaultdict(set)
     rule_index_to_head = {}
@@ -234,7 +179,7 @@ def parse_model_pi(model):
             rule_index = args[0].number
             predicate = args[1].name
             atom_args = args[3].arguments
-            atom_args = tuple(arg_lookup[arg] for arg in atom_args)
+            atom_args = settings.cached_atom_args[tuple(atom_args)]
             arity = len(atom_args)
             body_literal = (predicate, atom_args, arity)
             rule_index_to_body[rule_index].add(body_literal)
@@ -243,7 +188,7 @@ def parse_model_pi(model):
             rule_index = args[0].number
             predicate = args[1].name
             atom_args = args[3].arguments
-            atom_args = tuple(arg_lookup[arg] for arg in atom_args)
+            atom_args = settings.cached_atom_args[tuple(atom_args)]
             arity = len(atom_args)
             head_literal = (predicate, atom_args, arity)
             rule_index_to_head[rule_index] = head_literal
@@ -346,6 +291,10 @@ class Generator:
 
         if settings.pi_enabled:
             encoding.append(f'#show direction_/3.')
+
+        if settings.pi_enabled or settings.recursion_enabled:
+            encoding.append(f'#show head_literal/4.')
+
 
         if self.settings.bkcons:
             encoding.extend(bkcons)
