@@ -10,7 +10,7 @@ from . explain import Explainer, head_connected, get_raw_prog, seen_more_general
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, theory_subsumes, rule_subsumes, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score
 from . core import Literal
 from . tester import Tester
-from . generate import Generator, Grounder, parse_model, atom_to_symbol, arg_to_symbol
+from . generate import Generator, Grounder, parse_model_pi, parse_model_recursion, parse_model_single_rule, atom_to_symbol, arg_to_symbol
 from . bkcons import deduce_bk_cons, deduce_recalls
 from . variants import find_variants
 
@@ -588,7 +588,12 @@ def popper(settings):
 
             with settings.stats.duration('parse'):
                 atoms = model.symbols(shown = True)
-                prog, rule_ordering, directions = parse_model(atoms)
+                if settings.pi_enabled:
+                    prog, rule_ordering, directions = parse_model_pi(atoms)
+                elif settings.recursion_enabled:
+                    prog, rule_ordering, directions = parse_model_recursion(settings, atoms)
+                else:
+                    prog, rule_ordering, directions = parse_model_single_rule(settings, atoms)
 
             prog_size = calc_prog_size(prog)
 
@@ -597,7 +602,6 @@ def popper(settings):
             if settings.debug:
                 settings.logger.debug(f'Program {settings.stats.total_programs}:')
                 settings.logger.debug(format_prog(prog))
-
 
             if last_size == None or prog_size != last_size:
                 size_change = True

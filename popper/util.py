@@ -5,6 +5,7 @@ import signal
 import argparse
 import os
 import logging
+from collections import defaultdict
 from time import perf_counter
 from contextlib import contextmanager
 from .core import Literal
@@ -413,10 +414,39 @@ class Settings:
         """)
         solver.ground([('bias', [])])
 
+        self.recursion_enabled = False
+        for x in solver.symbolic_atoms.by_signature('enable_recursion', arity=0):
+            self.recursion_enabled = True
+
+        self.pi_enabled = False
+        for x in solver.symbolic_atoms.by_signature('enable_pi', arity=0):
+            self.pi_enabled = True
+
+        # read directions from bias file when there is no PI
+        if not self.pi_enabled:
+            directions = defaultdict(lambda: defaultdict(lambda: '?'))
+            for x in solver.symbolic_atoms.by_signature('direction', arity=2):
+                pred = x.symbol.arguments[0].name
+                for i, y in enumerate(x.symbol.arguments[1].arguments):
+                    y = y.name
+                    if y == 'in':
+                        arg_dir = '+'
+                    elif y == 'out':
+                        arg_dir = '-'
+                    directions[pred][i] = arg_dir
+            self.directions = directions
+
         self.max_arity = 0
         for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
             self.max_arity = max(self.max_arity, x.symbol.arguments[1].number)
 
+            if not self.pi_enabled:
+                head_pred = x.symbol.arguments[0].name
+                head_arity = x.symbol.arguments[1].number
+                head_args = tuple(chr(ord('A') + i) for i in range(head_arity))
+
+                head_modes = tuple(self.directions[head_pred][i] for i in range(head_arity))
+                self.head_literal = Literal(head_pred, head_args, head_modes)
 
         self.body_preds = set()
         for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
@@ -435,13 +465,6 @@ class Settings:
         for x in solver.symbolic_atoms.by_signature('max_clauses', arity=1):
             self.max_rules = x.symbol.arguments[0].number
 
-        self.recursion_enabled = False
-        for x in solver.symbolic_atoms.by_signature('enable_recursion', arity=0):
-            self.recursion_enabled = True
-
-        self.pi_enabled = False
-        for x in solver.symbolic_atoms.by_signature('enable_pi', arity=0):
-            self.pi_enabled = True
 
         if self.max_rules == None:
             if self.recursion_enabled or self.pi_enabled:
@@ -459,14 +482,6 @@ class Settings:
         self.logger.debug(f'Max body: {self.max_body}')
 
         self.single_solve = not (self.recursion_enabled or self.pi_enabled)
-
-    # def print_incomplete_solution(self, prog, tp, fn, size):
-    #     self.logger.info('*'*20)
-    #     self.logger.info('New best hypothesis:')
-    #     self.logger.info(f'tp:{tp} fn:{fn} size:{size}')
-    #     for rule in order_prog(prog):
-    #         self.logger.info(format_rule(order_rule(rule)))
-    #     self.logger.info('*'*20)
 
 
     def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):

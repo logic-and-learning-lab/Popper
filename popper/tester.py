@@ -12,7 +12,6 @@ import clingo.script
 import pkg_resources
 from . core import Literal
 from . explain import prog_hash, get_raw_prog
-from . generate import parse_model
 from collections import defaultdict
 
 class Tester():

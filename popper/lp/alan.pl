@@ -15,10 +15,9 @@
 
 #show head_literal/4.
 #show body_literal/4.
-#show direction_/3.
 #show before/2.
-#show size/1.
-
+%% #show size/1.
+%% #show direction_/3.
 %% #heuristic size(N). [1000-N,true]
 
 
