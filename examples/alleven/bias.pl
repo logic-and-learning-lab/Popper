@@ -23,3 +23,5 @@ direction(last,(in,out)).
 direction(empty,(in,)).
 direction(zero,(in,)).
 direction(even,(in,)).
+
+%% max_vars(3).

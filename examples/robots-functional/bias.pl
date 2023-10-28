@@ -1,4 +1,3 @@
-max_body(3). % speed up the example
 enable_recursion.
 
 head_pred(f,2).

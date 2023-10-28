@@ -48,3 +48,7 @@ direction(upright,(in,)).
 direction(lhs,(in,)).
 direction(rhs,(in,)).
 direction(strange,(in,)).
+
+:-
+    clause(C),
+    #count{V : clause_var(C,V),var_type(C,V,state)} != 1.

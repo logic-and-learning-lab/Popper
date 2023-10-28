@@ -8,19 +8,10 @@ from itertools import chain, combinations
 import pkg_resources
 from pyswip import Prolog
 from contextlib import contextmanager
-from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive
+from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, theory_subsumes
 from . core import Literal
 import clingo
 import clingo.script
-
-def rule_hash(rule):
-    head, body = rule
-    body = frozenset((lit.predicate, lit.arguments) for lit in body)
-    if head:
-        new_rule = ((head.predicate, head.arguments), body)
-    else:
-        new_rule = (False, body)
-    return hash(new_rule)
 
 def rename_variables(rule):
     head, body = rule
@@ -45,7 +36,6 @@ def rename_variables(rule):
         new_body.append((body_literal.predicate, tuple(new_args)))
     return (head, new_body)
 
-
 def get_raw_prog(prog):
     xs = set()
     for rule in prog:
@@ -53,14 +43,25 @@ def get_raw_prog(prog):
         xs.add((h, frozenset(b)))
     return frozenset(xs)
 
+def get_raw_prog2(prog):
+    xs = set()
+    for head, body in prog:
+        if head:
+            new_head = (head.predicate, head.arguments)
+        else:
+            new_head = None
+        new_body = frozenset((atom.predicate, atom.arguments) for atom in body)
+        new_rule = (new_head, new_body)
+        xs.add(new_rule)
+    return frozenset(xs)
+
 def prog_hash(prog):
     new_prog = get_raw_prog(prog)
     return hash(new_prog)
 
-def headless_hash(subprog):
-    rule = subprog[0]
-    head, body = rename_variables(rule)
-    return hash(frozenset(body))
+def non_empty_powerset(iterable):
+    s = tuple(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
 
 class Explainer:
 
@@ -68,10 +69,12 @@ class Explainer:
         self.settings = settings
         self.tester = tester
         self.seen_prog = set()
+        self.savings = 0
+        self.unsat = set()
 
     def add_seen(self, prog):
-        k = prog_hash(prog)
-        self.seen_prog.add(k)
+        self.seen_prog.add(get_raw_prog(prog))
+        self.seen_prog.add(get_raw_prog2(prog))
 
     def build_test_prog(self, subprog, directions):
         test_prog = []
@@ -89,43 +92,72 @@ class Explainer:
             test_prog.append(rule)
         return test_prog
 
-    def explain_totally_incomplete(self, prog, directions):
-        return self.explain_totally_incomplete_aux(prog, directions, 0, set(), set())
+    def explain_totally_incomplete(self, prog, directions, noisy=False):
+        return list(self.explain_totally_incomplete_aux2(prog, directions, set(), set(), noisy=noisy))
 
-    def explain_totally_incomplete_aux(self, prog, directions, depth, sat=set(), unsat=set()):
+    def explain_totally_incomplete_aux2(self, prog, directions, sat=set(), unsat=set(), noisy=False):
         has_recursion = prog_is_recursive(prog)
 
-        for subprog in find_subprogs(prog, has_recursion):
-            headless = is_headless(subprog)
+        out = []
+        for subprog in generalisations(prog, has_recursion):
+            raw_prog2 = get_raw_prog2(subprog)
 
-            if headless:
-                k = headless_hash(subprog)
-            else:
-                k = prog_hash(subprog)
+            # print('\t\t',format_prog(subprog))
 
-            if k in self.seen_prog:
+            if raw_prog2 in self.seen_prog:
                 continue
 
-            self.seen_prog.add(k)
-
             raw_prog = get_raw_prog(subprog)
+            if raw_prog in self.seen_prog:
+                continue
+
+            self.seen_prog.add(raw_prog)
+            self.seen_prog.add(raw_prog2)
+
+            def should_skip():
+                if len(subprog) > 0:
+                    return False
+                h_, b_ = list(subprog)[0]
+                for x in non_empty_powerset(b_):
+                    if get_raw_prog2([(None,x)]) in self.unsat:
+                        return True
+                    if get_raw_prog2([(h_,x)]) in self.unsat:
+                        return True
+                return False
+
+            if should_skip():
+                continue
+                # pass
 
             if seen_more_general_unsat(raw_prog, unsat):
                 continue
+                # pass
 
-            if seen_more_specific_sat(raw_prog, sat):
+            if seen_more_general_unsat(raw_prog2, unsat):
+                continue
+                # pass
+
+
+            if not prog_is_ok(subprog):
+                xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat, noisy)
+                out.extend(xs)
                 continue
 
             if self.tester.has_redundant_literal(subprog):
+                xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat, noisy)
+                out.extend(xs)
                 continue
 
             if len(subprog) > 2 and self.tester.has_redundant_rule(subprog):
-                continue
-
-            if len(subprog) > 1 and has_recursion and any(not recursive_input_is_ok(rule) for rule in subprog):
+                xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat, noisy)
+                out.extend(xs)
                 continue
 
             test_prog = self.build_test_prog(subprog, directions)
+
+            headless = is_headless(subprog)
+
+            # print('\t\t\t testing',format_prog(subprog))
 
             if headless:
                 body = test_prog[0][1]
@@ -133,26 +165,33 @@ class Explainer:
                     sat.add(raw_prog)
                     continue
             else:
-                if self.tester.is_sat(test_prog):
+                if self.tester.is_sat(test_prog, noisy):
+                    # print('\t\t\t SAT',format_prog(subprog))
                     sat.add(raw_prog)
                     continue
+                # print('\t\t\t UNSAT',format_prog(subprog))
 
             unsat.add(raw_prog)
-            xs = list(self.explain_totally_incomplete_aux(subprog, directions, depth+1, sat, unsat))
+            unsat.add(raw_prog2)
+            self.unsat.add(raw_prog)
+            self.unsat.add(raw_prog2)
+
+            xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat)
             if len(xs):
-                yield from xs
+                out.extend(xs)
             else:
-                yield subprog, headless
+                out.append((subprog, headless))
+        return out
 
 def has_valid_directions(rule):
     head, body = rule
 
     if head:
+        if len(head.inputs) == 0:
+            return True
+
         grounded_variables = head.inputs
         body_literals = set(body)
-
-        if head.inputs == []:
-            return rule
 
         while body_literals:
             selected_literal = None
@@ -198,54 +237,114 @@ def has_valid_directions(rule):
 
         return True
 
-def find_subrules(rule, force_head, recursive):
-    for rule in find_subrules_aux(rule, force_head, recursive):
-        head, body = rule
-        if head and not head_connected(rule):
-            continue
-        if not head and not connected(body):
-            continue
-        if not has_valid_directions(rule):
-            continue
-        if head and recursive and not rule_is_recursive(rule) and singleton_head(rule):
-            continue
-        # %% head input arg in a recursive rule must appear in the bod
-        yield rule
-
-def find_subrules_aux(rule, force_head, recursive):
-    head, body = rule
-
-    if recursive and rule_is_recursive(rule):
-        # recursive literals
-        b1 = frozenset(literal for literal in body if literal.predicate == head.predicate)
-        # non-recursive literals
-        b2 = frozenset(literal for literal in body if literal.predicate != head.predicate)
-
-        if len(b2) > 2:
-            for b in combinations(b2, len(b2)-1):
-                yield (head, b1.union(b))
-        return
-
-    if head != None and len(body) > 1:
-        for b in combinations(body, len(body)-1):
-            yield (head, b)
-
-        if not force_head and len(body) > 1:
-            yield (None, body)
-
-    if head == None and len(body) > 2:
-        for b in combinations(body, len(body)-1):
-            yield (None, b)
-
 def find_subprogs(prog, recursive):
     prog = list(prog)
-
     force_head = len(prog) > 1
 
     for i in range(len(prog)):
         rule = prog[i]
         for subrule in find_subrules(rule, force_head, recursive):
             yield prog[:i] + [subrule] + prog[i+1:]
+
+def generalisations(prog, recursive):
+
+    if len(prog) == 1:
+        rule = list(prog)[0]
+        head, body = rule
+
+        if head and len(body) > 0:
+            new_rule = (None, body)
+            new_prog = [new_rule]
+            yield new_prog
+
+        if len(body) > 1:
+            body = list(body)
+            for i in range(len(body)):
+                new_body = body[:i] + body[i+1:]
+                new_rule = (head, frozenset(new_body))
+                new_prog = [new_rule]
+                yield new_prog
+
+    else:
+
+        prog = list(prog)
+        for i in range(len(prog)):
+            subrule = prog[i]
+            for new_subrule in generalisations([subrule],rule_is_recursive(subrule)):
+                new_prog = prog[:i] + new_subrule + prog[i+1:]
+                yield new_prog
+
+
+def prog_is_ok(prog):
+    for rule in prog:
+        head, body = rule
+        if head and not head_connected(rule):
+            return False
+
+        if not head and not connected(body):
+            return False
+
+        if not has_valid_directions(rule):
+            return False
+
+    if len(prog) == 1:
+        return True
+
+    # if more than two rules then there must be recursion
+    has_recursion = False
+    for rule in prog:
+        h, b = rule
+
+        if h == None:
+            return False
+
+        if rule_is_recursive(rule):
+            has_recursion = True
+            h, b = rule
+            if len(b) == 1:
+                return False
+
+    if not has_recursion:
+        return False
+
+
+    if needs_datalog(prog) and not tmp(prog):
+        return False
+
+    return True
+
+def needs_datalog(prog):
+    for rule in prog:
+        rec_outputs = set()
+        non_rec_inputs = set()
+        head, body = rule
+        for literal in body:
+            if literal.predicate == head.predicate:
+                rec_outputs.update(literal.outputs)
+            else:
+                # if any(x in xr)
+                non_rec_inputs.update(literal.inputs)
+        if any(x in rec_outputs for x in non_rec_inputs):
+            return True
+    return False
+
+
+def tmp(prog):
+    for rule in prog:
+        head, body = rule
+        body_args = set(x for atom in body for x in atom.arguments)
+        if any(x not in body_args for x in head.arguments):
+            return False
+    return True
+
+
+
+
+# f(A,B):- empty(A).
+# f(A,B):- tail(A,D),f(D,C),increment(C,B).
+
+# if an output argument of a recursive literal is used as an input argument to another literal then all head arguments must appear in the body
+
 
 def order_body(body):
     ordered_body = []
@@ -272,11 +371,21 @@ def order_body(body):
 
     return tuple(ordered_body)
 
+cached_head_connected = {}
 def head_connected(rule):
+    k = prog_hash([rule])
+    if k in cached_head_connected:
+        return cached_head_connected[k]
+
     head, body = rule
     head_connected_vars = set(head.arguments)
     body_literals = set(body)
 
+    if not any(x in head_connected_vars for literal in body for x in literal.arguments):
+        cached_head_connected[k] = False
+        return False
+
+    result = True
     while body_literals:
         changed = False
         for literal in body_literals:
@@ -285,9 +394,11 @@ def head_connected(rule):
                 body_literals = body_literals.difference({literal})
                 changed = True
         if changed == False and body_literals:
-            return False
+            result = False
+            break
 
-    return True
+    cached_head_connected[k] = result
+    return result
 
 def connected(body):
     if len(body) == 1:
@@ -328,22 +439,6 @@ def recursive_input_is_ok(rule):
 
 def is_headless(prog):
     return any(head == None for head, body in prog)
-
-# TODO: THIS CHECK IS NOT COMPLETE
-# IT DOES NOT ACCOUNT FOR VARIABLE RENAMING
-# R1 = (None, frozenset({('c3', ('A',)), ('c2', ('A',))}))
-# R2 = (None, frozenset({('c3', ('B',)), ('c2', ('B',), true_value(A,B))}))
-def rule_subsumes(r1, r2):
-    # r1 subsumes r2 if r1 is a subset of r2
-    h1, b1 = r1
-    h2, b2 = r2
-    if h1 != None and h2 == None:
-        return False
-    return b1.issubset(b2)
-
-def theory_subsumes(prog1, prog2):
-    # P1 subsumes P2 if for every rule R2 in P2 there is a rule R1 in P1 such that R1 subsumes R2
-    return all(any(rule_subsumes(r1, r2) for r1 in prog1) for r2 in prog2)
 
 def seen_more_general_unsat(prog, unsat):
     return any(theory_subsumes(seen, prog) for seen in unsat)

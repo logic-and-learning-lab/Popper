@@ -61,6 +61,41 @@ pos_covered(Xs):-
 neg_covered(Xs):-
     findall(ID, (neg_index(ID,Atom),test_ex(Atom)), Xs).
 
+neg_uncovered(Xs):-
+    findall(ID, (neg_index(ID,Atom),\+test_ex(Atom)), Xs).
+
+is_more_inconsistent(Xs):-
+    neg_index(Id,Atom),
+    \+member(Id,Xs),
+    test_ex(Atom),!.
+
+covers_any(Xs,Id):-
+    member(Id,Xs),
+    neg_index(Id,Atom),
+    test_ex(Atom),
+    %% writeln(Id),
+    !.
+
+
+prog1_covers(Atom):-
+    Atom =.. [_|T],
+    List2 = [prog1|T],
+    Atom2 =..List2,
+    call(Atom2).
+
+prog2_covers(Atom):-
+    Atom =.. [_|T],
+    List2 = [prog2|T],
+    Atom2 =..List2,
+    call(Atom2).
+
+covers_more:-
+    neg_index(_,Atom),
+    prog2_covers(Atom),
+    \+prog1_covers(Atom),!.
+
+
+
 inconsistent:-
     neg_index(_,Atom),
     test_ex(Atom),!.
@@ -68,6 +103,17 @@ inconsistent:-
 sat:-
     pos_index(_,Atom),
     test_ex(Atom),!.
+
+succeeds_k_times(Goal,Body,Times):-
+    Counter = counter(0),
+    Goal,
+    once(Body),
+    arg(1, Counter, N0),
+    N is N0 + 1,
+    ((N>=Times -> true,!);
+    (nb_setarg(1, Counter, N),
+    fail)).
+
 
 %% ========== FUNCTIONAL CHECKS ==========
 non_functional:-
@@ -78,6 +124,9 @@ non_functional:-
 
 subsumes(C,D) :- \+ \+ (copy_term(D,D2), numbervars(D2,0,_), subset(C,D2)).
 
+
+%% subsumes2(C,D) :- \+ \+ (copy_term(D,D2), numbervars(D2,0,_), writeln(D2),subset(C,D2)).
+
 subset([], _D).
 subset([A|B], D):-
     member(A, D),
@@ -86,6 +135,8 @@ subset([A|B], D):-
 redundant_literal(C1):-
     select(_,C1,C2),
     subsumes(C1,C2),!.
+    %% writeln(C1),
+    %% writeln(C2).
 
 redundant_clause(P1):-
     select(C1,P1,P2),
@@ -97,3 +148,52 @@ find_redundant_rule(P1,K1,K2):-
     select(K1-C1,P1,P2),
     member(K2-C2,P2),
     subsumes(C1,C2),!.
+
+
+subsumes2(A,B):-
+    subsumes(A,B),
+    writeln(asda),
+    writeln(A),
+    writeln(B),
+    \+ subsumes(B,A).
+
+subsumes2(A,B):-
+    subsumes(A,B),
+    subsumes(B,A),
+    length(A,N1),
+    length(B,N2),
+    writeln(asda-N1-N2),
+    writeln(A),
+    writeln(B),
+    %% writeln(N1-N2),
+    N1 =< N2.
+
+%% subsumes2(A,B):-
+%%     subsumes(A,B),
+%%     subsumes(B,A),
+%%     length(A,N1),
+%%     length(B,N2),
+%%     writeln(asda-N1-N2),
+%%     writeln(A),
+%%     writeln(B),
+%%     %% writeln(N1-N2),
+%%     N1 < N2.
+%% %% TODO: ADD MEANINGFUL COMMENT
+%% reduce_theory(P1,K2):-
+%%     %% writeln(P1),
+%%     %% writeln(P2),
+%%     reduce_theory_(P1,P2),
+%%     findall(K, member(K-_,P2), K2).
+
+%% reduce_theory_(P1,P2):-
+%%     select(K1-C1,P1,P3),
+%%     member(K2-C2,P3),
+%%     subsumes(C1,C2),!,
+%%     %% writeln(asda),
+%%     %% writeln(C1),
+%%     %% writeln(C2),
+%%     %% subsumes2(C2,C1),!,
+%%     %% writeln(K1-K2),
+%%     reduce_theory_(P3,P2).
+
+%% reduce_theory_(P1,P1).

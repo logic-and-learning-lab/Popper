@@ -1,3 +1,6 @@
+
+:-style_check(-discontiguous).
+
 blue(p0_2).
 blue(p10_1).
 blue(p10_3).

@@ -1,12 +1,16 @@
+from enum import Enum
 import clingo
 import clingo.script
 import signal
 import argparse
 import os
 import logging
+from itertools import permutations
+from collections import defaultdict
 from time import perf_counter
 from contextlib import contextmanager
 from .core import Literal
+from math import comb
 
 clingo.script.enable_python()
 
@@ -19,6 +23,19 @@ MAX_RULES=2
 MAX_VARS=6
 MAX_BODY=6
 MAX_EXAMPLES=10000
+BATCH_SIZE=100
+
+
+# class syntax
+class Constraint(Enum):
+    GENERALISATION = 1
+    SPECIALISATION = 2
+    UNSAT = 3
+    REDUNDANCY_CONSTRAINT1 = 4
+    REDUNDANCY_CONSTRAINT2 = 5
+    TMP_ANDY = 6
+    BANISH = 7
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper is an ILP system based on learning from failures')
@@ -34,9 +51,15 @@ def parse_args():
     parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
     parser.add_argument('--max-rules', type=int, default=MAX_RULES, help=f'Maximum number of rules allowed in recursive program (default: {MAX_RULES})')
     parser.add_argument('--max-examples', type=int, default=MAX_EXAMPLES, help=f'Maximum number of examples per label (positive or negative) to learn from (default: {MAX_EXAMPLES})')
+    parser.add_argument('--batch-size', type=int, default=BATCH_SIZE, help=f'combine batch size (default: {BATCH_SIZE})')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
     parser.add_argument('--bkcons', default=False, action='store_true', help='EXPERIMENTAL FEATURE: deduce background constraints from Datalog background')
     parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
+    parser.add_argument('--showcons', default=False, action='store_true', help='Show constraints deduced during the search')
+    parser.add_argument('--no-bias', default=False, action='store_true', help='EXPERIMENTAL FEATURE: do not use language bias')
+    parser.add_argument('--order-space', default=False, action='store_true', help='EXPERIMENTAL FEATURE: search space ordered by size')
+    parser.add_argument('--noisy', default=False, action='store_true', help='tell Popper that there is noise')
+
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
@@ -119,7 +142,10 @@ class Stats:
                 self.durations[operation].append(duration)
 
 def format_prog(prog):
-    return '\n'.join(format_rule(order_rule(rule)) for rule in prog)
+    return '\n'.join(format_rule(order_rule(rule)) for rule in order_prog(prog))
+
+def format_prog2(prog):
+    return '\n'.join(format_rule(order_rule2(rule)) for rule in order_prog(prog))
 
 def format_literal(literal):
     args = ','.join(literal.arguments)
@@ -133,20 +159,8 @@ def format_rule(rule):
     body_str = ','.join(format_literal(literal) for literal in body)
     return f'{head_str}:- {body_str}.'
 
-def print_prog_score(prog, score):
-    tp, fn, tn, fp, size = score
-    precision = 'n/a'
-    if (tp+fp) > 0:
-        precision = f'{tp / (tp+fp):0.2f}'
-    recall = 'n/a'
-    if (tp+fn) > 0:
-        recall = f'{tp / (tp+fn):0.2f}'
-    print('*'*10 + ' SOLUTION ' + '*'*10)
-    print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
-    print(format_prog(order_prog(prog)))
-    print('*'*30)
 
-def prog_size(prog):
+def calc_prog_size(prog):
     return sum(rule_size(rule) for rule in prog)
 
 def rule_size(rule):
@@ -190,9 +204,21 @@ def rule_is_invented(rule):
         return False
     return head.predicate.startswith('inv')
 
+def order_rule2(rule, settings=None):
+    head, body = rule
+    return (head, sorted(body, key=lambda x: (len(x.arguments), x.predicate, x.arguments)))
+
+# def mdl_score(score):
+#     _, fn, _, fp, size = score
+#     return fn + fp + size
+
+def mdl_score(fn, fp, size):
+    # _, fn, _, fp, size = score
+    return fn + fp + size
+
 def order_rule(rule, settings=None):
 
-    if settings and settings.datalog:
+    if settings and settings.bkcons:
         return order_rule_datalog(rule, settings)
 
     head, body = rule
@@ -272,7 +298,28 @@ def order_rule_datalog(rule, settings):
         seen_vars = seen_vars.union(selected_literal.arguments)
         body_literals = body_literals.difference({selected_literal})
 
+    # if not head:
+    #     print('--')
+    #     print('A',format_rule(rule))
+    #     print('B',format_rule((head, ordered_body)))
+
     return head, tuple(ordered_body)
+
+def print_prog_score(prog, score, noisy):
+    tp, fn, tn, fp, size = score
+    precision = 'n/a'
+    if (tp+fp) > 0:
+        precision = f'{tp / (tp+fp):0.2f}'
+    recall = 'n/a'
+    if (tp+fn) > 0:
+        recall = f'{tp / (tp+fn):0.2f}'
+    print('*'*10 + ' SOLUTION ' + '*'*10)
+    if noisy:
+        print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size} MDL:{size+fn+fp}')
+    else:
+      print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')  
+    print(format_prog(order_prog(prog)))
+    print('*'*30)
 
 class DurationSummary:
     def __init__(self, operation, called, total, mean, maximum):
@@ -286,7 +333,7 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False):
+    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False, showcons=False, no_bias=False, order_space=False, noisy=False, batch_size=BATCH_SIZE):
 
         if cmd_line:
             args = parse_args()
@@ -304,6 +351,11 @@ class Settings:
             max_rules = args.max_rules
             functional_test = args.functional_test
             datalog = args.datalog
+            showcons = args.showcons
+            no_bias = args.no_bias
+            order_space = args.order_space
+            noisy=args.noisy
+            batch_size=args.batch_size
         else:
             if kbpath:
                 self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
@@ -330,6 +382,8 @@ class Settings:
         self.show_stats = show_stats
         self.bkcons = bkcons
         self.datalog = datalog
+        self.showcons = showcons
+        # self.aggressive = aggressive
         self.max_literals = max_literals
         self.functional_test = functional_test
         self.timeout = timeout
@@ -338,7 +392,12 @@ class Settings:
         self.max_body = max_body
         self.max_vars = max_vars
         self.max_rules = max_rules
+        self.no_bias = no_bias
+        self.order_space = order_space
+        self.noisy = noisy
+        self.batch_size = batch_size
 
+        self.recall = {}
         self.solution = None
         self.best_prog_score = None
 
@@ -356,11 +415,39 @@ class Settings:
         """)
         solver.ground([('bias', [])])
 
-        self.body_preds = set()
-        for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
-            pred = x.symbol.arguments[0].name
-            arity = x.symbol.arguments[1].number
-            self.body_preds.add((pred, arity))
+        self.recursion_enabled = False
+        for x in solver.symbolic_atoms.by_signature('enable_recursion', arity=0):
+            self.recursion_enabled = True
+
+        self.pi_enabled = False
+        for x in solver.symbolic_atoms.by_signature('enable_pi', arity=0):
+            self.pi_enabled = True
+
+        # read directions from bias file when there is no PI
+        if not self.pi_enabled:
+            directions = defaultdict(lambda: defaultdict(lambda: '?'))
+            for x in solver.symbolic_atoms.by_signature('direction', arity=2):
+                pred = x.symbol.arguments[0].name
+                for i, y in enumerate(x.symbol.arguments[1].arguments):
+                    y = y.name
+                    if y == 'in':
+                        arg_dir = '+'
+                    elif y == 'out':
+                        arg_dir = '-'
+                    directions[pred][i] = arg_dir
+            self.directions = directions
+
+        self.max_arity = 0
+        for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
+            self.max_arity = max(self.max_arity, x.symbol.arguments[1].number)
+
+            if not self.pi_enabled:
+                head_pred = x.symbol.arguments[0].name
+                head_arity = x.symbol.arguments[1].number
+                head_args = tuple(chr(ord('A') + i) for i in range(head_arity))
+
+                head_modes = tuple(self.directions[head_pred][i] for i in range(head_arity))
+                self.head_literal = Literal(head_pred, head_args, head_modes)
 
         for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
             self.max_body = x.symbol.arguments[0].number
@@ -372,13 +459,43 @@ class Settings:
         for x in solver.symbolic_atoms.by_signature('max_clauses', arity=1):
             self.max_rules = x.symbol.arguments[0].number
 
-        self.recursion_enabled = False
-        for x in solver.symbolic_atoms.by_signature('enable_recursion', arity=0):
-            self.recursion_enabled = True
 
-        self.pi_enabled = False
-        for x in solver.symbolic_atoms.by_signature('enable_pi', arity=0):
-            self.pi_enabled = True
+        self.body_preds = set()
+        for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
+            pred = x.symbol.arguments[0].name
+            arity = x.symbol.arguments[1].number
+            self.body_preds.add((pred, arity))
+            self.max_arity = max(self.max_arity, arity)
+
+        arg_lookup = {i:chr(ord('A') + i) for i in range(100)}
+        self.cached_atom_args = {}
+        for i in range(1, self.max_arity+1):
+            for args in permutations(range(0, self.max_vars), i):
+                k = tuple(clingo.Number(x) for x in args)
+                v = tuple(arg_lookup[x] for x in args)
+                self.cached_atom_args[k] = v
+
+        if not self.pi_enabled:
+            self.body_modes = {}
+            self.cached_literals = {}
+            for pred, arity in self.body_preds:
+                self.body_modes[pred] = tuple(directions[pred][i] for i in range(arity))
+
+            for pred, arity in self.body_preds:
+                for k, args in self.cached_atom_args.items():
+                    if len(args) != arity:
+                        continue
+                    literal = Literal(pred, args, self.body_modes[pred])
+                    self.cached_literals[(pred, k)] = literal
+
+            pred = self.head_literal.predicate
+            arity = self.head_literal.arity
+            self.body_modes[pred] = tuple(directions[pred][i] for i in range(arity))
+            for k, args in self.cached_atom_args.items():
+                if len(args) != arity:
+                    continue
+                literal = Literal(pred, args, self.body_modes[pred])
+                self.cached_literals[(pred, k)] = literal
 
         if self.max_rules == None:
             if self.recursion_enabled or self.pi_enabled:
@@ -386,14 +503,116 @@ class Settings:
             else:
                 self.max_rules = 1
 
+
+        self.head_types, self.body_types = load_types(self)
+
+        self.single_solve = not (self.recursion_enabled or self.pi_enabled)
+
         self.logger.debug(f'Max rules: {self.max_rules}')
         self.logger.debug(f'Max vars: {self.max_vars}')
         self.logger.debug(f'Max body: {self.max_body}')
 
-    def print_incomplete_solution(self, prog, tp, fn, size):
+        self.single_solve = not (self.recursion_enabled or self.pi_enabled)
+
+
+    def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
         self.logger.info('*'*20)
         self.logger.info('New best hypothesis:')
-        self.logger.info(f'tp:{tp} fn:{fn} size:{size}')
+        if self.noisy:
+            self.logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} mdl:{size+fn+fp}')
+        else:
+            self.logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size}')
         for rule in order_prog(prog):
             self.logger.info(format_rule(order_rule(rule)))
         self.logger.info('*'*20)
+
+
+
+# TODO: THIS CHECK IS NOT COMPLETE
+# IT DOES NOT ACCOUNT FOR VARIABLE RENAMING
+# R1 = (None, frozenset({('c3', ('A',)), ('c2', ('A',))}))
+# R2 = (None, frozenset({('c3', ('B',)), ('c2', ('B',), true_value(A,B))}))
+def rule_subsumes(r1, r2):
+    # r1 subsumes r2 if r1 is a subset of r2
+    h1, b1 = r1
+    h2, b2 = r2
+    if h1 != None and h2 == None:
+        return False
+    return b1.issubset(b2)
+
+def theory_subsumes(prog1, prog2):
+    # P1 subsumes P2 if for every rule R2 in P2 there is a rule R1 in P1 such that R1 subsumes R2
+    return all(any(rule_subsumes(r1, r2) for r1 in prog1) for r2 in prog2)
+
+
+def load_types(settings):
+    enc = """
+#defined clause/1.
+#defined clause_var/2.
+#defined var_type/3."""
+    # solver = clingo.Control()
+    solver = clingo.Control(['-Wnone'])
+    with open(settings.bias_file) as f:
+        solver.add('bias', [], f.read())
+    solver.add('bias', [], enc)
+    solver.ground([('bias', [])])
+
+    for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
+        head_pred = x.symbol.arguments[0].name
+        head_arity = x.symbol.arguments[1].number
+
+    head_types = None
+    body_types = {}
+    for x in solver.symbolic_atoms.by_signature('type', arity=2):
+        pred = x.symbol.arguments[0].name
+        # xs = (str(t) for t in )
+        xs = [y.name for y in x.symbol.arguments[1].arguments]
+        if pred == head_pred:
+            head_types = xs
+        else:
+            body_types[pred] = xs
+
+    return head_types, body_types
+
+def bias_order(settings, max_size):
+
+    if not (settings.no_bias or settings.order_space):
+        return [(size_literals, settings.max_vars, settings.max_rules, None) for size_literals in range(1, max_size)]
+
+    # if settings.search_order is None:
+    ret = []
+    predicates = len(settings.body_preds) + 1
+    arity = settings.max_arity
+    min_rules = settings.max_rules
+    if settings.no_bias:
+        min_rules = 1
+    for size_rules in range(min_rules, settings.max_rules+1):
+        max_size = (1 + settings.max_body) * size_rules
+        for size_literals in range(1, max_size+1):
+            # print(size_literals)
+            minimum_vars = settings.max_vars
+            if settings.no_bias:
+                minimum_vars = 1
+            for size_vars in range(minimum_vars, settings.max_vars+1):
+                # FG We should not search for configurations with more variables than the possible variables for the number of litereals considered
+                # There must be at least one variable repeated, otherwise all the literals are disconnected
+                max_possible_vars = (size_literals * arity) - 1
+                # print(f'size_literals:{size_literals} size_vars:{size_vars} size_rules:{size_rules} max_possible_vars:{max_possible_vars}')
+                if size_vars > max_possible_vars:
+                    break
+
+                hspace = comb(predicates * pow(size_vars, arity), size_literals)
+
+                # AC @ FG: handy code to skip pointless unsat calls
+                if hspace == 0:
+                    continue
+                if size_rules > 1 and size_literals < 5:
+                    continue
+                ret.append((size_literals, size_vars, size_rules, hspace))
+
+    if settings.order_space:
+        ret.sort(key=lambda tup: (tup[3],tup[0]))
+
+
+    settings.search_order = ret
+    return settings.search_order
