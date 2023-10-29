@@ -222,6 +222,53 @@ class Tester():
             print('PROLOG ERROR',err)
         return neg_covered
 
+    def test_single_rule_neg_at_most_k(self, prog, k):
+        # pos_covered = frozenset()
+        neg_covered = frozenset()
+        try:
+            rule = list(prog)[0]
+            head, _body = rule
+            head, ordered_body = order_rule(rule, self.settings)
+            atom_str = format_literal(head)
+            body_str = format_rule((None,ordered_body))[2:-1]
+            if len(self.neg_index) > 0:
+                # q = f'findall(ID, limit({k},(neg_index(ID,{atom_str}),({body_str}->  true))), Xs)'
+                q = f'findfirstn({k}, ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+                xs = next(self.prolog.query(q))
+                neg_covered = frozenset(xs['Xs'])
+
+        except PrologError as err:
+            print('PROLOG ERROR',err)
+        return neg_covered
+
+    def test_single_rule_neg_at_most_k2(self, prog, k):
+        # pos_covered = frozenset()
+        neg_covered = frozenset()
+        try:
+            rule = list(prog)[0]
+            head, _body = rule
+            head, ordered_body = order_rule(rule, self.settings)
+            atom_str = format_literal(head)
+            body_str = format_rule((None,ordered_body))[2:-1]
+            if len(self.neg_index) > 0:
+                q = f'findfirstn({k}, ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+                # q = f'findfirstn(ID, limit({k},(neg_index(ID,{atom_str}),({body_str}->  true))), Xs)'
+                xs = next(self.prolog.query(q))
+                neg_covered = frozenset(xs['Xs'])
+
+        except PrologError as err:
+            print('PROLOG ERROR',err)
+        return neg_covered
+
+# succeeds_k_times(Goal,Body,Times):-
+# Counter = counter(0),
+# Goal,
+# once(Body),
+# arg(1, Counter, N0),
+# N is N0 + 1,
+# ((N>=Times -> true,!);
+# (nb_setarg(1, Counter, N),
+# fail)).
 
     def is_inconsistent(self, prog):
         if len(self.neg_index) == 0:

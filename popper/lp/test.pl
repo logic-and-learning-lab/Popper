@@ -114,6 +114,14 @@ succeeds_k_times(Goal,Body,Times):-
     (nb_setarg(1, Counter, N),
     fail)).
 
+findfirstn(N, Template, Goal_0, Instances) :-
+   findall(Template, call_firstn(Goal_0, N), Instances).
+
+call_firstn(Goal_0, N) :-
+   N + N mod 1 >= 0, % ensures that N >=0 and N is an integer
+   call_nth(Goal_0, Nth),
+   ( Nth == N -> ! ; true ).
+
 
 %% ========== FUNCTIONAL CHECKS ==========
 non_functional:-
