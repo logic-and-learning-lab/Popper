@@ -619,7 +619,7 @@ def popper(settings):
 
             # TODO: refactor out for readability
             # test a program
-            skipped = False
+            skipped, skip_early_neg = False, False
             with settings.stats.duration('test'):
                 if settings.noisy:
                     if settings.recursion_enabled or settings.pi_enabled:
@@ -627,15 +627,16 @@ def popper(settings):
                         inconsistent = len(neg_covered) > 0
                     else:
                         pos_covered = tester.test_single_rule_pos(prog)
+                        num_pos_covered = len(pos_covered)
                         if len(pos_covered) > prog_size:
-                            neg_covered = tester.test_single_rule_neg(prog)
-
-                            # SUGGESTION BY CH
-                            # test_at_most_k_neg = settings.max_body-(prog_size-1)
-
-                            # test_at_most_k_neg = len(pos_covered)-prog_size
-                            # @CH, I have added code to the tester to find at most k solutions
-                            # neg_covered = tester.test_single_rule_neg_at_most_k(prog, test_at_most_k_neg)
+                            # maximum size of specialisations allowed
+                            test_at_most_k_neg1 = min([settings.max_body-(prog_size-1), settings.max_literals-prog_size])
+                            # conditions which determine whether a program can be part of a solution
+                            test_at_most_k_neg2 = min([settings.best_mdl - prog_size, num_pos_covered-prog_size])
+                            test_at_most_k_neg = max([test_at_most_k_neg1, test_at_most_k_neg2])
+                            neg_covered = tester.test_single_rule_neg_at_most_k(prog, test_at_most_k_neg)
+                            if len(neg_covered) == test_at_most_k_neg:
+                                skip_early_neg = True
 
                             inconsistent = len(neg_covered) > 0
                         else:
@@ -678,6 +679,8 @@ def popper(settings):
                         min_score = prog_size
 
                     if mdl < settings.best_mdl:
+                        if skip_early_neg:
+                            assert False
                         # if settings.delete_combine:
                             # combiner.update_deleted_progs(settings.best_mdl-min_score, mdl-min_score)
                         # HORRIBLE
@@ -806,16 +809,16 @@ def popper(settings):
                     elif len(prog) > 1 and spec_size_ < settings.max_literals:
                         spec_size = spec_size_
 
+                if skipped or skip_early_neg:
                     # only prune if the generalisation bounds are smaller than existing bounds
-                    gen_size_ = min([fn + prog_size, num_pos-fp, settings.best_mdl - mdl + num_pos + prog_size])
+                    gen_size_ = fn + prog_size
                     if gen_size_ <= prog_size:
                         add_gen = True
                     if gen_size_ < settings.max_literals:
                         gen_size = gen_size_
-
-                if skipped:
+                else:
                     # only prune if the generalisation bounds are smaller than existing bounds
-                    gen_size_ = fn + prog_size
+                    gen_size_ = min([fn + prog_size, num_pos-fp, settings.best_mdl - mdl + num_pos + prog_size])
                     if gen_size_ <= prog_size:
                         add_gen = True
                     if gen_size_ < settings.max_literals:
@@ -870,7 +873,7 @@ def popper(settings):
 
             call_combine = False
             if settings.noisy:
-                if not skipped and not is_recursive and not has_invention and tp >= prog_size+fp and num_pos_covered >= prog_size and fp+prog_size < settings.best_mdl:
+                if not skipped and not skip_early_neg and not is_recursive and not has_invention and tp >= prog_size+fp and num_pos_covered >= prog_size and fp+prog_size < settings.best_mdl:
                     success_sets_noise[tuple([pos_covered, neg_covered])] = prog
                     call_combine = True
             else:
