@@ -1,36 +1,37 @@
-
 # Popper
 
-Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) (ILP) system.
+Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) (ILP) system. 
 
-If you use Popper, please cite the paper: Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259). Mach. Learn. 110(4): 801-856 (2021)
+If you use Popper, please cite the paper: Andrew Cropper and Rolf Morel. [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259) (MLJ 2021).
 
 #### Requirements
-- [pyswip](https://github.com/yuce/pyswip) (You **_must_** install pyswip from the master branch! with  the command: `pip install git+https://github.com/yuce/pyswip@master#egg=pyswip`)
-- [SWI-Prolog](https://www.swi-prolog.org) (8.4.2 or above)
-- [Clingo](https://potassco.org/clingo/) (5.5.0 or above)
+- [pyswip](https://github.com/yuce/pyswip) (**You must install pyswip from the master branch with  the command: `pip install git+https://github.com/yuce/pyswip@master#egg=pyswip`**)
+- [SWI-Prolog](https://www.swi-prolog.org) (9.0.4 or above)
+- [Clingo](https://potassco.org/clingo/) (5.6.2 or above)
+- [pysat](https://pysathq.github.io) (3.1.0 or above)
+
 
 #### Installation
-To install the master branch, run the command:
-```pip install git+https://github.com/logic-and-learning-lab/Popper@main```
+To install the master branch, run the command: ```pip install git+https://github.com/logic-and-learning-lab/Popper@main```
 
 #### Command line usage
-Run Popper with the command `python popper.py <input dir>`. For instance, the command `python popper.py examples/dropk` produces:
-
+Run Popper with the command `python popper.py <input dir>`. For instance, the command `python popper.py examples/zend1` produces:
 ```prolog
+11:11:14 Generating programs of size: 3
+11:11:14 Generating programs of size: 4
+11:11:14 Generating programs of size: 5
+11:11:14 Generating programs of size: 6
+11:11:14 ********************
+11:11:14 New best hypothesis:
+11:11:14 tp:19 fn:1 tn:20 fp:0 size:20
+11:11:14 zendo(A):- piece(A,B),red(B),coord1(B,C),size(B,C).
+11:11:14 zendo(A):- piece(A,C),contact(C,B),blue(B),rhs(C).
+11:11:14 zendo(A):- piece(A,C),contact(C,B),red(B),upright(B).
+11:11:14 zendo(A):- piece(A,C),contact(C,B),red(B),lhs(B).
+11:11:14 ********************
 ********** SOLUTION **********
-Precision:1.00 Recall:1.00 TP:10 FN:0 TN:10 FP:0 Size:7
-f(A,B,C):- tail(A,C),one(B).
-f(A,B,C):- decrement(B,E),tail(A,D),f(D,E,C).
-******************************
-```
-
-The command `python popper.py examples/trains1` produces:
-
-```prolog
-********** SOLUTION **********
-Precision:1.00 Recall:1.00 TP:394 FN:0 TN:606 FP:0 Size:6
-f(A):- has_car(A,C),has_car(A,B),long(B),three_wheels(C),roof_closed(B).
+Precision:1.00 Recall:1.00 TP:20 FN:0 TN:20 FP:0 Size:6
+zendo(A):- piece(A,D),red(D),contact(D,B),size(B,C),small(C).
 ******************************
 ```
 
@@ -76,57 +77,15 @@ body_pred(father,2).
 
 These declarations say that each rule in a program must have the symbol *grandparent* with arity two in the head and *mother* and/or *father* in the body, also with arity two. If we call Popper with these three files it will produce the output:
 
-#### Anytime
-
-Popper is an anytime algorithm. By default, it shows intermediate solutions. For instance, the command `python popper.py examples/dropk` produces:
-
-```prolog
-08:08:54 Num. pos examples: 10
-08:08:54 Num. neg examples: 10
-08:08:54 Searching programs of size: 3
-08:08:54 Searching programs of size: 4
-08:08:54 Searching programs of size: 5
-08:08:54 Searching programs of size: 6
-08:08:54 ********************
-08:08:54 New best hypothesis:
-08:08:54 tp:1 fn:9 size:6
-08:08:54 f(A,B,C):- tail(E,C),tail(D,F),tail(F,E),even(B),tail(A,D).
-08:08:54 ********************
-08:08:56 Searching programs of size: 7
-08:08:57 ********************
-08:08:57 New best hypothesis:
-08:08:57 tp:10 fn:0 size:13
-08:08:57 f(A,B,C):- tail(A,C),element(A,B).
-08:08:57 f(A,B,C):- tail(E,C),tail(D,F),tail(F,E),even(B),tail(A,D).
-08:08:57 f(A,B,C):- decrement(B,D),tail(E,C),f(A,D,E).
-08:08:57 ********************
-08:08:58 ********************
-08:08:58 New best hypothesis:
-08:08:58 tp:10 fn:0 size:7
-08:08:58 f(A,B,C):- tail(A,C),one(B).
-08:08:58 f(A,B,C):- f(A,E,D),tail(D,C),decrement(B,E).
-08:08:58 ********************
-********** SOLUTION **********
-Precision:1.00 Recall:1.00 TP:10 FN:0 TN:10 FP:0 Size:7
-f(A,B,C):- tail(A,C),one(B).
-f(A,B,C):- decrement(B,E),f(A,E,D),tail(D,C).
-******************************
-```
-To suppress intermediate solutions, run Popper with the `--quiet` (`-q`) flag.
+#### Noisy examples
+Popper can learn from [noisy](https://arxiv.org/pdf/2308.09393.pdf) (misclassified examples). To do so, run Popper with the `--noisy` flag.
 
 #### Recursion
 To enable recursion add `enable_recursion.` to the bias file. Recursion allows Popper to learn programs where a predicate symbol appears in both the head and body of a rule, such as to find a duplicate element (`python popper.py examples/find-dupl`) in a list:
 
 ```prolog
-f(A,B):-head(A,B),tail(A,C),element(C,B).
-f(A,B):-tail(A,C),f(C,B).
-```
-Or to remove (`python popper.py examples/filter`) non-even elements from a list:
-
-```prolog
-f(A,B):-empty(A),empty(B).
-f(A,B):-tail(A,D),head(A,C),odd(C),f(D,B).
-f(A,B):-head(A,E),even(E),tail(A,C),f(C,D),prepend(E,D,B).
+f(A,B):- tail(A,C),head(A,B),element(C,B).
+f(A,B):- tail(A,C),f(C,B).
 ```
 
 Recursion is expensive, so it is best to try without it first.
@@ -189,15 +148,6 @@ inv1(A,B):-father(A,B).
 ```
 Predicate invention is currently very expensive so it is best to avoid it if possible.
 
-<!-- # Functional test
-TODO
- -->
-<!-- # Non-observational predicate learning
-
-Popper supports non-observational predicate learning, where it must learn definitions for relations not given as examples.
-See the example 'non-OPL'.
- -->
-
 #### Popper settings
 
  -  `--stats` (default: false) shows runtime statistics
@@ -209,16 +159,9 @@ See the example 'non-OPL'.
  - `--eval-timeout` (default: 0.001 seconds) sets a maximum example testing time. This flag only applies when learning recursive programs.
 
 #### Performance tips
-- If possible, transform your BK to sets of facts and use Popper with the `--bkcons` and `--datalog` flags.
-
-<!--
-To allow non-Datalog clauses, where a variable in the head need not appear in the body, add ``non_datalog.` to your bias file.
-To allow singleton variables (variables that only appear once in a clause), add `allow_singletons.` to your bias file.
-To set the maximum number of literals allow in a program use the flag  `--max-literals` (default: 40)
-To set the maximum number of body literals allowed in the body of a rule use the flag `--max-body` (default: 6)
-To set the maximum number of variables allowed in a rule use the flag `--max-vars` (default: 6)
-To set the maximum number of examples to learn from use the flag `--max-examples` (default: 10000)
--->
+- Transform your BK to Datalog rules and use the `--bkcons` and `--datalog` flags.
+- Try not to use more than 6 variables.
+- Avoid recursion and predicate invention if possible.
 
 #### Library usage
 
