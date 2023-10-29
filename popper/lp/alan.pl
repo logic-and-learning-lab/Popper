@@ -13,13 +13,8 @@
 #defined allow_singletons/0.
 #defined custom_max_size/1.
 
-%% #show head_literal/4.
 #show body_literal/4.
 #show before/2.
-%% #show size/1.
-%% #show direction_/3.
-%% #heuristic size(N). [1000-N,true]
-
 
 max_size(K):-
     custom_max_size(K).
@@ -33,19 +28,6 @@ size(N):-
     N = 2..MaxSize,
     #sum{K+1,Rule : body_size(Rule,K)} == N.
 :- not size(_).
-
-program_bounds(0..K):-
-    max_size(K).
-program_size_at_least(M):-
-    size(N),
-    program_bounds(M),
-    M <= N.
-
-size_vars(V):-
-    #max{K : clause_var(_,K)} == V + 1.
-
-size_rules(R):-
-    #max{K : clause(K)} == R + 1.
 
 pi_or_rec:-
     recursive.
@@ -361,19 +343,12 @@ before(C1,C2):-
 %% DATALOG
 :-
     not non_datalog,
-    non_datalog(Rule).
-    %% head_var(C,Var),
-    %% not body_var(C,Var).
-
-non_datalog(Rule):-
     head_var(Rule,Var),
     not body_var(Rule,Var).
-
 
 %% ELIMINATE SINGLETONS
 :-
     not allow_singletons,
-    %% singleton(_,_).
     clause_var(C,Var),
     #count{P,Vars : var_in_literal(C,P,Vars,Var)} == 1.
 
@@ -669,6 +644,7 @@ multiclause(P,A):-
 index(P,0):-
     head_pred(P,_).
 index(@py_gen_invsym(I),I):-
+    enable_pi,
     I=1..N-1,
     max_clauses(N).
 

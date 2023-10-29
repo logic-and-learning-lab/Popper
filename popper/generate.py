@@ -295,31 +295,47 @@ class Generator:
         if settings.pi_enabled or settings.recursion_enabled:
             encoding.append(f'#show head_literal/4.')
 
+        if settings.noisy:
+            encoding.append("""
+            program_bounds(0..K):- max_size(K).
+            program_size_at_least(M):- size(N), program_bounds(M), M <= N.
+            """)
 
-        if self.settings.bkcons:
+        if settings.bkcons:
             encoding.extend(bkcons)
 
         # FG Heuristic for single solve
         # - considering a default order of minimum rules, then minimum literals, and then minimum variables
         # - considering a preference for minimum hspace size parameters configuration
-        if settings.order_space and settings.single_solve:
-            horder = bias_order(settings, max_size)
-            iorder = 1
-            for (size, n_vars, n_rules, _) in horder:
-                encoding.append(f'h_order({iorder},{size},{n_vars},{n_rules}).')
-                iorder += 1
-            HSPACE_HEURISTIC = """
-            #heuristic hspace(N). [1000-N@30,true]
-            hspace(N) :- h_order(N,K,V,R), size(K), size_vars(V), size_rules(R).
-            """
-            encoding.append(HSPACE_HEURISTIC)
-        else:
-            DEFAULT_HEURISTIC = """
-            #heuristic size_rules(R). [1500-R@30,true]
-            #heuristic size(N). [1000-N@20,true]
-            #heuristic size_vars(V). [500-V@10,true]
-            """
-            encoding.append(DEFAULT_HEURISTIC)
+        if settings.single_solve:
+            if settings.order_space:
+                horder = bias_order(settings, max_size)
+                iorder = 1
+                for (size, n_vars, n_rules, _) in horder:
+                    encoding.append(f'h_order({iorder},{size},{n_vars},{n_rules}).')
+                    iorder += 1
+                HSPACE_HEURISTIC = """
+                #heuristic hspace(N). [1000-N@30,true]
+                hspace(N) :- h_order(N,K,V,R), size(K), size_vars(V), size_rules(R).
+                size_vars(V):- #max{K : clause_var(_,K)} == V + 1.
+                size_rules(R):- #max{K : clause(K)} == R + 1.
+                """
+
+                encoding.append(HSPACE_HEURISTIC)
+            elif settings.no_bias:
+                DEFAULT_HEURISTIC = """
+                size_vars(V):- #max{K : clause_var(_,K)} == V + 1.
+                size_rules(R):- #max{K : clause(K)} == R + 1.
+                #heuristic size_rules(R). [1500-R@30,true]
+                #heuristic size(N). [1000-N@20,true]
+                #heuristic size_vars(V). [500-V@10,true]
+                """
+                encoding.append(DEFAULT_HEURISTIC)
+            else:
+                DEFAULT_HEURISTIC = """
+                #heuristic size(N). [1000-N,true]
+                """
+                encoding.append(DEFAULT_HEURISTIC)
 
         encoding = '\n'.join(encoding)
 
