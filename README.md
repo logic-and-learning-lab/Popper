@@ -123,6 +123,11 @@ direction(length,(in,out)).
 direction(prepend,(in,in,out)).
 direction(geq,(in,in)).
 ```
+
+**Popper currently cannot learn with partial directions. So if you provide them, you must give them for all relations.**
+
+
+
 Directions are **optional** but can substantially reduce learning times.
 
 #### Bias
