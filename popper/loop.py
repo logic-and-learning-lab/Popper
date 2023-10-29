@@ -629,6 +629,14 @@ def popper(settings):
                         pos_covered = tester.test_single_rule_pos(prog)
                         if len(pos_covered) > prog_size:
                             neg_covered = tester.test_single_rule_neg(prog)
+
+                            # SUGGESTION BY CH
+                            # test_at_most_k_neg = settings.max_body-(prog_size-1)
+
+                            # test_at_most_k_neg = len(pos_covered)-prog_size
+                            # @CH, I have added code to the tester to find at most k solutions
+                            # neg_covered = tester.test_single_rule_neg_at_most_k(prog, test_at_most_k_neg)
+
                             inconsistent = len(neg_covered) > 0
                         else:
                             skipped = True
