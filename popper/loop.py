@@ -577,6 +577,8 @@ def popper(settings):
             spec_size = None
             gen_size = None
             size_change = False
+            neg_covered = None
+            inconsistent = None
 
             new_cons = []
 
@@ -617,21 +619,19 @@ def popper(settings):
 
             # TODO: refactor out for readability
             # test a program
+            skipped = False
             with settings.stats.duration('test'):
                 if settings.noisy:
-                    pos_covered, neg_covered = tester.test_prog_all(prog)
-                    inconsistent = len(neg_covered) > 0
-
-                    # @CH can you look into this optimisation please?
-                    # if settings.recursion_enabled or settings.pi_enabled:
-                    #     pos_covered, neg_covered = tester.test_prog_all(prog)
-                    #     inconsistent = len(neg_covered) > 0
-                    # else:
-                    #     pos_covered = tester.test_single_rule_pos(prog)
-                    #     if len(pos_covered) > prog_size:
-                    #         neg_covered = tester.test_single_rule_neg(prog)
-                    #     else:
-                    #         neg_covered = ???
+                    if settings.recursion_enabled or settings.pi_enabled:
+                        pos_covered, neg_covered = tester.test_prog_all(prog)
+                        inconsistent = len(neg_covered) > 0
+                    else:
+                        pos_covered = tester.test_single_rule_pos(prog)
+                        if len(pos_covered) > prog_size:
+                            neg_covered = tester.test_single_rule_neg(prog)
+                            inconsistent = len(neg_covered) > 0
+                        else:
+                            skipped = True
 
                 else:
                     if settings.recursion_enabled or settings.pi_enabled:
@@ -648,7 +648,7 @@ def popper(settings):
             num_pos_covered = len(pos_covered)
 
             # if non-separable program covers all examples, stop
-            if not inconsistent and num_pos_covered == num_pos and not settings.order_space:
+            if not skipped and not inconsistent and num_pos_covered == num_pos and not settings.order_space:
                 settings.solution = prog
                 settings.best_prog_score = num_pos, 0, num_neg, 0, prog_size
                 settings.best_mdl = prog_size
@@ -656,30 +656,30 @@ def popper(settings):
 
             if settings.noisy:
                 tp = len(pos_covered)
-                fp = len(neg_covered)
                 fn = num_pos-tp
-                tn = num_neg-fp
-                score = tp, fn, tn, fp, prog_size
-                mdl = mdl_score(fn, fp, prog_size)
-                if settings.debug:
-                    settings.logger.debug(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} mdl:{mdl}')
+                fp, tn = None, None
+                if not skipped:
+                    fp = len(neg_covered)
+                    tn = num_neg-fp
+                    score = tp, fn, tn, fp, prog_size
+                    mdl = mdl_score(fn, fp, prog_size)
+                    if settings.debug:
+                        settings.logger.debug(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} mdl:{mdl}')
+                    saved_scores[prog] = [fp, fn, prog_size]
+                    if not min_score:
+                        min_score = prog_size
 
-                saved_scores[prog] = [fp, fn, prog_size]
-                if not min_score:
-                    min_score = prog_size
-                # print(mdl, settings.best_mdl)
-
-                if mdl < settings.best_mdl:
-                    # if settings.delete_combine:
-                        # combiner.update_deleted_progs(settings.best_mdl-min_score, mdl-min_score)
-                    # HORRIBLE
-                    combiner.best_cost = mdl
-                    settings.best_prog_score = score
-                    settings.solution = prog
-                    settings.best_mdl = mdl
-                    settings.max_literals = mdl-1
-                    settings.print_incomplete_solution2(prog, tp, fn, tn, fp, prog_size)
-                    new_cons.extend(build_constraints_previous_hypotheses(generator, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen, mdl, prog_size))
+                    if mdl < settings.best_mdl:
+                        # if settings.delete_combine:
+                            # combiner.update_deleted_progs(settings.best_mdl-min_score, mdl-min_score)
+                        # HORRIBLE
+                        combiner.best_cost = mdl
+                        settings.best_prog_score = score
+                        settings.solution = prog
+                        settings.best_mdl = mdl
+                        settings.max_literals = mdl-1
+                        settings.print_incomplete_solution2(prog, tp, fn, tn, fp, prog_size)
+                        new_cons.extend(build_constraints_previous_hypotheses(generator, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen, mdl, prog_size))
 
             # if it does not cover any example, prune specialisations
             if num_pos_covered == 0:
@@ -691,7 +691,7 @@ def popper(settings):
                         add_redund1 = True
 
             # if consistent, prune specialisations
-            if not inconsistent:
+            if not skipped and not inconsistent:
                 add_spec = True
 
             #  if covers all positive examples prune generalisations
@@ -784,25 +784,34 @@ def popper(settings):
             if settings.noisy:
                 # if a program of size k covers less than k positive examples, we can prune its specialisations
                 # otherwise no useful mdl induction has taken place
-                if tp < prog_size:
+                if tp <= prog_size:
                     add_spec = True
 
                 # we can prune specialisations with size greater than prog_size+fp or tp
                 # only prune if the specialisation bounds are smaller than existing bounds
-                spec_size_ = min([tp, fp + prog_size])
-                if spec_size_ <= prog_size:
-                    add_spec = True
-                elif len(prog) == 1 and spec_size_ < settings.max_body + 1 and spec_size_ < settings.max_literals:
-                    spec_size = spec_size_
-                elif len(prog) > 1 and spec_size_ < settings.max_literals:
-                    spec_size = spec_size_
+                if not skipped:
+                    spec_size_ = min([tp, fp + prog_size])
+                    if spec_size_ <= prog_size:
+                        add_spec = True
+                    elif len(prog) == 1 and spec_size_ < settings.max_body + 1 and spec_size_ < settings.max_literals:
+                        spec_size = spec_size_
+                    elif len(prog) > 1 and spec_size_ < settings.max_literals:
+                        spec_size = spec_size_
 
-                # only prune if the generalisation bounds are smaller than existing bounds
-                gen_size_ = min([fn + prog_size, num_pos-fp, settings.best_mdl - mdl + num_pos + prog_size])
-                if gen_size_ <= prog_size:
-                    add_gen = True
-                if gen_size_ < settings.max_literals:
-                    gen_size = gen_size_
+                    # only prune if the generalisation bounds are smaller than existing bounds
+                    gen_size_ = min([fn + prog_size, num_pos-fp, settings.best_mdl - mdl + num_pos + prog_size])
+                    if gen_size_ <= prog_size:
+                        add_gen = True
+                    if gen_size_ < settings.max_literals:
+                        gen_size = gen_size_
+
+                if skipped:
+                    # only prune if the generalisation bounds are smaller than existing bounds
+                    gen_size_ = fn + prog_size
+                    if gen_size_ <= prog_size:
+                        add_gen = True
+                    if gen_size_ < settings.max_literals:
+                        gen_size = gen_size_
 
                 if not add_spec and False:
                     with settings.stats.duration('spec_subset'):
@@ -853,7 +862,7 @@ def popper(settings):
 
             call_combine = False
             if settings.noisy:
-                if not is_recursive and not has_invention and tp >= prog_size+fp and num_pos_covered >= prog_size and fp+prog_size < settings.best_mdl:
+                if not skipped and not is_recursive and not has_invention and tp >= prog_size+fp and num_pos_covered >= prog_size and fp+prog_size < settings.best_mdl:
                     success_sets_noise[tuple([pos_covered, neg_covered])] = prog
                     call_combine = True
             else:
@@ -933,10 +942,11 @@ def popper(settings):
             if add_spec and not pruned_sub_incomplete and not pruned_more_general and not add_redund2:
                 new_cons.append((Constraint.SPECIALISATION, prog, rule_ordering, None))
 
-            if settings.noisy and not add_spec and spec_size and not pruned_sub_incomplete:
-                if spec_size <= settings.max_literals and ((is_recursive or has_invention or spec_size <= settings.max_body)):
-                    new_cons.append((Constraint.SPECIALISATION, prog, rule_ordering, spec_size))
-                    seen_hyp_spec[fp+prog_size+mdl].append([prog, tp, fn, tn, fp, prog_size, rule_ordering])
+            if not skipped:
+                if settings.noisy and not add_spec and spec_size and not pruned_sub_incomplete:
+                    if spec_size <= settings.max_literals and ((is_recursive or has_invention or spec_size <= settings.max_body)):
+                        new_cons.append((Constraint.SPECIALISATION, prog, rule_ordering, spec_size))
+                        seen_hyp_spec[fp+prog_size+mdl].append([prog, tp, fn, tn, fp, prog_size, rule_ordering])
 
             if add_gen and not pruned_sub_inconsistent:
                 if settings.noisy or settings.recursion_enabled or settings.pi_enabled:
