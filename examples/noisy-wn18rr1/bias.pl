@@ -1,6 +1,4 @@
-max_body(5).
-max_vars(5).
-%% allow_singletons.
+allow_singletons.
 head_pred(memberofdomainregion,2).
 body_pred(memberofdomainusage,2).
 body_pred(membermeronym,2).
