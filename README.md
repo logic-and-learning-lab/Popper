@@ -154,12 +154,12 @@ inv1(A,B):-father(A,B).
 Predicate invention is currently very expensive so it is best to avoid it if possible.
 
 #### Popper settings
-
- -  `--stats` (default: false) shows runtime statistics
+ - `--noisy` (default: false) learn from [noisy](https://arxiv.org/pdf/2308.09393.pdf) (misclassified examples)
+ - `--datalog` (default: False) test programs quicker. The idea is from [Jan Struyf & Hendrik Blockeel](https://link.springer.com/chapter/10.1007/978-3-540-39917-9_22). This flag only works with Datalog programs.
+ - `--bkcons` (default: False) [discover constraints from the BK](https://arxiv.org/pdf/2202.09806.pdf). This flag only works with Datalog programs.
+ - `--stats` (default: false) shows runtime statistics
  - `--debug` (default: false) runs in debug mode
  - `--quiet` (default: False)  runs in quiet mode
- - `--bkcons` (default: False) allows Popper to [discover constraints from the BK](https://arxiv.org/pdf/2202.09806.pdf). This flag only works with Datalog programs.
- - `--datalog` (default: False) allows Popper to test programs more quickly by ordering the literals on them. This flag only works with Datalog programs.
  - `--timeout` (default: 600 seconds) sets a maximum learning time
  - `--eval-timeout` (default: 0.001 seconds) sets a maximum example testing time. This flag only applies when learning recursive programs.
 
