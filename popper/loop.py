@@ -7,7 +7,7 @@ from collections import deque
 from . explain import get_raw_prog as get_raw_prog2
 # from . combine import Combiner
 from . explain import Explainer, head_connected, get_raw_prog, seen_more_general_unsat, has_valid_directions, order_body, connected
-from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, theory_subsumes, rule_subsumes, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score
+from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, theory_subsumes, rule_subsumes, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr
 from . core import Literal
 from . tester import Tester
 from . generate import Generator, Grounder, parse_model_pi, parse_model_recursion, parse_model_single_rule, atom_to_symbol, arg_to_symbol
@@ -481,10 +481,6 @@ def load_solver(settings, tester):
         # settings.lex = True
 
 
-
-
-
-
 def popper(settings):
     with settings.stats.duration('load data'):
         tester = Tester(settings)
@@ -508,7 +504,7 @@ def popper(settings):
         # settings.best_prog = []
         settings.best_mdl = num_pos
         max_size = min((1 + settings.max_body) * settings.max_rules, num_pos)
-        
+
         # these are used to save hypotheses for which we pruned spec / gen from a certain size only
         # once we update the best mdl score, we can prune spec / gen from a better size for some of these
         seen_hyp_spec = collections.defaultdict(list)
@@ -520,11 +516,22 @@ def popper(settings):
 
     # deduce bk cons
     bkcons = []
+
     if settings.bkcons:
         settings.datalog = True
+
     if settings.bkcons or settings.datalog:
         with settings.stats.duration('recalls'):
             bkcons.extend(deduce_recalls(settings))
+    else:
+        # assume that the BK is datalog and try to deduce recalls from it
+        with suppress_stdout_stderr():
+            try:
+                with settings.stats.duration('recalls'):
+                    bkcons.extend(deduce_recalls(settings))
+                settings.datalog = True
+            except:
+                pass
 
     if settings.bkcons:
         with settings.stats.duration('bkcons'):
