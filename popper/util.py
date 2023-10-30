@@ -613,8 +613,8 @@ def bias_order(settings, max_size):
     if settings.order_space:
         ret.sort(key=lambda tup: (tup[3],tup[0]))
 
-    for x in ret:
-        print(x)
+    #for x in ret:
+    #    print(x)
 
     settings.search_order = ret
     return settings.search_order

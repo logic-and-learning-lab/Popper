@@ -317,15 +317,15 @@ class Generator:
                 HSPACE_HEURISTIC = """
                 #heuristic hspace(N). [1000-N@30,true]
                 hspace(N) :- h_order(N,K,V,R), size(K), size_vars(V), size_rules(R).
-                size_vars(V):- #max{K : clause_var(_,K)} == V + 1.
-                size_rules(R):- #max{K : clause(K)} == R + 1.
+                size_vars(V):- #count{K : clause_var(_,K)} == V.
+                size_rules(R):- #count{K : clause(K)} == R.
                 """
 
                 encoding.append(HSPACE_HEURISTIC)
             elif settings.no_bias:
                 DEFAULT_HEURISTIC = """
-                size_vars(V):- #max{K : clause_var(_,K)} == V + 1.
-                size_rules(R):- #max{K : clause(K)} == R + 1.
+                size_vars(V):- #count{K : clause_var(_,K)} == V.
+                size_rules(R):- #count{K : clause(K)} == R.
                 #heuristic size_rules(R). [1500-R@30,true]
                 #heuristic size(N). [1000-N@20,true]
                 #heuristic size_vars(V). [500-V@10,true]
