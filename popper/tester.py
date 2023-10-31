@@ -5,7 +5,7 @@ import pkg_resources
 from pyswip import Prolog
 from pyswip.prolog import PrologError
 from contextlib import contextmanager
-from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, rule_size
+from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, rule_size, calc_prog_size
 
 import clingo
 import clingo.script
@@ -547,10 +547,9 @@ class Tester():
             head, _body = rule
             head, ordered_body = order_rule(rule, self.settings)
             if noise:
-                # print('MOOOOO')
                 new_head = f'pos_index(ID,{format_literal(head)})'
                 x = format_rule((None,ordered_body))[2:-1]
-                x = f'succeeds_k_times({new_head},({x}),{rule_size(rule)}).'
+                x = f'succeeds_k_times({new_head},({x}),{rule_size(rule)}),!'
                 return self.bool_query(x)
             else:
                 head = f'pos_index(_,{format_literal(head)})'
@@ -559,6 +558,13 @@ class Tester():
                 return self.bool_query(x)
         else:
             with self.using(prog):
+                # if noise:
+                #     x = self.bool_query('sat')
+                #     y = self.bool_query(f'covers_at_least_k_pos({calc_prog_size(prog)})')
+                #     if x != y:
+                #         print(format_prog(prog))
+                #     return y
+                # else:
                 return self.bool_query('sat')
 
     def is_body_sat(self, body):
