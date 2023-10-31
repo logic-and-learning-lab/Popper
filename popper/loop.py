@@ -497,6 +497,8 @@ def popper(settings):
     num_pos = len(settings.pos_index)
     num_neg = len(settings.neg_index)
 
+    uncovered = set(settings.pos_index)
+
     if settings.noisy:
         min_score = None
         saved_scores = dict()
@@ -878,25 +880,25 @@ def popper(settings):
                 could_prune_later[prog] = pos_covered
 
 
-            call_combine = False
+            add_to_combiner = False
             if settings.noisy:
                 if not skipped and not skip_early_neg and not is_recursive and not has_invention and tp >= prog_size+fp and num_pos_covered >= prog_size and fp+prog_size < settings.best_mdl:
                     success_sets_noise[tuple([pos_covered, neg_covered])] = prog
-                    call_combine = True
+                    add_to_combiner = True
             else:
                 # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
                 if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general:
-                    call_combine = True
+                    add_to_combiner = True
 
                 if settings.order_space and not inconsistent and not subsumed and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general:
-                    call_combine = True
+                    add_to_combiner = True
 
-                if call_combine:
+                if add_to_combiner:
                     success_sets[pos_covered] = prog_size
                     if is_recursive:
                         rec_success_sets[pos_covered] = prog_size
 
-            if call_combine:
+            if add_to_combiner:
                 to_combine.append((prog, pos_covered, neg_covered))
 
                 if not settings.noisy and not has_invention and not is_recursive and WITH_OPTIMISATIONS:
@@ -905,7 +907,33 @@ def popper(settings):
                         for x in xs:
                             new_cons.append((Constraint.SPECIALISATION, x, None, None))
 
-            if to_combine and (len(to_combine) >= settings.batch_size or size_change):
+            call_combine = len(to_combine) > 0
+            call_combine = call_combine and (settings.noisy or settings.solution_found)
+            call_combine = call_combine and (len(to_combine) >= settings.batch_size or size_change)
+
+            if add_to_combiner and not settings.noisy and not settings.solution_found and not settings.recursion_enabled:
+                if any(x in uncovered for x in pos_covered):
+
+                    if settings.solution:
+                        settings.solution = settings.solution | prog
+                    else:
+                        settings.solution = prog
+                    uncovered = uncovered-pos_covered
+                    tp = num_pos-len(uncovered)
+                    fn = len(uncovered)
+                    tn = num_neg
+                    fp = 0
+                    hypothesis_size = calc_prog_size(settings.solution)
+                    settings.best_prog_score = tp, fn, tn, fp, hypothesis_size
+                    settings.print_incomplete_solution2(settings.solution, tp, fn, tn, fp, hypothesis_size)
+
+                    if len(uncovered) == 0:
+                        settings.solution_found = True
+                        settings.max_literals = hypothesis_size-1
+
+                    call_combine = len(uncovered) == 0
+
+            if call_combine:
 
                 # COMBINE
                 with settings.stats.duration('combine'):
