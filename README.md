@@ -35,8 +35,6 @@ zendo(A):- piece(A,D),red(D),contact(D,B),size(B,C),small(C).
 ******************************
 ```
 
-Look at the examples for guidance.
-
 #### Example problem
 Popper requires three files:
 - an examples file
@@ -49,8 +47,6 @@ An examples file contains positive and negative examples of the relation you wan
 pos(grandparent(ann,amelia)).
 pos(grandparent(steve,amelia)).
 pos(grandparent(ann,spongebob)).
-pos(grandparent(steve,spongebob)).
-pos(grandparent(linda,amelia)).
 neg(grandparent(amy,amelia)).
 ```
 
@@ -67,7 +63,7 @@ father(gavin,amelia).
 father(andy,spongebob).
 ```
 
-A bias file contains the information necessary to restrict the search space of Popper. **Predicate declarations** tell Popper which predicate symbols it can use in the head or body of a rule, such as:
+A bias file contains the information necessary to restrict the search space of Popper. Predicate declarations tell Popper which predicate symbols it can use in the head or body of a rule, such as:
 
 ```prolog
 head_pred(grandparent,2).
@@ -75,10 +71,10 @@ body_pred(mother,2).
 body_pred(father,2).
 ```
 
-These declarations say that each rule in a program must have the symbol *grandparent* with arity two in the head and *mother* and/or *father* in the body, also with arity two. If we call Popper with these three files it will produce the output:
+These declarations say that each rule in a program must have the symbol *grandparent* with arity two in the head and *mother* and/or *father* in the body, also with arity two. 
 
 #### Noisy examples
-Popper can learn from [noisy](https://arxiv.org/pdf/2308.09393.pdf) (misclassified examples). To do so, run Popper with the `--noisy` flag.
+Popper can learn from [noisy](https://arxiv.org/pdf/2308.09393.pdf) with the `--noisy` flag.
 
 #### Recursion
 To enable recursion add `enable_recursion.` to the bias file. Recursion allows Popper to learn programs where a predicate symbol appears in both the head and body of a rule, such as to find a duplicate element (`python popper.py examples/find-dupl`) in a list:
@@ -91,20 +87,18 @@ f(A,B):- tail(A,C),f(C,B).
 Recursion is expensive, so it is best to try without it first.
 
 #### Types
-Popper supports **optional** type annotations in the bias file.A type annotation is of the form `type(p,(t1,t2,...,tk)` for a predicate symbol `p` with arity `k`, such as:
+Popper supports type annotations in the bias file. A type annotation is of the form `type(p,(t1,t2,...,tk)` for a predicate symbol `p` with arity `k`, such as:
 
 ```prolog
-type(f,(list,list)).
 type(head,(list,element)).
 type(tail,(list,list)).
+type(length,(list,int,)).
 type(empty,(list,)).
-type(odd,(element,)).
-type(even,(element,)).
 type(prepend,(element,list,list)).
 ```
-These types are **optional** but can help reduce learning times.
+Types are **optional** but can help reduce learning times.
 
-### Directions
+#### Directions
 Prolog often requires arguments to be ground. For instance, when asking Prolog to answer the query:
 ```prolog
 X is 3+K.
@@ -113,7 +107,7 @@ It throws an error:
 ```prolog
 ERROR: Arguments are not sufficiently instantiated
 ```
-To avoid theses issues, Popper supports **optional** direction annotations. A direction annotation is of the form `direction(p,(d1,d2,...,dk)` for a predicate symbol `p` with arity `k`, where each `di` is either `in` or `out`.
+To avoid these issues, Popper supports **optional** direction annotations. A direction annotation is of the form `direction(p,(d1,d2,...,dk)` for a predicate symbol `p` with arity `k`, where each `di` is either `in` or `out`.
 An `in` variable must be ground when calling the relation. By contrast, an `out` variable need not be ground. Here are example directions:
 
 ```prolog
@@ -124,9 +118,7 @@ direction(prepend,(in,in,out)).
 direction(geq,(in,in)).
 ```
 
-**Popper currently cannot learn with partial directions. So if you provide them, you must give them for all relations.**
-
-
+**Popper cannot learn with partial directions. If you provide them, you must provide them for all relations.**
 
 Directions are **optional** but can substantially reduce learning times.
 
@@ -155,7 +147,6 @@ Predicate invention is currently very expensive so it is best to avoid it if pos
 
 #### Popper settings
  - `--noisy` (default: false) learn from [noisy](https://arxiv.org/pdf/2308.09393.pdf) (misclassified examples)
- - `--datalog` (default: False) test programs quicker. The idea is from [Jan Struyf & Hendrik Blockeel](https://link.springer.com/chapter/10.1007/978-3-540-39917-9_22). This flag only works with Datalog programs.
  - `--bkcons` (default: False) [discover constraints from the BK](https://arxiv.org/pdf/2202.09806.pdf). This flag only works with Datalog programs.
  - `--stats` (default: false) shows runtime statistics
  - `--debug` (default: false) runs in debug mode
@@ -164,7 +155,8 @@ Predicate invention is currently very expensive so it is best to avoid it if pos
  - `--eval-timeout` (default: 0.001 seconds) sets a maximum example testing time. This flag only applies when learning recursive programs.
 
 #### Performance tips
-- Transform your BK to Datalog rules and use the `--bkcons` and `--datalog` flags.
+- Transform your BK to Datalog, which allows Popper to perform preprocessing on the BK.
+- If you have Datalog BK, try the `--bkcons` flag.
 - Try not to use more than 6 variables.
 - Avoid recursion and predicate invention if possible.
 
