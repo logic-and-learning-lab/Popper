@@ -104,6 +104,20 @@ sat:-
     pos_index(_,Atom),
     test_ex(Atom),!.
 
+covers_at_least_k_pos(K):-
+    Counter = counter(0),
+    pos_index(_,Atom),
+    once(test_ex(Atom)),
+    arg(1, Counter, N0),
+    N is N0 + 1,
+    ((N>=K -> true,!);
+    (nb_setarg(1, Counter, N),
+    fail)).
+
+%% covers_at_least_k:-
+%%     pos_index(_,Atom),
+%%     test_ex(Atom),!.
+
 succeeds_k_times(Goal,Body,Times):-
     Counter = counter(0),
     Goal,
