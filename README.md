@@ -15,7 +15,7 @@ If you use Popper, please cite the paper: Andrew Cropper and Rolf Morel. [Learni
 To install the master branch, run the command: ```pip install git+https://github.com/logic-and-learning-lab/Popper@main```
 
 #### Command line usage
-Run Popper with the command `python popper.py <input dir>`. For instance, the command `python popper.py examples/zend1` produces:
+Run Popper with the command `python popper.py <input dir>`. For instance, the command `python popper.py examples/zendo1` produces:
 ```prolog
 11:11:14 Generating programs of size: 3
 11:11:14 Generating programs of size: 4
