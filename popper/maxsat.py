@@ -1,9 +1,6 @@
 # code written by Andreas Niskanen (andreas.niskanen@helsinki.fi)
-
-
 import os, subprocess, sys, tempfile
-import time
-import uuid
+
 from pysat.formula import WCNF
 from pysat.examples.rc2 import RC2
 from pysat.card import *
@@ -39,7 +36,7 @@ def new_wcnf_to_file(hard_clauses, soft_clauses, weights, file):
     file.flush()
 
 def exact_maxsat_solve(hard_clauses, soft_clauses, weights, settings):
-    # print("Calling MaxSAT solver!")
+    #print("Calling MaxSAT solver!")
     settings.stats.maxsat_calls += 1
     if settings.exact_maxsat_solver == "rc2":
         rc2 = RC2(WCNF())
@@ -49,27 +46,20 @@ def exact_maxsat_solve(hard_clauses, soft_clauses, weights, settings):
             if w == 0:
                 continue
             rc2.add_clause(clause, weight=w)
-
-        # x = uuid.uuid1()
-        # t1 = time.time()
-        # print('CALLING COMPUTE', x)
-        # with open(f'sat/platform-jumpers-{x}.wcnf',mode="w", ) as tmp:
-            # new_wcnf_to_file(hard_clauses, soft_clauses, weights, tmp)
-        # with open(f'sat/tron-legal-{x}.wcnf',mode="w", ) as tmp:
-            # new_wcnf_to_file(hard_clauses, soft_clauses, weights, tmp)
         model = rc2.compute()
-        # print('COMPUTE TIME', x, time.time()-t1)
         if model is not None:
             return rc2.cost, model
         return float("inf"), None
     elif settings.old_format is False:
+        # print('here!!!')
         with tempfile.NamedTemporaryFile(mode="w", suffix=".wcnf") as tmp:
             new_wcnf_to_file(hard_clauses, soft_clauses, weights, tmp)
             #another = open("test_" + str(settings.stats.maxsat_calls) + ".wcnf", "w")
             #new_wcnf_to_file(hard_clauses, soft_clauses, weights, another)
             #another.close()
             try:
-                output = subprocess.check_output([os.path.join(os.path.dirname(__file__), settings.exact_maxsat_solver)] + settings.exact_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
+                # output = subprocess.check_output([os.path.join(os.path.dirname(__file__), settings.exact_maxsat_solver)] + settings.exact_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
+                output = subprocess.check_output([settings.exact_maxsat_solver] + settings.exact_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
             except subprocess.CalledProcessError as error:
                 output = error.output.decode("utf-8").split("\n")
         if "s UNSATISFIABLE" in output:
@@ -126,7 +116,7 @@ def anytime_maxsat_solve(hard_clauses, soft_clauses, weights, settings, timeout)
             model = [i if model_line[i-1] == "1" else -i for i in range(1, len(model_line)+1)]
             return cost, model
         else:
-            print("WARNING: No solution found.")
+            # print("WARNING: No solution found.")
             #for line in output:
             #   print(line)
             return None, None
@@ -147,7 +137,7 @@ def anytime_maxsat_solve(hard_clauses, soft_clauses, weights, settings, timeout)
             model = [i if model_line[i-1] == "1" else -i for i in range(1, len(model_line)+1)]
             return cost, model
         else:
-            print("WARNING: No solution found.")
+            # print("WARNING: No solution found.")
             #for line in output:
             #   print(line)
             return None, None

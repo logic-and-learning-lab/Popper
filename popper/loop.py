@@ -456,20 +456,26 @@ def build_constraints_previous_hypotheses(generator, num_pos, num_neg, seen_hyp_
     return cons
 
 def load_solver(settings, tester):
+    print(settings.solver)
     if settings.solver == "clingo":
         if settings.noisy:
             from . combine_mdl import Combiner
             return Combiner(settings, tester)
-            print('HELLO')
-
         else:
             from . combine import Combiner
             return Combiner(settings, tester)
-    else:
+    elif settings.solver == 'rc2' or settings.solver == 'uwr':
         from . combine_ms import Combiner
         settings.maxsat_timeout = None
         settings.stats.maxsat_calls = 0
-        settings.exact_maxsat_solver="rc2"
+        if settings.solver == 'rc2':
+            settings.exact_maxsat_solver = 'rc2'
+        else:
+            settings.exact_maxsat_solver='uwrmaxsat'
+            settings.exact_maxsat_solver_params="-v0 -no-sat -no-bin -m -bm"
+
+        settings.old_format = False
+
         if settings.noisy:
             settings.lex = False
         else:
@@ -477,6 +483,9 @@ def load_solver(settings, tester):
             settings.best_mdl = False
             settings.lex_via_weights = False
         return Combiner(settings, tester)
+    else:
+        print('INVALID SOLVER')
+        exit()
 
         # settings.lex = True
 
@@ -488,10 +497,7 @@ def popper(settings):
     explainer = Explainer(settings, tester)
     grounder = Grounder(settings)
 
-    settings.solver = 'maxsat'
-    # settings.solver = 'clingo'
     settings.nonoise = not settings.noisy
-    # TODO AC: FIX
     settings.solution_found = False
 
     num_pos = len(settings.pos_index)

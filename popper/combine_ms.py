@@ -47,7 +47,7 @@ class Combiner:
         self.recursive_rules = []
 
         self.inconsistent = set()
-        self.solution_found = False
+        # self.solution_found = False
         self.max_size = None
 
     def update_deleted_progs(self, old_score, new_score):

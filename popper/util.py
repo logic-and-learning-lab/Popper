@@ -23,7 +23,7 @@ MAX_RULES=2
 MAX_VARS=6
 MAX_BODY=6
 MAX_EXAMPLES=10000
-BATCH_SIZE=500
+BATCH_SIZE=1000
 
 
 # class syntax
@@ -41,24 +41,26 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Popper is an ILP system based on learning from failures')
 
     parser.add_argument('kbpath', help='Path to files to learn from')
-    parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
-    parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
-    parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
+    parser.add_argument('--noisy', default=False, action='store_true', help='tell Popper that there is noise')
+    parser.add_argument('--bkcons', default=False, action='store_true', help='deduce background constraints from Datalog background (EXPERIMENTAL!)')
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {TIMEOUT})')
-    parser.add_argument('--eval-timeout', type=float, default=EVAL_TIMEOUT, help=f'Prolog evaluation timeout in seconds (default: {EVAL_TIMEOUT})')
     parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help=f'Maximum number of literals allowed in program (default: {MAX_LITERALS})')
     parser.add_argument('--max-body', type=int, default=MAX_BODY, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
     parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
-    parser.add_argument('--max-rules', type=int, default=MAX_RULES, help=f'Maximum number of rules allowed in recursive program (default: {MAX_RULES})')
-    parser.add_argument('--max-examples', type=int, default=MAX_EXAMPLES, help=f'Maximum number of examples per label (positive or negative) to learn from (default: {MAX_EXAMPLES})')
-    parser.add_argument('--batch-size', type=int, default=BATCH_SIZE, help=f'combine batch size (default: {BATCH_SIZE})')
-    parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
-    parser.add_argument('--bkcons', default=False, action='store_true', help='EXPERIMENTAL FEATURE: deduce background constraints from Datalog background')
-    parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
+    parser.add_argument('--max-rules', type=int, default=MAX_RULES, help=f'Maximum number of rules allowed in a recursive program (default: {MAX_RULES})')
+    parser.add_argument('--eval-timeout', type=float, default=EVAL_TIMEOUT, help=f'Prolog evaluation timeout in seconds (default: {EVAL_TIMEOUT})')
+    parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
+    parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
+    parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--showcons', default=False, action='store_true', help='Show constraints deduced during the search')
+    parser.add_argument('--solver', default='rc2', choices=['clingo', 'rc2', 'uwr'], help='Select a solver for the combine stage (default: rc2)')
+    # parser.add_argument('--max-examples', type=int, default=MAX_EXAMPLES, help=f'Maximum number of examples per label (positive or negative) to learn from (default: {MAX_EXAMPLES})')
+    parser.add_argument('--batch-size', type=int, default=BATCH_SIZE, help=f'Combine batch size (default: {BATCH_SIZE})')
+    parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
+    parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
     parser.add_argument('--no-bias', default=False, action='store_true', help='EXPERIMENTAL FEATURE: do not use language bias')
     parser.add_argument('--order-space', default=False, action='store_true', help='EXPERIMENTAL FEATURE: search space ordered by size')
-    parser.add_argument('--noisy', default=False, action='store_true', help='tell Popper that there is noise')
+
 
     return parser.parse_args()
 
@@ -333,7 +335,7 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False, showcons=False, no_bias=False, order_space=False, noisy=False, batch_size=BATCH_SIZE):
+    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False, showcons=False, no_bias=False, order_space=False, noisy=False, batch_size=BATCH_SIZE, solver='rc2'):
 
         if cmd_line:
             args = parse_args()
@@ -345,7 +347,7 @@ class Settings:
             max_literals = args.max_literals
             timeout = args.timeout
             eval_timeout = args.eval_timeout
-            max_examples = args.max_examples
+            max_examples = MAX_EXAMPLES
             max_body = args.max_body
             max_vars = args.max_vars
             max_rules = args.max_rules
@@ -354,8 +356,9 @@ class Settings:
             showcons = args.showcons
             no_bias = args.no_bias
             order_space = args.order_space
-            noisy=args.noisy
-            batch_size=args.batch_size
+            noisy = args.noisy
+            batch_size = args.batch_size
+            solver = args.solver
         else:
             if kbpath:
                 self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
@@ -396,6 +399,7 @@ class Settings:
         self.order_space = order_space
         self.noisy = noisy
         self.batch_size = batch_size
+        self.solver = solver
 
         self.recall = {}
         self.solution = None

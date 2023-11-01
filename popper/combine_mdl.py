@@ -118,8 +118,8 @@ class Combiner:
 
 
     def find_combination(self, encoding):
-        with self.settings.stats.duration('combine.build.string'):
-            str_encoding = '\n'.join(encoding)
+        # with self.settings.stats.duration('combine.build.string'):
+        str_encoding = '\n'.join(encoding)
 
         # with open('sat/mdl.pl','w') as f:
         #     f.write(str_encoding)
@@ -138,8 +138,8 @@ class Combiner:
             handle = iter(handle)
             while True:
                 # loop over the models
-                with self.settings.stats.duration('combine.solve'):
-                    m = next(handle, None)
+                # with self.settings.stats.duration('combine.solve'):
+                m = next(handle, None)
 
                 if m is None:
                     break
