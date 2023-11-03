@@ -456,23 +456,24 @@ def build_constraints_previous_hypotheses(generator, num_pos, num_neg, seen_hyp_
     return cons
 
 def load_solver(settings, tester):
-    print(settings.solver)
+    print("Load solver:", settings.solver)
     if settings.solver == "clingo":
         if settings.noisy:
             from . combine_mdl import Combiner
-            return Combiner(settings, tester)
         else:
             from . combine import Combiner
-            return Combiner(settings, tester)
-    elif settings.solver == 'rc2' or settings.solver == 'uwr':
+    elif settings.solver in ['rc2', 'uwr', 'wmaxcdcl']:
         from . combine_ms import Combiner
         settings.maxsat_timeout = None
         settings.stats.maxsat_calls = 0
         if settings.solver == 'rc2':
             settings.exact_maxsat_solver = 'rc2'
-        else:
+        elif settings.solver == 'uwr':
             settings.exact_maxsat_solver='uwrmaxsat'
             settings.exact_maxsat_solver_params="-v0 -no-sat -no-bin -m -bm"
+        else:
+            settings.exact_maxsat_solver='wmaxcdcl_static'
+            settings.exact_maxsat_solver_params=""
 
         settings.old_format = False
 
@@ -482,13 +483,31 @@ def load_solver(settings, tester):
             settings.lex = True
             settings.best_mdl = False
             settings.lex_via_weights = False
-        return Combiner(settings, tester)
     else:
         print('INVALID SOLVER')
         exit()
 
         # settings.lex = True
+    
+    print("Load anytime solver:", settings.anytime_solver)
+    if settings.anytime_solver in ['wmaxcdcl', 'nuwls']:
+        settings.maxsat_timeout = 10    # TODO: decide the timeout
+        if settings.anytime_solver == 'wmaxcdcl':
+            settings.anytime_maxsat_solver = 'wmaxcdcl_static'
+            settings.anytime_maxsat_solver_params = ""
+            settings.anytime_maxsat_solver_signal = 10
+        elif settings.anytime_solver == 'nuwls':
+            settings.anytime_maxsat_solver = 'NuWLS-c_static'
+            settings.anytime_maxsat_solver_params = ""
+            settings.anytime_maxsat_solver_signal = 15
+        else:
+            print('INVALID ANYTIME SOLVER')
+            exit()
 
+    # TODO: temporary config, need to be modified
+    settings.last_combine_stage = False
+
+    return Combiner(settings, tester)
 
 def popper(settings):
     with settings.stats.duration('load data'):

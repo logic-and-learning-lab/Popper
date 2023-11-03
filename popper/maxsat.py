@@ -51,7 +51,7 @@ def exact_maxsat_solve(hard_clauses, soft_clauses, weights, settings):
             return rc2.cost, model
         return float("inf"), None
     elif settings.old_format is False:
-        # print('here!!!')
+        # print('Using new format!')
         with tempfile.NamedTemporaryFile(mode="w", suffix=".wcnf") as tmp:
             new_wcnf_to_file(hard_clauses, soft_clauses, weights, tmp)
             #another = open("test_" + str(settings.stats.maxsat_calls) + ".wcnf", "w")
@@ -80,7 +80,8 @@ def exact_maxsat_solve(hard_clauses, soft_clauses, weights, settings):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".wcnf") as tmp:
             old_wcnf_to_file(hard_clauses, soft_clauses, weights, tmp)
             try:
-                output = subprocess.check_output([os.path.join(os.path.dirname(__file__), settings.exact_maxsat_solver)] + settings.exact_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
+                # output = subprocess.check_output([os.path.join(os.path.dirname(__file__), settings.exact_maxsat_solver)] + settings.exact_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
+                output = subprocess.check_output([settings.exact_maxsat_solver] + settings.exact_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
             except subprocess.CalledProcessError as error:
                 output = error.output.decode("utf-8").split("\n")
         if "UNSATISFIABLE" in output:
@@ -103,7 +104,8 @@ def anytime_maxsat_solve(hard_clauses, soft_clauses, weights, settings, timeout)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".wcnf") as tmp:
             new_wcnf_to_file(hard_clauses, soft_clauses, weights, tmp)
             try:
-                output = subprocess.check_output(["timeout", str(timeout), os.path.join(os.path.dirname(__file__), settings.anytime_maxsat_solver)] + settings.anytime_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
+                # output = subprocess.check_output(["timeout", str(timeout), os.path.join(os.path.dirname(__file__), settings.anytime_maxsat_solver)] + settings.anytime_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
+                output = subprocess.check_output(["timeout", "-s", str(settings.anytime_maxsat_solver_signal), str(timeout), settings.anytime_maxsat_solver] + settings.anytime_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
             except subprocess.CalledProcessError as error:
                 output = error.output.decode("utf-8").split("\n")
         if "s UNSATISFIABLE" in output:
@@ -124,7 +126,8 @@ def anytime_maxsat_solve(hard_clauses, soft_clauses, weights, settings, timeout)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".wcnf") as tmp:
             old_wcnf_to_file(hard_clauses, soft_clauses, weights, tmp)
             try:
-                output = subprocess.check_output(["timeout", str(timeout), os.path.join(os.path.dirname(__file__), settings.anytime_maxsat_solver)] + settings.anytime_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
+                # output = subprocess.check_output(["timeout", str(timeout), os.path.join(os.path.dirname(__file__), settings.anytime_maxsat_solver)] + settings.anytime_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
+                output = subprocess.check_output(["timeout", "-s", str(settings.anytime_maxsat_solver_signal), str(timeout), settings.anytime_maxsat_solver] + settings.anytime_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
             except subprocess.CalledProcessError as error:
                 output = error.output.decode("utf-8").split("\n")
         if "UNSATISFIABLE" in output:
