@@ -472,7 +472,7 @@ def load_solver(settings, tester):
             settings.exact_maxsat_solver='uwrmaxsat'
             settings.exact_maxsat_solver_params="-v0 -no-sat -no-bin -m -bm"
         else:
-            settings.exact_maxsat_solver='wmaxcdcl_static'
+            settings.exact_maxsat_solver='wmaxcdcl'
             settings.exact_maxsat_solver_params=""
 
         settings.old_format = False
@@ -491,13 +491,14 @@ def load_solver(settings, tester):
     
     print("Load anytime solver:", settings.anytime_solver)
     if settings.anytime_solver in ['wmaxcdcl', 'nuwls']:
-        settings.maxsat_timeout = 10    # TODO: decide the timeout
+        settings.maxsat_timeout = 60    # TODO: decide the timeout
         if settings.anytime_solver == 'wmaxcdcl':
-            settings.anytime_maxsat_solver = 'wmaxcdcl_static'
+            settings.anytime_maxsat_solver = 'wmaxcdcl'
             settings.anytime_maxsat_solver_params = ""
             settings.anytime_maxsat_solver_signal = 10
         elif settings.anytime_solver == 'nuwls':
-            settings.anytime_maxsat_solver = 'NuWLS-c_static'
+            # settings.old_format = True
+            settings.anytime_maxsat_solver = 'NuWLS-c'
             settings.anytime_maxsat_solver_params = ""
             settings.anytime_maxsat_solver_signal = 15
         else:
@@ -1046,7 +1047,9 @@ def popper(settings):
                 generator.constrain(new_cons, model)
 
         # if not pi_or_rec:
-        if to_combine:
+        print('LAST CALL')
+        if to_combine or True:
+            settings.last_combine_stage = True
             # TODO: AWFUL: FIX REFACOTRING
             # COMBINE
             with settings.stats.duration('combine'):
