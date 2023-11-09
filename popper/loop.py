@@ -456,7 +456,9 @@ def build_constraints_previous_hypotheses(generator, num_pos, num_neg, seen_hyp_
     return cons
 
 def load_solver(settings, tester):
-    print("Load solver:", settings.solver)
+    if settings.debug:
+        settings.logger.debug(f'Load exact solver: {settings.solver}')
+
     if settings.solver == "clingo":
         if settings.noisy:
             from . combine_mdl import Combiner
@@ -489,7 +491,10 @@ def load_solver(settings, tester):
 
         # settings.lex = True
     
-    print("Load anytime solver:", settings.anytime_solver)
+    # print("Load anytime solver:", settings.anytime_solver)
+    if settings.debug:
+        settings.logger.debug(f'Load anytime solver:{settings.anytime_solver}')
+
     if settings.anytime_solver in ['wmaxcdcl', 'nuwls']:
         settings.maxsat_timeout = 60    # TODO: decide the timeout
         if settings.anytime_solver == 'wmaxcdcl':
@@ -1047,7 +1052,7 @@ def popper(settings):
                 generator.constrain(new_cons, model)
 
         # if not pi_or_rec:
-        print('LAST CALL')
+        # print('LAST CALL')
         if to_combine or True:
             settings.last_combine_stage = True
             # TODO: AWFUL: FIX REFACOTRING

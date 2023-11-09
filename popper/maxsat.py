@@ -36,7 +36,7 @@ def new_wcnf_to_file(hard_clauses, soft_clauses, weights, file):
     file.flush()
 
 def exact_maxsat_solve(hard_clauses, soft_clauses, weights, settings):
-    print("Calling exact MaxSAT solver!")
+    # print("Calling exact MaxSAT solver!")
     settings.stats.maxsat_calls += 1
     if settings.exact_maxsat_solver == "rc2":
         rc2 = RC2(WCNF())
@@ -60,7 +60,7 @@ def exact_maxsat_solve(hard_clauses, soft_clauses, weights, settings):
             try:
                 # output = subprocess.check_output([os.path.join(os.path.dirname(__file__), settings.exact_maxsat_solver)] + settings.exact_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
                 args = [settings.exact_maxsat_solver] + settings.exact_maxsat_solver_params.split() + [tmp.name]
-                print(args)
+                # print(args)
                 output = subprocess.check_output(args).decode("utf-8").split("\n")
             except subprocess.CalledProcessError as error:
                 output = error.output.decode("utf-8").split("\n")
@@ -74,7 +74,7 @@ def exact_maxsat_solve(hard_clauses, soft_clauses, weights, settings):
             model = [i if model_line[i-1] == "1" else -i for i in range(1, len(model_line)+1)]
             return cost, model
         else:
-            print("ERROR: No optimal solution found.")
+            # print("ERROR: No optimal solution found.")
             #for line in output:
             #   print(line)
             return None, None
@@ -97,7 +97,7 @@ def exact_maxsat_solve(hard_clauses, soft_clauses, weights, settings):
             model = [i if model_line[i-1] == "1" else -i for i in range(1, len(model_line)+1)]
             return cost, model
         else:
-            print("ERROR: No optimal solution found.")
+            # print("ERROR: No optimal solution found.")
             #for line in output:
             #   print(line)
             return None, None
@@ -107,17 +107,17 @@ def anytime_maxsat_solve(hard_clauses, soft_clauses, weights, settings, timeout)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".wcnf") as tmp:
             new_wcnf_to_file(hard_clauses, soft_clauses, weights, tmp)
             try:
-                print('calling anytime')
+                # print('calling anytime')
                 # output = subprocess.check_output(["timeout", str(timeout), os.path.join(os.path.dirname(__file__), settings.anytime_maxsat_solver)] + settings.anytime_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
                 args = ["timeout", "-s", str(settings.anytime_maxsat_solver_signal), str(timeout), settings.anytime_maxsat_solver] + settings.anytime_maxsat_solver_params.split() + [tmp.name]
-                print(args)
+                # print(args)
                 output = subprocess.check_output(args).decode("utf-8").split("\n")
-                print(output)
+                # print(output)
             except subprocess.CalledProcessError as error:
-                print('errr', error)
+                # print('errr', error)
                 output = error.output.decode("utf-8").split("\n")
         if "s UNSATISFIABLE" in output:
-            print('UNSATISFIABLE')
+            # print('UNSATISFIABLE')
             return float("inf"), None
         elif "s OPTIMUM FOUND" in output or "s SATISFIABLE" in output:
             cost_line = [line for line in output if line.startswith("o ")][-1]
@@ -125,10 +125,10 @@ def anytime_maxsat_solve(hard_clauses, soft_clauses, weights, settings, timeout)
             model_line = [line for line in output if line.startswith("v ")][-1]
             model_line = model_line.replace("v ", "")
             model = [i if model_line[i-1] == "1" else -i for i in range(1, len(model_line)+1)]
-            print('SATISFIABLE', cost)
+            # print('SATISFIABLE', cost)
             return cost, model
         else:
-            print("WARNING: No solution found.")
+            # print("WARNING: No solution found.")
             #for line in output:
             #   print(line)
             return None, None
@@ -136,7 +136,7 @@ def anytime_maxsat_solve(hard_clauses, soft_clauses, weights, settings, timeout)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".wcnf") as tmp:
             old_wcnf_to_file(hard_clauses, soft_clauses, weights, tmp)
             try:
-                print('calling anytime')
+                # print('calling anytime')
                 # output = subprocess.check_output(["timeout", str(timeout), os.path.join(os.path.dirname(__file__), settings.anytime_maxsat_solver)] + settings.anytime_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
                 output = subprocess.check_output(["timeout", "-s", str(settings.anytime_maxsat_solver_signal), str(timeout), settings.anytime_maxsat_solver] + settings.anytime_maxsat_solver_params.split() + [tmp.name]).decode("utf-8").split("\n")
                 # print(output)
@@ -144,7 +144,7 @@ def anytime_maxsat_solve(hard_clauses, soft_clauses, weights, settings, timeout)
                 output = error.output.decode("utf-8").split("\n")
                 # print(output, error)
         if "UNSATISFIABLE" in output:
-            print('UNSATISFIABLE')
+            # print('UNSATISFIABLE')
             return float("inf"), None
         elif "s OPTIMUM FOUND" in output or "s SATISFIABLE" in output:
             cost_line = [line for line in output if line.startswith("o ")][-1]
@@ -152,10 +152,10 @@ def anytime_maxsat_solve(hard_clauses, soft_clauses, weights, settings, timeout)
             model_line = [line for line in output if line.startswith("v ")][-1]
             model_line = model_line.replace("v ", "")
             model = [i if model_line[i-1] == "1" else -i for i in range(1, len(model_line)+1)]
-            print('SATISFIABLE', cost)
+            # print('SATISFIABLE', cost)
             return cost, model
         else:
-            print("WARNING: No solution found.")
+            # print("WARNING: No solution found.")
             #for line in output:
             #   print(line)
             return None, None

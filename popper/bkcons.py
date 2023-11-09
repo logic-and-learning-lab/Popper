@@ -1060,7 +1060,7 @@ def deduce_recalls(settings):
     solver.ground([('base', [])])
 
     for pred, arity in settings.body_preds:
-        print(pred, arity)
+        # print(pred, arity)
         counts_all[pred] = 0
         counts[pred] = {}
         # we find all facts for a given predicate symbol
