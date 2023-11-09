@@ -489,20 +489,16 @@ def load_solver(settings, tester):
         print('INVALID SOLVER')
         exit()
 
-        # settings.lex = True
-    
-    # print("Load anytime solver:", settings.anytime_solver)
     if settings.debug:
         settings.logger.debug(f'Load anytime solver:{settings.anytime_solver}')
 
     if settings.anytime_solver in ['wmaxcdcl', 'nuwls']:
-        settings.maxsat_timeout = 60    # TODO: decide the timeout
+        settings.maxsat_timeout = settings.anytime_timeout
         if settings.anytime_solver == 'wmaxcdcl':
             settings.anytime_maxsat_solver = 'wmaxcdcl'
             settings.anytime_maxsat_solver_params = ""
             settings.anytime_maxsat_solver_signal = 10
         elif settings.anytime_solver == 'nuwls':
-            # settings.old_format = True
             settings.anytime_maxsat_solver = 'NuWLS-c'
             settings.anytime_maxsat_solver_params = ""
             settings.anytime_maxsat_solver_signal = 15
