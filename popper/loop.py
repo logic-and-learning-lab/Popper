@@ -1048,8 +1048,8 @@ def popper(settings):
                 generator.constrain(new_cons, model)
 
         # if not pi_or_rec:
-        # print('LAST CALL')
-        if to_combine or True:
+        if to_combine:
+            # print('LAST CALL')
             settings.last_combine_stage = True
             # TODO: AWFUL: FIX REFACOTRING
             # COMBINE
