@@ -1,7 +1,7 @@
 
 # Popper
 
-Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) (ILP) system.  If you use Popper, please cite the paper [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259) (MLJ 2021).
+Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) system.  If you use Popper, please cite the paper [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259) (MLJ 2021).
 
 #### Requirements
 - [pyswip](https://github.com/yuce/pyswip) (**You must install pyswip from the master branch with  the command: `pip install git+https://github.com/yuce/pyswip@master#egg=pyswip`**)
@@ -10,10 +10,10 @@ Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf)
 - [pysat](https://pysathq.github.io)
 
 #### Installation
-To install the master branch, run the command: ```pip install git+https://github.com/logic-and-learning-lab/Popper@main```
+Install Popper with the command: ```pip install git+https://github.com/logic-and-learning-lab/Popper@main```
 
 #### Command line usage
-Run Popper with the command `python popper.py <input dir>`. For instance, the command `python popper.py examples/zendo1` produces:
+Run Popper with the command `python popper.py <input dir>`. For instance, `python popper.py examples/zendo1` produces:
 ```prolog
 11:11:14 Generating programs of size: 3
 11:11:14 Generating programs of size: 4
@@ -61,7 +61,7 @@ father(gavin,amelia).
 father(andy,spongebob).
 ```
 
-A bias file contains the information that defines the search space of Popper. Predicate declarations tell Popper which predicate symbols it can use in the head (`head_pred`) or body (`body_pred`) of a rule, such as:
+A bias file defines the search space of Popper. Predicate declarations tell Popper which predicate symbols it can use in the head (`head_pred`) or body (`body_pred`) of a rule, such as:
 
 ```prolog
 head_pred(grandparent,2).
@@ -125,7 +125,7 @@ Popper has three important bias settings:
 - `max_body(N)` sets the maximum number of body literals in a rule to `N` (default: 6)
 - `max_clauses(N)` sets the maximum number of rules/clauses to `N` (default: 1 or 2 if `enable_recursion` is set)
 
-These settings greatly influence performance. If the values are too high then Popper might struggle to learn a solution. If the settings are too low then the search space might be too small to contain a good solution. You can set these settings in the bias file or through the command line (see `--help`).
+These settings greatly influence performance. If the values are too high then Popper might struggle to learn a solution. If the settings are too low then the search space might be too small to contain a good solution. 
 
 **IMPORTANT: do not supply max_clauses if you are learning non-recursive programs.**
 
@@ -143,7 +143,7 @@ To enable PI, add the setting `enable_pi.` to the bias file. However, predicate 
 
 #### Popper settings
  - `--noisy` (default: false) learn from [noisy](https://arxiv.org/pdf/2308.09393.pdf) (misclassified examples)
- - `--bkcons` (default: False) [discover constraints from the BK](https://arxiv.org/pdf/2202.09806.pdf). This flag only works with Datalog programs.
+ - `--bkcons` (default: False) [discover constraints from the BK](https://arxiv.org/pdf/2202.09806.pdf). This flag can greatly improve performance but only works with Datalog programs.
  - `--stats` (default: false) shows runtime statistics
  - `--debug` (default: false) runs in debug mode
  - `--quiet` (default: False)  runs in quiet mode
@@ -158,10 +158,13 @@ To enable PI, add the setting `enable_pi.` to the bias file. However, predicate 
 Popper uses various MaxSAT solvers. By default, Popper uses the [RC2](https://alexeyignatiev.github.io/assets/pdf/imms-jsat19-preprint.pdf) exact solver provided by PySAT. However, we have found that other solvers work *much* better. Popper supports these solvers:
 
 - UWrMaxSat (exact)
-- MaxCDCL (exact)
+- WMaxCDCL (exact)
 - NuWLS (anytime)
 
-You can download and compile these solvers from the [MaxSAT 2023 evaluation](https://maxsat-evaluations.github.io/2023/descriptions.html) website. We **strongly** recommend using these solvers. To use them, ensure that the solver is available on your path. For instance, for UWrMaxSat, ensure that `uwrmaxsat` is on your path so Popper can call it.
+You can download and compile these solvers from the [MaxSAT 2023 evaluation](https://maxsat-evaluations.github.io/2023/descriptions.html) website. We **strongly** recommend using these solvers. To use them, ensure that the solver is available on your path. 
+To use UWrMaxSat, ensure that `uwrmaxsat` is on your path.
+To use NuWLS, ensure that `NuWLS-c` is on your path.
+To use WMaxCDCL, ensure that `wmaxcdcl` is on your path.
 
 #### Performance tips
 - Transform your BK to Datalog, which allows Popper to perform preprocessing on the BK.
