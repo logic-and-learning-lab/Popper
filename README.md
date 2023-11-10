@@ -7,7 +7,7 @@ Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf)
 - [pyswip](https://github.com/yuce/pyswip) (**You must install pyswip from the master branch with  the command: `pip install git+https://github.com/yuce/pyswip@master#egg=pyswip`**)
 - [SWI-Prolog](https://www.swi-prolog.org) (9.0.4 or above)
 - [Clingo](https://potassco.org/clingo/) (5.6.2 or above)
-- [pysat](https://pysathq.github.io) (3.1.0 or above)
+- [pysat](https://pysathq.github.io)
 
 #### Installation
 To install the master branch, run the command: ```pip install git+https://github.com/logic-and-learning-lab/Popper@main```
