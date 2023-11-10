@@ -171,7 +171,7 @@ To use WMaxCDCL, ensure that `wmaxcdcl` is on your path.
 - If you have Datalog BK, try the `--bkcons` flag.
 - Try not to use more than 6 variables.
 - Avoid recursion and predicate invention if possible.
-- Use one of the solvers above, especially an anytime solver.
+- Use one of the solvers above, especially the NuWLS anytime solver.
 
 #### Library usage
 
