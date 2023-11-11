@@ -161,10 +161,7 @@ Popper uses various MaxSAT solvers. By default, Popper uses the [RC2](https://al
 - WMaxCDCL (exact)
 - NuWLS (anytime)
 
-You can download and compile these solvers from the [MaxSAT 2023 evaluation](https://maxsat-evaluations.github.io/2023/descriptions.html) website. We **strongly** recommend using these solvers. To use them, ensure that the solver is available on your path. 
-To use UWrMaxSat, ensure that `uwrmaxsat` is on your path.
-To use NuWLS, ensure that `NuWLS-c` is on your path.
-To use WMaxCDCL, ensure that `wmaxcdcl` is on your path.
+You can download and compile these solvers from the [MaxSAT 2023 evaluation](https://maxsat-evaluations.github.io/2023/descriptions.html) website. We **strongly** recommend using these solvers. To use them, ensure that the solver is available on your path.  See the [install solvers](solvers.md) file for help.
 
 #### Performance tips
 - Transform your BK to Datalog, which allows Popper to perform preprocessing on the BK.
