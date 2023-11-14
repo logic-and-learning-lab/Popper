@@ -352,7 +352,34 @@ before(C1,C2):-
     clause_var(C,Var),
     #count{P,Vars : var_in_literal(C,P,Vars,Var)} == 1.
 
-var_appears_more_than_twice(Rule,Var):-
+%% OLD
+%% valid_var(Rule,Var):-
+%%     not allow_singletons,
+%%     clause_var(Rule,Var),
+%%     #count{P,Vars : var_in_literal(Rule,P,Vars,Var)} > 2.
+
+%% NEW
+valid_var(Rule,Var):-
+    obeys_singleton_check(Rule,Var),
+    obeys_datalog_check(Rule,Var).
+
+obeys_datalog_check(Rule,Var):-
+    non_datalog,
+    clause_var(Rule,Var).
+
+obeys_datalog_check(Rule,Var):-
+    clause_var(Rule,Var),
+    not head_var(Rule,Var).
+
+obeys_datalog_check(Rule,Var):-
+    head_var(Rule,Var),
+    #count{P,Vars : body_literal(Rule,P,_,Vars),var_member(Var,Vars)} > 1.
+
+obeys_singleton_check(Rule,Var):-
+    allow_singletons,
+    clause_var(Rule,Var).
+
+obeys_singleton_check(Rule,Var):-
     not allow_singletons,
     clause_var(Rule,Var),
     #count{P,Vars : var_in_literal(Rule,P,Vars,Var)} > 2.

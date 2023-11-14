@@ -218,7 +218,7 @@ def build_props(settings, arities, tester=None):
 
         # rule_vars = xs_set | ys_set
         rule_vars = ys_set
-        checker = ','.join(f'var_appears_more_than_twice(Rule,{v})' for v in rule_vars)
+        checker = ','.join(f'valid_var(Rule,{v})' for v in rule_vars)
         con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})), {checker}.'
         # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
         # print(con1)
@@ -606,7 +606,7 @@ def build_props2(settings, arities):
 
         # rule_vars = xs_set | ys_set
         rule_vars = zs_set
-        checker = ','.join(f'var_appears_more_than_twice(Rule,{v})' for v in rule_vars)
+        checker = ','.join(f'valid_var(Rule,{v})' for v in rule_vars)
         con1 = f':- prop({key},(P,Q,R)), body_literal(Rule,P,_,({atom1})), body_literal(Rule,Q,_,({atom2})), body_literal(Rule,R,_,({atom3})), {checker}.'
         # # con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
         # # print(con1)
@@ -985,7 +985,7 @@ def deduce_bk_cons(settings, tester):
     new_props = new_props1 + new_props2
     new_cons = new_cons1 + new_cons2
 
-    # print(new_cons)
+    # print('\n'.join(new_cons))
 
     new_props = '\n'.join(new_props)
     encoding = [cons, prog, bias, bk, TIDY_OUTPUT, new_props]
