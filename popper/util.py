@@ -11,6 +11,7 @@ from time import perf_counter
 from contextlib import contextmanager
 from .core import Literal
 from math import comb
+import threading
 
 clingo.script.enable_python()
 
@@ -73,6 +74,9 @@ def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
 
     def handler(signum, frame):
         raise TimeoutError()
+    
+    if not (hasattr(signal, 'SIGALRM') and hasattr(signal, 'alarm')):
+        return _windows_timeout(settings, func, args, kwargs, timeout_duration)
 
     # set the timeout handler
     signal.signal(signal.SIGALRM, handler)
@@ -89,6 +93,36 @@ def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
         raise moo
     finally:
         signal.alarm(0)
+
+    return result
+
+def _windows_timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
+    """
+    A replacement for the `timeout` function that works on Windows, since the `signal` module is not fully supported on Windows.
+    """
+    result = None
+
+    def target():
+        nonlocal result
+        try:
+            result = func(*args, **kwargs)
+        except Exception as e:
+            result = e
+
+    thread = threading.Thread(target=target)
+    thread.start()
+    thread.join(timeout_duration)
+
+    if thread.is_alive():
+        # If the thread is still alive after the timeout_duration, it means it timed out
+        thread.join()  # Ensure the thread terminates properly
+        settings.logger.warn(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
+        # raise TimeoutError(f"Execution of {func.__name__} timed out after {timeout_duration} seconds")
+        return result
+
+    if isinstance(result, Exception):
+        # If the function raised an exception, re-raise it here
+        raise result
 
     return result
 
@@ -587,7 +621,7 @@ def load_types(settings):
 def bias_order(settings, max_size):
 
     if not (settings.no_bias or settings.order_space):
-        return [(size_literals, settings.max_vars, settings.max_rules, None) for size_literals in range(1, max_size+1)]
+        return [(size_literals, settings.max_vars, settings.max_rules, None) for size_literals in range(1, max_size)]
 
     # if settings.search_order is None:
     ret = []
