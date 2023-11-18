@@ -587,7 +587,7 @@ def load_types(settings):
 def bias_order(settings, max_size):
 
     if not (settings.no_bias or settings.order_space):
-        return [(size_literals, settings.max_vars, settings.max_rules, None) for size_literals in range(1, max_size)]
+        return [(size_literals, settings.max_vars, settings.max_rules, None) for size_literals in range(1, max_size+1)]
 
     # if settings.search_order is None:
     ret = []
