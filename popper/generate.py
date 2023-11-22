@@ -1,4 +1,5 @@
 import time
+import re
 from pysat.formula import CNF
 from pysat.solvers import Solver
 from pysat.card import *
@@ -280,11 +281,18 @@ class Generator:
         encoding = []
         alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
         encoding.append(alan)
+
+        bias_text = None
         with open(settings.bias_file) as f:
-            encoding.append(f.read())
+            bias_text = f.read()
+        bias_text = re.sub(r'max_vars\(\d*\).','', bias_text)
+        bias_text = re.sub(r'max_body\(\d*\).','', bias_text)
+        bias_text = re.sub(r'max_clauses\(\d*\).','', bias_text)
+        encoding.append(bias_text)
         encoding.append(f'max_clauses({settings.max_rules}).')
         encoding.append(f'max_body({settings.max_body}).')
         encoding.append(f'max_vars({settings.max_vars}).')
+
         max_size = (1 + settings.max_body) * settings.max_rules
         if settings.max_literals < max_size:
             encoding.append(f'custom_max_size({settings.max_literals}).')

@@ -46,9 +46,9 @@ def parse_args():
     parser.add_argument('--bkcons', default=False, action='store_true', help='deduce background constraints from Datalog background (EXPERIMENTAL!)')
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {TIMEOUT})')
     parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help=f'Maximum number of literals allowed in program (default: {MAX_LITERALS})')
-    parser.add_argument('--max-body', type=int, default=MAX_BODY, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
-    parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
-    parser.add_argument('--max-rules', type=int, default=MAX_RULES, help=f'Maximum number of rules allowed in a recursive program (default: {MAX_RULES})')
+    parser.add_argument('--max-body', type=int, default=None, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
+    parser.add_argument('--max-vars', type=int, default=None, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
+    parser.add_argument('--max-rules', type=int, default=None, help=f'Maximum number of rules allowed in a recursive program (default: {MAX_RULES})')
     parser.add_argument('--eval-timeout', type=float, default=EVAL_TIMEOUT, help=f'Prolog evaluation timeout in seconds (default: {EVAL_TIMEOUT})')
     parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
     parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
@@ -302,11 +302,6 @@ def order_rule_datalog(rule, settings):
         seen_vars = seen_vars.union(selected_literal.arguments)
         body_literals = body_literals.difference({selected_literal})
 
-    # if not head:
-    #     print('--')
-    #     print('A',format_rule(rule))
-    #     print('B',format_rule((head, ordered_body)))
-
     return head, tuple(ordered_body)
 
 def print_prog_score(prog, score, noisy):
@@ -337,7 +332,7 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=MAX_BODY, max_rules=MAX_RULES, max_vars=MAX_VARS, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False, showcons=False, no_bias=False, order_space=False, noisy=False, batch_size=BATCH_SIZE, solver='rc2', anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT):
+    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=None, max_rules=None, max_vars=None, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False, showcons=False, no_bias=False, order_space=False, noisy=False, batch_size=BATCH_SIZE, solver='rc2', anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT):
 
         if cmd_line:
             args = parse_args()
@@ -390,7 +385,6 @@ class Settings:
         self.bkcons = bkcons
         self.datalog = datalog
         self.showcons = showcons
-        # self.aggressive = aggressive
         self.max_literals = max_literals
         self.functional_test = functional_test
         self.timeout = timeout
@@ -459,16 +453,25 @@ class Settings:
                 head_modes = tuple(self.directions[head_pred][i] for i in range(head_arity))
                 self.head_literal = Literal(head_pred, head_args, head_modes)
 
-        for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
-            self.max_body = x.symbol.arguments[0].number
+        if self.max_body == None:
+            for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
+                self.max_body = x.symbol.arguments[0].number
+        if self.max_body == None:
+            self.max_body = MAX_BODY
 
-        for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
-            self.max_vars = x.symbol.arguments[0].number
+        if self.max_vars == None:
+            for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
+                self.max_vars = x.symbol.arguments[0].number
+        if self.max_vars == None:
+            self.max_vars = MAX_VARS
 
-        self.max_rules = None
-        for x in solver.symbolic_atoms.by_signature('max_clauses', arity=1):
-            self.max_rules = x.symbol.arguments[0].number
-
+        if self.max_rules == None:
+            for x in solver.symbolic_atoms.by_signature('max_clauses', arity=1):
+                self.max_rules = x.symbol.arguments[0].number
+        if self.max_rules == None:
+            self.max_rules = 1
+            if self.pi_enabled or self.recursion_enabled:
+                self.max_rules = MAX_RULES
 
         self.body_preds = set()
         for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
@@ -513,7 +516,6 @@ class Settings:
             else:
                 self.max_rules = 1
 
-
         self.head_types, self.body_types = load_types(self)
 
         self.single_solve = not (self.recursion_enabled or self.pi_enabled)
@@ -523,7 +525,6 @@ class Settings:
         self.logger.debug(f'Max body: {self.max_body}')
 
         self.single_solve = not (self.recursion_enabled or self.pi_enabled)
-
 
     def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
         self.logger.info('*'*20)
