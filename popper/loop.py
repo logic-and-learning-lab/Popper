@@ -470,14 +470,15 @@ def load_solver(settings, tester):
         settings.stats.maxsat_calls = 0
         if settings.solver == 'rc2':
             settings.exact_maxsat_solver = 'rc2'
+            settings.old_format = False
         elif settings.solver == 'uwr':
             settings.exact_maxsat_solver='uwrmaxsat'
             settings.exact_maxsat_solver_params="-v0 -no-sat -no-bin -m -bm"
+            settings.old_format = False
         else:
             settings.exact_maxsat_solver='wmaxcdcl'
             settings.exact_maxsat_solver_params=""
-
-        settings.old_format = False
+            settings.old_format = True
 
         if settings.noisy:
             settings.lex = False
@@ -498,6 +499,7 @@ def load_solver(settings, tester):
             settings.anytime_maxsat_solver = 'wmaxcdcl'
             settings.anytime_maxsat_solver_params = ""
             settings.anytime_maxsat_solver_signal = 10
+            settings.old_format = True
         elif settings.anytime_solver == 'nuwls':
             settings.anytime_maxsat_solver = 'NuWLS-c'
             settings.anytime_maxsat_solver_params = ""
