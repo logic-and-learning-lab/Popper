@@ -1,8 +1,3 @@
-
-max_vars(6).
-max_body(10).
-
-
 body_pred(movie,2).
 body_pred(actor,1).
 body_pred(director,1).

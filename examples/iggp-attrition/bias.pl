@@ -48,14 +48,6 @@ type(P,(T,)):-
     constant(P,T).
 
 %% BECAUSE WE DO NOT LEARN FROM INTERPRETATIONS
-tmp(next_value).
-tmp(does).
-tmp(my_true_claim_made_by).
-tmp(my_true_control).
-tmp(my_true_gameOver).
-tmp(my_true_score).
-bad_body(P,A,Vars):-
-    tmp(P),
-    body_pred(P,A),
-    var_pos(Var,Vars,0),
-    Var != 0.
+:-
+    clause(C),
+    #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.

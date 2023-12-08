@@ -1,4 +1,3 @@
-allow_singletons.
 head_pred(verbgroup,2).
 body_pred(synsetdomaintopicof,2).
 body_pred(alsosee,2).

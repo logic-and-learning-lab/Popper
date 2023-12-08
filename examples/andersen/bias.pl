@@ -1,5 +1,4 @@
 enable_recursion.
-allow_singletons.
 
 head_pred(pt, 2).
 body_pred(addr, 2).

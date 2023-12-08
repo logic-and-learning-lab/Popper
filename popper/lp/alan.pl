@@ -10,7 +10,7 @@
 #defined enable_pi/0.
 #defined enable_recursion/0.
 #defined non_datalog/0.
-#defined allow_singletons/0.
+%% #defined allow_singletons/0.
 #defined custom_max_size/1.
 
 #show body_literal/4.
@@ -346,11 +346,11 @@ before(C1,C2):-
     head_var(Rule,Var),
     not body_var(Rule,Var).
 
-%% ELIMINATE SINGLETONS
-:-
-    not allow_singletons,
-    clause_var(C,Var),
-    #count{P,Vars : var_in_literal(C,P,Vars,Var)} == 1.
+%% %% ELIMINATE SINGLETONS
+%% :-
+%%     not allow_singletons,
+%%     clause_var(C,Var),
+%%     #count{P,Vars : var_in_literal(C,P,Vars,Var)} == 1.
 
 %% OLD
 %% valid_var(Rule,Var):-
@@ -375,14 +375,14 @@ obeys_datalog_check(Rule,Var):-
     head_var(Rule,Var),
     #count{P,Vars : body_literal(Rule,P,_,Vars),var_member(Var,Vars)} > 1.
 
-obeys_singleton_check(Rule,Var):-
-    allow_singletons,
-    clause_var(Rule,Var).
+%% obeys_singleton_check(Rule,Var):-
+%%     allow_singletons,
+%%     clause_var(Rule,Var).
 
-obeys_singleton_check(Rule,Var):-
-    not allow_singletons,
-    clause_var(Rule,Var),
-    #count{P,Vars : var_in_literal(Rule,P,Vars,Var)} > 2.
+%% obeys_singleton_check(Rule,Var):-
+%%     not allow_singletons,
+%%     clause_var(Rule,Var),
+%%     #count{P,Vars : var_in_literal(Rule,P,Vars,Var)} > 2.
 
 %% MUST BE CONNECTED
 head_connected(C,Var):-

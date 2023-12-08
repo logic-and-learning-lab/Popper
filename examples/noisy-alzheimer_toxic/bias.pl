@@ -1,5 +1,3 @@
-max_body(7).
-
 head_pred(less_toxic,2).
 body_pred(x_subst,3).
 body_pred(alk_groups,2).
