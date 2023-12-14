@@ -360,7 +360,6 @@ before(C1,C2):-
 
 %% NEW
 valid_var(Rule,Var):-
-    obeys_singleton_check(Rule,Var),
     obeys_datalog_check(Rule,Var).
 
 obeys_datalog_check(Rule,Var):-
