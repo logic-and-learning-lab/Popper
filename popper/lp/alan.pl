@@ -346,42 +346,26 @@ before(C1,C2):-
     head_var(Rule,Var),
     not body_var(Rule,Var).
 
-%% %% ELIMINATE SINGLETONS
-%% :-
-%%     not allow_singletons,
-%%     clause_var(C,Var),
-%%     #count{P,Vars : var_in_literal(C,P,Vars,Var)} == 1.
-
-%% OLD
-%% valid_var(Rule,Var):-
-%%     not allow_singletons,
-%%     clause_var(Rule,Var),
-%%     #count{P,Vars : var_in_literal(Rule,P,Vars,Var)} > 2.
-
-%% NEW
+%% constraints used by bk cons
 valid_var(Rule,Var):-
     obeys_datalog_check(Rule,Var).
 
+%% if non_datalog is true, all vars are valid
 obeys_datalog_check(Rule,Var):-
     non_datalog,
     clause_var(Rule,Var).
 
+%% if non_datalog is false, a body only variable is valid
 obeys_datalog_check(Rule,Var):-
+    not non_datalog,
     clause_var(Rule,Var),
     not head_var(Rule,Var).
 
+%% if non_datalog is false, a head var must also appear in the body
 obeys_datalog_check(Rule,Var):-
+    not non_datalog,
     head_var(Rule,Var),
-    #count{P,Vars : body_literal(Rule,P,_,Vars),var_member(Var,Vars)} > 1.
-
-%% obeys_singleton_check(Rule,Var):-
-%%     allow_singletons,
-%%     clause_var(Rule,Var).
-
-%% obeys_singleton_check(Rule,Var):-
-%%     not allow_singletons,
-%%     clause_var(Rule,Var),
-%%     #count{P,Vars : var_in_literal(Rule,P,Vars,Var)} > 2.
+    body_var(Rule,Var).
 
 %% MUST BE CONNECTED
 head_connected(C,Var):-
