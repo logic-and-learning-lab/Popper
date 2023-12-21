@@ -99,7 +99,11 @@ class Explainer:
         has_recursion = prog_is_recursive(prog)
 
         out = []
-        for subprog in generalisations(prog, has_recursion):
+        for subprog in generalisations(prog, allow_headless=True, recursive=has_recursion):
+
+            # print('---')
+            # for rule in subprog:
+            #     print('\t', 'A', format_rule(rule))
 
             raw_prog2 = get_raw_prog2(subprog)
 
@@ -112,6 +116,10 @@ class Explainer:
 
             self.seen_prog.add(raw_prog)
             self.seen_prog.add(raw_prog2)
+
+
+            # for rule in subprog:
+                # print('\t', 'B', format_rule(rule))
 
             def should_skip():
                 if len(subprog) > 0:
@@ -136,16 +144,23 @@ class Explainer:
                 continue
                 # pass
 
+            # for rule in subprog:
+                # print('\t', 'C', format_rule(rule))
+
 
             if not prog_is_ok(subprog):
                 xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat, noisy)
                 out.extend(xs)
                 continue
 
+            # for rule in subprog:
+                # print('\t', 'D', format_rule(rule))
+
             if self.tester.has_redundant_literal(subprog):
                 xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat, noisy)
                 out.extend(xs)
                 continue
+
 
             if len(subprog) > 2 and self.tester.has_redundant_rule(subprog):
                 xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat, noisy)
@@ -246,7 +261,7 @@ def find_subprogs(prog, recursive):
             yield prog[:i] + [subrule] + prog[i+1:]
 
 
-def generalisations(prog, allow_headless, recursive=False):
+def generalisations(prog, allow_headless=True, recursive=False):
 
     if len(prog) == 1:
         rule = list(prog)[0]
@@ -258,11 +273,11 @@ def generalisations(prog, allow_headless, recursive=False):
                 new_prog = [new_rule]
                 yield new_prog
 
-        if (recursive and len(body) > 2) or (not recursive and len(body) > 1):
+        if (recursive and len(body) > 2 and head) or (not recursive and len(body) > 1):
             body = list(body)
             for i in range(len(body)):
                 # do not remove recursive literals
-                if body[i].predicate == head.predicate:
+                if recursive and body[i].predicate == head.predicate:
                     continue
                 new_body = body[:i] + body[i+1:]
                 new_rule = (head, frozenset(new_body))
