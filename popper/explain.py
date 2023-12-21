@@ -8,7 +8,7 @@ from itertools import chain, combinations
 import pkg_resources
 from pyswip import Prolog
 from contextlib import contextmanager
-from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, theory_subsumes
+from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, theory_subsumes, format_prog2
 from . core import Literal
 import clingo
 import clingo.script
@@ -100,9 +100,8 @@ class Explainer:
 
         out = []
         for subprog in generalisations(prog, has_recursion):
-            raw_prog2 = get_raw_prog2(subprog)
 
-            # print('\t\t',format_prog(subprog))
+            raw_prog2 = get_raw_prog2(subprog)
 
             if raw_prog2 in self.seen_prog:
                 continue
@@ -246,31 +245,36 @@ def find_subprogs(prog, recursive):
         for subrule in find_subrules(rule, force_head, recursive):
             yield prog[:i] + [subrule] + prog[i+1:]
 
-def generalisations(prog, recursive):
+
+def generalisations(prog, allow_headless, recursive=False):
 
     if len(prog) == 1:
         rule = list(prog)[0]
         head, body = rule
 
-        if head and len(body) > 0:
-            new_rule = (None, body)
-            new_prog = [new_rule]
-            yield new_prog
+        if allow_headless:
+            if head and len(body) > 0:
+                new_rule = (None, body)
+                new_prog = [new_rule]
+                yield new_prog
 
-        if len(body) > 1:
+        if (recursive and len(body) > 2) or (not recursive and len(body) > 1):
             body = list(body)
             for i in range(len(body)):
+                # do not remove recursive literals
+                if body[i].predicate == head.predicate:
+                    continue
                 new_body = body[:i] + body[i+1:]
                 new_rule = (head, frozenset(new_body))
                 new_prog = [new_rule]
                 yield new_prog
 
     else:
-
         prog = list(prog)
         for i in range(len(prog)):
             subrule = prog[i]
-            for new_subrule in generalisations([subrule],rule_is_recursive(subrule)):
+            recursive = rule_is_recursive(subrule)
+            for new_subrule in generalisations([subrule], allow_headless=False, recursive=recursive):
                 new_prog = prog[:i] + new_subrule + prog[i+1:]
                 yield new_prog
 

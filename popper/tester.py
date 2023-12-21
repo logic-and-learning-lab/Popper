@@ -558,14 +558,10 @@ class Tester():
                 return self.bool_query(x)
         else:
             with self.using(prog):
-                # if noise:
-                #     x = self.bool_query('sat')
-                #     y = self.bool_query(f'covers_at_least_k_pos({calc_prog_size(prog)})')
-                #     if x != y:
-                #         print(format_prog(prog))
-                #     return y
-                # else:
-                return self.bool_query('sat')
+                if noise:
+                    return self.bool_query(f'covers_at_least_k_pos({calc_prog_size(prog)})')
+                else:
+                    return self.bool_query('sat')
 
     def is_body_sat(self, body):
         _, ordered_body = order_rule((None,body), self.settings)
