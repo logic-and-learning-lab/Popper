@@ -26,20 +26,11 @@ def janus_format_rule(rule):
 
 class Tester():
 
-
-
     def query(self, query, key):
-        # print(query)
-        x = janus.query_once(query)
-        result = x[key]
-        # print(result)
-        # result = next(self.prolog.query(query))[key]
-        return set(result)
+        return janus.query_once(query)[key]
 
-    def bool_query(self, query,):
-        # print(query)
-        x = janus.query_once(query)
-        return x['truth']
+    def bool_query(self, query):
+        return janus.query_once(query)['truth']
 
     def __init__(self, settings):
         self.settings = settings
@@ -48,16 +39,27 @@ class Tester():
         exs_pl_path = self.settings.ex_file
         test_pl_path = pkg_resources.resource_filename(__name__, "lp/test.pl")
 
-        # with self.settings.stats.duration('load data'):
+        # print(janus.query_once('assert(()),fail'))
+        # janus.consult('prog', """
+
+        # """)
+
+        x = f':- dynamic {settings.head_literal.predicate}/{settings.head_literal.arity}.'
+        # x +=
+        # print(x)
+        janus.consult('prog', x)
+        janus.consult('prog', ":- style_check(-singleton).")
+
+
+
         for x in [exs_pl_path, bk_pl_path, test_pl_path]:
             if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
                 x = x.replace('\\', '\\\\')
             janus.consult(x)
 
-        # load examples
         janus.query_once('load_examples')
-        # >>> janus.query_once("findall(_GP, parent(Me, _P), parent(_P, _GP), GPs)",
-               # {'Me':'Jan'})["GPs"]
+
+        # exit()
 
         self.pos_index = self.query('findall(_K, pos_index(_K, _Atom), Xs)', 'Xs')
         self.neg_index = self.query('findall(_K, neg_index(_K, _Atom), Xs)', 'Xs')
@@ -65,15 +67,11 @@ class Tester():
         self.num_pos = len(self.pos_index)
         self.num_neg = len(self.neg_index)
 
-
-        # self.cached_covers_any = {}
-        # self.cached_covers_any2 = {}
         self.cached_pos_covered = {}
         self.cached_inconsistent = {}
         self.cached_redundant = {}
 
         self.cached_neg_covers = {}
-        self.savings = 0
 
         # weird
         self.settings.pos_index = self.pos_index
@@ -85,65 +83,43 @@ class Tester():
     def test_prog(self, prog):
         if len(prog) == 1:
             return self.test_single_rule(prog)
-        # try:
+
         with self.using(prog):
             pos_covered = frozenset(self.query('pos_covered(S)','S'))
             inconsistent = False
             if len(self.neg_index) > 0:
                 inconsistent = self.bool_query("inconsistent")
-        # except PrologError as err:
-        #     print('PROLOG ERROR',err)
-        #     pos_covered = set()
-        #     inconsistent = True
 
-        # self.cached_pos_covered[k] = pos_covered
         return pos_covered, inconsistent
 
     def test_prog_all(self, prog):
         if len(prog) == 1:
             return self.test_single_rule_all(prog)
-        # try:
         with self.using(prog):
             pos_covered = frozenset(janus.query_once(f'pos_covered(S)')['S'])
             neg_covered = frozenset(janus.query_once(f'neg_covered(S)')['S'])
-                # neg_covered = frozenset(self.query('neg_covered(Xs)', 'Xs'))
-        # except PrologError as err:
-        #     print('PROLOG ERROR',err)
-        #     pos_covered = set()
-        #     neg_covered = set()
         return pos_covered, neg_covered
 
     def test_prog_pos(self, prog):
         if len(prog) == 1:
             return self.test_single_rule_pos(prog)
-        try:
-            with self.using(prog):
-                pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
-        except PrologError as err:
-            print('PROLOG ERROR',err)
-            pos_covered = set()
+        with self.using(prog):
+            pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
         return pos_covered
 
-    # @profile
     def test_prog_inconsistent(self, prog):
         if len(prog) == 1:
             return self.test_single_inconsistent(prog)
-        try:
-            with self.using(prog):
-                if len(self.neg_index) > 0:
-                    return len(list(self.prolog.query("inconsistent"))) > 0
-        except PrologError as err:
-            print('PROLOG ERROR',err)
-            # pos_covered = set()
-            # inconsistent = True
-        # self.cached_pos_covered[k] = pos_covered
+        with self.using(prog):
+            if len(self.neg_index) > 0:
+                return self.bool_query("inconsistent")
         return True
 
     # @profile
     def test_single_rule(self, prog):
         pos_covered = frozenset()
         inconsistent = False
-        # try:
+
         rule = list(prog)[0]
         head, _body = rule
         head, ordered_body = order_rule(rule, self.settings)
@@ -155,19 +131,13 @@ class Tester():
         inconsistent = False
         if len(self.neg_index) > 0:
             q = f'neg_index(_ID, {atom_str}), {body_str},!'
-            xs = self.bool_query(q)
-            if xs:
-                inconsistent = True
-            # if len(xs) > 0:
-                # inconsistent = True
+            inconsistent = self.bool_query(q)
 
-        # except PrologError as err:
-            # print('PROLOG ERROR',err)
         return pos_covered, inconsistent
 
     def test_single_inconsistent(self, prog):
         inconsistent = False
-        # try:
+
         rule = list(prog)[0]
         head, _body = rule
         head, ordered_body = order_rule(rule, self.settings)
@@ -177,14 +147,13 @@ class Tester():
         if len(self.neg_index) > 0:
             q = f'neg_index(_Id,{atom_str}),{body_str},!'
             inconsistent = self.bool_query(q)
-        # except PrologError as err:
-            # print('PROLOG ERROR',err)
+
         return inconsistent
 
     def test_single_rule_all(self, prog):
         pos_covered = frozenset()
         neg_covered = frozenset()
-        # try:
+
         rule = list(prog)[0]
         head, _body = rule
         head, ordered_body = order_rule(rule, self.settings)
@@ -198,15 +167,11 @@ class Tester():
             xs = self.query(q, 'S')
             neg_covered = frozenset(xs)
 
-        # except PrologError as err:
-            # print('PROLOG ERROR',err)
         return pos_covered, neg_covered
-
 
 
     def test_single_rule_pos(self, prog):
         pos_covered = frozenset()
-        # try:
         rule = list(prog)[0]
         head, _body = rule
         head, ordered_body = order_rule(rule, self.settings)
@@ -215,33 +180,28 @@ class Tester():
         q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
         xs = self.query(q, 'S')
         pos_covered = frozenset(xs)
-
-        # except PrologError as err:
-        #     print('PROLOG ERROR',err)
         return pos_covered
 
-    def test_single_rule_neg(self, prog):
-        # pos_covered = frozenset()
-        neg_covered = frozenset()
-        try:
-            rule = list(prog)[0]
-            head, _body = rule
-            head, ordered_body = order_rule(rule, self.settings)
-            atom_str = format_literal(head)
-            body_str = format_rule((None,ordered_body))[2:-1]
-            if len(self.neg_index) > 0:
-                q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-                xs = next(self.prolog.query(q))
-                neg_covered = frozenset(xs['Xs'])
+    # def test_single_rule_neg(self, prog):
+    #     # pos_covered = frozenset()
+    #     neg_covered = frozenset()
+    #     try:
+    #         rule = list(prog)[0]
+    #         head, _body = rule
+    #         head, ordered_body = order_rule(rule, self.settings)
+    #         atom_str = format_literal(head)
+    #         body_str = format_rule((None,ordered_body))[2:-1]
+    #         if len(self.neg_index) > 0:
+    #             q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+    #             xs = next(self.prolog.query(q))
+    #             neg_covered = frozenset(xs['Xs'])
 
-        except PrologError as err:
-            print('PROLOG ERROR',err)
-        return neg_covered
+    #     except PrologError as err:
+    #         print('PROLOG ERROR',err)
+    #     return neg_covered
 
     def test_single_rule_neg_at_most_k(self, prog, k):
-        # pos_covered = frozenset()
         neg_covered = frozenset()
-        # try:
         rule = list(prog)[0]
         head, _body = rule
         head, ordered_body = order_rule(rule, self.settings)
@@ -250,41 +210,27 @@ class Tester():
         if len(self.neg_index) > 0:
             q = f'findfirstn({k}, _ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
             xs = self.query(q, 'S')
-            # xs = next(self.prolog.query(q))
             neg_covered = frozenset(xs)
-
-        # except PrologError as err:
-            # print('PROLOG ERROR',err)
         return neg_covered
 
-    def test_single_rule_neg_at_most_k2(self, prog, k):
-        # pos_covered = frozenset()
-        neg_covered = frozenset()
-        try:
-            rule = list(prog)[0]
-            head, _body = rule
-            head, ordered_body = order_rule(rule, self.settings)
-            atom_str = format_literal(head)
-            body_str = format_rule((None,ordered_body))[2:-1]
-            if len(self.neg_index) > 0:
-                q = f'findfirstn({k}, ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-                # q = f'findfirstn(ID, limit({k},(neg_index(ID,{atom_str}),({body_str}->  true))), Xs)'
-                xs = next(self.prolog.query(q))
-                neg_covered = frozenset(xs['Xs'])
+    # def test_single_rule_neg_at_most_k2(self, prog, k):
+    #     # pos_covered = frozenset()
+    #     neg_covered = frozenset()
+    #     try:
+    #         rule = list(prog)[0]
+    #         head, _body = rule
+    #         head, ordered_body = order_rule(rule, self.settings)
+    #         atom_str = format_literal(head)
+    #         body_str = format_rule((None,ordered_body))[2:-1]
+    #         if len(self.neg_index) > 0:
+    #             q = f'findfirstn({k}, ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
+    #             # q = f'findfirstn(ID, limit({k},(neg_index(ID,{atom_str}),({body_str}->  true))), Xs)'
+    #             xs = next(self.prolog.query(q))
+    #             neg_covered = frozenset(xs['Xs'])
 
-        except PrologError as err:
-            print('PROLOG ERROR',err)
-        return neg_covered
-
-# succeeds_k_times(Goal,Body,Times):-
-# Counter = counter(0),
-# Goal,
-# once(Body),
-# arg(1, Counter, N0),
-# N is N0 + 1,
-# ((N>=Times -> true,!);
-# (nb_setarg(1, Counter, N),
-# fail)).
+    #     except PrologError as err:
+    #         print('PROLOG ERROR',err)
+    #     return neg_covered
 
     def is_inconsistent(self, prog):
         if len(self.neg_index) == 0:
@@ -293,15 +239,14 @@ class Tester():
         if k in self.cached_inconsistent:
             return self.cached_inconsistent[k]
         with self.using(prog):
-            # inconsistent = len(list(self.prolog.query("inconsistent"))) > 0
             inconsistent = self.bool_query("inconsistent")
             self.cached_inconsistent[k] = inconsistent
             return inconsistent
 
-    def is_complete(self, prog):
-        with self.using(prog):
-            pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
-            return len(pos_covered) == len(self.pos_index)
+    # def is_complete(self, prog):
+    #     with self.using(prog):
+    #         pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
+    #         return len(pos_covered) == len(self.pos_index)
 
     def get_pos_covered(self, prog, ignore=True):
         k = prog_hash(prog)
@@ -316,99 +261,64 @@ class Tester():
             body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
             q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
             xs = self.query(q, 'S')
-            # x = janus.query_once('redundant_literal(X)', {'
-            # xs = next(self.prolog.query(q))
             pos_covered = frozenset(xs)
         else:
             with self.using(prog):
-                pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
+                pos_covered = frozenset(self.query('pos_covered(S)', 'S'))
         self.cached_pos_covered[k] = pos_covered
         return pos_covered
 
-    def get_neg_covered(self, prog):
-         with self.using(prog):
-            return frozenset(self.query('neg_covered(Xs)', 'Xs'))
+    # def get_neg_covered(self, prog):
+    #      with self.using(prog):
+    #         return frozenset(self.query('neg_covered(S)', 'S'))
 
-    def get_neg_covered2(self, prog):
-        k = prog_hash(prog)
-        assert(k not in self.cached_neg_covers)
+    # def get_neg_covered2(self, prog):
+    #     k = prog_hash(prog)
+    #     assert(k not in self.cached_neg_covers)
 
-        if len(prog) == 1:
-            rule = list(prog)[0]
-            head, _body = rule
-            head, ordered_body = order_rule(rule, self.settings)
-            atom_str = janus_format_rule(format_literal(head))
-            body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
-            q = f'findall(_ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
-            # xs = next(self.prolog.query(q))
-            xs = self.bool_query(q, 'S')
-            self.cached_neg_covers[k] = xs
-            return frozenset(xs)
-        else:
-            with self.using(prog):
-                xs = frozenset(self.query('neg_covered(Xs)', 'Xs'))
-                self.cached_neg_covers[k] = xs
-                return xs
-
-
-    def get_neg_uncovered(self, prog):
-        with self.using(prog):
-            return frozenset(self.query('neg_uncovered(Xs)', 'Xs'))
-
-    def is_more_inconsistent(self, prog, neg_covered):
-        with self.using(prog):
-            return len(list(self.prolog.query(f"is_more_inconsistent({neg_covered})"))) > 0
-
-    # def tmp(self, prog1, prog2):
-    #     current_clauses = set()
-    #     try:
-    #         for rule in prog1:
-    #             head, _body = rule
-    #             head.predicate = 'prog1'
-    #             x = format_rule(order_rule(rule, self.settings))[:-1]
-    #             self.prolog.assertz(x)
-    #             current_clauses.add((head.predicate, head.arity))
-    #         for rule in prog2:
-    #             head, _body = rule
-    #             head.predicate = 'prog2'
-    #             x = format_rule(order_rule(rule, self.settings))[:-1]
-    #             self.prolog.assertz(x)
-    #             current_clauses.add((head.predicate, head.arity))
-    #         return len(list(self.prolog.query(f"covers_more"))) > 0
-    #     finally:
-    #         for predicate, arity in current_clauses:
-    #             args = ','.join(['_'] * arity)
-    #             self.prolog.retractall(f'{predicate}({args})')
-
-        # with self.using(prog):
+    #     if len(prog) == 1:
+    #         rule = list(prog)[0]
+    #         head, _body = rule
+    #         head, ordered_body = order_rule(rule, self.settings)
+    #         atom_str = janus_format_rule(format_literal(head))
+    #         body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
+    #         q = f'findall(_ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
+    #         xs = self.bool_query(q, 'S')
+    #         self.cached_neg_covers[k] = xs
+    #         return frozenset(xs)
+    #     else:
+    #         with self.using(prog):
+    #             xs = frozenset(self.query('neg_covered(S)', 'S'))
+    #             self.cached_neg_covers[k] = xs
+    #             return xs
 
 
-    # def covers_any(self, prog, neg):
-    #     rule = list(prog)[0]
-    #     # k = rule_hash(rule)
-    #     # if k in self.cached_covers_any:
-    #     #     for x in self.cached_covers_any[k]:
-    #     #         if x in neg:
-    #     #             return True
-    #     # self.cached_covers_any[k] = set()
-
+    # def get_neg_uncovered(self, prog):
     #     with self.using(prog):
-    #         xs = list(self.prolog.query(f"covers_any({neg},ID)"))
-    #         if len(xs) > 0:
-    #             ex = xs[0]['ID']
-    #             # print(ex)
-    #             # self.cached_covers_any[k].add(ex)
-    #             return True
-    #         return False
+    #         return frozenset(self.query('neg_uncovered(Xs)', 'Xs'))
 
-    # def covers_any2(self, prog, neg):
-    #     rule = list(prog)[0]
+    # def is_more_inconsistent(self, prog, neg_covered):
+    #     with self.using(prog):
+    #         return len(list(self.prolog.query(f"is_more_inconsistent({neg_covered})"))) > 0
+
+
+    # def covers_any3(self, prog, neg):
     #     # k = rule_hash(rule)
+    #     rule = list(prog)[0]
+    #     # k = prog_hash(prog)
     #     # if k in self.cached_covers_any:
     #     #     for x in self.cached_covers_any[k]:
     #     #         if x in neg:
     #     #             return True
+    #     # if k in self.cached_covers_any2:
+    #     #     for x in self.cached_covers_any2[k]:
+    #     #         if x in neg:
+    #     #             return True
+    #     #             # print('MOOCOWJONES!!!!!!!!')
     #     # self.cached_covers_any[k] = set()
+
+    #     # for rule in prog:
+    #         # print('\tcalling prolog', format_rule(rule))
 
     #     rule = list(prog)[0]
     #     head, _body = rule
@@ -419,54 +329,12 @@ class Tester():
     #     q = f'member(Id,{neg}),neg_index(Id,{atom_str}),{body_str},!'
     #     # print(q)
     #     xs = list(self.prolog.query(q))
+    #     if len(xs) > 0:
+    #         ex = xs[0]['Id']
+    #         # self.cached_covers_any[k].add(ex)
+    #         return True
     #     # print(xs)
-    #     return len(xs) > 0
-
-    #     # return frozenset(xs['Xs'])
-
-    #     # with self.using(prog):
-    #     #     xs = list(self.prolog.query(f"covers_any({neg},ID)"))
-    #     #     if len(xs) > 0:
-    #     #         ex = xs[0]['ID']
-    #     #         # print(ex)
-    #     #         self.cached_covers_any[k].add(ex)
-    #     #         return True
-    #     #     return False
-
-
-    def covers_any3(self, prog, neg):
-        # k = rule_hash(rule)
-        rule = list(prog)[0]
-        # k = prog_hash(prog)
-        # if k in self.cached_covers_any:
-        #     for x in self.cached_covers_any[k]:
-        #         if x in neg:
-        #             return True
-        # if k in self.cached_covers_any2:
-        #     for x in self.cached_covers_any2[k]:
-        #         if x in neg:
-        #             return True
-        #             # print('MOOCOWJONES!!!!!!!!')
-        # self.cached_covers_any[k] = set()
-
-        # for rule in prog:
-            # print('\tcalling prolog', format_rule(rule))
-
-        rule = list(prog)[0]
-        head, _body = rule
-        head, ordered_body = order_rule(rule, self.settings)
-        atom_str = format_literal(head)
-        body_str = format_rule((None,ordered_body))[2:-1]
-        # q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-        q = f'member(Id,{neg}),neg_index(Id,{atom_str}),{body_str},!'
-        # print(q)
-        xs = list(self.prolog.query(q))
-        if len(xs) > 0:
-            ex = xs[0]['Id']
-            # self.cached_covers_any[k].add(ex)
-            return True
-        # print(xs)
-        return False
+    #     return False
 
         # return frozenset(xs['Xs'])
 
@@ -501,16 +369,17 @@ class Tester():
         if self.settings.recursion_enabled:
             prog = order_prog(prog)
         current_clauses = set()
-        # try:
-        str_prog = []
+
+        str_prog = [':- style_check(-singleton)']
         for rule in prog:
             head, _body = rule
             x = format_rule(order_rule(rule, self.settings))[:-1]
             str_prog.append(x)
             current_clauses.add((head.predicate, head.arity))
         # next_value/2'
-        for head, arity in current_clauses:
-            str_prog.append(f':- dynamic {head}/{arity}')
+        # for head, arity in current_clauses:
+            # str_prog.append(f':- dynamic {head}/{arity}')
+        # str_prog.append(':- style_check(-singleton)')
         str_prog = '.\n'.join(str_prog) +'.'
         # print('prog', str_prog)
         janus.consult('prog', str_prog)
@@ -563,23 +432,24 @@ class Tester():
         _, ordered_body = order_rule((None,body), self.settings)
         body_str = ','.join(format_literal(literal) for literal in ordered_body)
         query = body_str + ',!'
-        query = f'catch(call_with_time_limit(0.1, ({query})),time_limit_exceeded,true)'
+        # query = f'catch(call_with_time_limit(0.1, ({query})),time_limit_exceeded,true)'
+        # query = f'{query})),time_limit_exceeded,true)'
+        # print(query)
         return self.bool_query(query)
 
-    def check_redundant_literal(self, prog):
-        for rule in prog:
-            head, body = rule
-            if head:
-                c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-            else:
-                c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
-            res = list(self.prolog.query(f'redundant_literal({c})'))
-            if res:
-                yield rule
+    # def check_redundant_literal(self, prog):
+    #     for rule in prog:
+    #         head, body = rule
+    #         if head:
+    #             c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+    #         else:
+    #             c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
+    #         res = list(self.prolog.query(f'redundant_literal({c})'))
+    #         if res:
+    #             yield rule
 
     # @profile
     def has_redundant_literal(self, prog):
-        # t1 = time.time()
         k = prog_hash(prog)
         out = None
         if k in self.cached_redundant:
@@ -591,45 +461,23 @@ class Tester():
                     c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
                 else:
                     c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
-                # res = list(self.prolog.query(f'redundant_literal({c})'))
-                res = self.bool_query('redundant_literal(X)', {'X':c})
+                res = janus.query_once('redundant_literal(X)', {'X':c})['truth']
                 if res:
                     self.cached_redundant[k] = True
                     break
-                    # return True
         self.cached_redundant[k] = False
         out = self.cached_redundant[k]
-        # d1 = time.time()-t1
-
-        # t1 = time.time()
-        # for rule in prog:
-        #     head, body = rule
-        #     if head:
-        #         c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-        #     else:
-        #         c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
-        #     res = list(self.prolog.query(f'redundant_literal({c})'))
-        #     if res:
-        #         break
-        #         # return True
-        # # return False
-        # d2 = time.time()-t1
-        # self.savings += d1-d2
-        # print(self.savings)
         return out
-        # if k in self.cached_redundant:
-            # return self.cached_redundant[k]
 
 
-
-    def has_redundant_rule_(self, prog):
-        prog_ = []
-        for head, body in prog:
-            c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-            prog_.append(c)
-        prog_ = f"[{','.join(prog_)}]"
-        return len(list(self.prolog.query(f'redundant_clause({prog_})'))) > 0
-        # return self.bool_query(f'redundant_clause({prog_})')
+    # def has_redundant_rule_(self, prog):
+    #     prog_ = []
+    #     for head, body in prog:
+    #         c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+    #         prog_.append(c)
+    #     prog_ = f"[{','.join(prog_)}]"
+    #     return len(list(self.prolog.query(f'redundant_clause({prog_})'))) > 0
+    #     # return self.bool_query(f'redundant_clause({prog_})')
 
     def has_redundant_rule(self, prog):
         # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
@@ -700,48 +548,48 @@ class Tester():
 
 
 
-    def has_redundant_literal(self, prog):
-        for rule in prog:
-            head, body = rule
-            if head:
-                c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-            else:
-                c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
-            # res = list(self.prolog.query(f'redundant_literal({c})'))
-            # res = self.bool_query(
-            # print(c)
-            x = janus.query_once('redundant_literal(X)', {'X':c})
-            res = x['truth']
-            if res:
-                return True
-        return False
+    # def has_redundant_literal(self, prog):
+    #     for rule in prog:
+    #         head, body = rule
+    #         if head:
+    #             c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+    #         else:
+    #             c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
+    #         # res = list(self.prolog.query(f'redundant_literal({c})'))
+    #         # res = self.bool_query(
+    #         # print(c)
+    #         x = janus.query_once('redundant_literal(X)', {'X':c})
+    #         res = x['truth']
+    #         if res:
+    #             return True
+    #     return False
 
-    def has_redundant_rule_(self, prog):
-        prog_ = []
-        for head, body in prog:
-            c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-            prog_.append(c)
-        prog_ = f"[{','.join(prog_)}]"
-        return len(list(self.prolog.query(f'redundant_clause({prog_})'))) > 0
-        # return self.bool_query(f'redundant_clause({prog_})')
+    # def has_redundant_rule_(self, prog):
+    #     prog_ = []
+    #     for head, body in prog:
+    #         c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+    #         prog_.append(c)
+    #     prog_ = f"[{','.join(prog_)}]"
+    #     return len(list(self.prolog.query(f'redundant_clause({prog_})'))) > 0
+    #     # return self.bool_query(f'redundant_clause({prog_})')
 
-    def has_redundant_rule(self, prog):
-        # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
+    # def has_redundant_rule(self, prog):
+    #     # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
 
-        base = []
-        step = []
-        for rule in prog:
-            if rule_is_recursive(rule):
-                step.append(rule)
-            else:
-                base.append(rule)
-        if len(base) > 1 and self.has_redundant_rule_(base):
-            return True
-        if len(step) > 1 and self.has_redundant_rule_(step):
-            return True
-        return False
+    #     base = []
+    #     step = []
+    #     for rule in prog:
+    #         if rule_is_recursive(rule):
+    #             step.append(rule)
+    #         else:
+    #             base.append(rule)
+    #     if len(base) > 1 and self.has_redundant_rule_(base):
+    #         return True
+    #     if len(step) > 1 and self.has_redundant_rule_(step):
+    #         return True
+    #     return False
 
-    # WE ASSUME THAT THERE IS A REUNDANT RULE
+    # # WE ASSUME THAT THERE IS A REUNDANT RULE
     def find_redundant_rule_(self, prog):
         prog_ = []
         for i, (head, body) in enumerate(prog):
