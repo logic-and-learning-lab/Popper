@@ -219,3 +219,7 @@ subsumes2(A,B):-
 %%     reduce_theory_(P3,P2).
 
 %% reduce_theory_(P1,P1).
+
+%% tmp(S, Inconsistent):-
+%%     pos_covered(S),
+%%     (inconsistent -> Inconsistent=true; Inconsistent=false).

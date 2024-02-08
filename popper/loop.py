@@ -627,6 +627,7 @@ def popper(settings):
                     break
 
             with settings.stats.duration('parse'):
+                # AC: NEEDS REFACTORING
                 atoms = model.symbols(shown = True)
                 if settings.pi_enabled:
                     prog, rule_ordering, directions = parse_model_pi(settings, atoms)
@@ -664,6 +665,7 @@ def popper(settings):
                         pos_covered, neg_covered = tester.test_prog_all(prog)
                         inconsistent = len(neg_covered) > 0
                     else:
+                        # AC: we could push all this reasoning to Prolog to only need a single call
                         pos_covered = tester.test_single_rule_pos(prog)
                         num_pos_covered = len(pos_covered)
                         if len(pos_covered) > prog_size:
@@ -898,6 +900,8 @@ def popper(settings):
             # remove generalisations of programs with redundant rules
             if is_recursive and len(prog) > 2 and tester.has_redundant_rule(prog):
                 with settings.stats.duration('has_redundant_rule'):
+                    # print('HERE!!!!')
+                    # assert(False)
                     add_gen = True
                     r1, r2 = tester.find_redundant_rules(prog)
                     if settings.showcons:

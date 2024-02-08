@@ -12,7 +12,7 @@ from . core import Literal
 from . explain import prog_hash, get_raw_prog
 from collections import defaultdict
 
-rule_vars = set(['A','B','C','D','E','F'])
+rule_vars = set(['A','B','C','D','E','F','G','H'])
 def janus_format_rule(rule):
     out = []
     for x in rule:
@@ -65,21 +65,20 @@ class Tester():
     def test_prog(self, prog):
         if len(prog) == 1:
             return self.test_single_rule(prog)
-
         with self.using(prog):
             pos_covered = frozenset(self.query('pos_covered(S)','S'))
             inconsistent = False
             if len(self.neg_index) > 0:
                 inconsistent = self.bool_query("inconsistent")
-
         return pos_covered, inconsistent
 
     def test_prog_all(self, prog):
         if len(prog) == 1:
             return self.test_single_rule_all(prog)
         with self.using(prog):
-            pos_covered = frozenset(janus.query_once(f'pos_covered(S)')['S'])
-            neg_covered = frozenset(janus.query_once(f'neg_covered(S)')['S'])
+            res = janus.query_once(f'pos_covered(S1), neg_covered(S2)')
+            pos_covered = frozenset(res['S1'])
+            neg_covered = frozenset(res['S2'])
         return pos_covered, neg_covered
 
     def test_prog_pos(self, prog):
@@ -92,8 +91,8 @@ class Tester():
     def test_prog_inconsistent(self, prog):
         if len(prog) == 1:
             return self.test_single_inconsistent(prog)
-        with self.using(prog):
-            if len(self.neg_index) > 0:
+        if len(self.neg_index) > 0:
+            with self.using(prog):
                 return self.bool_query("inconsistent")
         return True
 
@@ -157,7 +156,7 @@ class Tester():
         head, _body = rule
         head, ordered_body = order_rule(rule, self.settings)
         atom_str = janus_format_rule(format_literal(head))
-        body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
+        body_str = janus_format_rule(format_rule((None, ordered_body))[2:-1])
         q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
         xs = self.query(q, 'S')
         pos_covered = frozenset(xs)
@@ -357,19 +356,13 @@ class Tester():
             x = format_rule(order_rule(rule, self.settings))[:-1]
             str_prog.append(x)
             current_clauses.add((head.predicate, head.arity))
-        # next_value/2'
-        # for head, arity in current_clauses:
-            # str_prog.append(f':- dynamic {head}/{arity}')
-        # str_prog.append(':- style_check(-singleton)')
+
         str_prog = '.\n'.join(str_prog) +'.'
-        # print('prog', str_prog)
         janus.consult('prog', str_prog)
         yield
-        # finally:
         for predicate, arity in current_clauses:
             args = ','.join(['_'] * arity)
             x = janus.query_once(f"retractall({predicate}({args}))")
-            # self.prolog.retractall(f'({args})')
 
     def is_non_functional(self, prog):
         with self.using(prog):
@@ -457,7 +450,9 @@ class Tester():
             c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
             prog_.append(c)
         prog_ = f"[{','.join(prog_)}]"
-        return janus.query_once('redundant_clause(X)', {'X':prog_})['truth']
+        v = janus.query_once('redundant_clause(X)', {'X':prog_})['truth']
+        # print(v, format_prog(prog))
+        return v
 
     def has_redundant_rule(self, prog):
         # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
@@ -571,6 +566,7 @@ class Tester():
 
     # # WE ASSUME THAT THERE IS A REUNDANT RULE
     def find_redundant_rule_(self, prog):
+        assert(False)
         prog_ = []
         for i, (head, body) in enumerate(prog):
             c = f"{i}-[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
