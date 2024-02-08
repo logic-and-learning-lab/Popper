@@ -2,7 +2,7 @@ head_pred(next_value,2).
 body_pred(does,3).
 body_pred(true_value,2).
 body_pred(my_succ,2).
-body_pred(pressButton,1).
+body_pred(press_button,1).
 body_pred(noop,1).
 body_pred(player,1).
 body_pred(c1,1).
@@ -15,7 +15,7 @@ type(next_value,(ex,int)).
 type(does,(ex,agent,action)).
 type(true_value,(ex,int)).
 type(my_succ,(int,int)).
-type(pressButton,(action,)).
+type(press_button,(action,)).
 type(noop,(action,)).
 type(player,(agent,)).
 type(c1,(int,)).

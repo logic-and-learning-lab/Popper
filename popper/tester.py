@@ -2,8 +2,9 @@ import os
 import time
 import numpy as np
 import pkg_resources
-from pyswip import Prolog
-from pyswip.prolog import PrologError
+# from pyswip import Prolog
+# from pyswip.prolog import PrologError
+import janus_swi as janus
 from contextlib import contextmanager
 from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, rule_size, calc_prog_size
 
@@ -14,18 +15,34 @@ from . core import Literal
 from . explain import prog_hash, get_raw_prog
 from collections import defaultdict
 
+rule_vars = set(['A','B','C','D','E','F'])
+def janus_format_rule(rule):
+    out = []
+    for x in rule:
+        if x in rule_vars:
+            out.append('_')
+        out.append(x)
+    return ''.join(out)
+
 class Tester():
 
+
+
     def query(self, query, key):
-        result = next(self.prolog.query(query))[key]
+        # print(query)
+        x = janus.query_once(query)
+        result = x[key]
+        # print(result)
+        # result = next(self.prolog.query(query))[key]
         return set(result)
 
     def bool_query(self, query,):
-        return len(list(self.prolog.query(query))) > 0
+        # print(query)
+        x = janus.query_once(query)
+        return x['truth']
 
     def __init__(self, settings):
         self.settings = settings
-        self.prolog = Prolog()
 
         bk_pl_path = self.settings.bk_file
         exs_pl_path = self.settings.ex_file
@@ -35,12 +52,15 @@ class Tester():
         for x in [exs_pl_path, bk_pl_path, test_pl_path]:
             if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
                 x = x.replace('\\', '\\\\')
-            self.prolog.consult(x)
+            janus.consult(x)
 
         # load examples
-        self.bool_query(f'load_examples')
-        self.pos_index = self.query('findall(K,pos_index(K,Atom),Xs)', 'Xs')
-        self.neg_index = self.query('findall(K,neg_index(K,Atom),Xs)', 'Xs')
+        janus.query_once('load_examples')
+        # >>> janus.query_once("findall(_GP, parent(Me, _P), parent(_P, _GP), GPs)",
+               # {'Me':'Jan'})["GPs"]
+
+        self.pos_index = self.query('findall(_K, pos_index(_K, _Atom), Xs)', 'Xs')
+        self.neg_index = self.query('findall(_K, neg_index(_K, _Atom), Xs)', 'Xs')
 
         self.num_pos = len(self.pos_index)
         self.num_neg = len(self.neg_index)
@@ -60,13 +80,8 @@ class Tester():
         self.settings.neg_index = self.neg_index
 
         if self.settings.recursion_enabled:
-            self.prolog.assertz(f'timeout({self.settings.eval_timeout})')
+            janus.query_once(f'assert(timeout({self.settings.eval_timeout})),fail')
 
-
-    def tmp(self):
-        len(list(self.prolog.query("true"))) > 0
-
-    # @profile
     def test_prog(self, prog):
         if len(prog) == 1:
             return self.test_single_rule(prog)
@@ -87,14 +102,15 @@ class Tester():
     def test_prog_all(self, prog):
         if len(prog) == 1:
             return self.test_single_rule_all(prog)
-        try:
-            with self.using(prog):
-                pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
-                neg_covered = frozenset(self.query('neg_covered(Xs)', 'Xs'))
-        except PrologError as err:
-            print('PROLOG ERROR',err)
-            pos_covered = set()
-            neg_covered = set()
+        # try:
+        with self.using(prog):
+            pos_covered = frozenset(janus.query_once(f'pos_covered(S)')['S'])
+            neg_covered = frozenset(janus.query_once(f'neg_covered(S)')['S'])
+                # neg_covered = frozenset(self.query('neg_covered(Xs)', 'Xs'))
+        # except PrologError as err:
+        #     print('PROLOG ERROR',err)
+        #     pos_covered = set()
+        #     neg_covered = set()
         return pos_covered, neg_covered
 
     def test_prog_pos(self, prog):
@@ -149,20 +165,18 @@ class Tester():
 
     def test_single_inconsistent(self, prog):
         inconsistent = False
-        try:
-            rule = list(prog)[0]
-            head, _body = rule
-            head, ordered_body = order_rule(rule, self.settings)
-            atom_str = format_literal(head)
-            body_str = format_rule((None,ordered_body))[2:-1]
-            inconsistent = False
-            if len(self.neg_index) > 0:
-                q = f'neg_index(Id,{atom_str}),{body_str},!'
-                xs = list(self.prolog.query(q))
-                if len(xs) > 0:
-                    inconsistent = True
-        except PrologError as err:
-            print('PROLOG ERROR',err)
+        # try:
+        rule = list(prog)[0]
+        head, _body = rule
+        head, ordered_body = order_rule(rule, self.settings)
+        atom_str = janus_format_rule(format_literal(head))
+        body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
+        inconsistent = False
+        if len(self.neg_index) > 0:
+            q = f'neg_index(_Id,{atom_str}),{body_str},!'
+            inconsistent = self.bool_query(q)
+        # except PrologError as err:
+            # print('PROLOG ERROR',err)
         return inconsistent
 
     def test_single_rule_all(self, prog):
@@ -190,18 +204,18 @@ class Tester():
 
     def test_single_rule_pos(self, prog):
         pos_covered = frozenset()
-        try:
-            rule = list(prog)[0]
-            head, _body = rule
-            head, ordered_body = order_rule(rule, self.settings)
-            atom_str = format_literal(head)
-            body_str = format_rule((None,ordered_body))[2:-1]
-            q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-            xs = next(self.prolog.query(q))
-            pos_covered = frozenset(xs['Xs'])
+        # try:
+        rule = list(prog)[0]
+        head, _body = rule
+        head, ordered_body = order_rule(rule, self.settings)
+        atom_str = janus_format_rule(format_literal(head))
+        body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
+        q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
+        xs = self.query(q, 'S')
+        pos_covered = frozenset(xs)
 
-        except PrologError as err:
-            print('PROLOG ERROR',err)
+        # except PrologError as err:
+        #     print('PROLOG ERROR',err)
         return pos_covered
 
     def test_single_rule_neg(self, prog):
@@ -295,48 +309,18 @@ class Tester():
             rule = list(prog)[0]
             head, _body = rule
             head, ordered_body = order_rule(rule, self.settings)
-            atom_str = format_literal(head)
-            body_str = format_rule((None,ordered_body))[2:-1]
-            q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-            xs = next(self.prolog.query(q))
-            pos_covered = frozenset(xs['Xs'])
+            atom_str = janus_format_rule(format_literal(head))
+            body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
+            q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
+            xs = self.query(q, 'S')
+            # x = janus.query_once('redundant_literal(X)', {'
+            # xs = next(self.prolog.query(q))
+            pos_covered = frozenset(xs)
         else:
             with self.using(prog):
                 pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
         self.cached_pos_covered[k] = pos_covered
         return pos_covered
-
-
-    # def get_pos_covered2(self, prog):
-    #     if len(prog) == 1:
-    #         rule = list(prog)[0]
-    #         head, _body = rule
-    #         head, ordered_body = order_rule(rule, self.settings)
-    #         atom_str = format_literal(head)
-    #         body_str = format_rule((None,ordered_body))[2:-1]
-    #         q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-    #         xs = next(self.prolog.query(q))
-    #         pos_covered = frozenset(xs['Xs'])
-    #     else:
-    #         with self.using(prog):
-    #             pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
-    #     return pos_covered
-
-    # def covers_more_than_k_examples(self, prog, m):
-    #     if len(prog) == 1:
-    #         rule = list(prog)[0]
-    #         head, _body = rule
-    #         head, ordered_body = order_rule(rule, self.settings)
-    #         atom_str = format_literal(head)
-    #         body_str = format_rule((None,ordered_body))[2:-1]
-    #         q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-    #         xs = next(self.prolog.query(q))
-    #         pos_covered = frozenset(xs['Xs'])
-    #     else:
-    #         with self.using(prog):
-    #             pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
-    #     self.cached_pos_covered[k] = pos_covered
-    #     return pos_covered
 
     def get_neg_covered(self, prog):
          with self.using(prog):
@@ -513,17 +497,25 @@ class Tester():
         if self.settings.recursion_enabled:
             prog = order_prog(prog)
         current_clauses = set()
-        try:
-            for rule in prog:
-                head, _body = rule
-                x = format_rule(order_rule(rule, self.settings))[:-1]
-                self.prolog.assertz(x)
-                current_clauses.add((head.predicate, head.arity))
-            yield
-        finally:
-            for predicate, arity in current_clauses:
-                args = ','.join(['_'] * arity)
-                self.prolog.retractall(f'{predicate}({args})')
+        # try:
+        str_prog = []
+        for rule in prog:
+            head, _body = rule
+            x = format_rule(order_rule(rule, self.settings))[:-1]
+            str_prog.append(x)
+            current_clauses.add((head.predicate, head.arity))
+        # next_value/2'
+        for head, arity in current_clauses:
+            str_prog.append(f':- dynamic {head}/{arity}')
+        str_prog = '.\n'.join(str_prog) +'.'
+        print('prog', str_prog)
+        janus.consult('prog', str_prog)
+        yield
+        # finally:
+        for predicate, arity in current_clauses:
+            args = ','.join(['_'] * arity)
+            x = janus.query_once(f"retractall({predicate}({args}))")
+            # self.prolog.retractall(f'({args})')
 
     def is_non_functional(self, prog):
         with self.using(prog):
@@ -595,7 +587,8 @@ class Tester():
                     c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
                 else:
                     c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
-                res = list(self.prolog.query(f'redundant_literal({c})'))
+                # res = list(self.prolog.query(f'redundant_literal({c})'))
+                res = self.bool_query('redundant_literal(X)', {'X':c})
                 if res:
                     self.cached_redundant[k] = True
                     break
@@ -710,7 +703,11 @@ class Tester():
                 c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
             else:
                 c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
-            res = list(self.prolog.query(f'redundant_literal({c})'))
+            # res = list(self.prolog.query(f'redundant_literal({c})'))
+            # res = self.bool_query(
+            # print(c)
+            x = janus.query_once('redundant_literal(X)', {'X':c})
+            res = x['truth']
             if res:
                 return True
         return False

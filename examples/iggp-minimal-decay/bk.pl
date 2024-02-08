@@ -20,7 +20,7 @@ true_value(5,5).
 true_value(6,2).
 true_value(8,2).
 
-pressButton(pressButton).
+press_button(pressButton).
 noop(noop).
 player(player).
 c1(1).
