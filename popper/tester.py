@@ -1,9 +1,6 @@
 import os
 import time
-import numpy as np
 import pkg_resources
-# from pyswip import Prolog
-# from pyswip.prolog import PrologError
 import janus_swi as janus
 from contextlib import contextmanager
 from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, rule_size, calc_prog_size
@@ -39,18 +36,7 @@ class Tester():
         exs_pl_path = self.settings.ex_file
         test_pl_path = pkg_resources.resource_filename(__name__, "lp/test.pl")
 
-        # print(janus.query_once('assert(()),fail'))
-        # janus.consult('prog', """
-
-        # """)
-
-        x = f':- dynamic {settings.head_literal.predicate}/{settings.head_literal.arity}.'
-        # x +=
-        # print(x)
-        janus.consult('prog', x)
-        janus.consult('prog', ":- style_check(-singleton).")
-
-
+        janus.consult('prog', f':- dynamic {settings.head_literal.predicate}/{settings.head_literal.arity}.')
 
         for x in [exs_pl_path, bk_pl_path, test_pl_path]:
             if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
@@ -58,9 +44,6 @@ class Tester():
             janus.consult(x)
 
         janus.query_once('load_examples')
-
-        # exit()
-
         self.pos_index = self.query('findall(_K, pos_index(_K, _Atom), Xs)', 'Xs')
         self.neg_index = self.query('findall(_K, neg_index(_K, _Atom), Xs)', 'Xs')
 
@@ -73,7 +56,6 @@ class Tester():
 
         self.cached_neg_covers = {}
 
-        # weird
         self.settings.pos_index = self.pos_index
         self.settings.neg_index = self.neg_index
 
@@ -115,7 +97,6 @@ class Tester():
                 return self.bool_query("inconsistent")
         return True
 
-    # @profile
     def test_single_rule(self, prog):
         pos_covered = frozenset()
         inconsistent = False
@@ -470,14 +451,13 @@ class Tester():
         return out
 
 
-    # def has_redundant_rule_(self, prog):
-    #     prog_ = []
-    #     for head, body in prog:
-    #         c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-    #         prog_.append(c)
-    #     prog_ = f"[{','.join(prog_)}]"
-    #     return len(list(self.prolog.query(f'redundant_clause({prog_})'))) > 0
-    #     # return self.bool_query(f'redundant_clause({prog_})')
+    def has_redundant_rule_(self, prog):
+        prog_ = []
+        for head, body in prog:
+            c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+            prog_.append(c)
+        prog_ = f"[{','.join(prog_)}]"
+        return janus.query_once('redundant_clause(X)', {'X':prog_})['truth']
 
     def has_redundant_rule(self, prog):
         # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
