@@ -85,16 +85,16 @@ class Tester():
     def test_prog(self, prog):
         if len(prog) == 1:
             return self.test_single_rule(prog)
-        try:
-            with self.using(prog):
-                pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
-                inconsistent = False
-                if len(self.neg_index) > 0:
-                    inconsistent = len(list(self.prolog.query("inconsistent"))) > 0
-        except PrologError as err:
-            print('PROLOG ERROR',err)
-            pos_covered = set()
-            inconsistent = True
+        # try:
+        with self.using(prog):
+            pos_covered = frozenset(self.query('pos_covered(S)','S'))
+            inconsistent = False
+            if len(self.neg_index) > 0:
+                inconsistent = self.bool_query("inconsistent")
+        # except PrologError as err:
+        #     print('PROLOG ERROR',err)
+        #     pos_covered = set()
+        #     inconsistent = True
 
         # self.cached_pos_covered[k] = pos_covered
         return pos_covered, inconsistent
@@ -143,24 +143,26 @@ class Tester():
     def test_single_rule(self, prog):
         pos_covered = frozenset()
         inconsistent = False
-        try:
-            rule = list(prog)[0]
-            head, _body = rule
-            head, ordered_body = order_rule(rule, self.settings)
-            atom_str = format_literal(head)
-            body_str = format_rule((None,ordered_body))[2:-1]
-            q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-            xs = next(self.prolog.query(q))
-            pos_covered = frozenset(xs['Xs'])
-            inconsistent = False
-            if len(self.neg_index) > 0:
-                q = f'neg_index(Id,{atom_str}),{body_str},!'
-                xs = list(self.prolog.query(q))
-                if len(xs) > 0:
-                    inconsistent = True
+        # try:
+        rule = list(prog)[0]
+        head, _body = rule
+        head, ordered_body = order_rule(rule, self.settings)
+        atom_str = janus_format_rule(format_literal(head))
+        body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
+        q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
+        xs = self.query(q, 'S')
+        pos_covered = frozenset(xs)
+        inconsistent = False
+        if len(self.neg_index) > 0:
+            q = f'neg_index(_ID, {atom_str}), {body_str},!'
+            xs = self.bool_query(q)
+            if xs:
+                inconsistent = True
+            # if len(xs) > 0:
+                # inconsistent = True
 
-        except PrologError as err:
-            print('PROLOG ERROR',err)
+        # except PrologError as err:
+            # print('PROLOG ERROR',err)
         return pos_covered, inconsistent
 
     def test_single_inconsistent(self, prog):
@@ -182,22 +184,22 @@ class Tester():
     def test_single_rule_all(self, prog):
         pos_covered = frozenset()
         neg_covered = frozenset()
-        try:
-            rule = list(prog)[0]
-            head, _body = rule
-            head, ordered_body = order_rule(rule, self.settings)
-            atom_str = format_literal(head)
-            body_str = format_rule((None,ordered_body))[2:-1]
-            q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-            xs = next(self.prolog.query(q))
-            pos_covered = frozenset(xs['Xs'])
-            if len(self.neg_index) > 0:
-                q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-                xs = next(self.prolog.query(q))
-                neg_covered = frozenset(xs['Xs'])
+        # try:
+        rule = list(prog)[0]
+        head, _body = rule
+        head, ordered_body = order_rule(rule, self.settings)
+        atom_str = janus_format_rule(format_literal(head))
+        body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
+        q = f'findall(_ID, (pos_index(_ID, {atom_str}), ({body_str}->  true)), S)'
+        xs = self.query(q, 'S')
+        pos_covered = frozenset(xs)
+        if len(self.neg_index) > 0:
+            q = f'findall(_ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
+            xs = self.query(q, 'S')
+            neg_covered = frozenset(xs)
 
-        except PrologError as err:
-            print('PROLOG ERROR',err)
+        # except PrologError as err:
+            # print('PROLOG ERROR',err)
         return pos_covered, neg_covered
 
 
@@ -291,7 +293,8 @@ class Tester():
         if k in self.cached_inconsistent:
             return self.cached_inconsistent[k]
         with self.using(prog):
-            inconsistent = len(list(self.prolog.query("inconsistent"))) > 0
+            # inconsistent = len(list(self.prolog.query("inconsistent"))) > 0
+            inconsistent = self.bool_query("inconsistent")
             self.cached_inconsistent[k] = inconsistent
             return inconsistent
 
@@ -334,12 +337,13 @@ class Tester():
             rule = list(prog)[0]
             head, _body = rule
             head, ordered_body = order_rule(rule, self.settings)
-            atom_str = format_literal(head)
-            body_str = format_rule((None,ordered_body))[2:-1]
-            q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-            xs = next(self.prolog.query(q))
+            atom_str = janus_format_rule(format_literal(head))
+            body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
+            q = f'findall(_ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
+            # xs = next(self.prolog.query(q))
+            xs = self.bool_query(q, 'S')
             self.cached_neg_covers[k] = xs
-            return frozenset(xs['Xs'])
+            return frozenset(xs)
         else:
             with self.using(prog):
                 xs = frozenset(self.query('neg_covered(Xs)', 'Xs'))
@@ -508,7 +512,7 @@ class Tester():
         for head, arity in current_clauses:
             str_prog.append(f':- dynamic {head}/{arity}')
         str_prog = '.\n'.join(str_prog) +'.'
-        print('prog', str_prog)
+        # print('prog', str_prog)
         janus.consult('prog', str_prog)
         yield
         # finally:
