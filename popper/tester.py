@@ -239,20 +239,20 @@ class Tester():
     def test_single_rule_neg_at_most_k(self, prog, k):
         # pos_covered = frozenset()
         neg_covered = frozenset()
-        try:
-            rule = list(prog)[0]
-            head, _body = rule
-            head, ordered_body = order_rule(rule, self.settings)
-            atom_str = format_literal(head)
-            body_str = format_rule((None,ordered_body))[2:-1]
-            if len(self.neg_index) > 0:
-                # q = f'findall(ID, limit({k},(neg_index(ID,{atom_str}),({body_str}->  true))), Xs)'
-                q = f'findfirstn({k}, ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-                xs = next(self.prolog.query(q))
-                neg_covered = frozenset(xs['Xs'])
+        # try:
+        rule = list(prog)[0]
+        head, _body = rule
+        head, ordered_body = order_rule(rule, self.settings)
+        atom_str = janus_format_rule(format_literal(head))
+        body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
+        if len(self.neg_index) > 0:
+            q = f'findfirstn({k}, _ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
+            xs = self.query(q, 'S')
+            # xs = next(self.prolog.query(q))
+            neg_covered = frozenset(xs)
 
-        except PrologError as err:
-            print('PROLOG ERROR',err)
+        # except PrologError as err:
+            # print('PROLOG ERROR',err)
         return neg_covered
 
     def test_single_rule_neg_at_most_k2(self, prog, k):
@@ -539,8 +539,8 @@ class Tester():
             head, _body = rule
             head, ordered_body = order_rule(rule, self.settings)
             if noise:
-                new_head = f'pos_index(ID,{format_literal(head)})'
-                x = format_rule((None,ordered_body))[2:-1]
+                new_head = f'pos_index(_ID, {janus_format_rule(format_literal(head))})'
+                x = janus_format_rule(format_rule((None,ordered_body))[2:-1])
                 x = f'succeeds_k_times({new_head},({x}),{rule_size(rule)}),!'
                 return self.bool_query(x)
             else:
