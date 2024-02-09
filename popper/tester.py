@@ -6,16 +6,9 @@ from janus_swi import query_once, consult
 from contextlib import contextmanager
 from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, rule_size, calc_prog_size
 from . explain import prog_hash, get_raw_prog
-from collections import defaultdict
-
-# AC: @AC, awful code. Fix
-rule_vars = set(['A','B','C','D','E','F','G','H', 'I', 'J', 'K'])
-
-d1_time = 0
-d2_time = 0
-d3_time = 0
 
 compiled_pattern = re.compile("(?<=[\(,])([A-Z])")
+
 # Janus requires that non-output variables be prefixed with _
 def janus_format_rule(rule):
     return compiled_pattern.sub(r"_\1", rule)
@@ -75,7 +68,7 @@ class Tester():
             pos_covered = frozenset(query_once(q)['S'])
             inconsistent = False
             if len(self.neg_index) > 0:
-                q = f'neg_index(_ID, {atom_str}), {body_str},!'
+                q = f'neg_index(_ID, {atom_str}), {body_str}'
                 inconsistent = bool_query(q)
             return pos_covered, inconsistent
 
@@ -120,7 +113,7 @@ class Tester():
 
         if len(prog) == 1:
             atom_str, body_str = parse_single_rule(prog, self.settings)
-            q = f'neg_index(_Id, {atom_str}), {body_str},!'
+            q = f'neg_index(_ID, {atom_str}), {body_str}'
             return bool_query(q)
 
         with self.using(prog):
@@ -212,12 +205,12 @@ class Tester():
             if noise:
                 new_head = f'pos_index(_ID, {janus_format_rule(format_literal(head))})'
                 x = janus_format_rule(format_rule((None,ordered_body))[2:-1])
-                q = f'succeeds_k_times({new_head},({x}),K),!'
+                q = f'succeeds_k_times({new_head},({x}),K)'
                 return query_once(q, {'K':rule_size(rule)})['truth']
             else:
                 head = f'pos_index(_,{format_literal(head)})'
                 x = format_rule((None, ordered_body))[2:-1]
-                x = f'{head},{x},!'
+                x = f'{head},{x}'
                 x = janus_format_rule(x)
                 return bool_query(x)
         else:
@@ -229,8 +222,8 @@ class Tester():
 
     def is_body_sat(self, body):
         _, ordered_body = order_rule((None,body), self.settings)
-        body_str = ','.join(format_literal(literal) for literal in ordered_body)
-        query = body_str + ',!'
+        query = ','.join(format_literal(literal) for literal in ordered_body)
+        # query = body_str + ',!'
         # query = f'catch(call_with_time_limit(0.1, ({query})),time_limit_exceeded,true)'
         # query = f'{query})),time_limit_exceeded,true)'
         return bool_query(query)
