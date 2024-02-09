@@ -39,7 +39,8 @@ class Tester():
         exs_pl_path = self.settings.ex_file
         test_pl_path = pkg_resources.resource_filename(__name__, "lp/test.pl")
 
-        consult('prog', f':- dynamic {settings.head_literal.predicate}/{settings.head_literal.arity}.')
+        if not settings.pi_enabled:
+            consult('prog', f':- dynamic {settings.head_literal.predicate}/{settings.head_literal.arity}.')
 
         for x in [exs_pl_path, bk_pl_path, test_pl_path]:
             if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
@@ -160,17 +161,22 @@ class Tester():
 
     @contextmanager
     def using(self, prog):
+
+        str_prog = [':- style_check(-singleton)']
+
         if self.settings.recursion_enabled:
             prog = order_prog(prog)
 
         current_clauses = set()
-        # horrible that we need to assert/consult this rule each time
-        str_prog = [':- style_check(-singleton)']
         for rule in prog:
             head, _body = rule
             x = format_rule(order_rule(rule, self.settings))[:-1]
             str_prog.append(x)
             current_clauses.add((head.predicate, head.arity))
+
+        if self.settings.pi_enabled:
+            for p, a in current_clauses:
+                str_prog.append(f':- dynamic {p}/{a}')
 
         str_prog = '.\n'.join(str_prog) +'.'
         consult('prog', str_prog)
