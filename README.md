@@ -4,9 +4,9 @@
 Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) system.  If you use Popper, please cite the paper [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259) (MLJ 2021).
 
 #### Requirements
-- [pyswip](https://github.com/yuce/pyswip) (**You must install pyswip from the master branch with  the command: `pip install git+https://github.com/yuce/pyswip@master#egg=pyswip`**)
-- [SWI-Prolog](https://www.swi-prolog.org) (9.0.4 or above)
+- [SWI-Prolog](https://www.swi-prolog.org) (9.2.0 or above)
 - [Clingo](https://potassco.org/clingo/) (5.6.2 or above)
+- [Janus-swi](https://github.com/SWI-Prolog/packages-swipy)
 - [pysat](https://pysathq.github.io)
 
 #### Installation
