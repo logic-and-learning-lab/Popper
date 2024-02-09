@@ -693,6 +693,7 @@ def popper(settings):
                         if len(pos_covered) > 0:
                             if not settings.solution_found or len(pos_covered) > 1:
                                 inconsistent = tester.test_prog_inconsistent(prog)
+                        # print(pos_covered, inconsistent)
 
             num_pos_covered = len(pos_covered)
 

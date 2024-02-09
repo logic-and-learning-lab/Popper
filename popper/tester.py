@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import pkg_resources
 from janus_swi import query_once, consult
@@ -10,14 +11,14 @@ from collections import defaultdict
 # AC: @AC, awful code. Fix
 rule_vars = set(['A','B','C','D','E','F','G','H', 'I', 'J', 'K'])
 
+d1_time = 0
+d2_time = 0
+d3_time = 0
+
+compiled_pattern = re.compile("(?<=[\(,])([A-Z])")
 # Janus requires that non-output variables be prefixed with _
 def janus_format_rule(rule):
-    out = []
-    for x in rule:
-        if x in rule_vars:
-            out.append('_')
-        out.append(x)
-    return ''.join(out)
+    return compiled_pattern.sub(r"_\1", rule)
 
 def bool_query(query):
     return query_once(query)['truth']
@@ -57,11 +58,11 @@ class Tester():
 
         self.cached_pos_covered = {}
         self.cached_inconsistent = {}
-        # self.cached_redundant = {}
-        # self.cached_neg_covers = {}
 
         self.settings.pos_index = self.pos_index
         self.settings.neg_index = self.neg_index
+
+        self.savings = 0
 
         if self.settings.recursion_enabled:
             query_once(f'assert(timeout({self.settings.eval_timeout})), fail')
@@ -126,11 +127,12 @@ class Tester():
             return bool_query("inconsistent")
 
     def test_single_rule_neg_at_most_k(self, prog, k):
+
         neg_covered = frozenset()
         if len(self.neg_index) > 0:
             atom_str, body_str = parse_single_rule(prog, self.settings)
-            q = f'findfirstn({k}, _ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
-            neg_covered = frozenset(query_once(q)['S'])
+            q = f'findfirstn(K, _ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
+            neg_covered = frozenset(query_once(q, {'K':k})['S'])
         return neg_covered
 
     def is_inconsistent(self, prog):
@@ -210,8 +212,8 @@ class Tester():
             if noise:
                 new_head = f'pos_index(_ID, {janus_format_rule(format_literal(head))})'
                 x = janus_format_rule(format_rule((None,ordered_body))[2:-1])
-                x = f'succeeds_k_times({new_head},({x}),{rule_size(rule)}),!'
-                return bool_query(x)
+                q = f'succeeds_k_times({new_head},({x}),K),!'
+                return query_once(q, {'K':rule_size(rule)})['truth']
             else:
                 head = f'pos_index(_,{format_literal(head)})'
                 x = format_rule((None, ordered_body))[2:-1]
@@ -221,7 +223,7 @@ class Tester():
         else:
             with self.using(prog):
                 if noise:
-                    return bool_query(f'covers_at_least_k_pos({calc_prog_size(prog)})')
+                    return query_once(f'covers_at_least_k_pos(K)',{'K':calc_prog_size(prog)})['truth']
                 else:
                     return bool_query('sat')
 
@@ -267,8 +269,7 @@ class Tester():
             else:
                 c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
             c = janus_format_rule(c)
-            res = bool_query(f'redundant_literal({c})')
-            if res:
+            if query_once('redundant_literal(C)',{'C':c})['truth']:
                 return True
         return False
 

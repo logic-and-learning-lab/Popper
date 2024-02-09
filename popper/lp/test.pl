@@ -6,6 +6,9 @@ load_examples:-
     load_pos,
     load_neg.
 
+get_pos(S):-
+    findall(K, pos_index(K, _Atom), S).
+
 load_pos:-
     current_predicate(pos/1),!,
     findall(X, pos(X), Pos),
