@@ -1,18 +1,16 @@
 import os
 import time
 import pkg_resources
-import janus_swi as janus
+from janus_swi import query_once, consult
 from contextlib import contextmanager
 from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, rule_size, calc_prog_size
-
-import clingo
-import clingo.script
-import pkg_resources
-from . core import Literal
 from . explain import prog_hash, get_raw_prog
 from collections import defaultdict
 
-rule_vars = set(['A','B','C','D','E','F','G','H'])
+# AC: @AC, awful code. Fix
+rule_vars = set(['A','B','C','D','E','F','G','H', 'I', 'J', 'K'])
+
+# Janus requires that non-output variables be prefixed with _
 def janus_format_rule(rule):
     out = []
     for x in rule:
@@ -21,13 +19,18 @@ def janus_format_rule(rule):
         out.append(x)
     return ''.join(out)
 
+def bool_query(query):
+    return query_once(query)['truth']
+
+def parse_single_rule(prog, settings):
+    rule = list(prog)[0]
+    head, _body = rule
+    head, ordered_body = order_rule(rule, settings)
+    atom_str = janus_format_rule(format_literal(head))
+    body_str = janus_format_rule(format_rule((None, ordered_body))[2:-1])
+    return atom_str, body_str
+
 class Tester():
-
-    def query(self, query, key):
-        return janus.query_once(query)[key]
-
-    def bool_query(self, query):
-        return janus.query_once(query)['truth']
 
     def __init__(self, settings):
         self.settings = settings
@@ -36,131 +39,288 @@ class Tester():
         exs_pl_path = self.settings.ex_file
         test_pl_path = pkg_resources.resource_filename(__name__, "lp/test.pl")
 
-        janus.consult('prog', f':- dynamic {settings.head_literal.predicate}/{settings.head_literal.arity}.')
+        consult('prog', f':- dynamic {settings.head_literal.predicate}/{settings.head_literal.arity}.')
 
         for x in [exs_pl_path, bk_pl_path, test_pl_path]:
             if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
                 x = x.replace('\\', '\\\\')
-            janus.consult(x)
+            consult(x)
 
-        janus.query_once('load_examples')
-        self.pos_index = self.query('findall(_K, pos_index(_K, _Atom), Xs)', 'Xs')
-        self.neg_index = self.query('findall(_K, neg_index(_K, _Atom), Xs)', 'Xs')
+        query_once('load_examples')
+
+        self.pos_index = query_once('findall(_K, pos_index(_K, _Atom), S)')['S']
+        self.neg_index = query_once('findall(_K, neg_index(_K, _Atom), S)')['S']
 
         self.num_pos = len(self.pos_index)
         self.num_neg = len(self.neg_index)
 
         self.cached_pos_covered = {}
         self.cached_inconsistent = {}
-        self.cached_redundant = {}
-
-        self.cached_neg_covers = {}
+        # self.cached_redundant = {}
+        # self.cached_neg_covers = {}
 
         self.settings.pos_index = self.pos_index
         self.settings.neg_index = self.neg_index
 
         if self.settings.recursion_enabled:
-            janus.query_once(f'assert(timeout({self.settings.eval_timeout})),fail')
+            query_once(f'assert(timeout({self.settings.eval_timeout})), fail')
 
     def test_prog(self, prog):
+
         if len(prog) == 1:
-            return self.test_single_rule(prog)
-        with self.using(prog):
-            pos_covered = frozenset(self.query('pos_covered(S)','S'))
+            atom_str, body_str = parse_single_rule(prog, self.settings)
+            q = f'findall(_ID, (pos_index(_ID, {atom_str}), ({body_str} ->  true)), S)'
+            pos_covered = frozenset(query_once(q)['S'])
             inconsistent = False
             if len(self.neg_index) > 0:
-                inconsistent = self.bool_query("inconsistent")
+                q = f'neg_index(_ID, {atom_str}), {body_str},!'
+                inconsistent = bool_query(q)
+            return pos_covered, inconsistent
+
+        with self.using(prog):
+            pos_covered = frozenset(query_once('pos_covered(S)')['S'])
+            inconsistent = False
+            if len(self.neg_index) > 0:
+                inconsistent = bool_query("inconsistent")
         return pos_covered, inconsistent
 
     def test_prog_all(self, prog):
+
         if len(prog) == 1:
-            return self.test_single_rule_all(prog)
+            atom_str, body_str = parse_single_rule(prog, self.settings)
+            q = f'findall(_ID, (pos_index(_ID, {atom_str}), ({body_str}->  true)), S)'
+            pos_covered = frozenset(query_once(q)['S'])
+            neg_covered = frozenset()
+            if len(self.neg_index) > 0:
+                q = f'findall(_ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
+                neg_covered = frozenset(query_once(q)['S'])
+            return pos_covered, neg_covered
+
         with self.using(prog):
-            res = janus.query_once(f'pos_covered(S1), neg_covered(S2)')
-            pos_covered = frozenset(res['S1'])
-            neg_covered = frozenset(res['S2'])
+            res = query_once(f'pos_covered(S1), neg_covered(S2)')
+        pos_covered = frozenset(res['S1'])
+        neg_covered = frozenset(res['S2'])
         return pos_covered, neg_covered
 
     def test_prog_pos(self, prog):
+
         if len(prog) == 1:
-            return self.test_single_rule_pos(prog)
+            atom_str, body_str = parse_single_rule(prog, self.settings)
+            q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
+            return frozenset(query_once(q)['S'])
+
         with self.using(prog):
-            pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
-        return pos_covered
+            return frozenset(query_once('pos_covered(S)')['S'])
 
     def test_prog_inconsistent(self, prog):
+        if len(self.neg_index) == 0:
+            return False
+
         if len(prog) == 1:
-            return self.test_single_inconsistent(prog)
-        if len(self.neg_index) > 0:
-            with self.using(prog):
-                return self.bool_query("inconsistent")
-        return True
+            atom_str, body_str = parse_single_rule(prog, self.settings)
+            q = f'neg_index(_Id, {atom_str}), {body_str},!'
+            return bool_query(q)
 
-    def test_single_rule(self, prog):
-        pos_covered = frozenset()
-        inconsistent = False
+        with self.using(prog):
+            return bool_query("inconsistent")
 
-        rule = list(prog)[0]
-        head, _body = rule
-        head, ordered_body = order_rule(rule, self.settings)
-        atom_str = janus_format_rule(format_literal(head))
-        body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
-        q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
-        xs = self.query(q, 'S')
-        pos_covered = frozenset(xs)
-        inconsistent = False
-        if len(self.neg_index) > 0:
-            q = f'neg_index(_ID, {atom_str}), {body_str},!'
-            inconsistent = self.bool_query(q)
-
-        return pos_covered, inconsistent
-
-    def test_single_inconsistent(self, prog):
-        inconsistent = False
-
-        rule = list(prog)[0]
-        head, _body = rule
-        head, ordered_body = order_rule(rule, self.settings)
-        atom_str = janus_format_rule(format_literal(head))
-        body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
-        inconsistent = False
-        if len(self.neg_index) > 0:
-            q = f'neg_index(_Id,{atom_str}),{body_str},!'
-            inconsistent = self.bool_query(q)
-
-        return inconsistent
-
-    def test_single_rule_all(self, prog):
-        pos_covered = frozenset()
+    def test_single_rule_neg_at_most_k(self, prog, k):
         neg_covered = frozenset()
-
-        rule = list(prog)[0]
-        head, _body = rule
-        head, ordered_body = order_rule(rule, self.settings)
-        atom_str = janus_format_rule(format_literal(head))
-        body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
-        q = f'findall(_ID, (pos_index(_ID, {atom_str}), ({body_str}->  true)), S)'
-        xs = self.query(q, 'S')
-        pos_covered = frozenset(xs)
         if len(self.neg_index) > 0:
-            q = f'findall(_ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
-            xs = self.query(q, 'S')
-            neg_covered = frozenset(xs)
+            atom_str, body_str = parse_single_rule(prog, self.settings)
+            q = f'findfirstn({k}, _ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
+            neg_covered = frozenset(query_once(q)['S'])
+        return neg_covered
 
-        return pos_covered, neg_covered
+    def is_inconsistent(self, prog):
+        if len(self.neg_index) == 0:
+            return False
+        k = prog_hash(prog)
+        if k in self.cached_inconsistent:
+            return self.cached_inconsistent[k]
+        with self.using(prog):
+            inconsistent = bool_query("inconsistent")
+            self.cached_inconsistent[k] = inconsistent
+            return inconsistent
 
+    def get_pos_covered(self, prog, ignore=True):
+        k = prog_hash(prog)
+        if k in self.cached_pos_covered:
+            return self.cached_pos_covered[k]
 
-    def test_single_rule_pos(self, prog):
-        pos_covered = frozenset()
-        rule = list(prog)[0]
-        head, _body = rule
-        head, ordered_body = order_rule(rule, self.settings)
-        atom_str = janus_format_rule(format_literal(head))
-        body_str = janus_format_rule(format_rule((None, ordered_body))[2:-1])
-        q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
-        xs = self.query(q, 'S')
-        pos_covered = frozenset(xs)
+        if len(prog) == 1:
+            atom_str, body_str = parse_single_rule(prog, self.settings)
+            q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
+            pos_covered = frozenset(query_once(q)['S'])
+        else:
+            with self.using(prog):
+                pos_covered = frozenset(query_once('pos_covered(S)')['S'])
+        self.cached_pos_covered[k] = pos_covered
         return pos_covered
+
+    @contextmanager
+    def using(self, prog):
+        if self.settings.recursion_enabled:
+            prog = order_prog(prog)
+
+        current_clauses = set()
+        # horrible that we need to assert/consult this rule each time
+        str_prog = [':- style_check(-singleton)']
+        for rule in prog:
+            head, _body = rule
+            x = format_rule(order_rule(rule, self.settings))[:-1]
+            str_prog.append(x)
+            current_clauses.add((head.predicate, head.arity))
+
+        str_prog = '.\n'.join(str_prog) +'.'
+        consult('prog', str_prog)
+        yield
+        for predicate, arity in current_clauses:
+            args = ','.join(['_'] * arity)
+            x = query_once(f"retractall({predicate}({args}))")
+
+    def is_non_functional(self, prog):
+        with self.using(prog):
+            return bool_query('non_functional')
+
+    def reduce_inconsistent(self, program):
+        if len(program) < 3:
+            return program
+        for i in range(len(program)):
+            subprog = program[:i] + program[i+1:]
+            if not prog_is_recursive(subprog):
+                continue
+            with self.using(subprog):
+                if self.is_inconsistent(subprog):
+                    return self.reduce_inconsistent(subprog)
+        return program
+
+    def is_sat(self, prog, noise=False):
+
+        if len(prog) == 1:
+            rule = list(prog)[0]
+            head, _body = rule
+            head, ordered_body = order_rule(rule, self.settings)
+            if noise:
+                new_head = f'pos_index(_ID, {janus_format_rule(format_literal(head))})'
+                x = janus_format_rule(format_rule((None,ordered_body))[2:-1])
+                x = f'succeeds_k_times({new_head},({x}),{rule_size(rule)}),!'
+                return bool_query(x)
+            else:
+                head = f'pos_index(_,{format_literal(head)})'
+                x = format_rule((None, ordered_body))[2:-1]
+                x = f'{head},{x},!'
+                return bool_query(x)
+        else:
+            with self.using(prog):
+                if noise:
+                    return bool_query(f'covers_at_least_k_pos({calc_prog_size(prog)})')
+                else:
+                    return bool_query('sat')
+
+    def is_body_sat(self, body):
+        _, ordered_body = order_rule((None,body), self.settings)
+        body_str = ','.join(format_literal(literal) for literal in ordered_body)
+        query = body_str + ',!'
+        # query = f'catch(call_with_time_limit(0.1, ({query})),time_limit_exceeded,true)'
+        # query = f'{query})),time_limit_exceeded,true)'
+        return bool_query(query)
+
+    def has_redundant_rule_(self, prog):
+        prog_ = []
+        for head, body in prog:
+            c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+            prog_.append(c)
+        prog_ = f"[{','.join(prog_)}]"
+        prog_ = janus_format_rule(prog_)
+        q = f'redundant_clause({prog_})'
+        return bool_query(q)
+
+    def has_redundant_rule(self, prog):
+        # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
+
+        base = []
+        step = []
+        for rule in prog:
+            if rule_is_recursive(rule):
+                step.append(rule)
+            else:
+                base.append(rule)
+        if len(base) > 1 and self.has_redundant_rule_(base):
+            return True
+        if len(step) > 1 and self.has_redundant_rule_(step):
+            return True
+        return False
+
+    def has_redundant_literal(self, prog):
+        for rule in prog:
+            head, body = rule
+            if head:
+                c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+            else:
+                c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
+            c = janus_format_rule(c)
+            res = bool_query(f'redundant_literal({c})')
+            if res:
+                return True
+        return False
+
+    # # WE ASSUME THAT THERE IS A REUNDANT RULE
+    def find_redundant_rule_(self, prog):
+        prog_ = []
+        for i, (head, body) in enumerate(prog):
+            c = f"{i}-[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+            prog_.append(c)
+        prog_ = f"[{','.join(prog_)}]"
+        prog_ = janus_format_rule(prog_)
+        q = f'find_redundant_rule({prog_}, K1, K2)'
+        res = query_once(q)
+        k1 = res['K1']
+        k2 = res['K2']
+        return prog[k1], prog[k2]
+
+    def find_redundant_rules(self, prog):
+        # assert(False)
+        # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
+        base = []
+        step = []
+        for rule in prog:
+            if rule_is_recursive(rule):
+                step.append(rule)
+            else:
+                base.append(rule)
+        if len(base) > 1 and self.has_redundant_rule(base):
+            return self.find_redundant_rule_(base)
+        if len(step) > 1 and self.has_redundant_rule(step):
+            return self.find_redundant_rule_(step)
+        return None
+
+
+    # def has_redundant_rule_(self, prog):
+    #     prog_ = []
+    #     for head, body in prog:
+    #         c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+    #         prog_.append(c)
+    #     prog_ = f"[{','.join(prog_)}]"
+    #     return len(list(self.prolog.query(f'redundant_clause({prog_})'))) > 0
+    #     # return self.bool_query(f'redundant_clause({prog_})')
+
+    # def has_redundant_rule(self, prog):
+    #     # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
+
+    #     base = []
+    #     step = []
+    #     for rule in prog:
+    #         if rule_is_recursive(rule):
+    #             step.append(rule)
+    #         else:
+    #             base.append(rule)
+    #     if len(base) > 1 and self.has_redundant_rule_(base):
+    #         return True
+    #     if len(step) > 1 and self.has_redundant_rule_(step):
+    #         return True
+    #     return False
+
 
     # def test_single_rule_neg(self, prog):
     #     # pos_covered = frozenset()
@@ -179,19 +339,6 @@ class Tester():
     #     except PrologError as err:
     #         print('PROLOG ERROR',err)
     #     return neg_covered
-
-    def test_single_rule_neg_at_most_k(self, prog, k):
-        neg_covered = frozenset()
-        rule = list(prog)[0]
-        head, _body = rule
-        head, ordered_body = order_rule(rule, self.settings)
-        atom_str = janus_format_rule(format_literal(head))
-        body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
-        if len(self.neg_index) > 0:
-            q = f'findfirstn({k}, _ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
-            xs = self.query(q, 'S')
-            neg_covered = frozenset(xs)
-        return neg_covered
 
     # def test_single_rule_neg_at_most_k2(self, prog, k):
     #     # pos_covered = frozenset()
@@ -212,43 +359,13 @@ class Tester():
     #         print('PROLOG ERROR',err)
     #     return neg_covered
 
-    def is_inconsistent(self, prog):
-        if len(self.neg_index) == 0:
-            return False
-        k = prog_hash(prog)
-        if k in self.cached_inconsistent:
-            return self.cached_inconsistent[k]
-        with self.using(prog):
-            inconsistent = self.bool_query("inconsistent")
-            self.cached_inconsistent[k] = inconsistent
-            return inconsistent
 
     # def is_complete(self, prog):
     #     with self.using(prog):
     #         pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
     #         return len(pos_covered) == len(self.pos_index)
 
-    def get_pos_covered(self, prog, ignore=True):
-        k = prog_hash(prog)
-        if k in self.cached_pos_covered:
-            return self.cached_pos_covered[k]
-
-        if len(prog) == 1:
-            rule = list(prog)[0]
-            head, _body = rule
-            head, ordered_body = order_rule(rule, self.settings)
-            atom_str = janus_format_rule(format_literal(head))
-            body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
-            q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
-            xs = self.query(q, 'S')
-            pos_covered = frozenset(xs)
-        else:
-            with self.using(prog):
-                pos_covered = frozenset(self.query('pos_covered(S)', 'S'))
-        self.cached_pos_covered[k] = pos_covered
-        return pos_covered
-
-    # def get_neg_covered(self, prog):
+# def get_neg_covered(self, prog):
     #      with self.using(prog):
     #         return frozenset(self.query('neg_covered(S)', 'S'))
 
@@ -344,74 +461,8 @@ class Tester():
     #     inconsistent = len(list(self.prolog.query(q))) > 0
 
 
-    @contextmanager
-    def using(self, prog):
-        if self.settings.recursion_enabled:
-            prog = order_prog(prog)
-        current_clauses = set()
 
-        str_prog = [':- style_check(-singleton)']
-        for rule in prog:
-            head, _body = rule
-            x = format_rule(order_rule(rule, self.settings))[:-1]
-            str_prog.append(x)
-            current_clauses.add((head.predicate, head.arity))
-
-        str_prog = '.\n'.join(str_prog) +'.'
-        janus.consult('prog', str_prog)
-        yield
-        for predicate, arity in current_clauses:
-            args = ','.join(['_'] * arity)
-            x = janus.query_once(f"retractall({predicate}({args}))")
-
-    def is_non_functional(self, prog):
-        with self.using(prog):
-            return self.bool_query('non_functional')
-
-    def reduce_inconsistent(self, program):
-        if len(program) < 3:
-            return program
-        for i in range(len(program)):
-            subprog = program[:i] + program[i+1:]
-            if not prog_is_recursive(subprog):
-                continue
-            with self.using(subprog):
-                if self.is_inconsistent(subprog):
-                    return self.reduce_inconsistent(subprog)
-        return program
-
-    def is_sat(self, prog, noise=False):
-        if len(prog) == 1:
-            rule = list(prog)[0]
-            head, _body = rule
-            head, ordered_body = order_rule(rule, self.settings)
-            if noise:
-                new_head = f'pos_index(_ID, {janus_format_rule(format_literal(head))})'
-                x = janus_format_rule(format_rule((None,ordered_body))[2:-1])
-                x = f'succeeds_k_times({new_head},({x}),{rule_size(rule)}),!'
-                return self.bool_query(x)
-            else:
-                head = f'pos_index(_,{format_literal(head)})'
-                x = format_rule((None,ordered_body))[2:-1]
-                x = f'{head},{x},!'
-                return self.bool_query(x)
-        else:
-            with self.using(prog):
-                if noise:
-                    return self.bool_query(f'covers_at_least_k_pos({calc_prog_size(prog)})')
-                else:
-                    return self.bool_query('sat')
-
-    def is_body_sat(self, body):
-        _, ordered_body = order_rule((None,body), self.settings)
-        body_str = ','.join(format_literal(literal) for literal in ordered_body)
-        query = body_str + ',!'
-        # query = f'catch(call_with_time_limit(0.1, ({query})),time_limit_exceeded,true)'
-        # query = f'{query})),time_limit_exceeded,true)'
-        # print(query)
-        return self.bool_query(query)
-
-    # def check_redundant_literal(self, prog):
+# def check_redundant_literal(self, prog):
     #     for rule in prog:
     #         head, body = rule
     #         if head:
@@ -423,54 +474,32 @@ class Tester():
     #             yield rule
 
     # @profile
-    def has_redundant_literal(self, prog):
-        k = prog_hash(prog)
-        out = None
-        if k in self.cached_redundant:
-            out = self.cached_redundant[k]
-        else:
-            for rule in prog:
-                head, body = rule
-                if head:
-                    c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-                else:
-                    c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
-                res = janus.query_once('redundant_literal(X)', {'X':c})['truth']
-                if res:
-                    self.cached_redundant[k] = True
-                    break
-        self.cached_redundant[k] = False
-        out = self.cached_redundant[k]
-        return out
+    # def has_redundant_literal(self, prog):
+    #     k = prog_hash(prog)
+    #     out = None
+    #     if k in self.cached_redundant:
+    #         out = self.cached_redundant[k]
+    #     else:
+    #         for rule in prog:
+    #             head, body = rule
+    #             if head:
+    #                 c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+    #             else:
+    #                 c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
+    #             c = janus_format_rule(c)
+    #             # print(c)
+    #             res = janus.query_once(f'redundant_literal({c})')['truth']
+    #             # print('res', res)
+    #             if res:
+    #                 print(res)
+    #                 self.cached_redundant[k] = True
+    #                 break
+    #     self.cached_redundant[k] = False
+    #     out = self.cached_redundant[k]
+    #     return out
 
 
-    def has_redundant_rule_(self, prog):
-        prog_ = []
-        for head, body in prog:
-            c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-            prog_.append(c)
-        prog_ = f"[{','.join(prog_)}]"
-        v = janus.query_once('redundant_clause(X)', {'X':prog_})['truth']
-        # print(v, format_prog(prog))
-        return v
-
-    def has_redundant_rule(self, prog):
-        # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
-
-        base = []
-        step = []
-        for rule in prog:
-            if rule_is_recursive(rule):
-                step.append(rule)
-            else:
-                base.append(rule)
-        if len(base) > 1 and self.has_redundant_rule_(base):
-            return True
-        if len(step) > 1 and self.has_redundant_rule_(step):
-            return True
-        return False
-
-    # # WE ASSUME THAT THERE IS A REUNDANT RULE
+# # WE ASSUME THAT THERE IS A REUNDANT RULE
     # def subsumes(self, r1, r2):
     #     r2 = str(r2)
     #     r2 = r2.replace('A','X')
@@ -515,82 +544,3 @@ class Tester():
     #     if len(step) > 1 and self.has_redundant_rule(step):
     #         return self.find_redundant_rule_(step)
     #     return None
-
-
-
-
-
-
-
-
-    # def has_redundant_literal(self, prog):
-    #     for rule in prog:
-    #         head, body = rule
-    #         if head:
-    #             c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-    #         else:
-    #             c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
-    #         # res = list(self.prolog.query(f'redundant_literal({c})'))
-    #         # res = self.bool_query(
-    #         # print(c)
-    #         x = janus.query_once('redundant_literal(X)', {'X':c})
-    #         res = x['truth']
-    #         if res:
-    #             return True
-    #     return False
-
-    # def has_redundant_rule_(self, prog):
-    #     prog_ = []
-    #     for head, body in prog:
-    #         c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-    #         prog_.append(c)
-    #     prog_ = f"[{','.join(prog_)}]"
-    #     return len(list(self.prolog.query(f'redundant_clause({prog_})'))) > 0
-    #     # return self.bool_query(f'redundant_clause({prog_})')
-
-    # def has_redundant_rule(self, prog):
-    #     # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
-
-    #     base = []
-    #     step = []
-    #     for rule in prog:
-    #         if rule_is_recursive(rule):
-    #             step.append(rule)
-    #         else:
-    #             base.append(rule)
-    #     if len(base) > 1 and self.has_redundant_rule_(base):
-    #         return True
-    #     if len(step) > 1 and self.has_redundant_rule_(step):
-    #         return True
-    #     return False
-
-    # # WE ASSUME THAT THERE IS A REUNDANT RULE
-    def find_redundant_rule_(self, prog):
-        assert(False)
-        prog_ = []
-        for i, (head, body) in enumerate(prog):
-            c = f"{i}-[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-            prog_.append(c)
-        prog_ = f"[{','.join(prog_)}]"
-        # print(prog_)
-        q = f'find_redundant_rule({prog_},K1,K2)'
-        res = list(self.prolog.query(q))
-        k1 = res[0]['K1']
-        k2 = res[0]['K2']
-        return prog[k1], prog[k2]
-        # return len(res) > 0
-
-    def find_redundant_rules(self, prog):
-        # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
-        base = []
-        step = []
-        for rule in prog:
-            if rule_is_recursive(rule):
-                step.append(rule)
-            else:
-                base.append(rule)
-        if len(base) > 1 and self.has_redundant_rule(base):
-            return self.find_redundant_rule_(base)
-        if len(step) > 1 and self.has_redundant_rule(step):
-            return self.find_redundant_rule_(step)
-        return None

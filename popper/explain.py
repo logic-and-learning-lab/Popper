@@ -162,10 +162,10 @@ class Explainer:
                 continue
 
 
-            if len(subprog) > 2 and self.tester.has_redundant_rule(subprog):
-                xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat, noisy)
-                out.extend(xs)
-                continue
+            # if len(subprog) > 2 and self.tester.has_redundant_rule(subprog):
+            #     xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat, noisy)
+            #     out.extend(xs)
+            #     continue
 
             test_prog = self.build_test_prog(subprog, directions)
 

@@ -666,7 +666,7 @@ def popper(settings):
                         inconsistent = len(neg_covered) > 0
                     else:
                         # AC: we could push all this reasoning to Prolog to only need a single call
-                        pos_covered = tester.test_single_rule_pos(prog)
+                        pos_covered = tester.test_prog_pos(prog)
                         num_pos_covered = len(pos_covered)
                         if len(pos_covered) > prog_size:
                             # maximum size of specialisations allowed
@@ -898,16 +898,14 @@ def popper(settings):
                 new_cons.append((Constraint.TMP_ANDY, prog, rule_ordering))
 
             # remove generalisations of programs with redundant rules
-            if is_recursive and len(prog) > 2 and tester.has_redundant_rule(prog):
-                with settings.stats.duration('has_redundant_rule'):
-                    # print('HERE!!!!')
-                    # assert(False)
-                    add_gen = True
-                    r1, r2 = tester.find_redundant_rules(prog)
-                    if settings.showcons:
-                        print('\t','r1',format_rule(order_rule(r1)))
-                        print('\t','r2',format_rule(order_rule(r2)))
-                    new_cons.append((Constraint.GENERALISATION, [r1,r2], None, None))
+            # if is_recursive and len(prog) > 2 and tester.has_redundant_rule(prog):
+            #     with settings.stats.duration('has_redundant_rule'):
+            #         add_gen = True
+            #         r1, r2 = tester.find_redundant_rules(prog)
+            #         if settings.showcons:
+            #             print('\t','r1',format_rule(order_rule(r1)))
+            #             print('\t','r2',format_rule(order_rule(r2)))
+            #         new_cons.append((Constraint.GENERALISATION, [r1,r2], None, None))
 
             if not add_spec and not pruned_more_general and not pruned_sub_incomplete:
                 could_prune_later[prog] = pos_covered

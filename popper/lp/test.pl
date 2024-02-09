@@ -155,10 +155,13 @@ subset([A|B], D):-
     subset(B,D).
 
 redundant_literal(C1):-
+    %% writeln(c1-C1),
     select(_,C1,C2),
-    subsumes(C1,C2),!.
-    %% writeln(C1),
-    %% writeln(C2).
+    %% writeln(c2-C2),
+    subsumes(C1,C2),
+    %% writeln(c1-C1-C2),
+    !.
+
 
 redundant_clause(P1):-
     select(C1,P1,P2),
