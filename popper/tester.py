@@ -210,6 +210,7 @@ class Tester():
                 head = f'pos_index(_,{format_literal(head)})'
                 x = format_rule((None, ordered_body))[2:-1]
                 x = f'{head},{x},!'
+                x = janus_format_rule(x)
                 return bool_query(x)
         else:
             with self.using(prog):
