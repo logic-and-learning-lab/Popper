@@ -99,15 +99,7 @@ def make_rule_handle(rule):
     cached_handles[k] = handle
     return handle
 
-def build_seen_rule(rule, is_rec):
-    rule_var = vo_clause('l')
-    handle = make_rule_handle(rule)
-    head = Literal('seen_rule', (handle, rule_var))
-    body = []
-    body.extend(build_rule_literals(rule, rule_var))
-    if is_rec:
-        body.append(gteq(rule_var, 1))
-    return head, tuple(body)
+
 
 def build_seen_rule_literal(handle, rule_var):
     return Literal('seen_rule', (handle, rule_var))
@@ -393,6 +385,15 @@ class Generator:
         self.solver = solver
 
 
+    # def build_seen_rule(rule, is_rec):
+    #     rule_var = vo_clause('l')
+    #     handle = make_rule_handle(rule)
+    #     head = Literal('seen_rule', (handle, rule_var))
+    #     body = []
+    #     body.extend(build_rule_literals(rule, rule_var))
+    #     if is_rec:
+    #         body.append(gteq(rule_var, 1))
+    #     return head, tuple(body)
 
     def get_model(self):
         if self.handle == None:
