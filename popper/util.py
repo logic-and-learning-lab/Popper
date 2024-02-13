@@ -1,3 +1,4 @@
+from functools import cache
 from enum import Enum
 import clingo
 import clingo.script
@@ -114,7 +115,7 @@ class Stats:
         for summary in self.duration_summary():
             percentage = int((summary.total/total_op_time)*100)
             message += f'{summary.operation}:\n\tCalled: {summary.called} times \t ' + \
-                       f'Total: {summary.total:0.2f} \t Mean: {summary.mean:0.3f} \t ' + \
+                       f'Total: {summary.total:0.2f} \t Mean: {summary.mean:0.4f} \t ' + \
                        f'Max: {summary.maximum:0.3f} \t Percentage: {percentage}%\n'
         message += f'Total operation time: {total_op_time:0.2f}s\n'
         message += f'Total execution time: {self.total_exec_time():0.2f}s'
@@ -221,11 +222,12 @@ def mdl_score(fn, fp, size):
     return fn + fp + size
 
 def order_rule(rule, settings=None):
+    head, body = rule
 
     if settings and settings.datalog:
-        return order_rule_datalog(rule, settings)
+        return order_rule_datalog(head, frozenset(body), settings)
 
-    head, body = rule
+
     ordered_body = []
     grounded_variables = set()
 
@@ -265,7 +267,8 @@ def order_rule(rule, settings=None):
 
     return head, tuple(ordered_body)
 
-def order_rule_datalog(rule, settings):
+@cache
+def order_rule_datalog(head, body, settings):
 
     def tmp_score(seen_vars, literal):
         key = []
@@ -280,7 +283,7 @@ def order_rule_datalog(rule, settings):
             return settings.recall[k]
         return 1000000
 
-    head, body = rule
+    # head, body = rule
     ordered_body = []
     seen_vars = set()
 
