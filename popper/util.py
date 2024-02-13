@@ -1,5 +1,5 @@
 from functools import cache
-from enum import Enum
+# from enum import Enum
 import clingo
 import clingo.script
 import signal
@@ -29,7 +29,7 @@ ANYTIME_TIMEOUT=10
 
 
 # class syntax
-class Constraint(Enum):
+class Constraint:
     GENERALISATION = 1
     SPECIALISATION = 2
     UNSAT = 3
