@@ -106,7 +106,7 @@ def build_seen_rule_literal(handle, rule_var):
 
 def parse_model_recursion(settings, model):
     rule_index_to_body = defaultdict(set)
-    rule_index_to_head = {}
+    # rule_index_to_head = {}
     rule_index_ordering = defaultdict(set)
 
     head = settings.head_literal
@@ -121,11 +121,6 @@ def parse_model_recursion(settings, model):
             atom_args = tuple(args[3].arguments)
             literal = cached_literals[(predicate, atom_args)]
             rule_index_to_body[rule_index].add(literal)
-        # elif name == 'head_literal':
-        #     assert(False)
-        #     args = atom.arguments
-        #     rule_index = args[0].number
-        #     rule_index_to_head[rule_index] = head
 
     prog = []
     rule_lookup = {}
