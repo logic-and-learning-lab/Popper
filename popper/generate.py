@@ -121,18 +121,19 @@ def parse_model_recursion(settings, model):
             atom_args = tuple(args[3].arguments)
             literal = cached_literals[(predicate, atom_args)]
             rule_index_to_body[rule_index].add(literal)
-        elif name == 'head_literal':
-            args = atom.arguments
-            rule_index = args[0].number
-            rule_index_to_head[rule_index] = head
+        # elif name == 'head_literal':
+        #     assert(False)
+        #     args = atom.arguments
+        #     rule_index = args[0].number
+        #     rule_index_to_head[rule_index] = head
 
     prog = []
     rule_lookup = {}
 
     directions = settings.directions
 
-    for rule_index in rule_index_to_head:
-        body = frozenset(rule_index_to_body[rule_index])
+    for rule_index, body in rule_index_to_body.items():
+        body = frozenset(body)
         rule = head, body
         prog.append((rule))
         rule_lookup[rule_index] = rule
@@ -293,7 +294,7 @@ class Generator:
         if settings.pi_enabled:
             encoding.append(f'#show direction_/3.')
 
-        if settings.pi_enabled or settings.recursion_enabled:
+        if settings.pi_enabled:
             encoding.append(f'#show head_literal/4.')
 
         if settings.noisy:
