@@ -236,10 +236,11 @@ def parse_model_pi(settings, model):
 
     return frozenset(prog), rule_ordering, directions
 
-def build_rule_literals(rule, rule_var):
+def build_rule_literals(rule, rule_var, pi=False):
     literals = []
     head, body = rule
-    yield Literal('head_literal', (rule_var, head.predicate, len(head.arguments), tuple(vo_variable2(rule_var, v) for v in head.arguments)))
+    if pi:
+        yield Literal('head_literal', (rule_var, head.predicate, len(head.arguments), tuple(vo_variable2(rule_var, v) for v in head.arguments)))
 
     for body_literal in body:
         yield Literal('body_literal', (rule_var, body_literal.predicate, len(body_literal.arguments), tuple(vo_variable2(rule_var, v) for v in body_literal.arguments)))
@@ -689,6 +690,7 @@ class Generator:
 
 
     def build_seen_rule2(self, rule, is_rec):
+        pi = self.settings.pi_enabled
 
         handle = make_rule_handle(rule)
         head, body = rule
@@ -711,7 +713,8 @@ class Generator:
             for xs in perms:
                 new_body = []
                 # new_body.append((True, 'head_literal', (rule_id, head.predicate, len(head.arguments), ground_head_args)))
-                new_body.append(('head_literal', (rule_id, head.predicate, len(head.arguments), ground_head_args)))
+                if pi:
+                    new_body.append(('head_literal', (rule_id, head.predicate, len(head.arguments), ground_head_args)))
                 for atom in body:
                     new_args = []
                     for x in atom.arguments:
@@ -721,7 +724,6 @@ class Generator:
                         else:
                             new_args.append(xs[indexes[x]])
                     new_args = tuple(new_args)
-                    # new_body.append((True, 'body_literal', (rule_id, atom.predicate, len(atom.arguments), new_args)))
                     new_body.append(('body_literal', (rule_id, atom.predicate, len(atom.arguments), new_args)))
                 new_rule = (new_head, frozenset(new_body))
                 out.append(new_rule)
