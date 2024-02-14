@@ -5,8 +5,8 @@ import pkg_resources
 from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
-from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, rule_size, calc_prog_size
-from . explain import prog_hash, get_raw_prog
+from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_literal, rule_is_recursive, rule_size, calc_prog_size
+from . explain import prog_hash
 
 compiled_pattern = re.compile("(?<=[\(,])([A-Z])")
 

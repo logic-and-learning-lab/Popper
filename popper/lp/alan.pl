@@ -10,11 +10,10 @@
 #defined enable_pi/0.
 #defined enable_recursion/0.
 #defined non_datalog/0.
-%% #defined allow_singletons/0.
 #defined custom_max_size/1.
 
 #show body_literal/4.
-#show before/2.
+%% #show before/2.
 
 max_size(K):-
     custom_max_size(K).

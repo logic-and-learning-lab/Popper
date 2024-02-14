@@ -161,6 +161,24 @@ class Generator:
         encoding.append(f'max_body({settings.max_body}).')
         encoding.append(f'max_vars({settings.max_vars}).')
 
+        # # ADD VARS, DIRECTIONS, AND TYPES
+        # encoding.append(f'head_vars({settings.head_literal.arity}, {tuple(range(settings.head_literal.arity))}).')
+        # arities = set(a for p, a in self.settings.body_preds)
+        # arities.add(settings.head_literal.arity)
+        # for arity in arities:
+        #     for xs in permutations(range(settings.max_vars), arity):
+        #         encoding.append(f'vars({arity}, {tuple(xs)}).')
+
+        #         for i, x in enumerate(xs):
+        #             encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
+
+        # for pred, xs in self.settings.directions.items():
+        #     for i, v in xs.items():
+        #         if v == '+':
+        #             encoding.append(f'direction_({pred}, {i}, in).')
+        #         if v == '-':
+        #             encoding.append(f'direction_({pred}, {i}, out).')
+
         max_size = (1 + settings.max_body) * settings.max_rules
         if settings.max_literals < max_size:
             encoding.append(f'custom_max_size({settings.max_literals}).')
@@ -548,7 +566,8 @@ class Generator:
         self.solver.assign_external(symbol, True)
 
     def prune_size(self, size):
-        size_con = [(atom_to_symbol("size", (i,)), True)]
+        size_con = [(atom_to_symbol("size", (size,)), True)]
+        # print('moo', size)
         self.model.context.add_nogood(size_con)
 
     def get_ground_rules(self, rule):
