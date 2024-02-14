@@ -10,7 +10,7 @@ from . explain import Explainer, head_connected, get_raw_prog, seen_more_general
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, theory_subsumes, rule_subsumes, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr
 from . core import Literal
 from . tester import Tester
-from . generate import Generator, Grounder, parse_model_pi, parse_model_recursion, parse_model_single_rule, atom_to_symbol, arg_to_symbol
+from . generate import Generator, Grounder, atom_to_symbol, arg_to_symbol
 from . bkcons import deduce_bk_cons, deduce_recalls
 from . variants import find_variants
 
@@ -622,19 +622,11 @@ def popper(settings):
 
             # generate a program
             with settings.stats.duration('generate'):
-                model = generator.get_model()
-                if model is None:
+                atoms = generator.get_model()
+                if atoms is None:
                     break
+                prog, rule_ordering, directions = generator.parse_atoms(atoms)
 
-            with settings.stats.duration('parse'):
-                # AC: NEEDS REFACTORING
-                atoms = model.symbols(shown = True)
-                if settings.pi_enabled:
-                    prog, rule_ordering, directions = parse_model_pi(settings, atoms)
-                elif settings.recursion_enabled:
-                    prog, rule_ordering, directions = parse_model_recursion(settings, atoms)
-                else:
-                    prog, rule_ordering, directions = parse_model_single_rule(settings, atoms)
 
             prog_size = calc_prog_size(prog)
 
@@ -1050,7 +1042,7 @@ def popper(settings):
 
             # CONSTRAIN
             with settings.stats.duration('constrain'):
-                generator.constrain(new_cons, model)
+                generator.constrain(new_cons)
 
         # if not pi_or_rec:
         if to_combine:
