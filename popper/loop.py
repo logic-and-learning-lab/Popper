@@ -16,43 +16,6 @@ pruned2 = set()
 
 
 
-# given a program with more than one rule, look for inconsistent subrules/subprograms
-def explain_inconsistent(settings, tester, prog):
-    out_cons = []
-
-    if len(prog) == 1 or not settings.recursion_enabled:
-        return out_cons
-
-    base = []
-    rec = []
-    for rule in prog:
-        if rule_is_recursive(rule):
-            rec.append(rule)
-        else:
-            base.append(rule)
-
-    pruned_subprog = False
-    for rule in base:
-        subprog = frozenset([rule])
-        if tester.is_inconsistent(subprog):
-            out_cons.append((Constraint.GENERALISATION, subprog, None, None))
-            pruned_subprog = True
-
-    if pruned_subprog:
-        return out_cons
-
-    if len(rec) == 1:
-        return out_cons
-
-    for r1 in base:
-        for r2 in rec:
-            subprog = frozenset([r1,r2])
-            if tester.is_inconsistent(subprog):
-                out_cons.append((Constraint.GENERALISATION, subprog, None, None))
-                pruned_subprog = True
-
-    return out_cons
-
 
 def functional_rename_vars(rule):
     head, body = rule
@@ -754,7 +717,7 @@ class Popper():
                         if is_recursive:
                             combiner.add_inconsistent(prog)
                             with settings.stats.duration('find sub inconsistent'):
-                                cons_ = explain_inconsistent(settings, tester, prog)
+                                cons_ = self.explain_inconsistent(prog)
                                 new_cons.extend(cons_)
                     else:
                         # if consistent, prune specialisations
@@ -1074,6 +1037,46 @@ class Popper():
             out_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, subprog, None))
 
         return out_cons
+
+    # given a program with more than one rule, look for inconsistent subrules/subprograms
+    def explain_inconsistent(self, prog):
+        settings, tester = self.settings, self.tester
+        out_cons = []
+
+        if len(prog) == 1 or not settings.recursion_enabled:
+            return out_cons
+
+        base = []
+        rec = []
+        for rule in prog:
+            if rule_is_recursive(rule):
+                rec.append(rule)
+            else:
+                base.append(rule)
+
+        pruned_subprog = False
+        for rule in base:
+            subprog = frozenset([rule])
+            if tester.is_inconsistent(subprog):
+                out_cons.append((Constraint.GENERALISATION, subprog, None, None))
+                pruned_subprog = True
+
+        if pruned_subprog:
+            return out_cons
+
+        if len(rec) == 1:
+            return out_cons
+
+        for r1 in base:
+            for r2 in rec:
+                subprog = frozenset([r1,r2])
+                if tester.is_inconsistent(subprog):
+                    out_cons.append((Constraint.GENERALISATION, subprog, None, None))
+                    pruned_subprog = True
+
+        return out_cons
+
+
 
 def popper(settings):
     x = Popper(settings)
