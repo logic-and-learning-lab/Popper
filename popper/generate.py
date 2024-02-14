@@ -161,16 +161,16 @@ class Generator:
         encoding.append(f'max_body({settings.max_body}).')
         encoding.append(f'max_vars({settings.max_vars}).')
 
-        # # ADD VARS, DIRECTIONS, AND TYPES
-        # encoding.append(f'head_vars({settings.head_literal.arity}, {tuple(range(settings.head_literal.arity))}).')
-        # arities = set(a for p, a in self.settings.body_preds)
-        # arities.add(settings.head_literal.arity)
-        # for arity in arities:
-        #     for xs in permutations(range(settings.max_vars), arity):
-        #         encoding.append(f'vars({arity}, {tuple(xs)}).')
+        # ADD VARS, DIRECTIONS, AND TYPES
+        encoding.append(f'head_vars({settings.head_literal.arity}, {tuple(range(settings.head_literal.arity))}).')
+        arities = set(a for p, a in self.settings.body_preds)
+        arities.add(settings.head_literal.arity)
+        for arity in arities:
+            for xs in permutations(range(settings.max_vars), arity):
+                encoding.append(f'vars({arity}, {tuple(xs)}).')
 
-        #         for i, x in enumerate(xs):
-        #             encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
+                for i, x in enumerate(xs):
+                    encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
 
         # for pred, xs in self.settings.directions.items():
         #     for i, v in xs.items():

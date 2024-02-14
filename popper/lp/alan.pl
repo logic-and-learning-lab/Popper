@@ -10,10 +10,11 @@
 #defined enable_pi/0.
 #defined enable_recursion/0.
 #defined non_datalog/0.
+%% #defined allow_singletons/0.
 #defined custom_max_size/1.
 
 #show body_literal/4.
-%% #show before/2.
+#show before/2.
 
 max_size(K):-
     custom_max_size(K).
@@ -187,23 +188,6 @@ body_size(Rule,N):-
     Var2 = 1..Var1-1,
     not clause_var(C,Var2).
 
-%% ##################################################
-%% VARS ABOUT VARS - META4LIFE
-%% ##################################################
-#script (python)
-from itertools import permutations
-from clingo.symbol import Tuple_, Number
-def mk_tuple(xs):
-    return Tuple_([Number(x) for x in xs])
-def pyhead_vars(arity):
-    return mk_tuple(range(arity.number))
-def pyvars(arity, max_vars):
-    for x in permutations(range(max_vars.number),arity.number):
-        yield mk_tuple(x)
-def pyvar_pos(pos, vars):
-    return vars.arguments[pos.number]
-#end.
-
 %% POSSIBLE VAR
 var(0..N-1):-
     max_vars(N).
@@ -235,11 +219,11 @@ var_in_literal(C,P,Vars,Var):-
     body_literal(C,P,_,Vars),
     var_member(Var,Vars).
 
-%% HEAD VARS ARE ALWAYS 0,1,...,A-1
-head_vars(A,@pyhead_vars(A)):-
-    head_pred(_,A).
-head_vars(A,@pyhead_vars(A)):-
-    invented(_,A).
+%% %% HEAD VARS ARE ALWAYS 0,1,...,A-1
+%% head_vars(A,@pyhead_vars(A)):-
+%%     head_pred(_,A).
+%% head_vars(A,@pyhead_vars(A)):-
+%%     invented(_,A).
 
 %% NEED TO KNOW LITERAL ARITIES
 seen_arity(A):-
@@ -250,15 +234,15 @@ max_arity(K):-
     #max{A : seen_arity(A)} == K.
 
 %% POSSIBLE VARIABLE PERMUTATIONS FROM 1..MAX_ARITY
-vars(A,@pyvars(A,MaxVars)):-
-    max_vars(MaxVars),
-    max_arity(K),
-    A=1..K.
+%% vars(A,@pyvars(A,MaxVars)):-
+%%     max_vars(MaxVars),
+%%     max_arity(K),
+%%     A=1..K.
 
 %% POSITION OF VAR IN TUPLE
-var_pos(@pyvar_pos(Pos,Vars),Vars,Pos):-
-    vars(A,Vars),
-    Pos = 0..A-1.
+%% var_pos(@pyvar_pos(Pos,Vars),Vars,Pos):-
+    %% vars(A,Vars),
+    %% Pos = 0..A-1.
 
 %% %% %% ##################################################
 %% %% %% REDUCE CONSTRAINT GROUNDING BY ORDERING CLAUSES
