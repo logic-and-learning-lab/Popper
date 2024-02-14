@@ -154,7 +154,6 @@ class Generator:
             encoding.append(f'custom_max_size({settings.max_literals}).')
 
         if settings.pi_enabled:
-            encoding.append(f'#show direction_/3.')
             encoding.append(f'#show head_literal/4.')
 
         if settings.noisy:

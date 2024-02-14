@@ -15,8 +15,8 @@ from . variants import find_variants
 pruned2 = set()
 
 # find unsat cores
-def explain_incomplete(settings, explainer, tester, prog, directions):
-    unsat_cores = list(explainer.explain_totally_incomplete(prog, directions, settings.noisy))
+def explain_incomplete(settings, explainer, tester, prog):
+    unsat_cores = list(explainer.explain_totally_incomplete(prog, settings.noisy))
 
     out_cons = []
     for subprog, unsat_body in unsat_cores:
@@ -611,7 +611,6 @@ def popper(settings):
                 prog = generator.get_prog()
                 if prog is None:
                     break
-                directions = settings.directions
 
             prog_size = calc_prog_size(prog)
 
@@ -732,7 +731,7 @@ def popper(settings):
                 if num_pos_covered == 0 or (settings.noisy and len(pos_covered) < prog_size):
                     # if the programs does not cover any positive examples, check whether it is has an unsat core
                     with settings.stats.duration('find mucs'):
-                        cons_ = explain_incomplete(settings, explainer, tester, prog, directions)
+                        cons_ = explain_incomplete(settings, explainer, tester, prog)
                         new_cons.extend(cons_)
                         pruned_sub_incomplete = len(cons_) > 0
 

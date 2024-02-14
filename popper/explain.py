@@ -74,7 +74,8 @@ class Explainer:
         self.seen_prog.add(get_raw_prog(prog))
         self.seen_prog.add(get_raw_prog2(prog))
 
-    def build_test_prog(self, subprog, directions):
+    def build_test_prog(self, subprog):
+        directions = self.settings.directions
         test_prog = []
         for head, body in subprog:
             if head:
@@ -90,10 +91,10 @@ class Explainer:
             test_prog.append(rule)
         return test_prog
 
-    def explain_totally_incomplete(self, prog, directions, noisy=False):
-        return list(self.explain_totally_incomplete_aux2(prog, directions, set(), set(), noisy=noisy))
+    def explain_totally_incomplete(self, prog, noisy=False):
+        return list(self.explain_totally_incomplete_aux2(prog, set(), set(), noisy=noisy))
 
-    def explain_totally_incomplete_aux2(self, prog, directions, sat=set(), unsat=set(), noisy=False):
+    def explain_totally_incomplete_aux2(self, prog, sat=set(), unsat=set(), noisy=False):
         has_recursion = prog_is_recursive(prog)
 
         out = []
@@ -147,7 +148,7 @@ class Explainer:
 
 
             if not prog_is_ok(subprog):
-                xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat, noisy)
+                xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat, noisy)
                 out.extend(xs)
                 continue
 
@@ -155,7 +156,7 @@ class Explainer:
                 # print('\t', 'D', format_rule(rule))
 
             if self.tester.has_redundant_literal(subprog):
-                xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat, noisy)
+                xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat, noisy)
                 out.extend(xs)
                 continue
 
@@ -165,7 +166,7 @@ class Explainer:
             #     out.extend(xs)
             #     continue
 
-            test_prog = self.build_test_prog(subprog, directions)
+            test_prog = self.build_test_prog(subprog)
 
             headless = is_headless(subprog)
 
@@ -188,7 +189,7 @@ class Explainer:
             self.unsat.add(raw_prog)
             self.unsat.add(raw_prog2)
 
-            xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat)
+            xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
             if len(xs):
                 out.extend(xs)
             else:
