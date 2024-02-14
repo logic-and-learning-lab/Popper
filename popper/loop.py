@@ -12,9 +12,6 @@ from . generate import Generator
 from . bkcons import deduce_bk_cons, deduce_recalls
 from . variants import find_variants
 
-WITH_OPTIMISATIONS = True
-# WITH_OPTIMISATIONS = False
-
 pruned2 = set()
 
 # find unsat cores
@@ -423,31 +420,31 @@ def build_constraints_previous_hypotheses(generator, num_pos, num_neg, seen_hyp_
     # print(f"new best score {score}")
     for k in [k for k in seen_hyp_spec if k > score+num_pos+best_size]:
         to_delete = []
-        for prog, tp, fn, tn, fp, size, rule_ordering in seen_hyp_spec[k]:
+        for prog, tp, fn, tn, fp, size in seen_hyp_spec[k]:
             # mdl = mdl_score(tuple((tp, fn, tn, fp, size)))
             mdl = mdl_score(fn, fp, size)
             if score+num_pos+best_size < fp+size+mdl:
                 spec_size = score-mdl+num_pos+best_size
                 if spec_size <= size:
-                    to_delete.append([prog, tp, fn, tn, fp, size, rule_ordering])
+                    to_delete.append([prog, tp, fn, tn, fp, size])
                 # _, con = generator.build_specialisation_constraint(prog, rule_ordering, spec_size=spec_size)
                 # cons.add(con)
-                cons.append((Constraint.SPECIALISATION, prog, rule_ordering, spec_size))
+                cons.append((Constraint.SPECIALISATION, prog, spec_size))
                 # print('SPEC', format_prog(prog))
         for to_del in to_delete:
             seen_hyp_spec[k].remove(to_del)
     for k in [k for k in seen_hyp_gen if k > score + num_neg + best_size]:
         to_delete = []
-        for prog, tp, fn, tn, fp, size, rule_ordering in seen_hyp_gen[k]:
+        for prog, tp, fn, tn, fp, size in seen_hyp_gen[k]:
             # mdl = mdl_score(tuple((tp, fn, tn, fp, size)))
             mdl = mdl_score(fn, fp, size)
             if score + num_neg + best_size < fn + size + mdl:
                 gen_size = score - mdl + num_neg + best_size
                 if gen_size <= size:
-                    to_delete.append([prog, tp, fn, tn, fp, size, rule_ordering])
+                    to_delete.append([prog, tp, fn, tn, fp, size])
                 # _, con = generator.build_generalisation_constraint(prog, rule_ordering, gen_size=gen_size)
                 # cons.add(con)
-                cons.append((Constraint.GENERALISATION, prog, rule_ordering, gen_size))
+                cons.append((Constraint.GENERALISATION, prog, gen_size))
                 # print('GEN', format_prog(prog))
         for to_del in to_delete:
             seen_hyp_gen[k].remove(to_del)
@@ -515,6 +512,7 @@ def popper(settings):
     with settings.stats.duration('load data'):
         tester = Tester(settings)
 
+    # TODO: MERGE WITH MAIN CODE
     explainer = Explainer(settings, tester)
 
     settings.nonoise = not settings.noisy
@@ -529,11 +527,10 @@ def popper(settings):
         min_score = None
         saved_scores = dict()
         settings.best_prog_score = 0, num_pos, num_neg, 0, 0
-        # settings.best_prog = []
         settings.best_mdl = num_pos
         max_size = min((1 + settings.max_body) * settings.max_rules, num_pos)
 
-        # these are used to save hypotheses for which we pruned spec / gen from a certain size only
+        # save hypotheses for which we pruned spec / gen from a certain size only
         # once we update the best mdl score, we can prune spec / gen from a better size for some of these
         seen_hyp_spec = collections.defaultdict(list)
         seen_hyp_gen = collections.defaultdict(list)
@@ -547,23 +544,17 @@ def popper(settings):
 
     if settings.bkcons:
         settings.datalog = True
-
-    if settings.bkcons or settings.datalog:
-        with settings.stats.duration('recalls'):
-            bkcons.extend(deduce_recalls(settings))
-    else:
-        # assume that the BK is datalog and try to deduce recalls from it
-        with suppress_stdout_stderr():
-            try:
-                with settings.stats.duration('recalls'):
-                    bkcons.extend(deduce_recalls(settings))
-                settings.datalog = True
-            except:
-                pass
-
-    if settings.bkcons:
         with settings.stats.duration('bkcons'):
             bkcons.extend(deduce_bk_cons(settings, tester))
+
+    # assume that the BK is datalog and try to deduce recalls from it
+    with suppress_stdout_stderr():
+        try:
+            with settings.stats.duration('recalls'):
+                bkcons.extend(deduce_recalls(settings))
+            settings.datalog = True
+        except:
+            pass
 
     # generator that builds programs
     with settings.stats.duration('init'):
@@ -594,8 +585,6 @@ def popper(settings):
         if not settings.single_solve:
             if settings.order_space:
                 settings.logger.info(f'SIZE: {size} VARS: {n_vars} RULES: {n_rules} MAX_SIZE: {settings.max_literals}')
-            # else:
-                # settings.logger.info(f'SIZE: {size} MAX_SIZE: {settings.max_literals}')
 
             with settings.stats.duration('init'):
                 generator.update_solver(size, n_vars, n_rules)
@@ -622,9 +611,7 @@ def popper(settings):
                 atoms = generator.get_model()
                 if atoms is None:
                     break
-                prog, rule_ordering, directions = generator.parse_atoms(atoms)
-                rule_ordering = {}
-
+                prog, directions = generator.parse_atoms(atoms)
 
             prog_size = calc_prog_size(prog)
 
@@ -761,7 +748,7 @@ def popper(settings):
                     if subsumed:
                         add_spec = True
 
-                    if not has_invention and WITH_OPTIMISATIONS:
+                    if not has_invention:
                         # we check whether a program does not cover enough examples to be useful
                         # if the program only not cover enough examples, we prune it specialisations
                         covers_too_few = settings.solution_found and not settings.order_space and num_pos_covered == 1
@@ -886,7 +873,7 @@ def popper(settings):
 
             # remove a subset of theta-subsumed rules when learning recursive programs with more than two rules
             if settings.max_rules > 2 and is_recursive:
-                new_cons.append((Constraint.TMP_ANDY, prog, rule_ordering))
+                new_cons.append((Constraint.TMP_ANDY, prog))
 
             # remove generalisations of programs with redundant rules
             # if is_recursive and len(prog) > 2 and tester.has_redundant_rule(prog):
@@ -923,7 +910,7 @@ def popper(settings):
             if add_to_combiner:
                 to_combine.append((prog, pos_covered, neg_covered))
 
-                if not settings.noisy and not has_invention and not is_recursive and WITH_OPTIMISATIONS:
+                if not settings.noisy and not has_invention and not is_recursive:
                     with settings.stats.duration('prune backtrack'):
                         xs = prune_subsumed_backtrack2(pos_covered, settings, could_prune_later, tester, prog_size, check_coverage=settings.solution_found)
                         for x in xs:
@@ -1008,35 +995,35 @@ def popper(settings):
 
             # BUILD CONSTRAINTS
             if add_spec and not pruned_sub_incomplete and not pruned_more_general and not add_redund2:
-                new_cons.append((Constraint.SPECIALISATION, prog, rule_ordering, None))
+                new_cons.append((Constraint.SPECIALISATION, prog, None))
 
             if not skipped:
                 if settings.noisy and not add_spec and spec_size and not pruned_sub_incomplete:
                     if spec_size <= settings.max_literals and ((is_recursive or has_invention or spec_size <= settings.max_body)):
-                        new_cons.append((Constraint.SPECIALISATION, prog, rule_ordering, spec_size))
-                        seen_hyp_spec[fp+prog_size+mdl].append([prog, tp, fn, tn, fp, prog_size, rule_ordering])
+                        new_cons.append((Constraint.SPECIALISATION, prog, spec_size))
+                        seen_hyp_spec[fp+prog_size+mdl].append([prog, tp, fn, tn, fp, prog_size])
 
             if add_gen and not pruned_sub_inconsistent:
                 if settings.noisy or settings.recursion_enabled or settings.pi_enabled:
                     if not pruned_sub_incomplete:
-                        new_cons.append((Constraint.GENERALISATION, prog, rule_ordering, None))
+                        new_cons.append((Constraint.GENERALISATION, prog, None))
                 else:
                     if not add_spec:
-                        new_cons.append((Constraint.GENERALISATION, prog, rule_ordering, None))
+                        new_cons.append((Constraint.GENERALISATION, prog, None))
 
             if settings.noisy and not add_gen and gen_size and not pruned_sub_inconsistent:
                 if gen_size <= settings.max_literals and (settings.recursion_enabled or settings.pi_enabled) and not pruned_sub_incomplete:
-                    new_cons.append((Constraint.GENERALISATION, prog, rule_ordering, gen_size))
-                    seen_hyp_gen[fn+prog_size+mdl].append([prog, tp, fn, tn, fp, prog_size, rule_ordering])
+                    new_cons.append((Constraint.GENERALISATION, prog, gen_size))
+                    seen_hyp_gen[fn+prog_size+mdl].append([prog, tp, fn, tn, fp, prog_size])
 
             if add_redund1 and not pruned_sub_incomplete:
-                new_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, prog, rule_ordering))
+                new_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, prog))
 
             if add_redund2 and not pruned_sub_incomplete:
-                new_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, prog, rule_ordering))
+                new_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, prog))
 
             if settings.noisy and not add_spec and not add_gen:
-                new_cons.append((Constraint.BANISH, prog, rule_ordering))
+                new_cons.append((Constraint.BANISH, prog))
 
             # CONSTRAIN
             with settings.stats.duration('constrain'):

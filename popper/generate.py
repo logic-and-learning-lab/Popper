@@ -10,7 +10,7 @@ import clingo.script
 import pkg_resources
 from . core import Literal, RuleVar, VarVar, Var
 from collections import defaultdict
-from . util import rule_is_recursive, format_rule, Constraint, format_prog, order_rule, order_prog, bias_order
+from . util import rule_is_recursive, Constraint, format_prog, bias_order
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
@@ -40,14 +40,6 @@ def find_all_vars(body):
                         all_vars.add(t_arg)
     return all_vars
 
-def find_all_vars2(body):
-    # head, body = rule
-    all_vars = set()
-    for literal in body:
-        for x in literal.arguments:
-            all_vars.add(x)
-    return all_vars
-
 # AC: When grounding constraint rules, we only care about the vars and the constraints, not the actual literals
 def grounding_hash(body, all_vars):
     cons = set()
@@ -59,10 +51,8 @@ def grounding_hash(body, all_vars):
 def make_literal_handle(literal):
     return f'{literal.predicate}{"".join(literal.arguments)}'
 
-
 def build_seen_rule_literal(handle, rule_var):
     return Literal('seen_rule', (handle, rule_var))
-
 
 def build_rule_literals(rule, rule_var, pi=False):
     literals = []
@@ -78,12 +68,12 @@ def build_rule_literals(rule, rule_var, pi=False):
     if rule_is_recursive(rule):
         yield gteq(rule_var, 1)
 
-def build_rule_ordering_literals(rule_index, rule_ordering):
-    for r1, higher_rules in rule_ordering.items():
-        r1v = rule_index[r1]
-        for r2 in higher_rules:
-            r2v = rule_index[r2]
-            yield lt(r1v, r2v)
+# def build_rule_ordering_literals(rule_index, rule_ordering):
+#     for r1, higher_rules in rule_ordering.items():
+#         r1v = rule_index[r1]
+#         for r2 in higher_rules:
+#             r2v = rule_index[r2]
+#             yield lt(r1v, r2v)
 
 class Generator:
 
@@ -318,7 +308,7 @@ class Generator:
             rule = head, body
             prog.append((rule))
 
-        return frozenset(prog), {}, directions
+        return frozenset(prog), directions
 
     def parse_model_single_rule(self, model):
         settings = self.settings
@@ -333,7 +323,7 @@ class Generator:
             literal = cached_literals[(predicate, atom_args)]
             body.add(literal)
         rule = head, frozenset(body)
-        return frozenset([rule]), defaultdict(set), directions
+        return frozenset([rule]), directions
 
     def parse_model_pi(self, model):
         settings = self.settings
@@ -378,13 +368,7 @@ class Generator:
                     raise Exception(f'Unrecognised argument direction "{arg_dir_str}"')
                 directions[pred_name][arg_index] = arg_dir
 
-            # elif name == 'before':
-            #     rule1 = args[0].number
-            #     rule2 = args[1].number
-            #     rule_index_ordering[rule1].add(rule2)
-
         prog = []
-        rule_lookup = {}
 
         for rule_index in rule_index_to_head:
             head_pred, head_args, head_arity = rule_index_to_head[rule_index]
@@ -397,15 +381,8 @@ class Generator:
             body = frozenset(body)
             rule = head, body
             prog.append((rule))
-            rule_lookup[rule_index] = rule
 
-        rule_ordering = defaultdict(set)
-        for r1_index, lower_rule_indices in rule_index_ordering.items():
-            r1 = rule_lookup[r1_index]
-            rule_ordering[r1] = set(rule_lookup[r2_index] for r2_index in lower_rule_indices)
-
-        return frozenset(prog), rule_ordering, directions
-
+        return frozenset(prog), directions
 
     def update_solver(self, size, num_vars, num_rules):
         self.update_number_of_literals(size)
@@ -550,10 +527,14 @@ class Generator:
         # print('moo', size)
         self.model.context.add_nogood(size_con)
 
+    # @profile
     def get_ground_rules(self, rule):
         head, body = rule
+        all_vars = find_all_vars(body)
+
         # find bindings for variables in the rule
-        assignments = self.find_bindings(rule)
+        assignments = self.find_bindings(body, all_vars)
+
         # keep only standard literals
         body = tuple(literal for literal in body if not literal.meta)
         # ground the rule for each variable assignment
@@ -581,7 +562,7 @@ class Generator:
         for xs in tmp_new_cons:
             con_type = xs[0]
             con_prog = xs[1]
-            con_prog_ordering = xs[2]
+            # con_prog_ordering = xs[2]
             # print(con_type)
 
             # if con_type not in (1, 2):
@@ -593,52 +574,33 @@ class Generator:
                 # for rule in order_prog(con_prog):
                     # print('\t', format_rule(order_rule(rule)))
             if con_type == Constraint.GENERALISATION:
-                con_size = xs[3]
-                new_rule_handles2, con = self.build_generalisation_constraint2(con_prog, con_prog_ordering, gen_size=con_size)
+                con_size = xs[2]
+                new_rule_handles2, con = self.build_generalisation_constraint2(con_prog, gen_size=con_size)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
             elif con_type == Constraint.SPECIALISATION:
-                con_size = xs[3]
-                new_rule_handles2, con = self.build_specialisation_constraint2(con_prog, con_prog_ordering, spec_size=con_size)
+                con_size = xs[2]
+                new_rule_handles2, con = self.build_specialisation_constraint2(con_prog, spec_size=con_size)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
             elif con_type == Constraint.UNSAT:
                 cons_ = self.unsat_constraint2(con_prog)
                 self.new_ground_cons.update(cons_)
             elif con_type == Constraint.REDUNDANCY_CONSTRAINT1:
-                # assert(False)
-                bad_handle, new_rule_handles2, con = self.redundancy_constraint1(con_prog, con_prog_ordering)
-
-
-
-                # ground_rules = self.get_ground_rules((None, con))
-                # for ground_rule in ground_rules:
-                #     _ground_head, ground_body = ground_rule
-                #     print('REDUNDANCY_CONSTRAINT1', sorted(ground_body))
-
-                # print(con)
-                # assert(False)
+                bad_handle, new_rule_handles2, con = self.redundancy_constraint1(con_prog)
                 self.bad_handles.add(bad_handle)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
             elif con_type == Constraint.REDUNDANCY_CONSTRAINT2:
-                new_rule_handles2, cons = self.redundancy_constraint2(con_prog, con_prog_ordering)
-                # for con in cons:
-                #     ground_rules = self.get_ground_rules((None, con))
-                #     for ground_rule in ground_rules:
-                #         _ground_head, ground_body = ground_rule
-                #         print('REDUNDANCY_CONSTRAINT2', sorted(ground_body))
+                new_rule_handles2, cons = self.redundancy_constraint2(con_prog)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.update(cons)
             elif con_type == Constraint.TMP_ANDY:
                 new_cons.update(self.andy_tmp_con(con_prog))
             elif con_type == Constraint.BANISH:
-                # assert(False)
-                new_rule_handles2, con = self.build_banish_constraint(con_prog, con_prog_ordering)
+                new_rule_handles2, con = self.build_banish_constraint(con_prog)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
-            else:
-                assert(False)
 
         self.all_ground_cons.update(self.new_ground_cons)
         ground_bodies = set()
@@ -683,7 +645,7 @@ class Generator:
         cached_handles[k] = handle
         return handle
 
-    def build_generalisation_constraint2(self, prog, rule_ordering=None, gen_size=False):
+    def build_generalisation_constraint2(self, prog, gen_size=False):
         new_handles = set()
         prog = list(prog)
         rule_index = {}
@@ -720,15 +682,15 @@ class Generator:
         if gen_size:
             literals.append(Literal('program_size_at_least', (gen_size,)))
 
-        if rule_ordering:
-            literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
-        else:
-            for k1, r1 in recs:
-                r1v = rule_index[r1]
-                for k2, r2 in recs:
-                    r2v = rule_index[r2]
-                    if k1 < k2:
-                        literals.append(lt(r1v, r2v))
+        # if rule_ordering:
+        #     literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
+        # else:
+        #     for k1, r1 in recs:
+        #         r1v = rule_index[r1]
+        #         for k2, r2 in recs:
+        #             r2v = rule_index[r2]
+        #             if k1 < k2:
+        #                 literals.append(lt(r1v, r2v))
         return new_handles, tuple(literals)
 
 
@@ -775,7 +737,7 @@ class Generator:
 
 
     # @profile
-    def build_specialisation_constraint2(self, prog, rule_ordering=None, spec_size=False):
+    def build_specialisation_constraint2(self, prog, spec_size=False):
         new_handles = set()
         prog = list(prog)
         rule_index = {}
@@ -811,15 +773,15 @@ class Generator:
         if spec_size:
             literals.append(Literal('program_size_at_least', (spec_size,)))
 
-        if rule_ordering:
-            literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
-        else:
-            for k1, r1 in recs:
-                r1v = rule_index[r1]
-                for k2, r2 in recs:
-                    r2v = rule_index[r2]
-                    if k1 < k2:
-                        literals.append(lt(r1v, r2v))
+        # if rule_ordering:
+        #     literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
+        # else:
+        #     for k1, r1 in recs:
+        #         r1v = rule_index[r1]
+        #         for k2, r2 in recs:
+        #             r2v = rule_index[r2]
+        #             if k1 < k2:
+        #                 literals.append(lt(r1v, r2v))
         return new_handles, tuple(literals)
 
     def build_banish_constraint(self, prog, rule_ordering=None):
@@ -850,18 +812,18 @@ class Generator:
             literals.append(body_size_literal(rule_var, len(body)))
         literals.append(Literal('clause', (len(prog), ), positive=False))
 
-        if rule_ordering:
-            literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
-        else:
-            for k1, r1 in recs:
-                r1v = rule_index[r1]
-                for k2, r2 in recs:
-                    r2v = rule_index[r2]
-                    if k1 < k2:
-                        literals.append(lt(r1v, r2v))
+        # if rule_ordering:
+        #     literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
+        # else:
+        #     for k1, r1 in recs:
+        #         r1v = rule_index[r1]
+        #         for k2, r2 in recs:
+        #             r2v = rule_index[r2]
+        #             if k1 < k2:
+        #                 literals.append(lt(r1v, r2v))
         return new_handles, tuple(literals)
 
-    def andy_tmp_con(self, prog, rule_ordering={}):
+    def andy_tmp_con(self, prog):
     # :-
     # seen_rule(fABfCBtailAC,R1),
     # seen_rule(fABfCBtailAC,R2),
@@ -886,7 +848,7 @@ class Generator:
 
     # only works with single rule programs
     # if a single rule R is unsatisfiable, then for R to appear in an optimal solution H it must be the case that H has a recursive rule that does not specialise R
-    def redundancy_constraint1(self, prog, rule_ordering=None):
+    def redundancy_constraint1(self, prog):
 
         new_handles = set()
         literals = []
@@ -913,7 +875,7 @@ class Generator:
 
         return handle, new_handles, tuple(literals)
 
-    def redundancy_constraint2(self, prog, rule_ordering=None):
+    def redundancy_constraint2(self, prog):
         # assert(Fa)
 
         lits_num_rules = defaultdict(int)
@@ -972,8 +934,8 @@ class Generator:
                 literals.append(Literal('num_clauses', (other_lit, num_clauses)))
             num_recursive = lits_num_recursive_rules[lit]
             literals.append(Literal('num_recursive', (lit, num_recursive)))
-            if rule_ordering != None:
-                literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
+            # if rule_ordering != None:
+                # literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
             out_cons.append(tuple(literals))
 
             # print(':- ' + ', '.join(map(str,literals)))
@@ -994,14 +956,14 @@ class Generator:
                 out.append(frozenset(rule))
         return out
 
-    def ground_literal(self, literal, assignment, tmp):
-        cached_grounded = self.cached_grounded
-        k = hash((literal.predicate, literal.arguments, tmp))
-        if k in cached_grounded:
-            v = cached_grounded[k]
-            return literal.positive, literal.predicate, v
+    # @profile
+    def ground_literal(self, arguments, assignment, tmp):
+        # print(arguments)
+        k = hash((arguments, tmp))
+        if k in self.cached_grounded:
+            return self.cached_grounded[k]
         ground_args = []
-        for arg in literal.arguments:
+        for arg in arguments:
             if isinstance(arg, tuple):
                 ground_args.append(tuple(assignment[t_arg] for t_arg in arg))
             elif arg in assignment:
@@ -1009,30 +971,31 @@ class Generator:
             else:
                 ground_args.append(arg)
         ground_args = tuple(ground_args)
-        cached_grounded[k] = ground_args
-        return literal.positive, literal.predicate, ground_args
+        self.cached_grounded[k] = ground_args
+        return ground_args
 
+    # @profile
     def ground_rule(self, rule, assignment):
         k = hash(frozenset(assignment.items()))
         head, body = rule
         ground_head = None
         if head:
-            ground_head = ground_literal(head, assignment, k)
-        ground_body = frozenset(self.ground_literal(literal, assignment, k) for literal in body)
-        return ground_head, ground_body
+            ground_args = self.ground_literal(head.arguments, assignment, k)
+            ground_head = (head.positive, head.predicate, ground_args)
+        ground_body = set()
+        for literal in body:
+            ground_args = self.ground_literal(literal.arguments, assignment, k)
+            ground_literal = (literal.positive, literal.predicate, ground_args)
+            ground_body.add(ground_literal)
+        return ground_head, frozenset(ground_body)
 
-
-    def find_bindings(self, rule):
-
-        max_rules, max_vars = self.settings.max_rules, self.settings.max_vars
-
-        _, body = rule
-
-        all_vars = find_all_vars(body)
+    def find_bindings(self, body, all_vars):
 
         k = grounding_hash(body, all_vars)
         if k in self.seen_assignments:
             return self.seen_assignments[k]
+
+        max_rules, max_vars = self.settings.max_rules, self.settings.max_vars
 
         # map each rule and var_var in the program to an integer
         rule_var_to_int = {v:i for i, v in enumerate(var for var in all_vars if isinstance(var, RuleVar))}
