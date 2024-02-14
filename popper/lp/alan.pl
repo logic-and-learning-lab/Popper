@@ -10,11 +10,9 @@
 #defined enable_pi/0.
 #defined enable_recursion/0.
 #defined non_datalog/0.
-%% #defined allow_singletons/0.
 #defined custom_max_size/1.
 
 #show body_literal/4.
-#show before/2.
 
 max_size(K):-
     custom_max_size(K).
@@ -219,12 +217,6 @@ var_in_literal(C,P,Vars,Var):-
     body_literal(C,P,_,Vars),
     var_member(Var,Vars).
 
-%% %% HEAD VARS ARE ALWAYS 0,1,...,A-1
-%% head_vars(A,@pyhead_vars(A)):-
-%%     head_pred(_,A).
-%% head_vars(A,@pyhead_vars(A)):-
-%%     invented(_,A).
-
 %% NEED TO KNOW LITERAL ARITIES
 seen_arity(A):-
     head_pred(_,A).
@@ -232,97 +224,6 @@ seen_arity(A):-
     body_pred(_,A).
 max_arity(K):-
     #max{A : seen_arity(A)} == K.
-
-%% POSSIBLE VARIABLE PERMUTATIONS FROM 1..MAX_ARITY
-%% vars(A,@pyvars(A,MaxVars)):-
-%%     max_vars(MaxVars),
-%%     max_arity(K),
-%%     A=1..K.
-
-%% POSITION OF VAR IN TUPLE
-%% var_pos(@pyvar_pos(Pos,Vars),Vars,Pos):-
-    %% vars(A,Vars),
-    %% Pos = 0..A-1.
-
-%% %% %% ##################################################
-%% %% %% REDUCE CONSTRAINT GROUNDING BY ORDERING CLAUSES
-%% %% %% ##################################################
-%% before(C1,C2):-
-%%     enable_pi,
-%%     C1 < C2,
-%%     head_literal(C1,P,_,_),
-%%     head_literal(C2,Q,_,_),
-%%     lower(P,Q).
-
-%% before(C1,C2):-
-%%     enable_pi,
-%%     C1 < C2,
-%%     head_literal(C1,P,_,_),
-%%     head_literal(C2,P,_,_),
-%%     not recursive_clause(C1,P,A),
-%%     recursive_clause(C2,P,A).
-
-%% before(C1,C2):-
-%%     enable_pi,
-%%     C1 < C2,
-%%     head_literal(C1,P,A,_),
-%%     head_literal(C2,P,A,_),
-%%     not recursive_clause(C1,P,A),
-%%     not recursive_clause(C2,P,A),
-%%     body_size(C1,K1),
-%%     body_size(C2,K2),
-%%     K1 < K2.
-
-%% before(C1,C2):-
-%%     enable_pi,
-%%     C1 < C2,
-%%     head_literal(C1,P,_,_),
-%%     head_literal(C2,P,_,_),
-%%     recursive_clause(C1,P,A),
-%%     recursive_clause(C2,P,A),
-%%     body_size(C1,K1),
-%%     body_size(C2,K2),
-%%     K1 < K2.
-
-%% count_lower(P,N):-
-%%     head_literal(_,P,_,_),
-%%     #count{Q : lower(Q,P)} == N.
-
-%% min_clause(C,N+1):-
-%%     recursive_clause(C,P,A),
-%%     count_lower(P,N).
-
-%% min_clause(C,N):-
-%%     head_literal(C,P,A,_),
-%%     not recursive_clause(C,P,A),
-%%     count_lower(P,N).
-
-%% lower(R1,R2):-
-%%     rule(R1),
-%%     rule(R2),
-%%     R1 != R2,
-%%     not recursive(R1),
-%%     not recursive(R2),
-%%     size(R1,K1),
-%%     size(R2,K2),
-%%     K1 < K2.
-
-%% lower(R1,R2):-
-%%     rule(R1),
-%%     rule(R2),
-%%     R1 != R2,
-%%     not recursive(R1),
-%%     recursive(R2).
-
-%% lower(R1,R2):-
-%%     rule(R1),
-%%     rule(R2),
-%%     R1 != R2,
-%%     recursive(R1),
-%%     recursive(R2),
-%%     size(R1,K1),
-%%     size(R2,K2),
-%%     K1 < K2.
 
 %% ##################################################
 %% BIAS CONSTRAINTS
@@ -450,21 +351,14 @@ var_type(C,Var,@pytype(Pos,Types)):-
 %% ORDER BY CLAUSE SIZE
 %% p(A)<-q(A),r(A). (C1)
 %% p(A)<-s(A). (C2)
-bigger(C1,C2):-
+bigger(C1, C2):-
+    C1 > 0,
     max_clauses(K),
     K > 2,
     body_size(C1,N1),
     body_size(C2,N2),
     C1 < C2,
     N1 > N2.
-
-%% TWO NON-RECURSIVE CLAUSES
-:-
-    C1 < C2,
-    not recursive_clause(C1,_,_),
-    not recursive_clause(C2,_,_),
-    same_head(C1,C2),
-    bigger(C1,C2).
 
 %% TWO NON-RECURSIVE CLAUSES
 :-

@@ -91,10 +91,10 @@ class Explainer:
             test_prog.append(rule)
         return test_prog
 
-    def explain_totally_incomplete(self, prog, noisy=False):
-        return list(self.explain_totally_incomplete_aux2(prog, set(), set(), noisy=noisy))
+    def explain_totally_incomplete(self, prog):
+        return list(self.explain_totally_incomplete_aux2(prog, set(), set()))
 
-    def explain_totally_incomplete_aux2(self, prog, sat=set(), unsat=set(), noisy=False):
+    def explain_totally_incomplete_aux2(self, prog, sat=set(), unsat=set()):
         has_recursion = prog_is_recursive(prog)
 
         out = []
@@ -148,7 +148,7 @@ class Explainer:
 
 
             if not prog_is_ok(subprog):
-                xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat, noisy)
+                xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
                 out.extend(xs)
                 continue
 
@@ -156,7 +156,7 @@ class Explainer:
                 # print('\t', 'D', format_rule(rule))
 
             if self.tester.has_redundant_literal(subprog):
-                xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat, noisy)
+                xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
                 out.extend(xs)
                 continue
 
@@ -178,7 +178,7 @@ class Explainer:
                     sat.add(raw_prog)
                     continue
             else:
-                if self.tester.is_sat(test_prog, noisy):
+                if self.tester.is_sat(test_prog, self.settings.noisy):
                     # print('\t\t\t SAT',format_prog(subprog))
                     sat.add(raw_prog)
                     continue
