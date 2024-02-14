@@ -569,47 +569,70 @@ class Generator:
     def constrain(self, tmp_new_cons, model):
         new_cons = set()
         debug = True
-        debug = False
+        # debug = False
 
         # for con_type, con_prog, con_prog_ordering in tmp_new_cons:
         for xs in tmp_new_cons:
             con_type = xs[0]
             con_prog = xs[1]
             con_prog_ordering = xs[2]
+            # print(con_type)
+
+            # if con_type not in (1, 2):
+                # print(con_type)
             # con_prog, con_prog_ordering
-            if debug and con_type != Constraint.UNSAT:
-                print('')
-                print('\t','--', con_type)
-                for rule in order_prog(con_prog):
-                    print('\t', format_rule(order_rule(rule)))
-            if con_type == Constraint.SPECIALISATION:
-                con_size = xs[3]
-                new_rule_handles2, con = self.build_specialisation_constraint2(con_prog, con_prog_ordering, spec_size=con_size)
-                self.all_handles.update(new_rule_handles2)
-                new_cons.add(con)
-            elif con_type == Constraint.GENERALISATION:
+            # if debug and con_type != Constraint.UNSAT:
+                # print('')
+                # print('\t','--', con_type)
+                # for rule in order_prog(con_prog):
+                    # print('\t', format_rule(order_rule(rule)))
+            if con_type == Constraint.GENERALISATION:
                 con_size = xs[3]
                 new_rule_handles2, con = self.build_generalisation_constraint2(con_prog, con_prog_ordering, gen_size=con_size)
+                self.all_handles.update(new_rule_handles2)
+                new_cons.add(con)
+            elif con_type == Constraint.SPECIALISATION:
+                con_size = xs[3]
+                new_rule_handles2, con = self.build_specialisation_constraint2(con_prog, con_prog_ordering, spec_size=con_size)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
             elif con_type == Constraint.UNSAT:
                 cons_ = self.unsat_constraint2(con_prog)
                 self.new_ground_cons.update(cons_)
             elif con_type == Constraint.REDUNDANCY_CONSTRAINT1:
+                # assert(False)
                 bad_handle, new_rule_handles2, con = self.redundancy_constraint1(con_prog, con_prog_ordering)
+
+
+
+                # ground_rules = self.get_ground_rules((None, con))
+                # for ground_rule in ground_rules:
+                #     _ground_head, ground_body = ground_rule
+                #     print('REDUNDANCY_CONSTRAINT1', sorted(ground_body))
+
+                # print(con)
+                # assert(False)
                 self.bad_handles.add(bad_handle)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
             elif con_type == Constraint.REDUNDANCY_CONSTRAINT2:
                 new_rule_handles2, cons = self.redundancy_constraint2(con_prog, con_prog_ordering)
+                # for con in cons:
+                #     ground_rules = self.get_ground_rules((None, con))
+                #     for ground_rule in ground_rules:
+                #         _ground_head, ground_body = ground_rule
+                #         print('REDUNDANCY_CONSTRAINT2', sorted(ground_body))
                 self.all_handles.update(new_rule_handles2)
                 new_cons.update(cons)
             elif con_type == Constraint.TMP_ANDY:
                 new_cons.update(self.andy_tmp_con(con_prog))
             elif con_type == Constraint.BANISH:
+                # assert(False)
                 new_rule_handles2, con = self.build_banish_constraint(con_prog, con_prog_ordering)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
+            else:
+                assert(False)
 
         self.all_ground_cons.update(self.new_ground_cons)
         ground_bodies = set()
@@ -620,6 +643,8 @@ class Generator:
             for ground_rule in ground_rules:
                 _ground_head, ground_body = ground_rule
                 ground_bodies.add(ground_body)
+                # if con_type == Constraint.REDUNDANCY_CONSTRAINT1:
+                # print(sorted(ground_body))
                 self.all_ground_cons.add(frozenset(ground_body))
 
         nogoods = []
@@ -658,6 +683,10 @@ class Generator:
                 is_rec = rule_is_recursive(rule)
                 if is_rec:
                     recs.append((len(body), rule))
+                if is_rec:
+                    literals.append(gteq(rule_var, 1))
+                else:
+                    literals.append(lt(rule_var, 1))
                 handle = make_rule_handle(rule)
                 if handle in self.seen_handles:
                     literals.append(build_seen_rule_literal(handle, rule_var))
@@ -758,7 +787,9 @@ class Generator:
                     new_handles.update(xs)
                     literals.extend(tuple(build_rule_literals(rule, rule_var)))
             literals.append(lt(rule_var, len(prog)))
-        literals.append(Literal('clause', (len(prog), ), positive = False))
+
+        if not self.settings.single_solve:
+            literals.append(Literal('clause', (len(prog), ), positive = False))
 
         if spec_size:
             literals.append(Literal('program_size_at_least', (spec_size,)))
@@ -866,6 +897,7 @@ class Generator:
         return handle, new_handles, tuple(literals)
 
     def redundancy_constraint2(self, prog, rule_ordering=None):
+        # assert(Fa)
 
         lits_num_rules = defaultdict(int)
         lits_num_recursive_rules = defaultdict(int)
