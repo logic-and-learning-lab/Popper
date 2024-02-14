@@ -626,6 +626,7 @@ def popper(settings):
                 if atoms is None:
                     break
                 prog, rule_ordering, directions = generator.parse_atoms(atoms)
+                rule_ordering = {}
 
 
             prog_size = calc_prog_size(prog)

@@ -167,8 +167,6 @@ class Generator:
 
         if settings.pi_enabled:
             encoding.append(f'#show direction_/3.')
-
-        if settings.pi_enabled:
             encoding.append(f'#show head_literal/4.')
 
         if settings.noisy:
@@ -304,39 +302,25 @@ class Generator:
     def parse_model_recursion(self, model):
         settings = self.settings
         rule_index_to_body = defaultdict(set)
-        # rule_index_to_head = {}
-        rule_index_ordering = defaultdict(set)
-
         head = settings.head_literal
         cached_literals = settings.cached_literals
-
-        for atom in model:
-            name = atom.name
-            if name == 'body_literal':
-                args = atom.arguments
-                rule_index = args[0].number
-                predicate = args[1].name
-                atom_args = tuple(args[3].arguments)
-                literal = cached_literals[(predicate, atom_args)]
-                rule_index_to_body[rule_index].add(literal)
-
-        prog = []
-        rule_lookup = {}
-
         directions = settings.directions
 
+        for atom in model:
+            args = atom.arguments
+            rule_index = args[0].number
+            predicate = args[1].name
+            atom_args = tuple(args[3].arguments)
+            literal = cached_literals[(predicate, atom_args)]
+            rule_index_to_body[rule_index].add(literal)
+
+        prog = []
         for rule_index, body in rule_index_to_body.items():
             body = frozenset(body)
             rule = head, body
             prog.append((rule))
-            rule_lookup[rule_index] = rule
 
-        rule_ordering = defaultdict(set)
-        for r1_index, lower_rule_indices in rule_index_ordering.items():
-            r1 = rule_lookup[r1_index]
-            rule_ordering[r1] = set(rule_lookup[r2_index] for r2_index in lower_rule_indices)
-
-        return frozenset(prog), rule_ordering, directions
+        return frozenset(prog), {}, directions
 
     def parse_model_single_rule(self, model):
         settings = self.settings
@@ -396,10 +380,10 @@ class Generator:
                     raise Exception(f'Unrecognised argument direction "{arg_dir_str}"')
                 directions[pred_name][arg_index] = arg_dir
 
-            elif name == 'before':
-                rule1 = args[0].number
-                rule2 = args[1].number
-                rule_index_ordering[rule1].add(rule2)
+            # elif name == 'before':
+            #     rule1 = args[0].number
+            #     rule2 = args[1].number
+            #     rule_index_ordering[rule1].add(rule2)
 
         prog = []
         rule_lookup = {}
