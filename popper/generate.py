@@ -56,47 +56,8 @@ def grounding_hash(body, all_vars):
             cons.add((lit.predicate, lit.arguments))
     return hash((frozenset(all_vars), frozenset(cons)))
 
-cached_grounded = {}
-def ground_literal(literal, assignment, tmp):
-    k = hash((literal.predicate, literal.arguments, tmp))
-    if k in cached_grounded:
-        v = cached_grounded[k]
-        return literal.positive, literal.predicate, v
-    ground_args = []
-    for arg in literal.arguments:
-        if isinstance(arg, tuple):
-            ground_args.append(tuple(assignment[t_arg] for t_arg in arg))
-        elif arg in assignment:
-            ground_args.append(assignment[arg])
-        else:
-            ground_args.append(arg)
-    ground_args = tuple(ground_args)
-    cached_grounded[k] = ground_args
-    return literal.positive, literal.predicate, ground_args
-
-def ground_rule(rule, assignment):
-    k = hash(frozenset(assignment.items()))
-    head, body = rule
-    ground_head = None
-    if head:
-        ground_head = ground_literal(head, assignment, k)
-    ground_body = frozenset(ground_literal(literal, assignment, k) for literal in body)
-    return ground_head, ground_body
-
 def make_literal_handle(literal):
     return f'{literal.predicate}{"".join(literal.arguments)}'
-
-cached_handles = {}
-def make_rule_handle(rule):
-    k = hash(rule)
-    if k in cached_handles:
-        return cached_handles[k]
-    head, body = rule
-    body_literals = sorted(body, key = operator.attrgetter('predicate'))
-    handle = ''.join(make_literal_handle(literal) for literal in [head] + body_literals)
-    cached_handles[k] = handle
-    return handle
-
 
 
 def build_seen_rule_literal(handle, rule_var):
@@ -126,15 +87,22 @@ def build_rule_ordering_literals(rule_index, rule_ordering):
 
 class Generator:
 
-    def __init__(self, settings, grounder, bkcons=[]):
+    def __init__(self, settings, bkcons=[]):
         self.savings = 0
         self.settings = settings
-        self.grounder = grounder
         self.seen_handles = set()
         self.assigned = {}
         self.seen_symbols = {}
         self.cached_clingo_atoms = {}
         self.handle = None
+        self.cached_handles = {}
+        self.cached_grounded = {}
+
+        # ex-grounder
+        self.seen_assignments = {}
+        self.seen_deep_assignments = {}
+        # self.settings = settings
+        self.cached4 = {}
 
         # handles for rules that are minimal and unsatisfiable
         self.bad_handles = set()
@@ -171,6 +139,18 @@ class Generator:
 
                 for i, x in enumerate(xs):
                     encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
+
+        # types = tuple(self.settings.head_types)
+        # str_types = str(types).replace("'","")
+        # for x, i in enumerate(self.settings.head_types):
+        #     encoding.append(f'type_pos({str_types}, {i}, {x}).')
+
+        # for pred, types in self.settings.body_types.items():
+        #     types = tuple(types)
+        #     str_types = str(types).replace("'","")
+        #     for i, x in enumerate(types):
+
+        #         encoding.append(f'type_pos({str_types}, {i}, {x}).')
 
         # for pred, xs in self.settings.directions.items():
         #     for i, v in xs.items():
@@ -278,7 +258,7 @@ class Generator:
 
     # def build_seen_rule(rule, is_rec):
     #     rule_var = vo_clause('l')
-    #     handle = make_rule_handle(rule)
+    #     handle = self.make_rule_handle(rule)
     #     head = Literal('seen_rule', (handle, rule_var))
     #     body = []
     #     body.extend(build_rule_literals(rule, rule_var))
@@ -573,11 +553,11 @@ class Generator:
     def get_ground_rules(self, rule):
         head, body = rule
         # find bindings for variables in the rule
-        assignments = self.grounder.find_bindings(rule, self.settings.max_rules, self.settings.max_vars)
+        assignments = self.find_bindings(rule)
         # keep only standard literals
         body = tuple(literal for literal in body if not literal.meta)
         # ground the rule for each variable assignment
-        return set(ground_rule((head, body), assignment) for assignment in assignments)
+        return set(self.ground_rule((head, body), assignment) for assignment in assignments)
 
     def parse_handles(self, new_handles):
         out = []
@@ -692,6 +672,17 @@ class Generator:
 
         self.new_ground_cons = set()
 
+    def make_rule_handle(self, rule):
+        cached_handles = self.cached_handles
+        k = hash(rule)
+        if k in cached_handles:
+            return cached_handles[k]
+        head, body = rule
+        body_literals = sorted(body, key = operator.attrgetter('predicate'))
+        handle = ''.join(make_literal_handle(literal) for literal in [head] + body_literals)
+        cached_handles[k] = handle
+        return handle
+
     def build_generalisation_constraint2(self, prog, rule_ordering=None, gen_size=False):
         new_handles = set()
         prog = list(prog)
@@ -713,7 +704,7 @@ class Generator:
                     literals.append(gteq(rule_var, 1))
                 else:
                     literals.append(lt(rule_var, 1))
-                handle = make_rule_handle(rule)
+                handle = self.make_rule_handle(rule)
                 if handle in self.seen_handles:
                     literals.append(build_seen_rule_literal(handle, rule_var))
                     if is_rec:
@@ -744,7 +735,7 @@ class Generator:
     def build_seen_rule2(self, rule, is_rec):
         pi = self.settings.pi_enabled
 
-        handle = make_rule_handle(rule)
+        handle = self.make_rule_handle(rule)
         head, body = rule
 
         head_vars = set(head.arguments)
@@ -801,7 +792,7 @@ class Generator:
                 is_rec = rule_is_recursive(rule)
                 if is_rec:
                     recs.append((len(body), rule))
-                handle = make_rule_handle(rule)
+                handle = self.make_rule_handle(rule)
                 if handle in self.seen_handles:
                     literals.append(build_seen_rule_literal(handle, rule_var))
                     if is_rec:
@@ -847,7 +838,7 @@ class Generator:
                 is_rec = rule_is_recursive(rule)
                 if is_rec:
                     recs.append((len(body), rule))
-                handle = make_rule_handle(rule)
+                handle = self.make_rule_handle(rule)
                 if handle in self.seen_handles:
                     literals.append(build_seen_rule_literal(handle, rule_var))
                     if is_rec:
@@ -880,7 +871,7 @@ class Generator:
             if not rule_is_recursive(rule):
                 continue
             head, body = rule
-            handle = make_rule_handle(rule)
+            handle = self.make_rule_handle(rule)
             if handle not in self.seen_handles:
                 continue
             rule_var1 = vo_clause(1)
@@ -904,7 +895,7 @@ class Generator:
         rule = list(prog)[0]
         head, body = rule
         rule_var = vo_clause(rule_id)
-        handle = make_rule_handle(rule)
+        handle = self.make_rule_handle(rule)
         if handle in self.seen_handles:
             literals.append(build_seen_rule_literal(handle, rule_var))
         else:
@@ -958,7 +949,7 @@ class Generator:
                 head, body = rule
                 rule_var = vo_clause(rule_id)
                 rule_index[rule] = rule_var
-                handle = make_rule_handle(rule)
+                handle = self.make_rule_handle(rule)
 
                 is_rec = rule_is_recursive(rule)
                 if is_rec:
@@ -992,7 +983,7 @@ class Generator:
     # def redundant_rules_check(self, rule1, rule2):-
 
     def unsat_constraint2(self, body):
-        assignments = self.grounder.find_deep_bindings4(body, self.settings.max_rules, self.settings.max_vars)
+        assignments = self.find_deep_bindings4(body, self.settings.max_rules, self.settings.max_vars)
         out = []
         for rule_id in range(0, self.settings.max_rules):
             for assignment in assignments:
@@ -1003,90 +994,37 @@ class Generator:
                 out.append(frozenset(rule))
         return out
 
+    def ground_literal(self, literal, assignment, tmp):
+        cached_grounded = self.cached_grounded
+        k = hash((literal.predicate, literal.arguments, tmp))
+        if k in cached_grounded:
+            v = cached_grounded[k]
+            return literal.positive, literal.predicate, v
+        ground_args = []
+        for arg in literal.arguments:
+            if isinstance(arg, tuple):
+                ground_args.append(tuple(assignment[t_arg] for t_arg in arg))
+            elif arg in assignment:
+                ground_args.append(assignment[arg])
+            else:
+                ground_args.append(arg)
+        ground_args = tuple(ground_args)
+        cached_grounded[k] = ground_args
+        return literal.positive, literal.predicate, ground_args
+
+    def ground_rule(self, rule, assignment):
+        k = hash(frozenset(assignment.items()))
+        head, body = rule
+        ground_head = None
+        if head:
+            ground_head = ground_literal(head, assignment, k)
+        ground_body = frozenset(self.ground_literal(literal, assignment, k) for literal in body)
+        return ground_head, ground_body
 
 
+    def find_bindings(self, rule):
 
-BINDING_ENCODING = """\
-#defined rule_var/2.
-#show bind_rule/2.
-#show bind_var/3.
-
-% bind a rule_id to a value
-{bind_rule(Rule,Value)}:-
-    rule(Rule),
-    Value=0..max_rules-1.
-{bind_var(Rule,Var,Value)}:-
-    rule_var(Rule,Var),
-    Value=0..max_vars-1.
-
-% every rule must be bound to exactly one value
-:-
-    rule(Rule),
-    #count{Value: bind_rule(Rule,Value)} != 1.
-% for each rule, each var must be bound to exactly one value
-:-
-    rule_var(Rule,Var),
-    #count{Value: bind_var(Rule,Var,Value)} != 1.
-% a rule value cannot be bound to more than one rule
-:-
-    Value=0..max_rules-1,
-    #count{Rule : bind_rule(Rule,Value)} > 1.
-% a var value cannot be bound to more than one var per rule
-:-
-    rule(Rule),
-    Value=0..max_vars-1,
-    #count{Var : bind_var(Rule,Var,Value)} > 1.
-"""
-
-
-
-# def vo_variable(variable):
-    # return ConstVar(f'{variable}', 'Variable')
-
-def vo_variable2(rule, variable):
-    key = f'{rule.name}_V{variable}'
-    return VarVar(rule=rule, name=key)
-
-def vo_clause(variable):
-    return RuleVar(name=f'R{variable}')
-
-def alldiff(args):
-    return Literal('AllDifferent', args, meta=True)
-
-def lt(a, b):
-    return Literal('<', (a,b), meta=True)
-
-def eq(a, b):
-    return Literal('==', (a,b), meta=True)
-
-def gteq(a, b):
-    return Literal('>=', (a,b), meta=True)
-
-def body_size_literal(clause_var, body_size):
-    return Literal('body_size', (clause_var, body_size))
-
-def alldiff(args):
-    return Literal('AllDifferent', args, meta=True)
-
-
-BODY_VARIANT_ENCODING = """\
-#show bind_var/2.
-value_type(Var,Type):- known_value(Var, Type).
-value_type(Value,Type):- bind_var(Var,Value), var_type(Var,Type).
-1 {bind_var(Var,Value): value(Value)} 1:- var(Var).
-:- value(Value), #count{T : value_type(Value,T)} > 1.
-:- value(Value), #count{Var : bind_var(Var,Value)} > 1.
-value(V):- V=0..max_vars-1.
-"""
-
-class Grounder():
-    def __init__(self, settings):
-        self.seen_assignments = {}
-        self.seen_deep_assignments = {}
-        self.settings = settings
-        self.cached4 = {}
-
-    def find_bindings(self, rule, max_rules, max_vars):
+        max_rules, max_vars = self.settings.max_rules, self.settings.max_vars
 
         _, body = rule
 
@@ -1303,3 +1241,79 @@ class Grounder():
 
         # solver.solve(on_model=on_model)
         # return out
+
+
+
+
+BINDING_ENCODING = """\
+#defined rule_var/2.
+#show bind_rule/2.
+#show bind_var/3.
+
+% bind a rule_id to a value
+{bind_rule(Rule,Value)}:-
+    rule(Rule),
+    Value=0..max_rules-1.
+{bind_var(Rule,Var,Value)}:-
+    rule_var(Rule,Var),
+    Value=0..max_vars-1.
+
+% every rule must be bound to exactly one value
+:-
+    rule(Rule),
+    #count{Value: bind_rule(Rule,Value)} != 1.
+% for each rule, each var must be bound to exactly one value
+:-
+    rule_var(Rule,Var),
+    #count{Value: bind_var(Rule,Var,Value)} != 1.
+% a rule value cannot be bound to more than one rule
+:-
+    Value=0..max_rules-1,
+    #count{Rule : bind_rule(Rule,Value)} > 1.
+% a var value cannot be bound to more than one var per rule
+:-
+    rule(Rule),
+    Value=0..max_vars-1,
+    #count{Var : bind_var(Rule,Var,Value)} > 1.
+"""
+
+
+
+# def vo_variable(variable):
+    # return ConstVar(f'{variable}', 'Variable')
+
+def vo_variable2(rule, variable):
+    key = f'{rule.name}_V{variable}'
+    return VarVar(rule=rule, name=key)
+
+def vo_clause(variable):
+    return RuleVar(name=f'R{variable}')
+
+def alldiff(args):
+    return Literal('AllDifferent', args, meta=True)
+
+def lt(a, b):
+    return Literal('<', (a,b), meta=True)
+
+def eq(a, b):
+    return Literal('==', (a,b), meta=True)
+
+def gteq(a, b):
+    return Literal('>=', (a,b), meta=True)
+
+def body_size_literal(clause_var, body_size):
+    return Literal('body_size', (clause_var, body_size))
+
+def alldiff(args):
+    return Literal('AllDifferent', args, meta=True)
+
+
+BODY_VARIANT_ENCODING = """\
+#show bind_var/2.
+value_type(Var,Type):- known_value(Var, Type).
+value_type(Value,Type):- bind_var(Var,Value), var_type(Var,Type).
+1 {bind_var(Var,Value): value(Value)} 1:- var(Var).
+:- value(Value), #count{T : value_type(Value,T)} > 1.
+:- value(Value), #count{Var : bind_var(Var,Value)} > 1.
+value(V):- V=0..max_vars-1.
+"""

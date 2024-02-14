@@ -4,12 +4,11 @@ import collections
 from itertools import permutations
 from itertools import chain, combinations
 from . explain import get_raw_prog as get_raw_prog2
-# from . combine import Combiner
 from . explain import Explainer, head_connected, get_raw_prog, seen_more_general_unsat, has_valid_directions, order_body, connected
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr
 from . core import Literal
 from . tester import Tester
-from . generate import Generator, Grounder
+from . generate import Generator
 from . bkcons import deduce_bk_cons, deduce_recalls
 from . variants import find_variants
 
@@ -517,7 +516,6 @@ def popper(settings):
         tester = Tester(settings)
 
     explainer = Explainer(settings, tester)
-    grounder = Grounder(settings)
 
     settings.nonoise = not settings.noisy
     settings.solution_found = False
@@ -569,7 +567,7 @@ def popper(settings):
 
     # generator that builds programs
     with settings.stats.duration('init'):
-        generator = Generator(settings, grounder, bkcons)
+        generator = Generator(settings, bkcons)
 
     # track the success sets of tested hypotheses
     success_sets = {}
