@@ -3,6 +3,7 @@ import re
 import time
 import pkg_resources
 from janus_swi import query_once, consult
+from functools import cache
 from contextlib import contextmanager
 from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_prog, format_literal, rule_is_recursive, rule_size, calc_prog_size
 from . explain import prog_hash, get_raw_prog
@@ -10,19 +11,12 @@ from . explain import prog_hash, get_raw_prog
 compiled_pattern = re.compile("(?<=[\(,])([A-Z])")
 
 # Janus requires that non-output variables be prefixed with _
+@cache
 def janus_format_rule(rule):
     return compiled_pattern.sub(r"_\1", rule)
 
 def bool_query(query):
     return query_once(query)['truth']
-
-def parse_single_rule(prog, settings):
-    rule = list(prog)[0]
-    head, _body = rule
-    head, ordered_body = order_rule(rule, settings)
-    atom_str = janus_format_rule(format_literal(head))
-    body_str = janus_format_rule(format_rule((None, ordered_body))[2:-1])
-    return atom_str, body_str
 
 class Tester():
 
@@ -60,10 +54,19 @@ class Tester():
         if self.settings.recursion_enabled:
             query_once(f'assert(timeout({self.settings.eval_timeout})), fail')
 
+    @cache
+    def parse_single_rule(self, prog):
+        rule = list(prog)[0]
+        head, _body = rule
+        head, ordered_body = order_rule(rule, self.settings)
+        atom_str = janus_format_rule(format_literal(head))
+        body_str = janus_format_rule(format_rule((None, ordered_body))[2:-1])
+        return atom_str, body_str
+
     def test_prog(self, prog):
 
         if len(prog) == 1:
-            atom_str, body_str = parse_single_rule(prog, self.settings)
+            atom_str, body_str = self.parse_single_rule(prog)
             q = f'findall(_ID, (pos_index(_ID, {atom_str}), ({body_str} ->  true)), S)'
             pos_covered = frozenset(query_once(q)['S'])
             inconsistent = False
@@ -82,7 +85,7 @@ class Tester():
     def test_prog_all(self, prog):
 
         if len(prog) == 1:
-            atom_str, body_str = parse_single_rule(prog, self.settings)
+            atom_str, body_str = self.parse_single_rule(prog)
             q = f'findall(_ID, (pos_index(_ID, {atom_str}), ({body_str}->  true)), S)'
             pos_covered = frozenset(query_once(q)['S'])
             neg_covered = frozenset()
@@ -100,7 +103,7 @@ class Tester():
     def test_prog_pos(self, prog):
 
         if len(prog) == 1:
-            atom_str, body_str = parse_single_rule(prog, self.settings)
+            atom_str, body_str = self.parse_single_rule(prog)
             q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
             return frozenset(query_once(q)['S'])
 
@@ -112,7 +115,7 @@ class Tester():
             return False
 
         if len(prog) == 1:
-            atom_str, body_str = parse_single_rule(prog, self.settings)
+            atom_str, body_str = self.parse_single_rule(prog)
             q = f'neg_index(_ID, {atom_str}), {body_str}'
             return bool_query(q)
 
@@ -123,7 +126,7 @@ class Tester():
 
         neg_covered = frozenset()
         if len(self.neg_index) > 0:
-            atom_str, body_str = parse_single_rule(prog, self.settings)
+            atom_str, body_str = self.parse_single_rule(prog)
             q = f'findfirstn(K, _ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
             neg_covered = frozenset(query_once(q, {'K':k})['S'])
         return neg_covered
@@ -145,7 +148,7 @@ class Tester():
             return self.cached_pos_covered[k]
 
         if len(prog) == 1:
-            atom_str, body_str = parse_single_rule(prog, self.settings)
+            atom_str, body_str = self.parse_single_rule(prog)
             q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
             pos_covered = frozenset(query_once(q)['S'])
         else:
