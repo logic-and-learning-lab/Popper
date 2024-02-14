@@ -3,14 +3,13 @@ import numbers
 import collections
 from itertools import permutations
 from itertools import chain, combinations
-from collections import deque
 from . explain import get_raw_prog as get_raw_prog2
 # from . combine import Combiner
 from . explain import Explainer, head_connected, get_raw_prog, seen_more_general_unsat, has_valid_directions, order_body, connected
-from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, theory_subsumes, rule_subsumes, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr
+from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr
 from . core import Literal
 from . tester import Tester
-from . generate import Generator, Grounder, atom_to_symbol, arg_to_symbol
+from . generate import Generator, Grounder
 from . bkcons import deduce_bk_cons, deduce_recalls
 from . variants import find_variants
 
@@ -993,8 +992,7 @@ def popper(settings):
                         if settings.single_solve:
                             # AC: sometimes adding these size constraints can take longer
                             for i in range(best_score, max_size+1):
-                                size_con = [(atom_to_symbol("size", (i,)), True)]
-                                model.context.add_nogood(size_con)
+                                generator.prune_size(i)
                     # print("HERE!!!", tp, fn, tn, fp)
                     if not settings.noisy and fp == 0 and fn == 0:
                         settings.solution_found = True
@@ -1006,8 +1004,9 @@ def popper(settings):
 
                         # AC: sometimes adding these size constraints can take longer
                         for i in range(hypothesis_size, max_size+1):
-                            size_con = [(atom_to_symbol("size", (i,)), True)]
-                            model.context.add_nogood(size_con)
+                            generator.prune_size(i)
+                            # size_con = [(atom_to_symbol("size", (i,)), True)]
+                            # model.context.add_nogood(size_con)
 
             # BUILD CONSTRAINTS
             if add_spec and not pruned_sub_incomplete and not pruned_more_general and not add_redund2:

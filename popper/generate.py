@@ -547,6 +547,9 @@ class Generator:
         symbol = clingo.Function('size_in_rules', [clingo.Number(size)])
         self.solver.assign_external(symbol, True)
 
+    def prune_size(self, size):
+        size_con = [(atom_to_symbol("size", (i,)), True)]
+        self.model.context.add_nogood(size_con)
 
     def get_ground_rules(self, rule):
         head, body = rule
