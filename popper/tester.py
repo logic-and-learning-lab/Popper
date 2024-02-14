@@ -265,7 +265,7 @@ class Tester():
             else:
                 c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
             c = janus_format_rule(c)
-            if query_once('redundant_literal(C)',{'C':c})['truth']:
+            if query_once(f'redundant_literal({c})')['truth']:
                 return True
         return False
 
