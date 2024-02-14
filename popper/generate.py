@@ -261,13 +261,19 @@ class Generator:
     #         self.handle = iter(self.solver.solve(yield_ = True))
     #     return next(self.handle, None)
 
-    def get_model(self):
+    def get_prog(self):
         if self.handle is None:
             self.handle = iter(self.solver.solve(yield_ = True))
         self.model = next(self.handle, None)
         if self.model is None:
             return None
-        return self.model.symbols(shown = True)
+        atoms = self.model.symbols(shown = True)
+        if self.settings.pi_enabled:
+            return self.parse_model_pi(atoms)
+        elif self.settings.recursion_enabled:
+            return self.parse_model_recursion(atoms)
+        else:
+            return self.parse_model_single_rule(atoms)
 
     def gen_symbol(self, literal, backend):
         sign, pred, args = literal
@@ -279,20 +285,11 @@ class Generator:
             self.seen_symbols[k] = symbol
         return symbol
 
-    def parse_atoms(self, atoms):
-        if self.settings.pi_enabled:
-            return self.parse_model_pi(atoms)
-        elif self.settings.recursion_enabled:
-            return self.parse_model_recursion(atoms)
-        else:
-            return self.parse_model_single_rule(atoms)
-
     def parse_model_recursion(self, model):
         settings = self.settings
         rule_index_to_body = defaultdict(set)
         head = settings.head_literal
         cached_literals = settings.cached_literals
-        directions = settings.directions
 
         for atom in model:
             args = atom.arguments
@@ -308,13 +305,12 @@ class Generator:
             rule = head, body
             prog.append((rule))
 
-        return frozenset(prog), directions
+        return frozenset(prog)
 
     def parse_model_single_rule(self, model):
         settings = self.settings
         head = settings.head_literal
         body = set()
-        directions = settings.directions
         cached_literals = settings.cached_literals
         for atom in model:
             args = atom.arguments
@@ -323,14 +319,14 @@ class Generator:
             literal = cached_literals[(predicate, atom_args)]
             body.add(literal)
         rule = head, frozenset(body)
-        return frozenset([rule]), directions
+        return frozenset([rule])
 
     def parse_model_pi(self, model):
         settings = self.settings
-        directions = defaultdict(lambda: defaultdict(lambda: '?'))
+        # directions = defaultdict(lambda: defaultdict(lambda: '?'))
         rule_index_to_body = defaultdict(set)
         rule_index_to_head = {}
-        rule_index_ordering = defaultdict(set)
+        # rule_index_ordering = defaultdict(set)
 
         for atom in model:
             args = atom.arguments
@@ -354,35 +350,33 @@ class Generator:
                 head_literal = (predicate, atom_args, arity)
                 rule_index_to_head[rule_index] = head_literal
 
-            # TODO AC: STOP READING THESE THE MODELS
-            elif name == 'direction_':
-                pred_name = args[0].name
-                arg_index = args[1].number
-                arg_dir_str = args[2].name
+            # # TODO AC: STOP READING THESE THE MODELS
+            # elif name == 'direction_':
+            #     pred_name = args[0].name
+            #     arg_index = args[1].number
+            #     arg_dir_str = args[2].name
 
-                if arg_dir_str == 'in':
-                    arg_dir = '+'
-                elif arg_dir_str == 'out':
-                    arg_dir = '-'
-                else:
-                    raise Exception(f'Unrecognised argument direction "{arg_dir_str}"')
-                directions[pred_name][arg_index] = arg_dir
+            #     if arg_dir_str == 'in':
+            #         arg_dir = '+'
+            #     elif arg_dir_str == 'out':
+            #         arg_dir = '-'
+            #     else:
+            #         raise Exception(f'Unrecognised argument direction "{arg_dir_str}"')
+            #     directions[pred_name][arg_index] = arg_dir
 
         prog = []
 
         for rule_index in rule_index_to_head:
             head_pred, head_args, head_arity = rule_index_to_head[rule_index]
-            head_modes = tuple(directions[head_pred][i] for i in range(head_arity))
-            head = Literal(head_pred, head_args, head_modes)
+            head = Literal(head_pred, head_args, {})
             body = set()
             for (body_pred, body_args, body_arity) in rule_index_to_body[rule_index]:
-                body_modes = tuple(directions[body_pred][i] for i in range(body_arity))
-                body.add(Literal(body_pred, body_args, body_modes))
+                body.add(Literal(body_pred, body_args, {}))
             body = frozenset(body)
             rule = head, body
             prog.append((rule))
 
-        return frozenset(prog), directions
+        return frozenset(prog)
 
     def update_solver(self, size, num_vars, num_rules):
         self.update_number_of_literals(size)

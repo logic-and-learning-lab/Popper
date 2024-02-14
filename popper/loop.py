@@ -608,10 +608,10 @@ def popper(settings):
 
             # generate a program
             with settings.stats.duration('generate'):
-                atoms = generator.get_model()
-                if atoms is None:
+                prog = generator.get_prog()
+                if prog is None:
                     break
-                prog, directions = generator.parse_atoms(atoms)
+                directions = settings.directions
 
             prog_size = calc_prog_size(prog)
 
