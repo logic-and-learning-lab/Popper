@@ -295,12 +295,12 @@ class Popper():
                         else:
                             # AC: we could push all this reasoning to Prolog to only need a single call
                             pos_covered = tester.test_prog_pos(prog)
-                            num_pos_covered = len(pos_covered)
-                            if len(pos_covered) > prog_size:
+                            tp = len(pos_covered)
+                            if tp > prog_size:
                                 # maximum size of specialisations allowed
                                 test_at_most_k_neg1 = min([settings.max_body-(prog_size-1), settings.max_literals-prog_size])
                                 # conditions which determine whether a program can be part of a solution
-                                test_at_most_k_neg2 = min([settings.best_mdl - prog_size, num_pos_covered-prog_size])
+                                test_at_most_k_neg2 = min([settings.best_mdl - prog_size, tp-prog_size])
                                 test_at_most_k_neg = max([test_at_most_k_neg1, test_at_most_k_neg2])
                                 neg_covered = tester.test_single_rule_neg_at_most_k(prog, test_at_most_k_neg)
                                 if len(neg_covered) == test_at_most_k_neg:
@@ -322,18 +322,17 @@ class Popper():
                                 if not settings.solution_found or len(pos_covered) > 1:
                                     inconsistent = tester.test_prog_inconsistent(prog)
 
-                num_pos_covered = len(pos_covered)
+                tp = len(pos_covered)
+                fn = num_pos-tp
 
                 # if non-separable program covers all examples, stop
-                if not skipped and not inconsistent and num_pos_covered == num_pos and not settings.order_space:
+                if not skipped and not inconsistent and tp == num_pos and not settings.order_space:
                     settings.solution = prog
                     settings.best_prog_score = num_pos, 0, num_neg, 0, prog_size
                     settings.best_mdl = prog_size
                     return
 
                 if settings.noisy:
-                    tp = len(pos_covered)
-                    fn = num_pos-tp
                     fp, tn = None, None
                     if not skipped:
                         fp = len(neg_covered)
@@ -361,7 +360,7 @@ class Popper():
                             new_cons.extend(self.build_constraints_previous_hypotheses(mdl, prog_size))
 
                 # if it does not cover any example, prune specialisations
-                if num_pos_covered == 0:
+                if tp == 0:
                     add_spec = True
                     # if recursion and no PI, apply redundancy constraints
                     if settings.recursion_enabled:
@@ -374,12 +373,12 @@ class Popper():
                     add_spec = True
 
                 #  if covers all positive examples prune generalisations
-                if num_pos_covered == num_pos:
+                if tp == num_pos:
                     add_gen = True
 
                 if not has_invention:
                     self.add_seen(prog)
-                    if num_pos_covered == 0 or (settings.noisy and len(pos_covered) < prog_size):
+                    if tp == 0 or (settings.noisy and tp < prog_size):
                         # if the programs does not cover any positive examples, check whether it is has an unsat core
                         with settings.stats.duration('find mucs'):
                             cons_ = self.explain_incomplete(prog)
@@ -387,7 +386,7 @@ class Popper():
                             pruned_sub_incomplete = len(cons_) > 0
 
                 if not settings.noisy:
-                    if not is_recursive and num_pos_covered > 0:
+                    if not is_recursive and tp > 0:
                         # if we do not search by increasing size, we need to use a strict form of subsumption
                         if settings.order_space:
                             subsumed = is_subsumed(pos_covered, prog_size, success_sets)
@@ -401,7 +400,7 @@ class Popper():
                         if not has_invention:
                             # we check whether a program does not cover enough examples to be useful
                             # if the program only not cover enough examples, we prune it specialisations
-                            covers_too_few = settings.solution_found and not settings.order_space and num_pos_covered == 1
+                            covers_too_few = settings.solution_found and not settings.order_space and tp == 1
                             if covers_too_few:
                                 add_spec = True
 
@@ -420,7 +419,7 @@ class Popper():
                                         if subsumed:
                                             print('\t', format_prog2(x), '\t', 'subsumed (generalisation)')
                                         else:
-                                            print('\t', format_prog2(x), '\t', 'covers_too_few (generalisation)', len(pos_covered))
+                                            print('\t', format_prog2(x), '\t', 'covers_too_few (generalisation)', tp)
                                     new_cons.append((Constraint.SPECIALISATION, x, None, None))
 
                     if inconsistent:
@@ -431,13 +430,14 @@ class Popper():
                             with settings.stats.duration('find sub inconsistent'):
                                 cons_ = self.explain_inconsistent(prog)
                                 new_cons.extend(cons_)
+                                pruned_sub_inconsistent = len(cons_) > 0
                     else:
                         # if consistent, prune specialisations
                         add_spec = True
                         neg_covered = frozenset()
 
                     # if consistent and partially complete, test whether functional
-                    if not inconsistent and settings.functional_test and num_pos_covered > 0 and not pruned_more_general:
+                    if not inconsistent and settings.functional_test and tp > 0 and not pruned_more_general:
                         if tester.is_non_functional(prog):
                             # if not functional, rule out generalisations and set as inconsistent
                             add_gen = True
@@ -452,7 +452,7 @@ class Popper():
                                     new_cons.extend(cons_)
 
                     seen_better_rec = False
-                    if is_recursive and not inconsistent and not subsumed and not add_gen and num_pos_covered > 0:
+                    if is_recursive and not inconsistent and not subsumed and not add_gen and tp > 0:
                         if settings.order_space:
                             # this check does not assume that we search by increasing program size
                             subsumed = is_subsumed(pos_covered, prog_size, success_sets_recursion)
@@ -541,15 +541,15 @@ class Popper():
 
                 add_to_combiner = False
                 if settings.noisy:
-                    if not skipped and not skip_early_neg and not is_recursive and not has_invention and tp >= prog_size+fp and num_pos_covered >= prog_size and fp+prog_size < settings.best_mdl:
-                        success_sets_noise[tuple([pos_covered, neg_covered])] = prog
+                    if not skipped and not skip_early_neg and not is_recursive and not has_invention and tp >= prog_size+fp and tp >= prog_size and fp+prog_size < settings.best_mdl:
+                        success_sets_noise[(pos_covered, neg_covered)] = prog
                         add_to_combiner = True
                 else:
                     # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
-                    if not inconsistent and not subsumed and not add_gen and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general:
+                    if not inconsistent and not subsumed and not add_gen and tp > 0 and not seen_better_rec and not pruned_more_general:
                         add_to_combiner = True
 
-                    if settings.order_space and not inconsistent and not subsumed and num_pos_covered > 0 and not seen_better_rec and not pruned_more_general:
+                    if settings.order_space and not inconsistent and not subsumed and tp > 0 and not seen_better_rec and not pruned_more_general:
                         add_to_combiner = True
 
                     if add_to_combiner:
@@ -596,11 +596,7 @@ class Popper():
 
                     # COMBINE
                     with settings.stats.duration('combine'):
-                        # is_new_solution_found = combiner.update_best_prog([(prog, pos_covered, [])])
-                        # print('calling combine', len(to_combine))
-                        # t1 = time.time()
                         is_new_solution_found = combiner.update_best_prog(to_combine)
-                        # print(f'combine time: {time.time()-t1}')
 
                     to_combine=[]
 
@@ -754,10 +750,6 @@ class Popper():
     def explain_inconsistent(self, prog):
         settings, tester = self.settings, self.tester
         out_cons = []
-
-        if len(prog) == 1 or not settings.recursion_enabled:
-            return out_cons
-
         base = []
         rec = []
         for rule in prog:
@@ -766,14 +758,12 @@ class Popper():
             else:
                 base.append(rule)
 
-        pruned_subprog = False
         for rule in base:
             subprog = frozenset([rule])
             if tester.test_prog_inconsistent(subprog):
-                out_cons.append((Constraint.GENERALISATION, subprog, None, None))
-                pruned_subprog = True
+                out_cons.append((Constraint.GENERALISATION, subprog, None))
 
-        if pruned_subprog:
+        if out_cons:
             return out_cons
 
         if len(rec) == 1:
@@ -781,10 +771,9 @@ class Popper():
 
         for r1 in base:
             for r2 in rec:
-                subprog = frozenset([r1,r2])
+                subprog = frozenset([r1, r2])
                 if tester.test_prog_inconsistent(subprog):
-                    out_cons.append((Constraint.GENERALISATION, subprog, None, None))
-                    pruned_subprog = True
+                    out_cons.append((Constraint.GENERALISATION, subprog, None))
 
         return out_cons
 
