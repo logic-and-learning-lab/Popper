@@ -1,13 +1,10 @@
 import time
 from collections import defaultdict
-from itertools import permutations
-from itertools import chain, combinations
+from itertools import chain, combinations, permutations
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr, non_empty_powerset, is_headless, head_connected, has_valid_directions, get_raw_prog, theory_subsumes, Literal
-# from . core import Literal
 from . tester import Tester
 from . generate import Generator
 from . bkcons import deduce_bk_cons, deduce_recalls
-from . variants import find_variants
 
 def functional_rename_vars(rule):
     head, body = rule
@@ -1326,3 +1323,45 @@ def seen_more_general_unsat(prog, unsat):
 
 def seen_more_specific_sat(prog, sat):
     return any(theory_subsumes(prog, seen) for seen in sat)
+
+
+def find_variants(rule, max_vars=6):
+    all_vars = 'ABCDEFGHIJKLM'
+    all_vars = all_vars[:max_vars]
+
+    head, body = rule
+    if head:
+        head_arity = head.arity
+        head_vars = set(head.arguments)
+    else:
+        head_arity = 0
+        head_vars = set()
+
+    body_vars = frozenset({x for literal in body for x in literal.arguments if x not in head_vars})
+    num_body_vars = len(body_vars)
+    if head:
+        subset = all_vars[head_arity:]
+    else:
+        subset = all_vars
+    indexes = {x:i for i, x in enumerate(body_vars)}
+    if head:
+        new_head = (head.predicate, head.arguments)
+    else:
+        new_head = None
+    new_rules = []
+    # print(body_vars, subset, indexes)
+    perms = list(permutations(subset, num_body_vars))
+    for xs in perms:
+        new_body = []
+        for literal in body:
+            new_args = []
+            for arg in literal.arguments:
+                if arg in indexes:
+                    new_args.append(xs[indexes[arg]])
+                else:
+                    new_args.append(arg)
+            new_body.append((literal.predicate, tuple(new_args)))
+        new_rule = (new_head, frozenset(new_body))
+        new_rules.append(new_rule)
+
+    return new_rules
