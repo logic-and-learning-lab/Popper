@@ -1,12 +1,11 @@
 from functools import cache
-# from enum import Enum
 import clingo
 import clingo.script
 import signal
 import argparse
 import os
 import logging
-from itertools import permutations
+from itertools import permutations, chain, combinations
 from collections import defaultdict
 from time import perf_counter
 from contextlib import contextmanager
@@ -558,6 +557,9 @@ def theory_subsumes(prog1, prog2):
     # P1 subsumes P2 if for every rule R2 in P2 there is a rule R1 in P1 such that R1 subsumes R2
     return all(any(rule_subsumes(r1, r2) for r1 in prog1) for r2 in prog2)
 
+def non_empty_powerset(iterable):
+    s = tuple(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
 
 def load_types(settings):
     enc = """
@@ -633,6 +635,8 @@ def bias_order(settings, max_size):
     settings.search_order = ret
     return settings.search_order
 
+def is_headless(prog):
+    return any(head is None for head, body in prog)
 
 import os
 # AC: I do not know what this code below really does, but it works

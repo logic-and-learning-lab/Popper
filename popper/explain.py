@@ -2,6 +2,7 @@ import os
 import copy
 import time
 import numbers
+from functools import cache
 from clingo import Function, Number, Tuple_
 from itertools import chain, combinations
 import pkg_resources
@@ -57,11 +58,6 @@ def prog_hash(prog):
     new_prog = get_raw_prog(prog)
     return hash(new_prog)
 
-def non_empty_powerset(iterable):
-    s = tuple(iterable)
-    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
-
-
 def has_valid_directions(rule):
     head, body = rule
 
@@ -115,16 +111,6 @@ def has_valid_directions(rule):
             body_literals = body_literals.difference({selected_literal})
 
         return True
-
-def find_subprogs(prog, recursive):
-    prog = list(prog)
-    force_head = len(prog) > 1
-
-    for i in range(len(prog)):
-        rule = prog[i]
-        for subrule in find_subrules(rule, force_head, recursive):
-            yield prog[:i] + [subrule] + prog[i+1:]
-
 
 def generalisations(prog, allow_headless=True, recursive=False):
 
@@ -221,55 +207,15 @@ def tmp(prog):
             return False
     return True
 
-
-
-
-# f(A,B):- empty(A).
-# f(A,B):- tail(A,D),f(D,C),increment(C,B).
-
-# if an output argument of a recursive literal is used as an input argument to another literal then all head arguments must appear in the body
-
-
-def order_body(body):
-    ordered_body = []
-    grounded_variables = set()
-    body_literals = set(body)
-
-    while body_literals:
-        selected_literal = None
-        for literal in body_literals:
-            if len(literal.outputs) == len(literal.arguments):
-                selected_literal = literal
-                break
-            if literal.inputs.issubset(grounded_variables):
-                selected_literal = literal
-                break
-
-        if selected_literal == None:
-            message = f'{selected_literal} in clause {format_rule(rule)} could not be grounded'
-            raise ValueError(message)
-
-        ordered_body.append(selected_literal)
-        grounded_variables = grounded_variables.union(selected_literal.arguments)
-        body_literals = body_literals.difference({selected_literal})
-
-    return tuple(ordered_body)
-
-cached_head_connected = {}
+@cache
 def head_connected(rule):
-    k = prog_hash([rule])
-    if k in cached_head_connected:
-        return cached_head_connected[k]
-
     head, body = rule
     head_connected_vars = set(head.arguments)
     body_literals = set(body)
 
     if not any(x in head_connected_vars for literal in body for x in literal.arguments):
-        cached_head_connected[k] = False
         return False
 
-    result = True
     while body_literals:
         changed = False
         for literal in body_literals:
@@ -278,11 +224,9 @@ def head_connected(rule):
                 body_literals = body_literals.difference({literal})
                 changed = True
         if changed == False and body_literals:
-            result = False
-            break
+            return False
 
-    cached_head_connected[k] = result
-    return result
+    return True
 
 def connected(body):
     if len(body) == 1:
@@ -303,26 +247,6 @@ def connected(body):
             return False
 
     return True
-
-def singleton_head(rule):
-    head, body = rule
-    head_vars = set(head.arguments)
-    for b in body:
-        head_vars = head_vars.difference({b.arguments})
-    if head_vars:
-        return True
-    return False
-
-def recursive_input_is_ok(rule):
-    head, body = rule
-    body_vars = set(x for literal in body for x in literal.arguments)
-    for x in head.inputs:
-        if x not in body_vars:
-            return False
-    return True
-
-def is_headless(prog):
-    return any(head == None for head, body in prog)
 
 def seen_more_general_unsat(prog, unsat):
     return any(theory_subsumes(seen, prog) for seen in unsat)

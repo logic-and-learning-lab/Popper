@@ -4,8 +4,8 @@ import collections
 from itertools import permutations
 from itertools import chain, combinations
 from . explain import get_raw_prog as get_raw_prog2
-from . explain import head_connected, get_raw_prog, seen_more_general_unsat, has_valid_directions, order_body, connected, generalisations, prog_is_ok, is_headless
-from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr
+from . explain import head_connected, get_raw_prog, seen_more_general_unsat, has_valid_directions, connected, generalisations, prog_is_ok
+from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr, non_empty_powerset, is_headless
 from . core import Literal
 from . tester import Tester
 from . generate import Generator
@@ -52,10 +52,6 @@ def has_messed_up_vars(prog):
         if any(chr(ord('A') + i) not in seen_args for i in range(len(seen_args))):
             return True
     return False
-
-def non_empty_powerset(iterable):
-    s = tuple(iterable)
-    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
 
 def explain_none_functional(settings, tester, prog):
     new_cons = []
@@ -1181,7 +1177,7 @@ class Popper():
 
             if headless:
                 body = test_prog[0][1]
-                if self.tester.is_body_sat(order_body(body)):
+                if self.tester.is_body_sat(body):
                     sat.add(raw_prog)
                     continue
             else:
