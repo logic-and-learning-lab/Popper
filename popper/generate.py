@@ -8,12 +8,27 @@ import operator
 import numbers
 import clingo.script
 import pkg_resources
-from . core import Literal, RuleVar, VarVar, Var
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, format_prog, bias_order
+from . util import rule_is_recursive, Constraint, format_prog, bias_order, Literal
+
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
+
+import dataclasses
+
+@dataclasses.dataclass(frozen=True)
+class Var:
+    name: str
+
+@dataclasses.dataclass(frozen=True)
+class RuleVar(Var):
+    pass
+
+@dataclasses.dataclass(frozen=True)
+class VarVar(Var):
+    rule: RuleVar
+
 
 def arg_to_symbol(arg):
     if isinstance(arg, tuple):

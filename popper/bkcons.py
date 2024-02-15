@@ -4,8 +4,8 @@ import numbers
 import operator
 import pkg_resources
 import time
-from . core import Literal, RuleVar, VarVar, Var
-from . util import rule_is_recursive, format_rule, Constraint, format_prog, order_rule, order_prog
+# from . core import Literal, RuleVar, VarVar, Var
+from . util import rule_is_recursive, format_rule, Constraint, format_prog, order_rule, order_prog, Literal
 from clingo import Function, Number, Tuple_
 from collections import defaultdict
 from itertools import permutations

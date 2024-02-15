@@ -147,7 +147,7 @@ class Combiner:
                         best_size = size
                         continue
                     
-                    model_inconsistent = self.tester.is_inconsistent(model_prog)
+                    model_inconsistent = self.tester.test_prog_inconsistent(model_prog)
                     # check whether recursive program is inconsistent
                     if not model_inconsistent:
                         best_prog = rules

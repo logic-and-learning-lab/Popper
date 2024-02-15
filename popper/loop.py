@@ -1,12 +1,9 @@
 import time
-import numbers
-import collections
+from collections import defaultdict
 from itertools import permutations
 from itertools import chain, combinations
-from . explain import get_raw_prog as get_raw_prog2
-from . explain import head_connected, get_raw_prog, seen_more_general_unsat, has_valid_directions, connected, generalisations, prog_is_ok
-from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr, non_empty_powerset, is_headless
-from . core import Literal
+from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr, non_empty_powerset, is_headless, head_connected, has_valid_directions, get_raw_prog, theory_subsumes, Literal
+# from . core import Literal
 from . tester import Tester
 from . generate import Generator
 from . bkcons import deduce_bk_cons, deduce_recalls
@@ -179,7 +176,7 @@ class Popper():
             settings.best_mdl = num_pos
             # save hypotheses for which we pruned spec / gen from a certain size only
             # once we update the best mdl score, we can prune spec / gen from a better size for some of these
-            self.seen_hyp_spec, self.seen_hyp_gen = collections.defaultdict(list), collections.defaultdict(list)
+            self.seen_hyp_spec, self.seen_hyp_gen = defaultdict(list), defaultdict(list)
             max_size = min((1 + settings.max_body) * settings.max_rules, num_pos)
         else:
             max_size = (1 + settings.max_body) * settings.max_rules
@@ -768,7 +765,7 @@ class Popper():
         pruned_subprog = False
         for rule in base:
             subprog = frozenset([rule])
-            if tester.is_inconsistent(subprog):
+            if tester.test_prog_inconsistent(subprog):
                 out_cons.append((Constraint.GENERALISATION, subprog, None, None))
                 pruned_subprog = True
 
@@ -781,7 +778,7 @@ class Popper():
         for r1 in base:
             for r2 in rec:
                 subprog = frozenset([r1,r2])
-                if tester.is_inconsistent(subprog):
+                if tester.test_prog_inconsistent(subprog):
                     out_cons.append((Constraint.GENERALISATION, subprog, None, None))
                     pruned_subprog = True
 
@@ -1075,7 +1072,7 @@ class Popper():
 
     def add_seen(self, prog):
         self.seen_prog.add(get_raw_prog(prog))
-        self.seen_prog.add(get_raw_prog2(prog))
+        # self.seen_prog.add(get_raw_prog2(prog))
 
     def build_test_prog(self, subprog):
         directions = self.settings.directions
@@ -1107,17 +1104,17 @@ class Popper():
             # for rule in subprog:
             #     print('\t', 'A', format_rule(rule))
 
-            raw_prog2 = get_raw_prog2(subprog)
+            # raw_prog2 = get_raw_prog2(subprog)
 
-            if raw_prog2 in self.seen_prog:
-                continue
+            # if raw_prog2 in self.seen_prog:
+                # continue
 
             raw_prog = get_raw_prog(subprog)
             if raw_prog in self.seen_prog:
                 continue
 
             self.seen_prog.add(raw_prog)
-            self.seen_prog.add(raw_prog2)
+            # self.seen_prog.add(raw_prog2)
 
 
             # for rule in subprog:
@@ -1128,9 +1125,9 @@ class Popper():
                     return False
                 h_, b_ = list(subprog)[0]
                 for x in non_empty_powerset(b_):
-                    if get_raw_prog2([(None,x)]) in self.unsat:
+                    if get_raw_prog([(None,x)]) in self.unsat:
                         return True
-                    if get_raw_prog2([(h_,x)]) in self.unsat:
+                    if get_raw_prog([(h_,x)]) in self.unsat:
                         return True
                 return False
 
@@ -1142,8 +1139,8 @@ class Popper():
                 continue
                 # pass
 
-            if seen_more_general_unsat(raw_prog2, unsat):
-                continue
+            # if seen_more_general_unsat(raw_prog2, unsat):
+                # continue
                 # pass
 
             # for rule in subprog:
@@ -1188,9 +1185,9 @@ class Popper():
                 # print('\t\t\t UNSAT',format_prog(subprog))
 
             unsat.add(raw_prog)
-            unsat.add(raw_prog2)
+            # unsat.add(raw_prog2)
             self.unsat.add(raw_prog)
-            self.unsat.add(raw_prog2)
+            # self.unsat.add(raw_prog2)
 
             xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
             if len(xs):
@@ -1206,3 +1203,126 @@ def popper(settings):
 def learn_solution(settings):
     timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)
     return settings.solution, settings.best_prog_score, settings.stats
+
+
+def generalisations(prog, allow_headless=True, recursive=False):
+
+    if len(prog) == 1:
+        rule = list(prog)[0]
+        head, body = rule
+
+        if allow_headless:
+            if head and len(body) > 0:
+                new_rule = (None, body)
+                new_prog = [new_rule]
+                yield new_prog
+
+        if (recursive and len(body) > 2 and head) or (not recursive and len(body) > 1):
+            body = list(body)
+            for i in range(len(body)):
+                # do not remove recursive literals
+                if recursive and body[i].predicate == head.predicate:
+                    continue
+                new_body = body[:i] + body[i+1:]
+                new_rule = (head, frozenset(new_body))
+                new_prog = [new_rule]
+                yield new_prog
+
+    else:
+        prog = list(prog)
+        for i in range(len(prog)):
+            subrule = prog[i]
+            recursive = rule_is_recursive(subrule)
+            for new_subrule in generalisations([subrule], allow_headless=False, recursive=recursive):
+                new_prog = prog[:i] + new_subrule + prog[i+1:]
+                yield new_prog
+
+
+def prog_is_ok(prog):
+    for rule in prog:
+        head, body = rule
+        if head and not head_connected(rule):
+            return False
+
+        if not head and not connected(body):
+            return False
+
+        if not has_valid_directions(rule):
+            return False
+
+    if len(prog) == 1:
+        return True
+
+    # if more than two rules then there must be recursion
+    has_recursion = False
+    for rule in prog:
+        h, b = rule
+
+        if h == None:
+            return False
+
+        if rule_is_recursive(rule):
+            has_recursion = True
+            h, b = rule
+            if len(b) == 1:
+                return False
+
+    if not has_recursion:
+        return False
+
+
+    if needs_datalog(prog) and not tmp(prog):
+        return False
+
+    return True
+
+def needs_datalog(prog):
+    for rule in prog:
+        rec_outputs = set()
+        non_rec_inputs = set()
+        head, body = rule
+        for literal in body:
+            if literal.predicate == head.predicate:
+                rec_outputs.update(literal.outputs)
+            else:
+                # if any(x in xr)
+                non_rec_inputs.update(literal.inputs)
+        if any(x in rec_outputs for x in non_rec_inputs):
+            return True
+    return False
+
+
+def tmp(prog):
+    for rule in prog:
+        head, body = rule
+        body_args = set(x for atom in body for x in atom.arguments)
+        if any(x not in body_args for x in head.arguments):
+            return False
+    return True
+
+
+def connected(body):
+    if len(body) == 1:
+        return True
+
+    body = list(body)
+    connected_vars = set(body[0].arguments)
+    body_literals = set(body[1:])
+
+    while body_literals:
+        changed = False
+        for literal in body_literals:
+            if any (x in connected_vars for x in literal.arguments):
+                connected_vars.update(literal.arguments)
+                body_literals = body_literals.difference({literal})
+                changed = True
+        if changed == False and body_literals:
+            return False
+
+    return True
+
+def seen_more_general_unsat(prog, unsat):
+    return any(theory_subsumes(seen, prog) for seen in unsat)
+
+def seen_more_specific_sat(prog, sat):
+    return any(theory_subsumes(prog, seen) for seen in sat)

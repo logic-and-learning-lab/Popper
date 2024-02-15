@@ -5,8 +5,7 @@ import pkg_resources
 from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
-from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_literal, rule_is_recursive, rule_size, calc_prog_size
-from . explain import prog_hash
+from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_literal, rule_is_recursive, rule_size, calc_prog_size, prog_hash
 
 compiled_pattern = re.compile("(?<=[\(,])([A-Z])")
 
@@ -131,17 +130,7 @@ class Tester():
             neg_covered = frozenset(query_once(q, {'K':k})['S'])
         return neg_covered
 
-    def is_inconsistent(self, prog):
-        if len(self.neg_index) == 0:
-            return False
-        k = prog_hash(prog)
-        if k in self.cached_inconsistent:
-            return self.cached_inconsistent[k]
-        with self.using(prog):
-            inconsistent = bool_query("inconsistent")
-            self.cached_inconsistent[k] = inconsistent
-            return inconsistent
-
+    # why twice???
     def get_pos_covered(self, prog, ignore=True):
         k = prog_hash(prog)
         if k in self.cached_pos_covered:
@@ -195,7 +184,7 @@ class Tester():
             if not prog_is_recursive(subprog):
                 continue
             with self.using(subprog):
-                if self.is_inconsistent(subprog):
+                if self.test_prog_inconsistent(subprog):
                     return self.reduce_inconsistent(subprog)
         return program
 
