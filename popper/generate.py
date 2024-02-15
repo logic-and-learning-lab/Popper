@@ -960,7 +960,7 @@ class Generator:
     def unsat_constraint2(self, body):
         assignments = self.find_deep_bindings4(body)
         out = []
-        for rule_id in range(0, self.settings.max_rules):
+        for rule_id in range(self.settings.max_rules):
             for assignment in assignments:
                 rule = []
                 for atom in body:
@@ -1109,7 +1109,6 @@ class Generator:
         solver.solve(on_model=on_model)
         self.seen_assignments[k] = out
         return out
-
 
     def find_deep_bindings4(self, body):
         all_vars = set(x for atom in body for x in atom.arguments)
