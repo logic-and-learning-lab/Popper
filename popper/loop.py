@@ -65,7 +65,7 @@ def explain_none_functional(settings, tester, prog):
     for rule in base:
         subprog = frozenset([rule])
         if tester.is_non_functional(subprog):
-            new_cons.append((Constraint.GENERALISATION, subprog , None, None))
+            new_cons.append((Constraint.GENERALISATION, subprog))
             pruned_subprog = True
 
     if pruned_subprog:
@@ -78,7 +78,7 @@ def explain_none_functional(settings, tester, prog):
         for r2 in rec:
             subprog = frozenset([r1,r2])
             if tester.is_non_functional(subprog):
-                new_cons.append((Constraint.GENERALISATION, subprog , None, None))
+                new_cons.append((Constraint.GENERALISATION, subprog))
 
     return new_cons
 
@@ -420,7 +420,7 @@ class Popper():
                                             print('\t', format_prog2(x), '\t', 'subsumed (generalisation)')
                                         else:
                                             print('\t', format_prog2(x), '\t', 'covers_too_few (generalisation)', tp)
-                                    new_cons.append((Constraint.SPECIALISATION, x, None, None))
+                                    new_cons.append((Constraint.SPECIALISATION, x))
 
                     if inconsistent:
                         # if inconsistent, prune generalisations
@@ -517,7 +517,7 @@ class Popper():
                     for rule in prog:
                         if tester.has_redundant_literal([rule]):
                             add_gen = True
-                            new_cons.append((Constraint.GENERALISATION, [rule], None, None))
+                            new_cons.append((Constraint.GENERALISATION, [rule]))
                             if settings.showcons:
                                 print('\t', format_rule(rule), '\t', 'has_redundant_literal')
 
@@ -564,7 +564,7 @@ class Popper():
                         with settings.stats.duration('prune backtrack'):
                             xs = self.prune_subsumed_backtrack2(pos_covered, prog_size, check_coverage=settings.solution_found)
                             for x in xs:
-                                new_cons.append((Constraint.SPECIALISATION, x, None, None))
+                                new_cons.append((Constraint.SPECIALISATION, x))
 
                 call_combine = len(to_combine) > 0
                 call_combine = call_combine and (settings.noisy or settings.solution_found)
@@ -641,7 +641,7 @@ class Popper():
 
                 # BUILD CONSTRAINTS
                 if add_spec and not pruned_sub_incomplete and not pruned_more_general and not add_redund2:
-                    new_cons.append((Constraint.SPECIALISATION, prog, None))
+                    new_cons.append((Constraint.SPECIALISATION, prog))
 
                 if not skipped:
                     if settings.noisy and not add_spec and spec_size and not pruned_sub_incomplete:
@@ -652,15 +652,15 @@ class Popper():
                 if add_gen and not pruned_sub_inconsistent:
                     if settings.noisy or settings.recursion_enabled or settings.pi_enabled:
                         if not pruned_sub_incomplete:
-                            new_cons.append((Constraint.GENERALISATION, prog, None))
+                            new_cons.append((Constraint.GENERALISATION, prog))
                     else:
                         if not add_spec:
-                            new_cons.append((Constraint.GENERALISATION, prog, None))
+                            new_cons.append((Constraint.GENERALISATION, prog))
 
                 if settings.noisy and not add_gen and gen_size and not pruned_sub_inconsistent:
                     if gen_size <= settings.max_literals and (settings.recursion_enabled or settings.pi_enabled) and not pruned_sub_incomplete:
                         new_cons.append((Constraint.GENERALISATION, prog, gen_size))
-                        seen_hyp_gen[fn+prog_size+mdl].append([prog, tp, fn, tn, fp, prog_size])
+                        self.seen_hyp_gen[fn+prog_size+mdl].append([prog, tp, fn, tn, fp, prog_size])
 
                 if add_redund1 and not pruned_sub_incomplete:
                     new_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, prog))
@@ -732,17 +732,17 @@ class Popper():
 
             if unsat_body:
                 _, body = list(subprog)[0]
-                out_cons.append((Constraint.UNSAT, body, None))
+                out_cons.append((Constraint.UNSAT, body))
                 continue
 
             if not (settings.recursion_enabled or settings.pi_enabled):
-                out_cons.append((Constraint.SPECIALISATION, subprog, None, None))
+                out_cons.append((Constraint.SPECIALISATION, subprog))
                 continue
 
             if len(subprog) == 1:
-                out_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, subprog, None))
+                out_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, subprog))
 
-            out_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, subprog, None))
+            out_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, subprog))
 
         return out_cons
 
@@ -761,7 +761,7 @@ class Popper():
         for rule in base:
             subprog = frozenset([rule])
             if tester.test_prog_inconsistent(subprog):
-                out_cons.append((Constraint.GENERALISATION, subprog, None))
+                out_cons.append((Constraint.GENERALISATION, subprog))
 
         if out_cons:
             return out_cons
@@ -773,7 +773,7 @@ class Popper():
             for r2 in rec:
                 subprog = frozenset([r1, r2])
                 if tester.test_prog_inconsistent(subprog):
-                    out_cons.append((Constraint.GENERALISATION, subprog, None))
+                    out_cons.append((Constraint.GENERALISATION, subprog))
 
         return out_cons
 

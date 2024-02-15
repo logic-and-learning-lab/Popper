@@ -582,12 +582,17 @@ class Generator:
                 # for rule in order_prog(con_prog):
                     # print('\t', format_rule(order_rule(rule)))
             if con_type == Constraint.GENERALISATION:
-                con_size = xs[2]
+                con_size = None
+                if self.settings.noisy and len(xs)>2:
+                    con_size = xs[2]
                 new_rule_handles2, con = self.build_generalisation_constraint2(con_prog, gen_size=con_size)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
             elif con_type == Constraint.SPECIALISATION:
-                con_size = xs[2]
+                # con_size = xs[2]
+                con_size = None
+                if self.settings.noisy and len(xs)>2:
+                    con_size = xs[2]
                 new_rule_handles2, con = self.build_specialisation_constraint2(con_prog, spec_size=con_size)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
