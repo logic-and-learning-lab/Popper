@@ -958,7 +958,7 @@ class Generator:
     # def redundant_rules_check(self, rule1, rule2):-
 
     def unsat_constraint2(self, body):
-        assignments = self.find_deep_bindings4(body, self.settings.max_rules, self.settings.max_vars)
+        assignments = self.find_deep_bindings4(body)
         out = []
         for rule_id in range(0, self.settings.max_rules):
             for assignment in assignments:
@@ -1111,8 +1111,9 @@ class Generator:
         return out
 
 
-    def find_deep_bindings4(self, body, max_rules, max_vars):
+    def find_deep_bindings4(self, body):
         all_vars = set(x for atom in body for x in atom.arguments)
+        max_vars = self.settings.max_vars
         head_types = self.settings.head_types
         body_types = self.settings.body_types
 
@@ -1215,10 +1216,6 @@ class Generator:
         self.cached4[key] = out
         return out
 
-        # solver.solve(on_model=on_model)
-        # return out
-
-
 
 
 BINDING_ENCODING = """\
@@ -1253,20 +1250,12 @@ BINDING_ENCODING = """\
     #count{Var : bind_var(Rule,Var,Value)} > 1.
 """
 
-
-
-# def vo_variable(variable):
-    # return ConstVar(f'{variable}', 'Variable')
-
 def vo_variable2(rule, variable):
     key = f'{rule.name}_V{variable}'
     return VarVar(rule=rule, name=key)
 
 def vo_clause(variable):
     return RuleVar(name=f'R{variable}')
-
-def alldiff(args):
-    return Literal('AllDifferent', args, meta=True)
 
 def lt(a, b):
     return Literal('<', (a,b), meta=True)
@@ -1279,17 +1268,3 @@ def gteq(a, b):
 
 def body_size_literal(clause_var, body_size):
     return Literal('body_size', (clause_var, body_size))
-
-def alldiff(args):
-    return Literal('AllDifferent', args, meta=True)
-
-
-BODY_VARIANT_ENCODING = """\
-#show bind_var/2.
-value_type(Var,Type):- known_value(Var, Type).
-value_type(Value,Type):- bind_var(Var,Value), var_type(Var,Type).
-1 {bind_var(Var,Value): value(Value)} 1:- var(Var).
-:- value(Value), #count{T : value_type(Value,T)} > 1.
-:- value(Value), #count{Var : bind_var(Var,Value)} > 1.
-value(V):- V=0..max_vars-1.
-"""
