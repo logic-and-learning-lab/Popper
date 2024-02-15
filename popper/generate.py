@@ -10,11 +10,9 @@ import clingo.script
 import pkg_resources
 from collections import defaultdict
 from . util import rule_is_recursive, Constraint, format_prog, bias_order, Literal
-
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
-
 import dataclasses
 
 @dataclasses.dataclass(frozen=True)
@@ -29,7 +27,6 @@ class RuleVar(Var):
 class VarVar(Var):
     rule: RuleVar
 
-
 def arg_to_symbol(arg):
     if isinstance(arg, tuple):
         return Tuple_(tuple(arg_to_symbol(a) for a in arg))
@@ -37,7 +34,6 @@ def arg_to_symbol(arg):
         return Number(arg)
     if isinstance(arg, str):
         return Function(arg)
-    assert False, f'Unhandled argtype({type(arg)}) in aspsolver.py arg_to_symbol()'
 
 def atom_to_symbol(pred, args):
     xs = tuple(arg_to_symbol(arg) for arg in args)
@@ -57,10 +53,7 @@ def find_all_vars(body):
 
 # AC: When grounding constraint rules, we only care about the vars and the constraints, not the actual literals
 def grounding_hash(body, all_vars):
-    cons = set()
-    for lit in body:
-        if lit.meta:
-            cons.add((lit.predicate, lit.arguments))
+    cons = frozenset((lit.predicate, lit.arguments) for lit in body if lit.meta)
     return hash((frozenset(all_vars), frozenset(cons)))
 
 def make_literal_handle(literal):
