@@ -54,10 +54,7 @@ def find_all_vars(body):
 # AC: When grounding constraint rules, we only care about the vars and the constraints, not the actual literals
 def grounding_hash(body, all_vars):
     cons = frozenset((lit.predicate, lit.arguments) for lit in body if lit.meta)
-    return hash((frozenset(all_vars), frozenset(cons)))
-
-def make_literal_handle(literal):
-    return f'{literal.predicate}{"".join(literal.arguments)}'
+    return hash((frozenset(all_vars), cons))
 
 def build_seen_rule_literal(handle, rule_var):
     return Literal('seen_rule', (handle, rule_var))
@@ -76,13 +73,6 @@ def build_rule_literals(rule, rule_var, pi=False):
     if rule_is_recursive(rule):
         yield gteq(rule_var, 1)
 
-# def build_rule_ordering_literals(rule_index, rule_ordering):
-#     for r1, higher_rules in rule_ordering.items():
-#         r1v = rule_index[r1]
-#         for r2 in higher_rules:
-#             r2v = rule_index[r2]
-#             yield lt(r1v, r2v)
-
 class Generator:
 
     def __init__(self, settings, bkcons=[]):
@@ -98,8 +88,6 @@ class Generator:
 
         # ex-grounder
         self.seen_assignments = {}
-        self.seen_deep_assignments = {}
-        # self.settings = settings
         self.cached4 = {}
 
         # handles for rules that are minimal and unsatisfiable
@@ -116,7 +104,6 @@ class Generator:
         alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
         encoding.append(alan)
 
-        bias_text = None
         with open(settings.bias_file) as f:
             bias_text = f.read()
         bias_text = re.sub(r'max_vars\(\d*\).','', bias_text)
@@ -246,27 +233,9 @@ class Generator:
 
 
         solver.configuration.solve.models = 0
-
-
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver
-
-
-    # def build_seen_rule(rule, is_rec):
-    #     rule_var = vo_clause('l')
-    #     handle = self.make_rule_handle(rule)
-    #     head = Literal('seen_rule', (handle, rule_var))
-    #     body = []
-    #     body.extend(build_rule_literals(rule, rule_var))
-    #     if is_rec:
-    #         body.append(gteq(rule_var, 1))
-    #     return head, tuple(body)
-
-    # def get_model(self):
-    #     if self.handle == None:
-    #         self.handle = iter(self.solver.solve(yield_ = True))
-    #     return next(self.handle, None)
 
     def get_prog(self):
         if self.handle is None:
@@ -275,12 +244,14 @@ class Generator:
         if self.model is None:
             return None
         atoms = self.model.symbols(shown = True)
+
+        if self.settings.single_solve:
+            return self.parse_model_single_rule(atoms)
+
         if self.settings.pi_enabled:
             return self.parse_model_pi(atoms)
-        elif self.settings.recursion_enabled:
-            return self.parse_model_recursion(atoms)
-        else:
-            return self.parse_model_single_rule(atoms)
+
+        return self.parse_model_recursion(atoms)
 
     def gen_symbol(self, literal, backend):
         sign, pred, args = literal
@@ -449,9 +420,7 @@ class Generator:
                     body_lits.append(symbol if sign else -symbol)
                 backend.add_rule(head_literal, body_lits)
 
-        # for x in set(handle for handle, rule in handles):
         self.seen_handles.update(new_seen_rules)
-
 
         # RESET SO WE DO NOT KEEP ADDING THEM
         self.all_ground_cons = set()
@@ -647,7 +616,7 @@ class Generator:
             return cached_handles[k]
         head, body = rule
         body_literals = sorted(body, key = operator.attrgetter('predicate'))
-        handle = ''.join(make_literal_handle(literal) for literal in [head] + body_literals)
+        handle = ''.join(f'{literal.predicate}{"".join(literal.arguments)}' for literal in [head] + body_literals)
         cached_handles[k] = handle
         return handle
 
