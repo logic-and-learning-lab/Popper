@@ -4,15 +4,13 @@ import collections
 from itertools import permutations
 from itertools import chain, combinations
 from . explain import get_raw_prog as get_raw_prog2
-from . explain import Explainer, head_connected, get_raw_prog, seen_more_general_unsat, has_valid_directions, order_body, connected
+from . explain import head_connected, get_raw_prog, seen_more_general_unsat, has_valid_directions, order_body, connected, generalisations, prog_is_ok, is_headless
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr
 from . core import Literal
 from . tester import Tester
 from . generate import Generator
 from . bkcons import deduce_bk_cons, deduce_recalls
 from . variants import find_variants
-
-pruned2 = set()
 
 def functional_rename_vars(rule):
     head, body = rule
@@ -55,11 +53,9 @@ def has_messed_up_vars(prog):
             return True
     return False
 
-
 def non_empty_powerset(iterable):
     s = tuple(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
-
 
 def explain_none_functional(settings, tester, prog):
     new_cons = []
@@ -164,6 +160,9 @@ def load_solver(settings, tester):
 class Popper():
     def __init__(self, settings):
         self.settings = settings
+        self.pruned2 = set()
+        self.seen_prog = set()
+        self.unsat = set()
 
     def run(self):
         settings = self.settings
@@ -172,9 +171,6 @@ class Popper():
 
         with settings.stats.duration('load data'):
             tester = self.tester = Tester(settings)
-
-        # TODO: MERGE WITH MAIN CODE
-        explainer = self.explainer = Explainer(settings, tester)
 
         num_pos, num_neg = self.num_pos, self.num_neg = len(settings.pos_index), len(settings.neg_index)
 
@@ -385,7 +381,7 @@ class Popper():
                     add_gen = True
 
                 if not has_invention:
-                    explainer.add_seen(prog)
+                    self.add_seen(prog)
                     if num_pos_covered == 0 or (settings.noisy and len(pos_covered) < prog_size):
                         # if the programs does not cover any positive examples, check whether it is has an unsat core
                         with settings.stats.duration('find mucs'):
@@ -727,8 +723,8 @@ class Popper():
 
     # find unsat cores
     def explain_incomplete(self, prog):
-        settings, explainer, tester = self.settings, self.explainer, self.tester
-        unsat_cores = list(explainer.explain_totally_incomplete(prog))
+        settings, tester = self.settings, self.tester
+        unsat_cores = list(self.explain_totally_incomplete(prog))
 
         out_cons = []
         for subprog, unsat_body in unsat_cores:
@@ -866,7 +862,7 @@ class Popper():
                 continue
 
             # check whether we have pruned any subset (HORRIBLE CODE)
-            if any(frozenset((y.predicate, y.arguments) for y in x) in pruned2 for x in non_empty_powerset(new_body)):
+            if any(frozenset((y.predicate, y.arguments) for y in x) in self.pruned2 for x in non_empty_powerset(new_body)):
                 continue
 
             if not head_connected(new_rule):
@@ -913,7 +909,7 @@ class Popper():
             # for each pruned program, add the variants to the list of pruned programs
             # doing so reduces the number of pointless checks
             for _, x in find_variants(new_rule, settings.max_vars):
-                pruned2.add(x)
+                self.pruned2.add(x)
 
             out.add(new_prog)
         return out
@@ -952,8 +948,8 @@ class Popper():
             # print('X2', format_prog2([(head, body)]))
 
             # If we have seen a subset of the body then ignore this program
-            if any(frozenset((y.predicate, y.arguments) for y in x) in pruned2 for x in non_empty_powerset(body)):
-                # print('PRUNED2')
+            if any(frozenset((y.predicate, y.arguments) for y in x) in self.pruned2 for x in non_empty_powerset(body)):
+                # print('self.pruned2')
                 # assert(False)
                 to_delete.add(prog2)
                 continue
@@ -1004,7 +1000,7 @@ class Popper():
                 skip = False
                 for z in non_empty_powerset(new_body):
                     asda = frozenset((y.predicate, y.arguments) for y in z)
-                    if asda in pruned2:
+                    if asda in self.pruned2:
                         # print('here!!!!!')
                         skip = True
                         pruned_subprog = True
@@ -1017,13 +1013,13 @@ class Popper():
                 # print('X6', format_prog2([new_rule]))
 
                 head2, body2 = functional_rename_vars(new_rule)
-                if any(frozenset((y.predicate, y.arguments) for y in z) in pruned2 for z in non_empty_powerset(body2)):
+                if any(frozenset((y.predicate, y.arguments) for y in z) in self.pruned2 for z in non_empty_powerset(body2)):
                     # assert(False)
                     continue
 
                 for z in non_empty_powerset(body2):
                     asda = frozenset((y.predicate, y.arguments) for y in z)
-                    if asda in pruned2:
+                    if asda in self.pruned2:
                         print('PRUNED_A', format_prog2(new_prog), sorted(asda))
                         assert(False)
 
@@ -1062,15 +1058,15 @@ class Popper():
                     pruned_subprog = True
                     # with settings.stats.duration('variants'):
                     for _, x in find_variants(new_rule):
-                        pruned2.add(x)
+                        self.pruned2.add(x)
 
             to_delete.add(prog2)
 
             if pruned_subprog == False:
                 # with settings.stats.duration('variants'):
                 for _, x in find_variants((head, body), settings.max_vars):
-                    # print('hello, pruned2', x)
-                    pruned2.add(x)
+                    # print('hello, self.pruned2', x)
+                    self.pruned2.add(x)
                 if settings.showcons:
                     print('\t', format_prog2(prog2), '\t', 'subsumed_backtrack')
                     # pass
@@ -1081,7 +1077,131 @@ class Popper():
 
         return to_prune
 
+    def add_seen(self, prog):
+        self.seen_prog.add(get_raw_prog(prog))
+        self.seen_prog.add(get_raw_prog2(prog))
 
+    def build_test_prog(self, subprog):
+        directions = self.settings.directions
+        test_prog = []
+        for head, body in subprog:
+            if head:
+                head_modes = tuple(directions[head.predicate][i] for i in range(head.arity))
+                head_literal = Literal(head.predicate, head.arguments, head_modes)
+            else:
+                head_literal = False
+            body_literals = set()
+            for body_literal in body:
+                body_modes = tuple(directions[body_literal.predicate][i] for i in range(body_literal.arity))
+                body_literals.add(Literal(body_literal.predicate, body_literal.arguments, body_modes))
+            rule = head_literal, body_literals
+            test_prog.append(rule)
+        return test_prog
+
+    def explain_totally_incomplete(self, prog):
+        return list(self.explain_totally_incomplete_aux2(prog, set(), set()))
+
+    def explain_totally_incomplete_aux2(self, prog, sat=set(), unsat=set()):
+        has_recursion = prog_is_recursive(prog)
+
+        out = []
+        for subprog in generalisations(prog, allow_headless=True, recursive=has_recursion):
+
+            # print('---')
+            # for rule in subprog:
+            #     print('\t', 'A', format_rule(rule))
+
+            raw_prog2 = get_raw_prog2(subprog)
+
+            if raw_prog2 in self.seen_prog:
+                continue
+
+            raw_prog = get_raw_prog(subprog)
+            if raw_prog in self.seen_prog:
+                continue
+
+            self.seen_prog.add(raw_prog)
+            self.seen_prog.add(raw_prog2)
+
+
+            # for rule in subprog:
+                # print('\t', 'B', format_rule(rule))
+
+            def should_skip():
+                if len(subprog) > 0:
+                    return False
+                h_, b_ = list(subprog)[0]
+                for x in non_empty_powerset(b_):
+                    if get_raw_prog2([(None,x)]) in self.unsat:
+                        return True
+                    if get_raw_prog2([(h_,x)]) in self.unsat:
+                        return True
+                return False
+
+            if should_skip():
+                continue
+                # pass
+
+            if seen_more_general_unsat(raw_prog, unsat):
+                continue
+                # pass
+
+            if seen_more_general_unsat(raw_prog2, unsat):
+                continue
+                # pass
+
+            # for rule in subprog:
+                # print('\t', 'C', format_rule(rule))
+
+
+            if not prog_is_ok(subprog):
+                xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
+                out.extend(xs)
+                continue
+
+            # for rule in subprog:
+                # print('\t', 'D', format_rule(rule))
+
+            if self.tester.has_redundant_literal(subprog):
+                xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
+                out.extend(xs)
+                continue
+
+
+            # if len(subprog) > 2 and self.tester.has_redundant_rule(subprog):
+            #     xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat, noisy)
+            #     out.extend(xs)
+            #     continue
+
+            test_prog = self.build_test_prog(subprog)
+
+            headless = is_headless(subprog)
+
+            # print('\t\t\t testing',format_prog(subprog))
+
+            if headless:
+                body = test_prog[0][1]
+                if self.tester.is_body_sat(order_body(body)):
+                    sat.add(raw_prog)
+                    continue
+            else:
+                if self.tester.is_sat(test_prog, self.settings.noisy):
+                    # print('\t\t\t SAT',format_prog(subprog))
+                    sat.add(raw_prog)
+                    continue
+                # print('\t\t\t UNSAT',format_prog(subprog))
+
+            unsat.add(raw_prog)
+            unsat.add(raw_prog2)
+            self.unsat.add(raw_prog)
+            self.unsat.add(raw_prog2)
+
+            xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
+            if len(xs):
+                out.extend(xs)
+            else:
+                out.append((subprog, headless))
+        return out
 
 def popper(settings):
     x = Popper(settings)
