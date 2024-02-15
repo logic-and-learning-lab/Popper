@@ -209,14 +209,6 @@ body_var(C,Var):-
 var_member(Var,Vars):-
     var_pos(Var,Vars,_).
 
-%% VAR IN A LITERAL
-var_in_literal(C,P,Vars,Var):-
-    head_literal(C,P,_,Vars),
-    var_member(Var,Vars).
-var_in_literal(C,P,Vars,Var):-
-    body_literal(C,P,_,Vars),
-    var_member(Var,Vars).
-
 %% NEED TO KNOW LITERAL ARITIES
 seen_arity(A):-
     head_pred(_,A).
@@ -336,7 +328,13 @@ pred_arg_type(P,Pos,@pytype(Pos,Types)):-
     type(P,Types).
 
 var_type(C,Var,@pytype(Pos,Types)):-
-    var_in_literal(C,P,Vars,Var),
+    body_literal(C,P,_,Vars),
+    var_pos(Var,Vars,Pos),
+    vars(A,Vars),
+    type(P,Types).
+
+var_type(C,Var,@pytype(Pos,Types)):-
+    head_literal(C,P,_,Vars),
     var_pos(Var,Vars,Pos),
     vars(A,Vars),
     type(P,Types).
