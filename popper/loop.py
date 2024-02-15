@@ -154,6 +154,26 @@ class Popper():
         self.seen_prog = set()
         self.unsat = set()
 
+        if settings.bkcons:
+            settings.datalog = True
+
+    def load_bkcons(self):
+        settings, tester = self.settings, self.tester
+        bkcons = []
+        if settings.bkcons:
+            with settings.stats.duration('bkcons'):
+                bkcons.extend(deduce_bk_cons(settings, tester))
+
+        # assume that the BK is datalog and try to deduce recalls from it
+        with suppress_stdout_stderr():
+            try:
+                with settings.stats.duration('recalls'):
+                    bkcons.extend(deduce_recalls(settings))
+                settings.datalog = True
+            except:
+                pass
+        return bkcons
+
     def run(self):
         settings = self.settings
         settings.nonoise = not settings.noisy
@@ -181,20 +201,7 @@ class Popper():
         combiner = load_solver(settings, tester)
 
         # deduce bk cons
-        bkcons = []
-        if settings.bkcons:
-            settings.datalog = True
-            with settings.stats.duration('bkcons'):
-                bkcons.extend(deduce_bk_cons(settings, tester))
-
-        # assume that the BK is datalog and try to deduce recalls from it
-        with suppress_stdout_stderr():
-            try:
-                with settings.stats.duration('recalls'):
-                    bkcons.extend(deduce_recalls(settings))
-                settings.datalog = True
-            except:
-                pass
+        bkcons = self.load_bkcons()
 
         # generator that builds programs
         with settings.stats.duration('init'):
