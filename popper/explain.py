@@ -68,6 +68,7 @@ class Explainer:
         self.tester = tester
         self.seen_prog = set()
         self.savings = 0
+        self.seen_prog = set()
         self.unsat = set()
 
     def add_seen(self, prog):
