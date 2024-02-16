@@ -3,7 +3,6 @@ from collections import defaultdict
 from itertools import chain, combinations, permutations
 from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr, non_empty_powerset, is_headless, head_connected, has_valid_directions, get_raw_prog, theory_subsumes, Literal
 from . tester import Tester
-from . generate import Generator
 from . bkcons import deduce_bk_cons, deduce_recalls
 
 def functional_rename_vars(rule):
@@ -205,6 +204,10 @@ class Popper():
 
         # generator that builds programs
         with settings.stats.duration('init'):
+            if settings.single_solve:
+                from . gen2 import Generator
+            else:
+                from . generate import Generator
             generator = self.generator = Generator(settings, bkcons)
 
         # track the success sets of tested hypotheses
