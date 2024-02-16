@@ -14,7 +14,6 @@ clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
 
-# @profile
 def arg_to_symbol(arg):
     if isinstance(arg, tuple):
         return Tuple_(tuple(arg_to_symbol(a) for a in arg))
@@ -32,31 +31,10 @@ class Generator:
     def __init__(self, settings, bkcons=[]):
         self.savings = 0
         self.settings = settings
-        # self.seen_handles = set()
         self.assigned = {}
-        self.seen_symbols = {}
         self.cached_clingo_atoms = {}
         self.handle = None
-        # self.cached_handles = {}
-        # self.cached_grounded = {}
-
-        self.cached_perms = {}
-        self.cached_perms2 = {}
-
-
-        # ex-grounder
-        self.seen_assignments = {}
         self.cached4 = {}
-
-        # handles for rules that are minimal and unsatisfiable
-        self.bad_handles = set()
-        # new rules added to the solver, such as: seen(id):- head_literal(...), body_literal(...)
-        self.all_handles = set()
-
-        # TODO: dunno
-        # self.all_ground_cons = set()
-        # TODO: dunno
-        # self.new_ground_cons = set()
 
         encoding = []
         alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
@@ -143,6 +121,7 @@ class Generator:
         self.model = next(self.handle, None)
         if self.model is None:
             return None
+
         atoms = self.model.symbols(shown = True)
 
         return self.parse_model_single_rule(atoms)
@@ -165,13 +144,10 @@ class Generator:
         size_con = [(atom_to_symbol("size", (size,)), True)]
         self.model.context.add_nogood(size_con)
 
-
-    # @profile
     def constrain(self, tmp_new_cons):
         model = self.model
 
         new_ground_cons = set()
-
 
         for xs in tmp_new_cons:
             con_type = xs[0]
@@ -223,7 +199,6 @@ class Generator:
             out.append(frozenset(rule))
         return out
 
-    # @profile
     def build_generalisation_constraint3(self, prog, size=None):
         cons = []
         rule = tuple(prog)[0]
@@ -246,31 +221,17 @@ class Generator:
             cons.append(frozenset(body))
         return cons
 
-    # @profile
     def find_variants3(self, rule):
         head, body = rule
-
-        head_vars = frozenset(head.arguments)
-        body_vars = frozenset({x for literal in body for x in literal.arguments if x not in head_vars})
-
-        lookup = {x:i+len(head_vars) for i, x in enumerate(body_vars)}
-        for x in head_vars:
-            lookup[x] = x
-
-        all_vars = tuple(range(self.settings.max_vars))
-        subset = all_vars[head.arity:]
-
-        new_rules = []
+        body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head.arity)
+        subset = range(head.arity, self.settings.max_vars)
         perms = tuple(permutations(subset, len(body_vars)))
-
-        # print(format_prog([rule]))
         new_rules = []
         for xs in perms:
             xs = head.arguments + xs
-            # print('\t', xs)
             new_body = []
             for atom in body:
-                new_args = tuple(xs[lookup[arg]] for arg in atom.arguments)
+                new_args = tuple(xs[arg] for arg in atom.arguments)
                 new_literal = (True, 'body_literal', (0, atom.predicate, len(new_args), new_args))
                 new_body.append(new_literal)
             new_rules.append(frozenset(new_body))

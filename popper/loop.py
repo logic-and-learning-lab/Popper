@@ -414,7 +414,9 @@ class Popper():
                                             print('\t', format_prog2(x), '\t', 'subsumed (generalisation)')
                                         else:
                                             print('\t', format_prog2(x), '\t', 'covers_too_few (generalisation)', tp)
-                                    new_cons.append((Constraint.SPECIALISATION, x))
+
+
+                                    new_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(list(x)[0])]))
 
                     if inconsistent:
                         # if inconsistent, prune generalisations
@@ -558,7 +560,7 @@ class Popper():
                         with settings.stats.duration('prune backtrack'):
                             xs = self.prune_subsumed_backtrack2(pos_covered, prog_size, check_coverage=settings.solution_found)
                             for x in xs:
-                                new_cons.append((Constraint.SPECIALISATION, x))
+                                new_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(list(x)[0])]))
 
                 call_combine = len(to_combine) > 0
                 call_combine = call_combine and (settings.noisy or settings.solution_found)
@@ -730,7 +732,7 @@ class Popper():
                 continue
 
             if not (settings.recursion_enabled or settings.pi_enabled):
-                out_cons.append((Constraint.SPECIALISATION, subprog))
+                out_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(subprog[0])]))
                 continue
 
             if len(subprog) == 1:
