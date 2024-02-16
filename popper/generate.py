@@ -616,7 +616,7 @@ class Generator:
             return cached_handles[k]
         head, body = rule
         body_literals = sorted(body, key = operator.attrgetter('predicate'))
-        handle = ''.join(f'{literal.predicate}{"".join(literal.arguments)}' for literal in [head] + body_literals)
+        handle = ''.join(f'{literal.predicate}{"".join(map(str,literal.arguments))}' for literal in [head] + body_literals)
         cached_handles[k] = handle
         return handle
 
@@ -699,8 +699,8 @@ class Generator:
                     new_args = []
                     for x in atom.arguments:
                         if x in head_vars:
-                            v = ord(x)- ord('A')
-                            new_args.append(v)
+                            # v = ord(x)- ord('A')
+                            new_args.append(x)
                         else:
                             new_args.append(xs[indexes[x]])
                     new_args = tuple(new_args)
@@ -1084,7 +1084,7 @@ class Generator:
 
         # MAP A->0, B->1
         for x in all_vars:
-            k = ord(x)- ord('A')
+            k = x
             var_to_index[x] = k
             index_to_var[k] = x
 
@@ -1100,7 +1100,7 @@ class Generator:
             if pred not in body_types:
                 continue
             for i, x in enumerate(atom.arguments):
-                k = ord(x)- ord('A')
+                # k = ord(x)- ord('A')
                 body_vars.add(k)
                 var_type = body_types[pred][i]
                 var_type_lookup[k] = var_type

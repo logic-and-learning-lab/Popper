@@ -5,7 +5,7 @@ import pkg_resources
 from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
-from . util import format_rule, order_rule, order_prog, prog_is_recursive, format_literal, rule_is_recursive, rule_size, calc_prog_size, prog_hash
+from . util import order_rule, order_prog, prog_is_recursive, rule_is_recursive, rule_size, calc_prog_size, prog_hash, format_rule, format_literal
 
 compiled_pattern = re.compile("(?<=[\(,])([A-Z])")
 

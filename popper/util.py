@@ -163,7 +163,7 @@ def format_prog2(prog):
     return '\n'.join(format_rule(order_rule2(rule)) for rule in order_prog(prog))
 
 def format_literal(literal):
-    args = ','.join(literal.arguments)
+    args = ','.join(f'V{i}' for i in literal.arguments)
     return f'{literal.predicate}({args})'
 
 def format_rule(rule):
@@ -173,7 +173,6 @@ def format_rule(rule):
         head_str = format_literal(head)
     body_str = ','.join(format_literal(literal) for literal in body)
     return f'{head_str}:- {body_str}.'
-
 
 def calc_prog_size(prog):
     return sum(rule_size(rule) for rule in prog)
@@ -461,8 +460,8 @@ class Settings:
             # if not self.pi_enabled:
             head_pred = x.symbol.arguments[0].name
             head_arity = x.symbol.arguments[1].number
-            head_args = tuple(chr(ord('A') + i) for i in range(head_arity))
-
+            # head_args = tuple(chr(ord('A') + i) for i in range(head_arity))
+            head_args = tuple(range(head_arity))
             head_modes = tuple(self.directions[head_pred][i] for i in range(head_arity))
             self.head_literal = Literal(head_pred, head_args, head_modes)
 
@@ -493,13 +492,13 @@ class Settings:
             self.body_preds.add((pred, arity))
             self.max_arity = max(self.max_arity, arity)
 
-        arg_lookup = {i:chr(ord('A') + i) for i in range(100)}
+        # arg_lookup = {i:chr(ord('A') + i) for i in range(100)}
         self.cached_atom_args = {}
         for i in range(1, self.max_arity+1):
             for args in permutations(range(0, self.max_vars), i):
                 k = tuple(clingo.Number(x) for x in args)
-                v = tuple(arg_lookup[x] for x in args)
-                self.cached_atom_args[k] = v
+                # v = tuple(arg_lookup[x] for x in args)
+                self.cached_atom_args[k] = args
 
         # if not self.pi_enabled:
         self.body_modes = {}
@@ -773,7 +772,7 @@ def rename_variables(rule):
                 new_args.append(var)
                 continue
             elif var not in lookup:
-                lookup[var] = chr(ord('A') + next_var)
+                lookup[var] = next_var
                 next_var+=1
             new_args.append(lookup[var])
         new_body.append((body_literal.predicate, tuple(new_args)))

@@ -27,24 +27,13 @@ def functional_rename_vars(rule):
                 new_args.append(var)
                 continue
             elif var not in lookup:
-                lookup[var] = chr(ord('A') + next_var)
+                lookup[var] = next_var
                 next_var+=1
             new_args.append(lookup[var])
         new_atom = Literal(body_literal.predicate, tuple(new_args), body_literal.directions)
         new_body.add(new_atom)
 
     return head, frozenset(new_body)
-
-def has_messed_up_vars(prog):
-    for head, body in prog:
-        seen_args = set()
-        seen_args.update(head.arguments)
-        for body_literal in body:
-            seen_args.update(body_literal.arguments)
-        # print(seen_args, any(chr(ord('A') + i) not in seen_args for i in range(len(seen_args))))
-        if any(chr(ord('A') + i) not in seen_args for i in range(len(seen_args))):
-            return True
-    return False
 
 def explain_none_functional(settings, tester, prog):
     new_cons = []
@@ -290,6 +279,7 @@ class Popper():
                 # TODO: refactor out for readability
                 # test a program
                 skipped, skip_early_neg = False, False
+                # print('testing?')
                 with settings.stats.duration('test'):
                     if settings.noisy:
                         if settings.recursion_enabled or settings.pi_enabled:
@@ -324,6 +314,7 @@ class Popper():
                             if len(pos_covered) > 0:
                                 if not settings.solution_found or len(pos_covered) > 1:
                                     inconsistent = tester.test_prog_inconsistent(prog)
+                            # print('moo', pos_covered, inconsistent)
 
                 tp = len(pos_covered)
                 fn = num_pos-tp
