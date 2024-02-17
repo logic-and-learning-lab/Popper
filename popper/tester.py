@@ -1,5 +1,4 @@
 import os
-import re
 import time
 import pkg_resources
 from janus_swi import query_once, consult
@@ -7,12 +6,17 @@ from functools import cache
 from contextlib import contextmanager
 from . util import order_rule, order_prog, prog_is_recursive, rule_is_recursive, rule_size, calc_prog_size, prog_hash, format_rule, format_literal
 
-compiled_pattern = re.compile("(?<=[\(,])([A-Z])")
+def format_literal_janus(literal):
+    args = ','.join(f'_V{i}' for i in literal.arguments)
+    return f'{literal.predicate}({args})'
 
-# Janus requires that non-output variables be prefixed with _
-@cache
-def janus_format_rule(rule):
-    return compiled_pattern.sub(r"_\1", rule)
+def format_rule_janus(rule):
+    head, body = rule
+    head_str = ''
+    if head:
+        head_str = format_literal_janus(head)
+    body_str = ','.join(format_literal_janus(literal) for literal in body)
+    return f'{head_str}:- {body_str}.'
 
 def bool_query(query):
     return query_once(query)['truth']
@@ -58,8 +62,8 @@ class Tester():
         rule = list(prog)[0]
         head, _body = rule
         head, ordered_body = order_rule(rule, self.settings)
-        atom_str = janus_format_rule(format_literal(head))
-        body_str = janus_format_rule(format_rule((None, ordered_body))[2:-1])
+        atom_str = format_literal_janus(head)
+        body_str = format_rule_janus((None, ordered_body))[2:-1]
         return atom_str, body_str
 
     def test_prog(self, prog):
@@ -134,6 +138,7 @@ class Tester():
     def get_pos_covered(self, prog, ignore=True):
         k = prog_hash(prog)
         if k in self.cached_pos_covered:
+            # print('MATCH')
             return self.cached_pos_covered[k]
 
         if len(prog) == 1:
@@ -189,21 +194,19 @@ class Tester():
         return program
 
     def is_sat(self, prog, noise=False):
-
         if len(prog) == 1:
             rule = list(prog)[0]
             head, _body = rule
             head, ordered_body = order_rule(rule, self.settings)
             if noise:
-                new_head = f'pos_index(_ID, {janus_format_rule(format_literal(head))})'
-                x = janus_format_rule(format_rule((None,ordered_body))[2:-1])
+                new_head = f'pos_index(_ID, {format_literal_janus(head)})'
+                x = format_rule_janus((None, ordered_body))[2:-1]
                 q = f'succeeds_k_times({new_head},({x}),K)'
                 return query_once(q, {'K':rule_size(rule)})['truth']
             else:
-                head = f'pos_index(_,{format_literal(head)})'
-                x = format_rule((None, ordered_body))[2:-1]
+                head = f'pos_index(_,{format_literal_janus(head)})'
+                x = format_rule_janus((None, ordered_body))[2:-1]
                 x = f'{head},{x}'
-                x = janus_format_rule(x)
                 return bool_query(x)
         else:
             with self.using(prog):
@@ -215,12 +218,10 @@ class Tester():
     def is_body_sat(self, body):
         _, ordered_body = order_rule((None,body), self.settings)
         query = ','.join(format_literal(literal) for literal in ordered_body)
-        # query = body_str + ',!'
-        # query = f'catch(call_with_time_limit(0.1, ({query})),time_limit_exceeded,true)'
-        # query = f'{query})),time_limit_exceeded,true)'
         return bool_query(query)
 
     def has_redundant_rule_(self, prog):
+        assert(False)
         prog_ = []
         for head, body in prog:
             c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
@@ -231,6 +232,7 @@ class Tester():
         return bool_query(q)
 
     def has_redundant_rule(self, prog):
+        assert(False)
         # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
 
         base = []
@@ -250,10 +252,9 @@ class Tester():
         for rule in prog:
             head, body = rule
             if head:
-                c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+                c = f"[{','.join(('not_'+ format_literal_janus(head),) + tuple(format_literal_janus(lit) for lit in body))}]"
             else:
-                c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
-            c = janus_format_rule(c)
+                c = f"[{','.join(tuple(format_literal_janus(lit) for lit in body))}]"
             if query_once(f'redundant_literal({c})')['truth']:
                 return True
         return False
