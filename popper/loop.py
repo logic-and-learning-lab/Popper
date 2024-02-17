@@ -1,7 +1,7 @@
 import time
 from collections import defaultdict
 from itertools import chain, combinations, permutations
-from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr, non_empty_powerset, is_headless, head_connected, has_valid_directions, get_raw_prog, theory_subsumes, Literal
+from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr, non_empty_powerset, is_headless, head_connected, has_valid_directions, get_raw_prog, theory_subsumes, Literal, non_empty_subset
 from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls
 
@@ -902,11 +902,11 @@ class Popper():
         return out
 
     def prune_subsumed_backtrack2(self, pos_covered, prog_size, check_coverage):
-        # print('!!!!!!!!!!!!!!!!!!!')
         settings, could_prune_later, tester = self.settings, self.could_prune_later, self.tester
         to_prune = set()
         to_delete = set()
         seen = set()
+        pruned2 = self.pruned2
 
         def get_zs():
             for x in could_prune_later:
@@ -929,32 +929,30 @@ class Popper():
             head, body = list(prog2)[0]
 
             if body in seen:
-                continue
+                assert(False)
+                # continue
             seen.add(body)
 
-            # for x in non_empty_powerset(body)):
-            #     tmp_key = frozenset((y.predicate, y.arguments) for y in x)
-            #     pr
-            #     # if tmp_key in pruned2:
-
-
             # If we have seen a subset of the body then ignore this program
-            if any(frozenset((y.predicate, y.arguments) for y in x) in self.pruned2 for x in non_empty_powerset(body)):
-                # print('self.pruned2')
-                # assert(False)
+            if any(frozenset((y.predicate, y.arguments) for y in x) in pruned2 for x in non_empty_subset(body)):
                 to_delete.add(prog2)
                 continue
+
+            if any(frozenset((y.predicate, y.arguments) for y in x) in self.pruned2 for x in non_empty_powerset(body)):
+                assert(False)
 
             pruned_subprog = False
 
             # We now enumerate the subsets of the body of this role to find the most general subsumed subset
-            for new_body in non_empty_powerset(body):
+            for new_body in non_empty_subset(body):
 
                 if len(new_body) == 0:
-                    continue
+                    assert(False)
+                    # continue
 
                 if len(new_body) == len(body):
-                    continue
+                    assert(False)
+                    # continue
 
                 new_rule = (head, new_body)
 
@@ -968,6 +966,7 @@ class Popper():
 
                 tmp = frozenset((y.predicate, y.arguments) for y in new_body)
                 if tmp in seen:
+                    # print('MOOOO')
                     continue
                 seen.add(tmp)
 
@@ -1062,9 +1061,7 @@ class Popper():
         head, body = rule
         body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head.arity)
         subset = range(head.arity, self.settings.max_vars)
-        perms = tuple(permutations(subset, len(body_vars)))
-        # new_rules = []
-        for xs in perms:
+        for xs in permutations(subset, len(body_vars)):
             xs = head.arguments + xs
             new_body = []
             for atom in body:

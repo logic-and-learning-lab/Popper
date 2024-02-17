@@ -568,6 +568,10 @@ def non_empty_powerset(iterable):
     s = tuple(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
 
+def non_empty_subset(iterable):
+    s = tuple(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)))
+
 def load_types(settings):
     enc = """
 #defined clause/1.

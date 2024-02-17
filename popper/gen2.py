@@ -202,20 +202,19 @@ class Generator:
     def build_specialisation_constraint3(self, prog, size=None):
         rule = tuple(prog)[0]
         if not size:
-            return self.find_variants3(rule)
-        cons = []
+            yield from self.find_variants3(rule)
+            return
+
         for body in self.find_variants3(rule):
             body = list(body)
             body.append((True, 'program_size_at_least', (size,)))
-            cons.append(frozenset(body))
-        return cons
+            yield frozenset(body)
 
     def find_variants3(self, rule):
         head, body = rule
         body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head.arity)
         subset = range(head.arity, self.settings.max_vars)
-        perms = permutations(subset, len(body_vars))
-        for xs in perms:
+        for xs in permutations(subset, len(body_vars)):
             xs = head.arguments + xs
             new_body = []
             for atom in body:
