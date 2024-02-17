@@ -895,13 +895,14 @@ class Popper():
 
             # for each pruned program, add the variants to the list of pruned programs
             # doing so reduces the number of pointless checks
-            for _, x in find_variants(new_rule, settings.max_vars):
+            for x in self.find_variants(functional_rename_vars(new_rule)):
                 self.pruned2.add(x)
 
             out.add(new_prog)
         return out
 
     def prune_subsumed_backtrack2(self, pos_covered, prog_size, check_coverage):
+        # print('!!!!!!!!!!!!!!!!!!!')
         settings, could_prune_later, tester = self.settings, self.could_prune_later, self.tester
         to_prune = set()
         to_delete = set()
@@ -930,6 +931,12 @@ class Popper():
             if body in seen:
                 continue
             seen.add(body)
+
+            # for x in non_empty_powerset(body)):
+            #     tmp_key = frozenset((y.predicate, y.arguments) for y in x)
+            #     pr
+            #     # if tmp_key in pruned2:
+
 
             # If we have seen a subset of the body then ignore this program
             if any(frozenset((y.predicate, y.arguments) for y in x) in self.pruned2 for x in non_empty_powerset(body)):
@@ -1022,19 +1029,25 @@ class Popper():
                     to_prune.add(new_prog)
                     pruned_subprog = True
                     # with settings.stats.duration('variants'):
-                    for _, x in find_variants(new_rule):
+                    # for _, x in find_variants(new_rule):
+                    # print('A', format_prog(prog2))
+                    for x in self.find_variants(functional_rename_vars(new_rule)):
+                        # print('\tA, self.pruned2', x)
                         self.pruned2.add(x)
 
             to_delete.add(prog2)
 
             if pruned_subprog == False:
                 # with settings.stats.duration('variants'):
-                for _, x in find_variants((head, body), settings.max_vars):
-                    # print('hello, self.pruned2', x)
+                # for _, x in find_variants((head, body), settings.max_vars):
+                # print('B', format_prog(prog2))
+                for x in self.find_variants(functional_rename_vars((head, body))):
+                    # print('\tB, self.pruned2', x)
                     self.pruned2.add(x)
                 if settings.showcons:
                     print('\t', format_prog2(prog2), '\t', 'subsumed_backtrack')
                     # pass
+                # print('C, self.pruned2', prog2)
                 to_prune.add(prog2)
 
         for x in to_delete:
@@ -1044,6 +1057,21 @@ class Popper():
 
     def add_seen(self, prog):
         self.seen_prog.add(get_raw_prog(prog))
+
+    def find_variants(self, rule):
+        head, body = rule
+        body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head.arity)
+        subset = range(head.arity, self.settings.max_vars)
+        perms = tuple(permutations(subset, len(body_vars)))
+        # new_rules = []
+        for xs in perms:
+            xs = head.arguments + xs
+            new_body = []
+            for atom in body:
+                new_args = tuple(xs[arg] for arg in atom.arguments)
+                new_literal = (atom.predicate, new_args)
+                new_body.append(new_literal)
+            yield frozenset(new_body)
 
     def build_test_prog(self, subprog):
         directions = self.settings.directions
@@ -1299,43 +1327,44 @@ def seen_more_specific_sat(prog, sat):
     return any(theory_subsumes(prog, seen) for seen in sat)
 
 
-def find_variants(rule, max_vars=6):
-    all_vars = 'ABCDEFGHIJKLM'
-    all_vars = all_vars[:max_vars]
+# def find_variants(rule, max_vars=6):
+#     all_vars = 'ABCDEFGHIJKLM'
+#     all_vars = all_vars[:max_vars]
 
-    head, body = rule
-    if head:
-        head_arity = head.arity
-        head_vars = set(head.arguments)
-    else:
-        head_arity = 0
-        head_vars = set()
+#     head, body = rule
+#     if head:
+#         head_arity = head.arity
+#         head_vars = set(head.arguments)
+#     else:
+#         head_arity = 0
+#         head_vars = set()
 
-    body_vars = frozenset({x for literal in body for x in literal.arguments if x not in head_vars})
-    num_body_vars = len(body_vars)
-    if head:
-        subset = all_vars[head_arity:]
-    else:
-        subset = all_vars
-    indexes = {x:i for i, x in enumerate(body_vars)}
-    if head:
-        new_head = (head.predicate, head.arguments)
-    else:
-        new_head = None
-    new_rules = []
-    # print(body_vars, subset, indexes)
-    perms = list(permutations(subset, num_body_vars))
-    for xs in perms:
-        new_body = []
-        for literal in body:
-            new_args = []
-            for arg in literal.arguments:
-                if arg in indexes:
-                    new_args.append(xs[indexes[arg]])
-                else:
-                    new_args.append(arg)
-            new_body.append((literal.predicate, tuple(new_args)))
-        new_rule = (new_head, frozenset(new_body))
-        new_rules.append(new_rule)
+#     body_vars = frozenset({x for literal in body for x in literal.arguments if x not in head_vars})
+#     num_body_vars = len(body_vars)
+#     if head:
+#         subset = all_vars[head_arity:]
+#     else:
+#         subset = all_vars
+#     indexes = {x:i for i, x in enumerate(body_vars)}
+#     if head:
+#         new_head = (head.predicate, head.arguments)
+#     else:
+#         new_head = None
+#     new_rules = []
+#     # print(body_vars, subset, indexes)
+#     perms = list(permutations(subset, num_body_vars))
+#     for xs in perms:
+#         new_body = []
+#         for literal in body:
+#             new_args = []
+#             for arg in literal.arguments:
+#                 if arg in indexes:
+#                     new_args.append(xs[indexes[arg]])
+#                 else:
+#                     new_args.append(arg)
+#             new_body.append((literal.predicate, tuple(new_args)))
+#         new_rule = (new_head, frozenset(new_body))
+#         new_rules.append(new_rule)
 
-    return new_rules
+#     return new_rules
+
