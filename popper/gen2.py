@@ -167,7 +167,8 @@ class Generator:
                 cons_ = self.unsat_constraint2(con_prog)
                 new_ground_cons.update(cons_)
 
-        nogoods = []
+        tmp = model.context.add_nogood
+
         for ground_body in new_ground_cons:
             nogood = []
             for sign, pred, args in ground_body:
@@ -178,35 +179,25 @@ class Generator:
                     x = (atom_to_symbol(pred, args), sign)
                     self.cached_clingo_atoms[k] = x
                 nogood.append(x)
-            nogoods.append(nogood)
-
-        tmp = model.context.add_nogood
-        for x in nogoods:
-            tmp(x)
+            tmp(nogood)
 
     def unsat_constraint2(self, body):
-        # print('A', format_prog([(None, body)]))
         assignments = self.find_deep_bindings4(body)
-        # assignments = self.find_deep_bindings4_(body)
-        out = []
         for assignment in assignments:
             rule = []
             for atom in body:
                 args2 = tuple(assignment[x] for x in atom.arguments)
                 rule.append((True, 'body_literal', (0, atom.predicate, len(atom.arguments), args2)))
-            out.append(frozenset(rule))
-        return out
+            yield frozenset(rule)
 
     def build_generalisation_constraint3(self, prog, size=None):
-        cons = []
         rule = tuple(prog)[0]
         for body in self.find_variants3(rule):
             body = list(body)
             body.append((True, 'body_size', (0, len(body))))
             if size:
                 body.append((True, 'program_size_at_least', (size,)))
-            cons.append(frozenset(body))
-        return cons
+            yield frozenset(body)
 
     def build_specialisation_constraint3(self, prog, size=None):
         rule = tuple(prog)[0]
@@ -223,8 +214,7 @@ class Generator:
         head, body = rule
         body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head.arity)
         subset = range(head.arity, self.settings.max_vars)
-        perms = tuple(permutations(subset, len(body_vars)))
-        new_rules = []
+        perms = permutations(subset, len(body_vars))
         for xs in perms:
             xs = head.arguments + xs
             new_body = []
@@ -232,9 +222,7 @@ class Generator:
                 new_args = tuple(xs[arg] for arg in atom.arguments)
                 new_literal = (True, 'body_literal', (0, atom.predicate, len(new_args), new_args))
                 new_body.append(new_literal)
-            new_rules.append(frozenset(new_body))
-
-        return new_rules
+            yield frozenset(new_body)
 
     def find_deep_bindings4(self, body):
         head_types = self.settings.head_types
