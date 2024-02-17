@@ -207,19 +207,10 @@ class Popper():
         success_sets_recursion = {}
 
         # maintain a set of programs that we have not yet pruned
-        could_prune_later = self.could_prune_later = {}
-
-        # from sortedcontainers import SortedList
-        # could_prune_later2 = self.could_prune_later2 = [{}]*(max_size+1)
-        could_prune_later2 = self.could_prune_later2 = [0]*(max_size+1)
-
+        could_prune_later = self.could_prune_later = [0]*(max_size+1)
         for i in range(max_size+1):
-            could_prune_later2[i] = dict()
+            could_prune_later[i] = dict()
 
-        # print('could_prune_later2', len(could_prune_later2))
-
-        # for i in range(settings.max_size):
-            # print('count_at_size', i, len(self.could_prune_later2[i]))
 
         to_combine = []
 
@@ -546,15 +537,7 @@ class Popper():
                 #         new_cons.append((Constraint.GENERALISATION, [r1,r2], None, None))
 
                 if not add_spec and not pruned_more_general and not pruned_sub_incomplete:
-                    with settings.stats.duration('could_prune_later.adding'):
-                        could_prune_later[prog] = pos_covered
-                    with settings.stats.duration('could_prune_later.adding2'):
-                        # print('adding,could_prune_later2_a', )
-                        # print('adding,could_prune_later2_b', len(could_prune_later2[prog_size]))
-                        could_prune_later2[prog_size][prog] = pos_covered
-                        # print('adding,could_prune_later2', prog_size, len(could_prune_later2[prog_size]))
-                        # for i in range(settings.max_size):
-                            # print('count_at_size', i, len(self.could_prune_later2[i]))
+                    could_prune_later[prog_size][prog] = pos_covered
 
 
                 add_to_combiner = False
@@ -924,34 +907,11 @@ class Popper():
         to_delete = set()
         seen = set()
 
-        # Order unpruned programs by size
-        # with settings.stats.duration('could_prune_later.sorted'):
-            # zs = sorted(could_prune_later.items(), key=lambda x: len(list(x[0])[0][1]), reverse=False)
-
         def get_zs():
-            for x in self.could_prune_later2:
+            for x in could_prune_later:
                 yield from x.items()
-            # for i in range(settings.max_size+1):
-                # for x in self.could_prune_later2[i].items():
-                    # yield x
-
-        # with settings.stats.duration('could_prune_later.sorted2'):
-        #     zs2 = tuple(get_zs())
-            # return get_zs()
-
-
-        # if len(zs) != len(zs2):
-        #     print(zs[0])
-        #     print(zs2[1])
-        #     print(len(could_prune_later), len(self.could_prune_later2))
-        #     for i in range(settings.max_size):
-        #         print(i, len(self.could_prune_later2[i]))
-        #     print(len(zs), len(zs2))
-        #     assert(False)
-
 
         for prog2, pos_covered2 in get_zs():
-        # for prog2, pos_covered2 in zs:
 
             should_prune = check_coverage and len(pos_covered2) == 1 and not settings.order_space
 
@@ -965,16 +925,11 @@ class Popper():
             if not should_prune:
                 continue
 
-            # if check_coverage and len(pos_covered2) == 1 and not pos_covered2.issubset(pos_covered):
-                # assert(False)
-
             head, body = list(prog2)[0]
 
             if body in seen:
                 continue
             seen.add(body)
-
-            # print('X2', format_prog2([(head, body)]))
 
             # If we have seen a subset of the body then ignore this program
             if any(frozenset((y.predicate, y.arguments) for y in x) in self.pruned2 for x in non_empty_powerset(body)):
@@ -982,14 +937,6 @@ class Popper():
                 # assert(False)
                 to_delete.add(prog2)
                 continue
-
-            # print('X3', format_prog2([(head, body)]))
-
-            # if any(frozenset((y.predicate, y.arguments) for y in x) in seen for x in non_empty_powerset(body)):
-            #     print('MOO')
-            #     assert(False)
-            #     to_delete.add(prog2)
-            #     continue
 
             pruned_subprog = False
 
@@ -1014,15 +961,9 @@ class Popper():
 
                 tmp = frozenset((y.predicate, y.arguments) for y in new_body)
                 if tmp in seen:
-                    # print('prog2', format_prog2(prog2))
-                    # print('new_rule', format_prog2([new_rule]))
-                    # print('ASDA PRICE')
-                    # assert(False)
                     continue
                 seen.add(tmp)
 
-
-                # print('X5', format_prog2([new_rule]))
 
                 new_prog = frozenset([new_rule])
 
@@ -1030,16 +971,11 @@ class Popper():
                 for z in non_empty_powerset(new_body):
                     asda = frozenset((y.predicate, y.arguments) for y in z)
                     if asda in self.pruned2:
-                        # print('here!!!!!')
                         skip = True
                         pruned_subprog = True
                         break
                 if skip:
-                    # print('skipppy!!!!!')
                     continue
-
-
-                # print('X6', format_prog2([new_rule]))
 
                 head2, body2 = functional_rename_vars(new_rule)
                 if any(frozenset((y.predicate, y.arguments) for y in z) in self.pruned2 for z in non_empty_powerset(body2)):
@@ -1102,18 +1038,12 @@ class Popper():
                 to_prune.add(prog2)
 
         for x in to_delete:
-            with settings.stats.duration('could_prune_later.delete'):
-                # pass
-                del could_prune_later[x]
-            with settings.stats.duration('could_prune_later2.delete'):
-                # pass
-                del self.could_prune_later2[calc_prog_size(x)][x]
+            del could_prune_later[calc_prog_size(x)][x]
 
         return to_prune
 
     def add_seen(self, prog):
         self.seen_prog.add(get_raw_prog(prog))
-        # self.seen_prog.add(get_raw_prog2(prog))
 
     def build_test_prog(self, subprog):
         directions = self.settings.directions
