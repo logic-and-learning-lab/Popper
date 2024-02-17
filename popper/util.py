@@ -492,15 +492,12 @@ class Settings:
             self.body_preds.add((pred, arity))
             self.max_arity = max(self.max_arity, arity)
 
-        # arg_lookup = {i:chr(ord('A') + i) for i in range(100)}
         self.cached_atom_args = {}
         for i in range(1, self.max_arity+1):
             for args in permutations(range(0, self.max_vars), i):
                 k = tuple(clingo.Number(x) for x in args)
-                # v = tuple(arg_lookup[x] for x in args)
                 self.cached_atom_args[k] = args
 
-        # if not self.pi_enabled:
         self.body_modes = {}
         self.cached_literals = {}
         for pred, arity in self.body_preds:

@@ -237,6 +237,7 @@ class Generator:
         solver.ground([('base', [])])
         self.solver = solver
 
+    # @profile
     def get_prog(self):
         if self.handle is None:
             self.handle = iter(self.solver.solve(yield_ = True))

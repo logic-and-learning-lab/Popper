@@ -4,11 +4,9 @@ from pysat.formula import CNF
 from pysat.solvers import Solver
 from pysat.card import *
 import clingo
-import operator
 import numbers
 import clingo.script
 import pkg_resources
-from collections import defaultdict
 from . util import rule_is_recursive, Constraint, format_prog, bias_order, Literal
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
@@ -169,7 +167,6 @@ class Generator:
                 cons_ = self.unsat_constraint2(con_prog)
                 new_ground_cons.update(cons_)
 
-        # with self.settings.stats.duration('constrain.build_nogoods'):
         nogoods = []
         for ground_body in new_ground_cons:
             nogood = []
@@ -183,13 +180,14 @@ class Generator:
                 nogood.append(x)
             nogoods.append(nogood)
 
-        # with self.settings.stats.duration('constrain.add_solver'):
         tmp = model.context.add_nogood
         for x in nogoods:
             tmp(x)
 
     def unsat_constraint2(self, body):
+        # print('A', format_prog([(None, body)]))
         assignments = self.find_deep_bindings4(body)
+        # assignments = self.find_deep_bindings4_(body)
         out = []
         for assignment in assignments:
             rule = []
@@ -239,27 +237,16 @@ class Generator:
         return new_rules
 
     def find_deep_bindings4(self, body):
-        all_vars = set(x for atom in body for x in atom.arguments)
-        max_vars = self.settings.max_vars
         head_types = self.settings.head_types
         body_types = self.settings.body_types
 
         var_type_lookup = {}
-        var_to_index = {}
-        index_to_var = {}
-
-        # MAP A->0, B->1
-        for x in all_vars:
-            # k = ord(x)- ord('A')
-            k=x
-            var_to_index[x] = k
-            index_to_var[k] = x
 
         head_vars = set()
         if head_types:
-            for k, head_type in enumerate(head_types):
-                var_type_lookup[k] = head_type
-                head_vars.add(k)
+            for i, head_type in enumerate(head_types):
+                var_type_lookup[i] = head_type
+                head_vars.add(i)
 
         body_vars = set()
         for atom in body:
@@ -267,22 +254,21 @@ class Generator:
             if pred not in body_types:
                 continue
             for i, x in enumerate(atom.arguments):
-                # k = ord(x)- ord('A')
-                k=x
-                body_vars.add(k)
+                body_vars.add(x)
                 var_type = body_types[pred][i]
-                var_type_lookup[k] = var_type
+                var_type_lookup[x] = var_type
 
-        # if cache:
         if body_vars:
             key = hash(frozenset((k,v) for k,v in var_type_lookup.items() if k in body_vars))
         else:
-            key = hash(frozenset(all_vars))
+            assert(False)
+            # all_vars = set(x for atom in body for x in atom.arguments)
+            # key = hash(frozenset(all_vars))
+
         if key in self.cached4:
             return self.cached4[key]
 
-        formula = CNF()
-        bad_ks = set()
+        bad_matchings = set()
         for x in body_vars:
             if x not in var_type_lookup:
                 continue
@@ -294,20 +280,21 @@ class Generator:
                 if var_type_lookup[x] == var_type_lookup[y]:
                     continue
                 k = (x, y)
-                bad_ks.add(k)
+                bad_matchings.add(k)
 
-        solver_vars = list(var_to_index.values())
-        solver_values = list(range(0, max_vars))
+        solver_values = tuple(range(self.settings.max_vars))
         var_lookup = {}
         solver_index = {}
         index = 1
 
-        for x in solver_vars:
+        formula = CNF()
+
+        for x in body_vars:
             x_clause = []
             for y in solver_values:
                 # match x to y
                 k = (x,y)
-                if k in bad_ks:
+                if k in bad_matchings:
                     continue
                 var_lookup[k] = index
                 solver_index[index] = k
@@ -319,9 +306,9 @@ class Generator:
 
         for y in solver_values:
             y_clause = []
-            for x in solver_vars:
+            for x in body_vars:
                 k = (x,y)
-                if k in bad_ks:
+                if k in bad_matchings:
                     continue
                 y_clause.append(var_lookup[k])
             for z in CardEnc.atmost(lits=y_clause, encoding=EncType.pairwise).clauses:
@@ -338,9 +325,9 @@ class Generator:
                 if x < 0:
                     continue
                 x, y = solver_index[x]
-                assignment[index_to_var[x]] = y
+                assignment[x] = y
             out.append(assignment)
+            # print('moo2', assignment)
 
-        # if cache:
         self.cached4[key] = out
         return out
