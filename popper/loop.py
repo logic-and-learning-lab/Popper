@@ -6,10 +6,38 @@ from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls
 
 def functional_rename_vars(rule):
+    # if functional_rename_vars1(rule) != functional_rename_vars2(rule):
+    #     print('A',format_rule(functional_rename_vars1(rule)))
+    #     print('B',format_rule(functional_rename_vars2(rule)))
+    return functional_rename_vars1(rule)
+
+def functional_rename_vars1(rule):
     head, body = rule
-    seen_args = set()
-    for body_literal in body:
-        seen_args.update(body_literal.arguments)
+    seen_args = set(atom.arguments for atom in body)
+
+    if head:
+        head_vars = set(head.arguments)
+    else:
+        head_vars = set()
+
+    next_var = len(head_vars)
+    lookup = {x:x for x in head_vars}
+    new_body = set()
+    for atom in sorted(body, key=lambda x: x.predicate):
+        new_args = []
+        for var in atom.arguments:
+            if var not in lookup:
+                lookup[var] = next_var
+                next_var+=1
+            new_args.append(lookup[var])
+        new_atom = Literal(atom.predicate, tuple(new_args), atom.directions)
+        new_body.add(new_atom)
+
+    return head, frozenset(new_body)
+
+def functional_rename_vars2(rule):
+    head, body = rule
+    seen_args = set(atom.arguments for atom in body)
 
     if head:
         head_vars = set(head.arguments)
@@ -379,7 +407,7 @@ class Popper():
                     if tp == 0 or (settings.noisy and tp < prog_size):
                         # if the programs does not cover any positive examples, check whether it is has an unsat core
                         with settings.stats.duration('find mucs'):
-                            cons_ = self.explain_incomplete(prog)
+                            cons_ = tuple(self.explain_incomplete(prog))
                             new_cons.extend(cons_)
                             pruned_sub_incomplete = len(cons_) > 0
 
@@ -405,7 +433,8 @@ class Popper():
                             if subsumed or covers_too_few:
                                 # If a program is subsumed or doesn't cover enough examples, we search for the most general subprogram that also is also subsumed or doesn't cover enough examples
                                 # only applies to non-recursive and non-PI programs
-                                xs = self.subsumed_or_covers_too_few(prog, check_coverage=covers_too_few, check_subsumed=subsumed, seen=set())
+                                with settings.stats.duration('self.subsumed_or_covers_too_few'):
+                                    xs = self.subsumed_or_covers_too_few(prog, check_coverage=covers_too_few, check_subsumed=subsumed, seen=set())
                                 pruned_more_general = len(xs) > 0
                                 if settings.showcons and not pruned_more_general:
                                     if subsumed:
@@ -719,9 +748,7 @@ class Popper():
         settings, tester = self.settings, self.tester
         unsat_cores = self.explain_totally_incomplete(prog)
 
-        out_cons = []
         for subprog, unsat_body in unsat_cores:
-            pruned_subprog = True
 
             if settings.showcons:
                 if len(subprog) > 1:
@@ -731,19 +758,17 @@ class Popper():
 
             if unsat_body:
                 _, body = list(subprog)[0]
-                out_cons.append((Constraint.UNSAT, body))
+                yield (Constraint.UNSAT, body)
                 continue
 
             if not (settings.recursion_enabled or settings.pi_enabled):
-                out_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(subprog[0])]))
+                yield (Constraint.SPECIALISATION, [functional_rename_vars(subprog[0])])
                 continue
 
             if len(subprog) == 1:
-                out_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, subprog))
+                yield (Constraint.REDUNDANCY_CONSTRAINT1, subprog)
 
-            out_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, subprog))
-
-        return out_cons
+            yield (Constraint.REDUNDANCY_CONSTRAINT2, subprog)
 
     # given a program with more than one rule, look for inconsistent subrules/subprograms
     def explain_inconsistent(self, prog):
@@ -1210,7 +1235,6 @@ def needs_datalog(prog):
             return True
     return False
 
-
 def tmp(prog):
     for rule in prog:
         head, body = rule
@@ -1218,7 +1242,6 @@ def tmp(prog):
         if any(x not in body_args for x in head.arguments):
             return False
     return True
-
 
 def connected(body):
     if len(body) == 1:
