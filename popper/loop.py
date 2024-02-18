@@ -931,9 +931,10 @@ class Popper():
         for prog2, pos_covered2 in get_zs():
 
             should_prune = check_coverage and len(pos_covered2) == 1
-            subsumed = pos_covered2.issubset(pos_covered) and calc_prog_size(prog2) >= prog_size
+            subsumed = pos_covered2.issubset(pos_covered)
 
-            if not should_prune or subsumed:
+            if not (should_prune or subsumed):
+            # if not should_prune or subsumed:
                 continue
 
             head, body = tuple(prog2)[0]
