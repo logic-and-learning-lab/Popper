@@ -22,7 +22,6 @@ class Literal:
         self.inputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
         self.outputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
 
-
 clingo.script.enable_python()
 
 TIMEOUT=600
@@ -36,7 +35,7 @@ MAX_BODY=6
 MAX_EXAMPLES=10000
 BATCH_SIZE=20000
 ANYTIME_TIMEOUT=10
-
+BKCONS_TIMEOUT=10
 
 # class syntax
 class Constraint:
@@ -54,7 +53,7 @@ def parse_args():
 
     parser.add_argument('kbpath', help='Path to files to learn from')
     parser.add_argument('--noisy', default=False, action='store_true', help='tell Popper that there is noise')
-    parser.add_argument('--bkcons', default=False, action='store_true', help='deduce background constraints from Datalog background (EXPERIMENTAL!)')
+    # parser.add_argument('--bkcons', default=False, action='store_true', help='deduce background constraints from Datalog background (EXPERIMENTAL!)')
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {TIMEOUT})')
     parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help=f'Maximum number of literals allowed in program (default: {MAX_LITERALS})')
     parser.add_argument('--max-body', type=int, default=None, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
@@ -70,7 +69,7 @@ def parse_args():
     parser.add_argument('--anytime-timeout', type=int, default=ANYTIME_TIMEOUT, help=f'Maximum timeout (seconds) for each anytime MaxSAT call (default: {ANYTIME_TIMEOUT})')
     parser.add_argument('--batch-size', type=int, default=BATCH_SIZE, help=f'Combine batch size (default: {BATCH_SIZE})')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
-    parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
+    # parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
     parser.add_argument('--no-bias', default=False, action='store_true', help='EXPERIMENTAL FEATURE: do not use language bias')
     parser.add_argument('--order-space', default=False, action='store_true', help='EXPERIMENTAL FEATURE: search space ordered by size')
 
@@ -344,7 +343,7 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=None, max_rules=None, max_vars=None, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False, showcons=False, no_bias=False, order_space=False, noisy=False, batch_size=BATCH_SIZE, solver='rc2', anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT):
+    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=None, max_rules=None, max_vars=None, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, showcons=False, no_bias=False, order_space=False, noisy=False, batch_size=BATCH_SIZE, solver='rc2', anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT):
 
         if cmd_line:
             args = parse_args()
@@ -352,7 +351,7 @@ class Settings:
             quiet = args.quiet
             debug = args.debug
             show_stats = args.stats
-            bkcons = args.bkcons
+            # bkcons = args.bkcons
             max_literals = args.max_literals
             timeout = args.timeout
             eval_timeout = args.eval_timeout
@@ -361,7 +360,7 @@ class Settings:
             max_vars = args.max_vars
             max_rules = args.max_rules
             functional_test = args.functional_test
-            datalog = args.datalog
+            # datalog = args.datalog
             showcons = args.showcons
             no_bias = args.no_bias
             order_space = args.order_space
@@ -394,8 +393,8 @@ class Settings:
         self.stats = Stats(info=info, debug=debug)
         self.stats.logger = self.logger
         self.show_stats = show_stats
-        self.bkcons = bkcons
-        self.datalog = datalog
+        # self.bkcons = bkcons
+        # self.datalog = datalog
         self.showcons = showcons
         self.max_literals = max_literals
         self.functional_test = functional_test
@@ -412,6 +411,7 @@ class Settings:
         self.solver = solver
         self.anytime_solver = anytime_solver
         self.anytime_timeout = anytime_timeout
+        self.bkcons_timeout = BKCONS_TIMEOUT
 
         self.recall = {}
         self.solution = None

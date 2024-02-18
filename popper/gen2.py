@@ -91,8 +91,7 @@ class Generator:
             program_size_at_least(M):- size(N), program_bounds(M), M <= N.
             """)
 
-        if settings.bkcons:
-            encoding.extend(bkcons)
+        encoding.extend(bkcons)
 
         if settings.single_solve:
             DEFAULT_HEURISTIC = """

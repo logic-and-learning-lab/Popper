@@ -1,4 +1,3 @@
-
 # Popper
 
 Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) system.  If you use Popper, please cite the paper [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259) (MLJ 2021).
@@ -143,7 +142,6 @@ To enable PI, add the setting `enable_pi.` to the bias file. However, predicate 
 
 #### Popper settings
  - `--noisy` (default: false) learn from [noisy](https://arxiv.org/pdf/2308.09393.pdf) (misclassified examples)
- - `--bkcons` (default: False) [discover constraints from the BK](https://arxiv.org/pdf/2202.09806.pdf). This flag can greatly improve performance but only works with Datalog programs.
  - `--stats` (default: false) shows runtime statistics
  - `--debug` (default: false) runs in debug mode
  - `--quiet` (default: False)  runs in quiet mode
@@ -166,10 +164,8 @@ You can download and compile these solvers from the [MaxSAT 2023 evaluation](htt
 #### Performance tips
 - Transform your BK to Datalog, which allows Popper to perform preprocessing on the BK.
 - Use one of the MaxSAT above, especially the NuWLS anytime solver.
-- If you have Datalog BK, try the `--bkcons` flag.
-- Try not to use more than 6 variables.
-- Avoid recursion and predicate invention if possible.
-
+- Use 6 variables or fewer.
+- Avoid recursion and predicate invention.
 
 #### Library usage
 

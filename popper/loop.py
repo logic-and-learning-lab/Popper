@@ -6,36 +6,6 @@ from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls
 
 def functional_rename_vars(rule):
-    # if functional_rename_vars1(rule) != functional_rename_vars2(rule):
-    #     print('A',format_rule(functional_rename_vars1(rule)))
-    #     print('B',format_rule(functional_rename_vars2(rule)))
-    return functional_rename_vars1(rule)
-
-def functional_rename_vars1(rule):
-    head, body = rule
-    seen_args = set(atom.arguments for atom in body)
-
-    if head:
-        head_vars = set(head.arguments)
-    else:
-        head_vars = set()
-
-    next_var = len(head_vars)
-    lookup = {x:x for x in head_vars}
-    new_body = set()
-    for atom in sorted(body, key=lambda x: x.predicate):
-        new_args = []
-        for var in atom.arguments:
-            if var not in lookup:
-                lookup[var] = next_var
-                next_var+=1
-            new_args.append(lookup[var])
-        new_atom = Literal(atom.predicate, tuple(new_args), atom.directions)
-        new_body.add(new_atom)
-
-    return head, frozenset(new_body)
-
-def functional_rename_vars2(rule):
     head, body = rule
     seen_args = set(atom.arguments for atom in body)
 
@@ -163,40 +133,17 @@ def load_solver(settings, tester):
     return Combiner(settings, tester)
 
 class Popper():
-    def __init__(self, settings):
+    def __init__(self, settings, tester, bkcons):
         self.settings = settings
+        self.tester = tester
+        self.bkcons = bkcons
         self.pruned2 = set()
         self.seen_prog = set()
         self.unsat = set()
 
-        if settings.bkcons:
-            settings.datalog = True
-
-    def load_bkcons(self):
-        settings, tester = self.settings, self.tester
-        bkcons = []
-        if settings.bkcons:
-            with settings.stats.duration('bkcons'):
-                bkcons.extend(deduce_bk_cons(settings, tester))
-
-        # assume that the BK is datalog and try to deduce recalls from it
-        with suppress_stdout_stderr():
-            try:
-                with settings.stats.duration('recalls'):
-                    bkcons.extend(deduce_recalls(settings))
-                settings.datalog = True
-            except:
-                pass
-        return bkcons
-
     def run(self):
         settings = self.settings
-        settings.nonoise = not settings.noisy
-        settings.solution_found = False
-
-        with settings.stats.duration('load data'):
-            tester = self.tester = Tester(settings)
-
+        tester = self.tester
         num_pos, num_neg = self.num_pos, self.num_neg = len(settings.pos_index), len(settings.neg_index)
 
         uncovered = set(settings.pos_index)
@@ -217,16 +164,13 @@ class Popper():
 
         combiner = load_solver(settings, tester)
 
-        # deduce bk cons
-        bkcons = self.load_bkcons()
-
         # generator that builds programs
         with settings.stats.duration('init'):
             if settings.single_solve:
                 from . gen2 import Generator
             else:
                 from . generate import Generator
-            generator = self.generator = Generator(settings, bkcons)
+            generator = self.generator = Generator(settings, self.bkcons)
 
         # track the success sets of tested hypotheses
         success_sets = self.success_sets = {}
@@ -1145,12 +1089,49 @@ class Popper():
                 out.append((subprog, headless))
         return out
 
-def popper(settings):
-    x = Popper(settings)
+def popper(settings, tester, bkcons):
+    x = Popper(settings, tester, bkcons)
     x.run()
 
 def learn_solution(settings):
-    timeout(settings, popper, (settings,), timeout_duration=int(settings.timeout),)
+    t1 = time.time()
+    settings.nonoise = not settings.noisy
+    settings.solution_found = False
+
+    with settings.stats.duration('load data'):
+        tester = Tester(settings)
+
+    bkcons = []
+
+    settings.logger.debug(f'Loading recalls')
+    with suppress_stdout_stderr():
+        try:
+            with settings.stats.duration('recalls'):
+                bkcons.extend(deduce_recalls(settings))
+            settings.datalog = True
+        except:
+            settings.datalog = False
+
+    if not settings.datalog:
+        settings.logger.debug(f'Loading recalls FAILURE')
+    else:
+        import signal
+
+        def handler(signum, frame):
+            raise TimeoutError()
+
+        settings.logger.debug(f'Loading bkcons')
+        with settings.stats.duration('bkcons'):
+            signal.signal(signal.SIGALRM, handler)
+            signal.alarm(settings.bkcons_timeout)
+            try:
+                bkcons.extend(deduce_bk_cons(settings, tester))
+            except TimeoutError as _exc:
+                settings.logger.debug(f'Loading bkcons FAILURE')
+            finally:
+                signal.alarm(0)
+    time_so_far = time.time()-t1
+    timeout(settings, popper, (settings, tester, bkcons), timeout_duration=int(settings.timeout-time_so_far),)
     return settings.solution, settings.best_prog_score, settings.stats
 
 def generalisations(prog, allow_headless=True, recursive=False):

@@ -157,8 +157,8 @@ class Generator:
             program_size_at_least(M):- size(N), program_bounds(M), M <= N.
             """)
 
-        if settings.bkcons:
-            encoding.extend(bkcons)
+        # if settings.bkcons:
+        encoding.extend(bkcons)
 
         # FG Heuristic for single solve
         # - considering a default order of minimum rules, then minimum literals, and then minimum variables
