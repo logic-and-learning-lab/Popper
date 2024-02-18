@@ -457,7 +457,7 @@ class Popper():
                         if is_recursive:
                             combiner.add_inconsistent(prog)
                             with settings.stats.duration('find sub inconsistent'):
-                                cons_ = self.explain_inconsistent(prog)
+                                cons_ = set(self.explain_inconsistent(prog))
                                 new_cons.extend(cons_)
                                 pruned_sub_inconsistent = len(cons_) > 0
                     else:
@@ -775,6 +775,8 @@ class Popper():
         base = []
         rec = []
 
+        pruned_base = False
+
         for rule in prog:
             if rule_is_recursive(rule):
                 rec.append(rule)
@@ -784,9 +786,10 @@ class Popper():
             # test whether base case is inconsistent
             subprog = frozenset([rule])
             if self.tester.test_prog_inconsistent(subprog):
+                pruned_base = True
                 yield (Constraint.GENERALISATION, subprog)
 
-        if out_cons or len(rec) == 1:
+        if pruned_base or len(rec) == 1:
             return
 
         for r1 in base:
