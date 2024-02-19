@@ -244,7 +244,7 @@ class Combiner:
                     print("ERROR: Combining rec or pi programs not supported with MDL objective. Exiting.")
                     sys.exit(1)
 
-                model_inconsistent = self.tester.is_inconsistent(model_prog)
+                model_inconsistent = self.tester.test_prog_inconsistent(model_prog)
                 if not model_inconsistent:
                     best_prog = rules
                     best_fp = fp

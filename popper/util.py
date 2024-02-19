@@ -1,16 +1,26 @@
-from enum import Enum
+from functools import cache
 import clingo
 import clingo.script
 import signal
 import argparse
 import os
 import logging
-from itertools import permutations
+from itertools import permutations, chain, combinations
 from collections import defaultdict
 from time import perf_counter
 from contextlib import contextmanager
-from .core import Literal
 from math import comb
+
+class Literal:
+    def __init__(self, predicate, arguments, directions = [], positive = True, meta=False):
+        self.predicate = predicate
+        self.arguments = arguments
+        self.arity = len(arguments)
+        self.directions = directions
+        self.positive = positive
+        self.meta = meta
+        self.inputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
+        self.outputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
 
 clingo.script.enable_python()
 
@@ -25,10 +35,10 @@ MAX_BODY=6
 MAX_EXAMPLES=10000
 BATCH_SIZE=20000
 ANYTIME_TIMEOUT=10
-
+BKCONS_TIMEOUT=10
 
 # class syntax
-class Constraint(Enum):
+class Constraint:
     GENERALISATION = 1
     SPECIALISATION = 2
     UNSAT = 3
@@ -43,7 +53,7 @@ def parse_args():
 
     parser.add_argument('kbpath', help='Path to files to learn from')
     parser.add_argument('--noisy', default=False, action='store_true', help='tell Popper that there is noise')
-    parser.add_argument('--bkcons', default=False, action='store_true', help='deduce background constraints from Datalog background (EXPERIMENTAL!)')
+    # parser.add_argument('--bkcons', default=False, action='store_true', help='deduce background constraints from Datalog background (EXPERIMENTAL!)')
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {TIMEOUT})')
     parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help=f'Maximum number of literals allowed in program (default: {MAX_LITERALS})')
     parser.add_argument('--max-body', type=int, default=None, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
@@ -59,9 +69,9 @@ def parse_args():
     parser.add_argument('--anytime-timeout', type=int, default=ANYTIME_TIMEOUT, help=f'Maximum timeout (seconds) for each anytime MaxSAT call (default: {ANYTIME_TIMEOUT})')
     parser.add_argument('--batch-size', type=int, default=BATCH_SIZE, help=f'Combine batch size (default: {BATCH_SIZE})')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
-    parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
-    parser.add_argument('--no-bias', default=False, action='store_true', help='EXPERIMENTAL FEATURE: do not use language bias')
-    parser.add_argument('--order-space', default=False, action='store_true', help='EXPERIMENTAL FEATURE: search space ordered by size')
+    # parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
+    # parser.add_argument('--no-bias', default=False, action='store_true', help='EXPERIMENTAL FEATURE: do not use language bias')
+    # parser.add_argument('--order-space', default=False, action='store_true', help='EXPERIMENTAL FEATURE: search space ordered by size')
 
 
     return parser.parse_args()
@@ -114,7 +124,7 @@ class Stats:
         for summary in self.duration_summary():
             percentage = int((summary.total/total_op_time)*100)
             message += f'{summary.operation}:\n\tCalled: {summary.called} times \t ' + \
-                       f'Total: {summary.total:0.2f} \t Mean: {summary.mean:0.3f} \t ' + \
+                       f'Total: {summary.total:0.2f} \t Mean: {summary.mean:0.4f} \t ' + \
                        f'Max: {summary.maximum:0.3f} \t Percentage: {percentage}%\n'
         message += f'Total operation time: {total_op_time:0.2f}s\n'
         message += f'Total execution time: {self.total_exec_time():0.2f}s'
@@ -152,7 +162,7 @@ def format_prog2(prog):
     return '\n'.join(format_rule(order_rule2(rule)) for rule in order_prog(prog))
 
 def format_literal(literal):
-    args = ','.join(literal.arguments)
+    args = ','.join(f'V{i}' for i in literal.arguments)
     return f'{literal.predicate}({args})'
 
 def format_rule(rule):
@@ -162,7 +172,6 @@ def format_rule(rule):
         head_str = format_literal(head)
     body_str = ','.join(format_literal(literal) for literal in body)
     return f'{head_str}:- {body_str}.'
-
 
 def calc_prog_size(prog):
     return sum(rule_size(rule) for rule in prog)
@@ -221,11 +230,12 @@ def mdl_score(fn, fp, size):
     return fn + fp + size
 
 def order_rule(rule, settings=None):
+    head, body = rule
 
     if settings and settings.datalog:
-        return order_rule_datalog(rule, settings)
+        return order_rule_datalog(head, frozenset(body), settings)
 
-    head, body = rule
+
     ordered_body = []
     grounded_variables = set()
 
@@ -265,7 +275,8 @@ def order_rule(rule, settings=None):
 
     return head, tuple(ordered_body)
 
-def order_rule_datalog(rule, settings):
+@cache
+def order_rule_datalog(head, body, settings):
 
     def tmp_score(seen_vars, literal):
         key = []
@@ -280,7 +291,7 @@ def order_rule_datalog(rule, settings):
             return settings.recall[k]
         return 1000000
 
-    head, body = rule
+    # head, body = rule
     ordered_body = []
     seen_vars = set()
 
@@ -332,7 +343,7 @@ def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, bkcons=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=None, max_rules=None, max_vars=None, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, datalog=False, showcons=False, no_bias=False, order_space=False, noisy=False, batch_size=BATCH_SIZE, solver='rc2', anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT):
+    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=None, max_rules=None, max_vars=None, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, showcons=False, no_bias=False, order_space=False, noisy=False, batch_size=BATCH_SIZE, solver='rc2', anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT):
 
         if cmd_line:
             args = parse_args()
@@ -340,7 +351,7 @@ class Settings:
             quiet = args.quiet
             debug = args.debug
             show_stats = args.stats
-            bkcons = args.bkcons
+            # bkcons = args.bkcons
             max_literals = args.max_literals
             timeout = args.timeout
             eval_timeout = args.eval_timeout
@@ -349,10 +360,10 @@ class Settings:
             max_vars = args.max_vars
             max_rules = args.max_rules
             functional_test = args.functional_test
-            datalog = args.datalog
+            # datalog = args.datalog
             showcons = args.showcons
-            no_bias = args.no_bias
-            order_space = args.order_space
+            # no_bias = args.no_bias
+            # order_space = args.order_space
             noisy = args.noisy
             batch_size = args.batch_size
             solver = args.solver
@@ -382,8 +393,8 @@ class Settings:
         self.stats = Stats(info=info, debug=debug)
         self.stats.logger = self.logger
         self.show_stats = show_stats
-        self.bkcons = bkcons
-        self.datalog = datalog
+        # self.bkcons = bkcons
+        # self.datalog = datalog
         self.showcons = showcons
         self.max_literals = max_literals
         self.functional_test = functional_test
@@ -400,6 +411,7 @@ class Settings:
         self.solver = solver
         self.anytime_solver = anytime_solver
         self.anytime_timeout = anytime_timeout
+        self.bkcons_timeout = BKCONS_TIMEOUT
 
         self.recall = {}
         self.solution = None
@@ -428,30 +440,30 @@ class Settings:
             self.pi_enabled = True
 
         # read directions from bias file when there is no PI
-        if not self.pi_enabled:
-            directions = defaultdict(lambda: defaultdict(lambda: '?'))
-            for x in solver.symbolic_atoms.by_signature('direction', arity=2):
-                pred = x.symbol.arguments[0].name
-                for i, y in enumerate(x.symbol.arguments[1].arguments):
-                    y = y.name
-                    if y == 'in':
-                        arg_dir = '+'
-                    elif y == 'out':
-                        arg_dir = '-'
-                    directions[pred][i] = arg_dir
-            self.directions = directions
+        # if not self.pi_enabled:
+        directions = defaultdict(lambda: defaultdict(lambda: '?'))
+        for x in solver.symbolic_atoms.by_signature('direction', arity=2):
+            pred = x.symbol.arguments[0].name
+            for i, y in enumerate(x.symbol.arguments[1].arguments):
+                y = y.name
+                if y == 'in':
+                    arg_dir = '+'
+                elif y == 'out':
+                    arg_dir = '-'
+                directions[pred][i] = arg_dir
+        self.directions = directions
 
         self.max_arity = 0
         for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
             self.max_arity = max(self.max_arity, x.symbol.arguments[1].number)
 
-            if not self.pi_enabled:
-                head_pred = x.symbol.arguments[0].name
-                head_arity = x.symbol.arguments[1].number
-                head_args = tuple(chr(ord('A') + i) for i in range(head_arity))
-
-                head_modes = tuple(self.directions[head_pred][i] for i in range(head_arity))
-                self.head_literal = Literal(head_pred, head_args, head_modes)
+            # if not self.pi_enabled:
+            head_pred = x.symbol.arguments[0].name
+            head_arity = x.symbol.arguments[1].number
+            # head_args = tuple(chr(ord('A') + i) for i in range(head_arity))
+            head_args = tuple(range(head_arity))
+            head_modes = tuple(self.directions[head_pred][i] for i in range(head_arity))
+            self.head_literal = Literal(head_pred, head_args, head_modes)
 
         if self.max_body == None:
             for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
@@ -480,35 +492,32 @@ class Settings:
             self.body_preds.add((pred, arity))
             self.max_arity = max(self.max_arity, arity)
 
-        arg_lookup = {i:chr(ord('A') + i) for i in range(100)}
         self.cached_atom_args = {}
         for i in range(1, self.max_arity+1):
             for args in permutations(range(0, self.max_vars), i):
                 k = tuple(clingo.Number(x) for x in args)
-                v = tuple(arg_lookup[x] for x in args)
-                self.cached_atom_args[k] = v
+                self.cached_atom_args[k] = args
 
-        if not self.pi_enabled:
-            self.body_modes = {}
-            self.cached_literals = {}
-            for pred, arity in self.body_preds:
-                self.body_modes[pred] = tuple(directions[pred][i] for i in range(arity))
-
-            for pred, arity in self.body_preds:
-                for k, args in self.cached_atom_args.items():
-                    if len(args) != arity:
-                        continue
-                    literal = Literal(pred, args, self.body_modes[pred])
-                    self.cached_literals[(pred, k)] = literal
-
-            pred = self.head_literal.predicate
-            arity = self.head_literal.arity
+        self.body_modes = {}
+        self.cached_literals = {}
+        for pred, arity in self.body_preds:
             self.body_modes[pred] = tuple(directions[pred][i] for i in range(arity))
+
+        for pred, arity in self.body_preds:
             for k, args in self.cached_atom_args.items():
                 if len(args) != arity:
                     continue
                 literal = Literal(pred, args, self.body_modes[pred])
                 self.cached_literals[(pred, k)] = literal
+
+        pred = self.head_literal.predicate
+        arity = self.head_literal.arity
+        self.body_modes[pred] = tuple(directions[pred][i] for i in range(arity))
+        for k, args in self.cached_atom_args.items():
+            if len(args) != arity:
+                continue
+            literal = Literal(pred, args, self.body_modes[pred])
+            self.cached_literals[(pred, k)] = literal
 
         if self.max_rules == None:
             if self.recursion_enabled or self.pi_enabled:
@@ -555,6 +564,13 @@ def theory_subsumes(prog1, prog2):
     # P1 subsumes P2 if for every rule R2 in P2 there is a rule R1 in P1 such that R1 subsumes R2
     return all(any(rule_subsumes(r1, r2) for r1 in prog1) for r2 in prog2)
 
+def non_empty_powerset(iterable):
+    s = tuple(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
+
+def non_empty_subset(iterable):
+    s = tuple(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)))
 
 def load_types(settings):
     enc = """
@@ -630,6 +646,84 @@ def bias_order(settings, max_size):
     settings.search_order = ret
     return settings.search_order
 
+def is_headless(prog):
+    return any(head is None for head, body in prog)
+
+@cache
+def head_connected(rule):
+    head, body = rule
+    head_connected_vars = set(head.arguments)
+    body_literals = set(body)
+
+    if not any(x in head_connected_vars for literal in body for x in literal.arguments):
+        return False
+
+    while body_literals:
+        changed = False
+        for literal in body_literals:
+            if any (x in head_connected_vars for x in literal.arguments):
+                head_connected_vars.update(literal.arguments)
+                body_literals = body_literals.difference({literal})
+                changed = True
+        if changed == False and body_literals:
+            return False
+
+    return True
+
+@cache
+def has_valid_directions(rule):
+    head, body = rule
+
+    if head:
+        if len(head.inputs) == 0:
+            return True
+
+        grounded_variables = head.inputs
+        body_literals = set(body)
+
+        while body_literals:
+            selected_literal = None
+            for literal in body_literals:
+                if not literal.inputs.issubset(grounded_variables):
+                    continue
+                if literal.predicate != head.predicate:
+                    # find the first ground non-recursive body literal and stop
+                    selected_literal = literal
+                    break
+                elif selected_literal == None:
+                    # otherwise use the recursive body literal
+                    selected_literal = literal
+
+            if selected_literal == None:
+                return False
+
+            grounded_variables = grounded_variables.union(selected_literal.outputs)
+            body_literals = body_literals.difference({selected_literal})
+        return True
+    else:
+        if all(len(literal.inputs) == 0 for literal in body):
+            return True
+
+        body_literals = set(body)
+        grounded_variables = set()
+
+        while body_literals:
+            selected_literal = None
+            for literal in body_literals:
+                if len(literal.outputs) == len(literal.arguments):
+                    selected_literal = literal
+                    break
+                if literal.inputs.issubset(grounded_variables):
+                    selected_literal = literal
+                    break
+
+            if selected_literal == None:
+                return False
+
+            grounded_variables = grounded_variables.union(selected_literal.arguments)
+            body_literals = body_literals.difference({selected_literal})
+
+        return True
 
 import os
 # AC: I do not know what this code below really does, but it works
@@ -661,3 +755,37 @@ class suppress_stdout_stderr(object):
         # Close all file descriptors
         for fd in self.null_fds + self.save_fds:
             os.close(fd)
+
+def rename_variables(rule):
+    head, body = rule
+    if head:
+        head_vars = set(head.arguments)
+        head = (head.predicate, head.arguments)
+    else:
+        head_vars = set()
+    next_var = len(head_vars)
+    new_body = []
+    lookup = {}
+    for body_literal in sorted(body, key=lambda x: x.predicate):
+        new_args = []
+        for var in body_literal.arguments:
+            if var in head_vars:
+                new_args.append(var)
+                continue
+            elif var not in lookup:
+                lookup[var] = next_var
+                next_var+=1
+            new_args.append(lookup[var])
+        new_body.append((body_literal.predicate, tuple(new_args)))
+    return (head, new_body)
+
+def get_raw_prog(prog):
+    xs = set()
+    for rule in prog:
+        h, b = rename_variables(rule)
+        xs.add((h, frozenset(b)))
+    return frozenset(xs)
+
+def prog_hash(prog):
+    new_prog = get_raw_prog(prog)
+    return hash(new_prog)

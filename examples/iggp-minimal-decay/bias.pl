@@ -28,3 +28,17 @@ type(c5,(int,)).
 :-
     clause(C),
     #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
+
+bad_body(P, A, Vars):-
+    P=does,
+    vars(A, Vars),
+    Vars = (X, _, _),
+    X != 0.
+
+bad_body(P, A, Vars):-
+    P=true_value,
+    vars(A, Vars),
+    Vars = (X, _),
+    X != 0.
+
+%% body_literal(0,does,3,(0,2,5))
