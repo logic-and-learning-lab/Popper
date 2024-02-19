@@ -70,8 +70,8 @@ def parse_args():
     parser.add_argument('--batch-size', type=int, default=BATCH_SIZE, help=f'Combine batch size (default: {BATCH_SIZE})')
     parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
     # parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
-    parser.add_argument('--no-bias', default=False, action='store_true', help='EXPERIMENTAL FEATURE: do not use language bias')
-    parser.add_argument('--order-space', default=False, action='store_true', help='EXPERIMENTAL FEATURE: search space ordered by size')
+    # parser.add_argument('--no-bias', default=False, action='store_true', help='EXPERIMENTAL FEATURE: do not use language bias')
+    # parser.add_argument('--order-space', default=False, action='store_true', help='EXPERIMENTAL FEATURE: search space ordered by size')
 
 
     return parser.parse_args()
@@ -362,8 +362,8 @@ class Settings:
             functional_test = args.functional_test
             # datalog = args.datalog
             showcons = args.showcons
-            no_bias = args.no_bias
-            order_space = args.order_space
+            # no_bias = args.no_bias
+            # order_space = args.order_space
             noisy = args.noisy
             batch_size = args.batch_size
             solver = args.solver

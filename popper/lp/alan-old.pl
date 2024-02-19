@@ -3,7 +3,6 @@
 %% ##################################################
 
 #defined direction/2.
-#defined direction_/3.
 #defined type/2.
 #defined invented/2.
 #defined lower/2.
@@ -309,41 +308,36 @@ body_subset(C1,C2):-
     same_head(C1,C2),
     body_subset(C1,C2).
 
-%% %% ##################################################
-%% %% SIMPLE TYPE MATCHING
-%% %% ##################################################
-%% #script (python)
-%% def pytype(pos, types):
-%%     return types.arguments[pos.number]
-%% #end.
+%% ##################################################
+%% SIMPLE TYPE MATCHING
+%% ##################################################
+#script (python)
+def pytype(pos, types):
+    return types.arguments[pos.number]
+#end.
 
-fixed_var_type(Var, Type):-
-    head_literal(_,P, A, Vars),
-    var_pos(Var, Vars, Pos),
-    type(P, Types),
-    head_vars(A,Vars),
-    type_pos(Types, Pos, Type).
+fixed_var_type(Var,@pytype(Pos,Types)):-
+    head_literal(_,P,A,Vars),
+    var_pos(Var,Vars,Pos),
+    type(P,Types),
+    head_vars(A,Vars).
 
-pred_arg_type(P, Pos, Type):-
+pred_arg_type(P,Pos,@pytype(Pos,Types)):-
     Pos = 0..A-1,
     body_pred(P,A),
-    type(P, Types),
-    type_pos(Types, Pos, Type).
+    type(P,Types).
 
-
-var_type(C, Var, Type):-
+var_type(C,Var,@pytype(Pos,Types)):-
     body_literal(C,P,_,Vars),
     var_pos(Var,Vars,Pos),
     vars(A,Vars),
-    type(P,Types),
-    type_pos(Types, Pos, Type).
+    type(P,Types).
 
-var_type(C, Var, Type):-
+var_type(C,Var,@pytype(Pos,Types)):-
     head_literal(C,P,_,Vars),
     var_pos(Var,Vars,Pos),
     vars(A,Vars),
-    type(P,Types),
-    type_pos(Types, Pos, Type).
+    type(P,Types).
 :-
     clause_var(C,Var),
     #count{Type : var_type(C,Var,Type)} > 1.
@@ -459,25 +453,25 @@ base_clause(C,P,A):-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% ENSURES INPUT VARS ARE GROUND
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% #script (python)
-%% def pydirection(pos, directions):
-%%     return directions.arguments[pos.number]
-%% def pylen(directions):
-%%     return Number(len(directions.arguments))
-%% #end.
+#script (python)
+def pydirection(pos, directions):
+    return directions.arguments[pos.number]
+def pylen(directions):
+    return Number(len(directions.arguments))
+#end.
 
-%% arity(P,A):-
-    %% head_aux(P,A).
-%% arity(P,A):-
-    %% body_aux(P,A).
+arity(P,A):-
+    head_aux(P,A).
+arity(P,A):-
+    body_aux(P,A).
 
-%% direction_aux(P, @pylen(Directions), Directions):-
-%%     direction(P,Directions).
+direction_aux(P, @pylen(Directions), Directions):-
+    direction(P,Directions).
 
-%% direction_(P,Pos,@pydirection(Pos,Directions)):-
-%%     arity(P,A),
-%%     Pos=0..A-1,
-%%     direction_aux(P,A,Directions).
+direction_(P,Pos,@pydirection(Pos,Directions)):-
+    arity(P,A),
+    Pos=0..A-1,
+    direction_aux(P,A,Directions).
 
 num_in_args(P,N):-
     direction_(P,_,_),
@@ -514,14 +508,14 @@ safe_bvar(Rule,Var):-
 %% IDEAS FROM THE PAPER:
 %% Predicate invention by learning from failures. A. Cropper and R. Morel
 
-%% #script (python)
-%% from itertools import permutations
-%% from clingo.symbol import Tuple_, Number, Function
-%% def mk_tuple(xs):
-%%     return Tuple_([Number(x) for x in xs])
-%% def py_gen_invsym(i):
-%%     return Function(f'inv{i}')
-%% #end.
+#script (python)
+from itertools import permutations
+from clingo.symbol import Tuple_, Number, Function
+def mk_tuple(xs):
+    return Tuple_([Number(x) for x in xs])
+def py_gen_invsym(i):
+    return Function(f'inv{i}')
+#end.
 
 pi:-
     invented(_,_).

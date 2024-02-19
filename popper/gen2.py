@@ -55,28 +55,28 @@ class Generator:
         for arity in arities:
             for xs in permutations(range(settings.max_vars), arity):
                 encoding.append(f'vars({arity}, {tuple(xs)}).')
-
                 for i, x in enumerate(xs):
                     encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
 
-        # types = tuple(self.settings.head_types)
-        # str_types = str(types).replace("'","")
-        # for x, i in enumerate(self.settings.head_types):
-        #     encoding.append(f'type_pos({str_types}, {i}, {x}).')
+        type_encoding = set()
+        types = tuple(self.settings.head_types)
+        str_types = str(types).replace("'","")
+        for i, x in enumerate(self.settings.head_types):
+            type_encoding.add(f'type_pos({str_types}, {i}, {x}).')
 
-        # for pred, types in self.settings.body_types.items():
-        #     types = tuple(types)
-        #     str_types = str(types).replace("'","")
-        #     for i, x in enumerate(types):
+        for pred, types in self.settings.body_types.items():
+            types = tuple(types)
+            str_types = str(types).replace("'","")
+            for i, x in enumerate(types):
+                type_encoding.add(f'type_pos({str_types}, {i}, {x}).')
+        encoding.extend(type_encoding)
 
-        #         encoding.append(f'type_pos({str_types}, {i}, {x}).')
-
-        # for pred, xs in self.settings.directions.items():
-        #     for i, v in xs.items():
-        #         if v == '+':
-        #             encoding.append(f'direction_({pred}, {i}, in).')
-        #         if v == '-':
-        #             encoding.append(f'direction_({pred}, {i}, out).')
+        for pred, xs in self.settings.directions.items():
+            for i, v in xs.items():
+                if v == '+':
+                    encoding.append(f'direction_({pred}, {i}, in).')
+                if v == '-':
+                    encoding.append(f'direction_({pred}, {i}, out).')
 
         max_size = (1 + settings.max_body) * settings.max_rules
         if settings.max_literals < max_size:
@@ -99,10 +99,11 @@ class Generator:
             """
             encoding.append(DEFAULT_HEURISTIC)
 
+        # assert(len(encoding) == len(set(encoding)))
         encoding = '\n'.join(encoding)
 
-        # with open('ENCODING-GEN.pl', 'w') as f:
-            # f.write(encoding)
+        with open('ENCODING-GEN.pl', 'w') as f:
+            f.write(encoding)
 
         if self.settings.single_solve:
             solver = clingo.Control(['--heuristic=Domain','-Wnone'])
