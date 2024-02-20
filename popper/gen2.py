@@ -24,6 +24,10 @@ def atom_to_symbol(pred, args):
     xs = tuple(arg_to_symbol(arg) for arg in args)
     return Function(name = pred, arguments = xs)
 
+DEFAULT_HEURISTIC = """
+#heuristic size(N). [1000-N,true]
+"""
+
 class Generator:
 
     def __init__(self, settings, bkcons=[]):
@@ -94,12 +98,8 @@ class Generator:
         encoding.extend(bkcons)
 
         if settings.single_solve:
-            DEFAULT_HEURISTIC = """
-            #heuristic size(N). [1000-N,true]
-            """
             encoding.append(DEFAULT_HEURISTIC)
 
-        # assert(len(encoding) == len(set(encoding)))
         encoding = '\n'.join(encoding)
 
         with open('ENCODING-GEN.pl', 'w') as f:

@@ -1248,8 +1248,24 @@ def connected(body):
 
     return True
 
+# TODO: THIS CHECK IS NOT COMPLETE
+# IT DOES NOT ACCOUNT FOR VARIABLE RENAMING
+# R1 = (None, frozenset({('c3', ('A',)), ('c2', ('A',))}))
+# R2 = (None, frozenset({('c3', ('B',)), ('c2', ('B',), true_value(A,B))}))
+def rule_subsumes(r1, r2):
+    # r1 subsumes r2 if r1 is a subset of r2
+    h1, b1 = r1
+    h2, b2 = r2
+    if h1 != None and h2 == None:
+        return False
+    return b1.issubset(b2)
+
+# P1 subsumes P2 if for every rule R2 in P2 there is a rule R1 in P1 such that R1 subsumes R2
+def theory_subsumes(prog1, prog2):
+    return all(any(rule_subsumes(r1, r2) for r1 in prog1) for r2 in prog2)
+
 def seen_more_general_unsat(prog, unsat):
     return any(theory_subsumes(seen, prog) for seen in unsat)
 
-def seen_more_specific_sat(prog, sat):
-    return any(theory_subsumes(prog, seen) for seen in sat)
+# def seen_more_specific_sat(prog, sat):
+#     return any(theory_subsumes(prog, seen) for seen in sat)
