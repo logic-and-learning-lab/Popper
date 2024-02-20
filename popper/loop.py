@@ -1,7 +1,8 @@
 import time
 from collections import defaultdict
+from functools import cache
 from itertools import chain, combinations, permutations
-from . util import timeout, format_rule, rule_is_recursive, order_prog, prog_is_recursive, prog_has_invention, order_rule, calc_prog_size, format_literal, format_prog, format_prog2, order_rule2, Constraint, bias_order, mdl_score, suppress_stdout_stderr, non_empty_powerset, is_headless, head_connected, has_valid_directions, get_raw_prog, theory_subsumes, Literal, non_empty_subset
+from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, format_prog, Constraint, bias_order, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal
 from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls
 
@@ -382,15 +383,15 @@ class Popper():
                                 pruned_more_general = len(xs) > 0
                                 if settings.showcons and not pruned_more_general:
                                     if subsumed:
-                                        print('\t', format_prog2(prog), '\t', 'subsumed')
+                                        print('\t', format_prog(prog), '\t', 'subsumed')
                                     else:
-                                        print('\t', format_prog2(prog), '\t', 'covers_too_few')
+                                        print('\t', format_prog(prog), '\t', 'covers_too_few')
                                 for x in xs:
                                     if settings.showcons:
                                         if subsumed:
-                                            print('\t', format_prog2(x), '\t', 'subsumed (generalisation)')
+                                            print('\t', format_prog(x), '\t', 'subsumed (generalisation)')
                                         else:
-                                            print('\t', format_prog2(x), '\t', 'covers_too_few (generalisation)', tp)
+                                            print('\t', format_prog(x), '\t', 'covers_too_few (generalisation)', tp)
 
 
                                     new_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(list(x)[0])]))
@@ -697,8 +698,8 @@ class Popper():
             if settings.showcons:
                 if len(subprog) > 1:
                     print('\n')
-                for i, rule in enumerate(order_prog(subprog)):
-                    print('\t', format_rule(order_rule(rule)), '\t', f'unsat')
+                for i, rule in enumerate(subprog):
+                    print('\t', format_rule(rule), '\t', f'unsat')
 
             if unsat_body:
                 _, body = list(subprog)[0]
@@ -845,7 +846,7 @@ class Popper():
 
             if check_coverage and len(sub_prog_pos_covered) == 1 and not subsumed:
                 print("POOOOOOOOOO")
-                print(format_prog2(new_prog))
+                print(format_prog(new_prog))
                 assert(False)
 
             if not prune:
@@ -923,11 +924,11 @@ class Popper():
 
                 if sub_prog_subsumed:
                     if self.settings.showcons:
-                        print('\t', format_prog2(new_prog), '\t', 'subsumed_backtrack (generalisation)')
+                        print('\t', format_prog(new_prog), '\t', 'subsumed_backtrack (generalisation)')
 
                 if not sub_prog_subsumed and sub_covers_too_few:
                     if self.settings.showcons:
-                        print('\t', format_prog2(new_prog), '\t', 'COVERS TOO FEW')
+                        print('\t', format_prog(new_prog), '\t', 'COVERS TOO FEW')
                     assert(False)
 
                 if sub_prog_subsumed or sub_covers_too_few:
@@ -946,7 +947,7 @@ class Popper():
                 pruned2.add(x)
 
             if self.settings.showcons:
-                print('\t', format_prog2(prog2), '\t', 'subsumed_backtrack')
+                print('\t', format_prog(prog2), '\t', 'subsumed_backtrack')
             to_prune.add(prog2)
 
         for x in to_delete:
@@ -1267,5 +1268,89 @@ def theory_subsumes(prog1, prog2):
 def seen_more_general_unsat(prog, unsat):
     return any(theory_subsumes(seen, prog) for seen in unsat)
 
-# def seen_more_specific_sat(prog, sat):
-#     return any(theory_subsumes(prog, seen) for seen in sat)
+@cache
+def head_connected(rule):
+    head, body = rule
+    head_connected_vars = set(head.arguments)
+    body_literals = set(body)
+
+    if not any(x in head_connected_vars for literal in body for x in literal.arguments):
+        return False
+
+    while body_literals:
+        changed = False
+        for literal in body_literals:
+            if any (x in head_connected_vars for x in literal.arguments):
+                head_connected_vars.update(literal.arguments)
+                body_literals = body_literals.difference({literal})
+                changed = True
+        if changed == False and body_literals:
+            return False
+
+    return True
+
+@cache
+def has_valid_directions(rule):
+    head, body = rule
+
+    if head:
+        if len(head.inputs) == 0:
+            return True
+
+        grounded_variables = head.inputs
+        body_literals = set(body)
+
+        while body_literals:
+            selected_literal = None
+            for literal in body_literals:
+                if not literal.inputs.issubset(grounded_variables):
+                    continue
+                if literal.predicate != head.predicate:
+                    # find the first ground non-recursive body literal and stop
+                    selected_literal = literal
+                    break
+                elif selected_literal == None:
+                    # otherwise use the recursive body literal
+                    selected_literal = literal
+
+            if selected_literal == None:
+                return False
+
+            grounded_variables = grounded_variables.union(selected_literal.outputs)
+            body_literals = body_literals.difference({selected_literal})
+        return True
+    else:
+        if all(len(literal.inputs) == 0 for literal in body):
+            return True
+
+        body_literals = set(body)
+        grounded_variables = set()
+
+        while body_literals:
+            selected_literal = None
+            for literal in body_literals:
+                if len(literal.outputs) == len(literal.arguments):
+                    selected_literal = literal
+                    break
+                if literal.inputs.issubset(grounded_variables):
+                    selected_literal = literal
+                    break
+
+            if selected_literal == None:
+                return False
+
+            grounded_variables = grounded_variables.union(selected_literal.arguments)
+            body_literals = body_literals.difference({selected_literal})
+
+        return True
+
+def is_headless(prog):
+    return any(head is None for head, body in prog)
+
+def non_empty_powerset(iterable):
+    s = tuple(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
+
+def non_empty_subset(iterable):
+    s = tuple(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)))
