@@ -86,9 +86,6 @@ class Generator:
         if settings.max_literals < max_size:
             encoding.append(f'custom_max_size({settings.max_literals}).')
 
-        if settings.pi_enabled:
-            encoding.append(f'#show head_literal/4.')
-
         if settings.noisy:
             encoding.append("""
             program_bounds(0..K):- max_size(K).
@@ -102,8 +99,8 @@ class Generator:
 
         encoding = '\n'.join(encoding)
 
-        with open('ENCODING-GEN.pl', 'w') as f:
-            f.write(encoding)
+        # with open('ENCODING-GEN.pl', 'w') as f:
+            # f.write(encoding)
 
         if self.settings.single_solve:
             solver = clingo.Control(['--heuristic=Domain','-Wnone'])

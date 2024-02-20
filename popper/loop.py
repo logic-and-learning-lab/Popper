@@ -170,7 +170,8 @@ class Popper():
             if settings.single_solve:
                 from . gen2 import Generator
             else:
-                from . generate import Generator
+                # from . generate import Generator
+                from . gen3 import Generator
             generator = self.generator = Generator(settings, self.bkcons)
 
         # track the success sets of tested hypotheses
