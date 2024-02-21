@@ -170,8 +170,8 @@ class Popper():
             if settings.single_solve:
                 from . gen2 import Generator
             else:
-                # from . generate import Generator
-                from . gen3 import Generator
+                from . generate import Generator
+                # from . gen3 import Generator
             generator = self.generator = Generator(settings, self.bkcons)
 
         # track the success sets of tested hypotheses
@@ -296,6 +296,8 @@ class Popper():
 
                 tp = len(pos_covered)
                 fn = num_pos-tp
+
+                print(tp, inconsistent)
 
                 # if non-separable program covers all examples, stop
                 if not skipped and not inconsistent and tp == num_pos and not settings.order_space:
@@ -712,9 +714,9 @@ class Popper():
                 continue
 
             if len(subprog) == 1:
-                yield (Constraint.REDUNDANCY_CONSTRAINT1, subprog)
+                yield (Constraint.REDUNDANCY_CONSTRAINT1, [functional_rename_vars(subprog[0])])
 
-            yield (Constraint.REDUNDANCY_CONSTRAINT2, subprog)
+            yield (Constraint.REDUNDANCY_CONSTRAINT2, [functional_rename_vars(rule) for rule in subprog])
 
     # given a program with more than one rule, look for inconsistent subrules/subprograms
     def explain_inconsistent(self, prog):
