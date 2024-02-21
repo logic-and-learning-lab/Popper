@@ -28,6 +28,11 @@ DEFAULT_HEURISTIC = """
 #heuristic size(N). [1000-N,true]
 """
 
+NOISY_ENCODING = """
+program_bounds(0..K):- max_size(K).
+program_size_at_least(M):- size(N), program_bounds(M), M <= N.
+"""
+
 class Generator:
 
     def __init__(self, settings, bkcons=[]):
@@ -87,10 +92,7 @@ class Generator:
             encoding.append(f'custom_max_size({settings.max_literals}).')
 
         if settings.noisy:
-            encoding.append("""
-            program_bounds(0..K):- max_size(K).
-            program_size_at_least(M):- size(N), program_bounds(M), M <= N.
-            """)
+            encoding.append(NOISY_ENCODING)
 
         encoding.extend(bkcons)
 
@@ -140,8 +142,6 @@ class Generator:
         self.model.context.add_nogood(size_con)
 
     def constrain(self, tmp_new_cons):
-        model = self.model
-
         new_ground_cons = set()
 
         for xs in tmp_new_cons:
@@ -164,7 +164,7 @@ class Generator:
                 cons_ = self.unsat_constraint2(con_prog)
                 new_ground_cons.update(cons_)
 
-        tmp = model.context.add_nogood
+        tmp = self.model.context.add_nogood
 
         for ground_body in new_ground_cons:
             nogood = []

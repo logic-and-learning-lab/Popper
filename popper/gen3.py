@@ -118,8 +118,8 @@ class Generator:
 
         encoding = '\n'.join(encoding)
 
-        with open('ENCODING-GEN.pl', 'w') as f:
-            f.write(encoding)
+        # with open('ENCODING-GEN.pl', 'w') as f:
+            # f.write(encoding)
 
         if self.settings.single_solve:
             solver = clingo.Control(['--heuristic=Domain','-Wnone'])
@@ -200,63 +200,6 @@ class Generator:
             body.add(literal)
         rule = head, frozenset(body)
         return frozenset([rule])
-
-    def parse_model_pi(self, model):
-        settings = self.settings
-        # directions = defaultdict(lambda: defaultdict(lambda: '?'))
-        rule_index_to_body = defaultdict(set)
-        rule_index_to_head = {}
-        # rule_index_ordering = defaultdict(set)
-
-        for atom in model:
-            args = atom.arguments
-            name = atom.name
-
-            if name == 'body_literal':
-                rule_index = args[0].number
-                predicate = args[1].name
-                atom_args = args[3].arguments
-                atom_args = settings.cached_atom_args[tuple(atom_args)]
-                arity = len(atom_args)
-                body_literal = (predicate, atom_args, arity)
-                rule_index_to_body[rule_index].add(body_literal)
-
-            elif name == 'head_literal':
-                rule_index = args[0].number
-                predicate = args[1].name
-                atom_args = args[3].arguments
-                atom_args = settings.cached_atom_args[tuple(atom_args)]
-                arity = len(atom_args)
-                head_literal = (predicate, atom_args, arity)
-                rule_index_to_head[rule_index] = head_literal
-
-            # # TODO AC: STOP READING THESE THE MODELS
-            # elif name == 'direction_':
-            #     pred_name = args[0].name
-            #     arg_index = args[1].number
-            #     arg_dir_str = args[2].name
-
-            #     if arg_dir_str == 'in':
-            #         arg_dir = '+'
-            #     elif arg_dir_str == 'out':
-            #         arg_dir = '-'
-            #     else:
-            #         raise Exception(f'Unrecognised argument direction "{arg_dir_str}"')
-            #     directions[pred_name][arg_index] = arg_dir
-
-        prog = []
-
-        for rule_index in rule_index_to_head:
-            head_pred, head_args, head_arity = rule_index_to_head[rule_index]
-            head = Literal(head_pred, head_args, {})
-            body = set()
-            for (body_pred, body_args, body_arity) in rule_index_to_body[rule_index]:
-                body.add(Literal(body_pred, body_args, {}))
-            body = frozenset(body)
-            rule = head, body
-            prog.append((rule))
-
-        return frozenset(prog)
 
     def update_solver(self, size, num_vars, num_rules):
         self.update_number_of_literals(size)
@@ -365,17 +308,23 @@ class Generator:
         self.model.context.add_nogood(size_con)
 
     def constrain(self, tmp_new_cons):
-
         new_cons = set()
+
         for xs in tmp_new_cons:
             con_type = xs[0]
             con_prog = xs[1]
 
             if con_type == Constraint.GENERALISATION:
-                xs = set(self.build_generalisation_constraint3(con_prog))
+                con_size = None
+                if self.settings.noisy and len(xs)>2:
+                    con_size = xs[2]
+                xs = set(self.build_generalisation_constraint3(con_prog, con_size))
                 new_cons.update(xs)
             elif con_type == Constraint.SPECIALISATION:
-                xs = set(self.build_specialisation_constraint3(con_prog))
+                con_size = None
+                if self.settings.noisy and len(xs)>2:
+                    con_size = xs[2]
+                xs = set(self.build_specialisation_constraint3(con_prog, con_size))
                 new_cons.update(xs)
             elif con_type == Constraint.UNSAT:
                 new_cons.update(self.unsat_constraint2(con_prog))
@@ -391,9 +340,11 @@ class Generator:
             elif con_type == Constraint.TMP_ANDY:
                 assert(False)
             elif con_type == Constraint.BANISH:
-                assert(False)
+                xs = set(self.build_banish_constraint(con_prog))
+                new_cons.update(xs)
 
-        nogoods = []
+        tmp = self.model.context.add_nogood
+
         for ground_body in new_cons:
             nogood = []
             for sign, pred, args in ground_body:
@@ -404,11 +355,7 @@ class Generator:
                     x = (atom_to_symbol(pred, args), sign)
                     self.cached_clingo_atoms[k] = x
                 nogood.append(x)
-            nogoods.append(nogood)
-
-        model = self.model
-        for x in nogoods:
-            model.context.add_nogood(x)
+            tmp(nogood)
 
         # add ground cons
         self.new_ground_cons.update(new_cons)
@@ -434,6 +381,8 @@ class Generator:
                 con = []
                 con.append((True, 'seen_rule', (handle, 0)))
                 con.append((False, 'clause', (1, )))
+                if size:
+                    con.append((True, 'program_size_at_least', (size,)))
                 yield frozenset(con)
                 return
 
@@ -473,7 +422,11 @@ class Generator:
 
         for r1 in bases:
             for r2 in recs:
-                yield r1 | r2
+                if not size:
+                    yield r1 | r2
+                else:
+                    yield r1 | r2 | {(True, 'program_size_at_least', (size,))}
+                    # yield frozenset(con)
 
     def build_generalisation_constraint3(self, prog, size=None):
 
@@ -486,6 +439,8 @@ class Generator:
                 con = []
                 con.append((True, 'seen_rule', (handle, 0)))
                 con.append((True, 'body_size', (0, len(body))))
+                if size:
+                    con.append((True, 'program_size_at_least', (size,)))
                 yield frozenset(con)
                 return
 
@@ -496,6 +451,75 @@ class Generator:
                 con.append((True, 'body_size', (0, len(body))))
                 if size:
                     con.append((True, 'program_size_at_least', (size,)))
+                yield frozenset(con)
+            return
+
+        base = [rule for rule in prog if not rule_is_recursive(rule)][0]
+        base_head, base_body = base
+
+        bases = []
+        handle = self.make_rule_handle(base)
+        if handle in self.seen_handles:
+            con = []
+            con.append((True, 'seen_rule', (handle, 0)))
+            con.append((True, 'body_size', (0, len(base_body))))
+            bases.append(frozenset(con))
+        else:
+            self.new_seen_rules.update(self.build_seen_rule2(base, False))
+            for variant in self.find_variants3(base, ruleid=0):
+                con = []
+                con.extend(variant)
+                con.append((True, 'body_size', (0, len(base_body))))
+                bases.append(frozenset(con))
+
+        rec = [rule for rule in prog if rule_is_recursive(rule)][0]
+        rec_head, rec_body = rec
+        recs = []
+        handle = self.make_rule_handle(rec)
+        if handle in self.seen_handles:
+            con = []
+            con.append((True, 'seen_rule', (handle, 1)))
+            con.append((True, 'body_size', (1, len(rec_body))))
+            bases.append(frozenset(con))
+        else:
+            self.new_seen_rules.update(self.build_seen_rule2(rec, True))
+            for variant in self.find_variants3(rec, ruleid=1):
+                con = []
+                con.extend(variant)
+                con.append((True, 'body_size', (1, len(rec_body))))
+                recs.append(frozenset(con))
+
+        for r1 in bases:
+            for r2 in recs:
+                # con = r1 | r2
+                if not size:
+                    yield r1 | r2
+                else:
+                    # con.add()
+                    yield r1 | r2 | {(True, 'program_size_at_least', (size,))}
+
+
+    def build_banish_constraint(self, prog):
+
+        if len(prog) == 1:
+            rule = list(prog)[0]
+            head, body = rule
+            handle = self.make_rule_handle(rule)
+            if handle in self.seen_handles:
+                con = []
+                con.append((True, 'seen_rule', (handle, 0)))
+                con.append((True, 'body_size', (0, len(body))))
+                con.append((False, 'clause', (1, )))
+                yield frozenset(con)
+                return
+
+            self.new_seen_rules.update(self.build_seen_rule2(rule, False))
+
+            for variant in self.find_variants3(rule):
+                con = []
+                con.extend(variant)
+                con.append((True, 'body_size', (0, len(body))))
+                con.append((False, 'clause', (1, )))
                 yield frozenset(con)
             return
 
@@ -590,6 +614,7 @@ class Generator:
                 new_rule = (new_head, frozenset(new_body))
                 out.append(new_rule)
         return frozenset(out)
+
     # only works with single rule programs
     # if a single rule R is unsatisfiable, then for R to appear in an optimal solution H it must be the case that H has a recursive rule that does not specialise R
     def redundancy_constraint1(self, prog):
@@ -613,15 +638,13 @@ class Generator:
 
     def unsat_constraint2(self, body):
         assignments = self.find_deep_bindings4(body)
-        out = []
         for rule_id in range(self.settings.max_rules):
             for assignment in assignments:
                 rule = []
                 for atom in body:
                     args2 = tuple(assignment[x] for x in atom.arguments)
                     rule.append((True, 'body_literal', (rule_id, atom.predicate, len(atom.arguments), args2)))
-                out.append(frozenset(rule))
-        return out
+                yield frozenset(rule)
 
     def find_deep_bindings4(self, body):
         head_types = self.settings.head_types
