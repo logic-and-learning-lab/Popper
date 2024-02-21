@@ -1,12 +1,12 @@
 enable_recursion.
 
 head_pred(f,2).
-%% body_pred(at_top,1).
-%% body_pred(at_bottom,1).
-%% body_pred(at_left,1).
-%% body_pred(at_right,1).
-%% body_pred(move_left,2).
-%% body_pred(move_right,2).
+body_pred(at_top,1).
+body_pred(at_bottom,1).
+body_pred(at_left,1).
+body_pred(at_right,1).
+body_pred(move_left,2).
+body_pred(move_right,2).
 body_pred(move_up,2).
 body_pred(move_down,2).
 

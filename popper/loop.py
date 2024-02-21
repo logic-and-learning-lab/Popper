@@ -170,8 +170,8 @@ class Popper():
             if settings.single_solve:
                 from . gen2 import Generator
             else:
-                from . generate import Generator
-                # from . gen3 import Generator
+                # from . generate import Generator
+                from . gen3 import Generator
             generator = self.generator = Generator(settings, self.bkcons)
 
         # track the success sets of tested hypotheses
@@ -297,7 +297,7 @@ class Popper():
                 tp = len(pos_covered)
                 fn = num_pos-tp
 
-                print(tp, inconsistent)
+                # print(tp, inconsistent)
 
                 # if non-separable program covers all examples, stop
                 if not skipped and not inconsistent and tp == num_pos and not settings.order_space:
@@ -396,7 +396,6 @@ class Popper():
                                         else:
                                             print('\t', format_prog(x), '\t', 'covers_too_few (generalisation)', tp)
 
-
                                     new_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(list(x)[0])]))
 
                     if inconsistent:
@@ -492,6 +491,8 @@ class Popper():
                 # remove generalisations of programs with redundant literals
                 if is_recursive:
                     for rule in prog:
+                        if rule_is_recursive(rule) and settings.max_rules == 2:
+                            continue
                         if tester.has_redundant_literal([rule]):
                             add_gen = True
                             new_cons.append((Constraint.GENERALISATION, [rule]))
@@ -514,7 +515,6 @@ class Popper():
 
                 if not add_spec and not pruned_more_general and not pruned_sub_incomplete:
                     could_prune_later[prog_size][prog] = pos_covered
-
 
                 add_to_combiner = False
                 if settings.noisy:
@@ -613,8 +613,6 @@ class Popper():
                             # AC: sometimes adding these size constraints can take longer
                             for i in range(hypothesis_size, max_size+1):
                                 generator.prune_size(i)
-                                # size_con = [(atom_to_symbol("size", (i,)), True)]
-                                # model.context.add_nogood(size_con)
 
                 # BUILD CONSTRAINTS
                 if add_spec and not pruned_sub_incomplete and not pruned_more_general and not add_redund2:
@@ -880,6 +878,9 @@ class Popper():
                 yield from x.items()
 
         for prog2, pos_covered2 in get_zs():
+
+            if len(prog2) > 1:
+                continue
 
             should_prune = check_coverage and len(pos_covered2) == 1
             subsumed = pos_covered2.issubset(pos_covered)

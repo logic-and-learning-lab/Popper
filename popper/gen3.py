@@ -42,6 +42,9 @@ class Generator:
         self.cached_handles = {}
         self.cached4 = {}
 
+
+        self.debug = defaultdict(set)
+
         # handles for rules that are minimal and unsatisfiable
         self.bad_handles = set()
         # new rules added to the solver, such as: seen(id):- head_literal(...), body_literal(...)
@@ -51,7 +54,6 @@ class Generator:
 
         encoding = []
         alan = pkg_resources.resource_string(__name__, "lp/alan-old.pl").decode()
-        # alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
         encoding.append(alan)
 
         with open(settings.bias_file) as f:
@@ -268,14 +270,34 @@ class Generator:
         # add handles for newly seen rules
         # for handle, rule in handles:
         for rule in self.new_seen_rules:
+            # print(rule)
             head, body = rule
             head_pred, head_args = head
             new_head = (True, head_pred, head_args)
             new_body = frozenset((True, pred, args) for pred, args in body)
             to_add.append((new_head, new_body))
 
+            if head_args[0] in self.debug:
+                print('wtf???')
+                print(head_args[0])
+                print('NEW', rule)
+                for x in self.debug[head_args[0]]:
+                    print('OLD', x)
+                assert(False)
+
+            # print(head_args[0])
+
             # ADD SEEN HANDLE
             self.seen_handles.add(head_args[0])
+
+        for rule in self.new_seen_rules:
+            # print(rule)
+            head, body = rule
+            head_pred, head_args = head
+            # new_head = (True, head_pred, head_args)
+            # new_body = frozenset((True, pred, args) for pred, args in body)
+            # to_add.append((new_head, new_body))
+            self.debug[head_args[0]].add(rule)
 
         # for handle in self.bad_handles:
         #     # if we know that rule_xyz is bad
@@ -350,47 +372,22 @@ class Generator:
             con_prog = xs[1]
 
             if con_type == Constraint.GENERALISATION:
-                # print('gen')
-                con_size = None
-                if self.settings.noisy and len(xs)>2:
-                    con_size = xs[2]
-                xs = set(self.build_generalisation_constraint3(con_prog, size=con_size))
-                for x in xs:
-                    print('gen', x)
+                xs = set(self.build_generalisation_constraint3(con_prog))
                 new_cons.update(xs)
             elif con_type == Constraint.SPECIALISATION:
-                # print('spec')
-                con_size = None
-                if self.settings.noisy and len(xs)>2:
-                    con_size = xs[2]
-                xs = set(self.build_specialisation_constraint3(con_prog, size=con_size))
-                for x in xs:
-                    print('spec', x)
+                xs = set(self.build_specialisation_constraint3(con_prog))
                 new_cons.update(xs)
             elif con_type == Constraint.UNSAT:
-                print('unsat')
                 new_cons.update(self.unsat_constraint2(con_prog))
             elif con_type == Constraint.REDUNDANCY_CONSTRAINT1:
-                # pass
-                # print(format_prog(con_prog))
                 xs = set(self.redundancy_constraint1(con_prog))
-                for x in xs:
-                    print('red1', x)
                 new_cons.update(xs)
             elif con_type == Constraint.REDUNDANCY_CONSTRAINT2:
-                print('CON_PROG')
-                print(format_prog(con_prog))
                 if len(con_prog) == 1:
                     xs = set(self.redundancy_constraint1(con_prog))
-                    for x in xs:
-                        print('red2.red1', x)
-                    new_cons.update(xs)
                 else:
                     xs = set(self.build_specialisation_constraint3(con_prog))
-                    for x in xs:
-                        print('red2.spec', x)
-                    new_cons.update(xs)
-
+                new_cons.update(xs)
             elif con_type == Constraint.TMP_ANDY:
                 assert(False)
             elif con_type == Constraint.BANISH:
@@ -431,19 +428,27 @@ class Generator:
 
         if len(prog) == 1:
             rule = list(prog)[0]
-            head, body_ = rule
+            head, body = rule
+            handle = self.make_rule_handle(rule)
+            if handle in self.seen_handles:
+                con = []
+                con.append((True, 'seen_rule', (handle, 0)))
+                con.append((False, 'clause', (1, )))
+                yield frozenset(con)
+                return
+
             self.new_seen_rules.update(self.build_seen_rule2(rule, False))
-            for body in self.find_variants3(rule):
-                body = list(body)
-                body.append((False, 'clause', (1, )))
+
+            for variant in self.find_variants3(rule):
+                con = []
+                con.extend(variant)
+                con.append((False, 'clause', (1, )))
                 if size:
-                    body.append((True, 'program_size_at_least', (size,)))
-                body = frozenset(body)
-                yield body
+                    con.append((True, 'program_size_at_least', (size,)))
+                yield frozenset(con)
             return
 
         base = [rule for rule in prog if not rule_is_recursive(rule)][0]
-        rec = [rule for rule in prog if rule_is_recursive(rule)][0]
 
         bases = []
         handle = self.make_rule_handle(base)
@@ -456,6 +461,7 @@ class Generator:
                 bases.append(frozenset(body))
 
         recs = []
+        rec = [rule for rule in prog if rule_is_recursive(rule)][0]
         handle = self.make_rule_handle(rec)
         if handle in self.seen_handles:
             recs.append(frozenset([(True, 'seen_rule', (handle, 1))]))
@@ -467,53 +473,70 @@ class Generator:
 
         for r1 in bases:
             for r2 in recs:
-                x = r1 | r2
-                yield x
+                yield r1 | r2
 
     def build_generalisation_constraint3(self, prog, size=None):
 
         if len(prog) == 1:
             rule = list(prog)[0]
-            head, body_ = rule
+            head, body = rule
+            handle = self.make_rule_handle(rule)
+
+            if handle in self.seen_handles:
+                con = []
+                con.append((True, 'seen_rule', (handle, 0)))
+                con.append((True, 'body_size', (0, len(body))))
+                yield frozenset(con)
+                return
+
             self.new_seen_rules.update(self.build_seen_rule2(rule, False))
-            for body in self.find_variants3(rule):
-                body = list(body)
-                body.append((True, 'body_size', (0, len(body))))
+            for variant in self.find_variants3(rule):
+                con = []
+                con.extend(variant)
+                con.append((True, 'body_size', (0, len(body))))
                 if size:
-                    body.append((True, 'program_size_at_least', (size,)))
-                body = frozenset(body)
-                yield body
+                    con.append((True, 'program_size_at_least', (size,)))
+                yield frozenset(con)
             return
 
         base = [rule for rule in prog if not rule_is_recursive(rule)][0]
-        rec = [rule for rule in prog if rule_is_recursive(rule)][0]
+        base_head, base_body = base
 
         bases = []
         handle = self.make_rule_handle(base)
         if handle in self.seen_handles:
-            bases.append(frozenset([(True, 'seen_rule', (handle, 0))]))
+            con = []
+            con.append((True, 'seen_rule', (handle, 0)))
+            con.append((True, 'body_size', (0, len(base_body))))
+            bases.append(frozenset(con))
         else:
-            self.new_seen_rules.update(self.build_seen_rule2(rule, False))
-            for body in self.find_variants3(base, ruleid=0):
-                body = list(body)
-                body.append((True, 'body_size', (0, len(body))))
-                bases.append(frozenset(body))
+            self.new_seen_rules.update(self.build_seen_rule2(base, False))
+            for variant in self.find_variants3(base, ruleid=0):
+                con = []
+                con.extend(variant)
+                con.append((True, 'body_size', (0, len(base_body))))
+                bases.append(frozenset(con))
 
+        rec = [rule for rule in prog if rule_is_recursive(rule)][0]
+        rec_head, rec_body = rec
         recs = []
         handle = self.make_rule_handle(rec)
         if handle in self.seen_handles:
-            recs.append(frozenset([(True, 'seen_rule', (handle, 1))]))
+            con = []
+            con.append((True, 'seen_rule', (handle, 1)))
+            con.append((True, 'body_size', (1, len(rec_body))))
+            bases.append(frozenset(con))
         else:
-            self.new_seen_rules.update(self.build_seen_rule2(rule, True))
-            for body in self.find_variants3(rec, ruleid=1):
-                body = list(body)
-                body.append((True, 'body_size', (1, len(body))))
-                recs.append(frozenset(body))
+            self.new_seen_rules.update(self.build_seen_rule2(rec, True))
+            for variant in self.find_variants3(rec, ruleid=1):
+                con = []
+                con.extend(variant)
+                con.append((True, 'body_size', (1, len(rec_body))))
+                recs.append(frozenset(con))
 
         for r1 in bases:
             for r2 in recs:
-                x = r1 | r2
-                yield x
+                yield r1 | r2
 
     def find_variants3(self, rule, ruleid=0):
         head, body = rule
