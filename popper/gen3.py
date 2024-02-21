@@ -242,26 +242,6 @@ class Generator:
             # to_add.append((new_head, new_body))
             self.debug[head_args[0]].add(rule)
 
-        # for handle in self.bad_handles:
-        #     # if we know that rule_xyz is bad
-        #     # we add the groundings of bad_stuff(R,ThisSize):- seen_rule(rule_xyz, R), R=0..MaxRules.
-        #     for rule_id in range(0, self.settings.max_rules):
-        #         h = (True, 'bad_stuff', (rule_id, size))
-        #         b = (True, 'seen_rule', (handle, rule_id))
-        #         new_rule = (h, (b,))
-        #         to_add.append(new_rule)
-
-        #     # we now eliminate bad stuff
-        #     # :- seen_rule(rule_xyz,R1), bad_stuff(R2,Size), R1=0..MaxRules, R2=0..MaxRules, Size=0..ThisSize.
-        #     for smaller_size in range(1, size+1):
-        #         for r1 in range(1, self.settings.max_rules):
-        #             atom1 = (True, 'seen_rule', (handle, r1))
-        #             for r2 in range(1, self.settings.max_rules):
-        #                 if r1 == r2:
-        #                     continue
-        #                 atom2 = (True, 'bad_stuff', (r2, smaller_size))
-        #                 new_rule = ([], (atom1, atom2))
-        #                 to_add.append(new_rule)
 
         with self.solver.backend() as backend:
             for head, body in to_add:

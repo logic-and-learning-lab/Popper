@@ -169,9 +169,9 @@ class Popper():
         with settings.stats.duration('init'):
             if settings.single_solve:
                 from . gen2 import Generator
+                # from . generate import Generator
             elif settings.max_rules == 2 and not settings.pi_enabled:
                 from . gen3 import Generator
-                # from . generate import Generator
             else:
                 from . generate import Generator
             generator = self.generator = Generator(settings, self.bkcons)

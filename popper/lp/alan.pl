@@ -8,8 +8,22 @@
 
 #show body_literal/4.
 
-size(N+1):-
-    body_size(0,N).
+
+%% max_size(K):-
+%%     custom_max_size(K).
+max_size(K):-
+    max_body(M),
+    max_clauses(N),
+    K = (M+1)*N.
+size(N):-
+    max_size(MaxSize),
+    N = 2..MaxSize,
+    #sum{K+1,Rule : body_size(Rule,K)} == N.
+
+%% THIS DOES NOT WORK!!!???
+%% size(N+1):-
+%%     body_size(0,N).
+%% :- not size(_).
 
 %% ********** BASE CASE (RULE 0) **********
 head_literal(0,P,A,Vars):-
