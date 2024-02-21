@@ -24,6 +24,15 @@ def atom_to_symbol(pred, args):
     xs = tuple(arg_to_symbol(arg) for arg in args)
     return Function(name = pred, arguments = xs)
 
+DEFAULT_HEURISTIC = """
+#heuristic size(N). [1000-N,true]
+"""
+
+NOISY_ENCODING = """
+program_bounds(0..K):- max_size(K).
+program_size_at_least(M):- size(N), program_bounds(M), M <= N.
+"""
+
 class Generator:
 
     def __init__(self, settings, bkcons=[]):
@@ -82,24 +91,14 @@ class Generator:
         if settings.max_literals < max_size:
             encoding.append(f'custom_max_size({settings.max_literals}).')
 
-        if settings.pi_enabled:
-            encoding.append(f'#show head_literal/4.')
-
         if settings.noisy:
-            encoding.append("""
-            program_bounds(0..K):- max_size(K).
-            program_size_at_least(M):- size(N), program_bounds(M), M <= N.
-            """)
+            encoding.append(NOISY_ENCODING)
 
         encoding.extend(bkcons)
 
         if settings.single_solve:
-            DEFAULT_HEURISTIC = """
-            #heuristic size(N). [1000-N,true]
-            """
             encoding.append(DEFAULT_HEURISTIC)
 
-        # assert(len(encoding) == len(set(encoding)))
         encoding = '\n'.join(encoding)
 
         with open('ENCODING-GEN.pl', 'w') as f:
@@ -143,8 +142,6 @@ class Generator:
         self.model.context.add_nogood(size_con)
 
     def constrain(self, tmp_new_cons):
-        model = self.model
-
         new_ground_cons = set()
 
         for xs in tmp_new_cons:
@@ -167,7 +164,7 @@ class Generator:
                 cons_ = self.unsat_constraint2(con_prog)
                 new_ground_cons.update(cons_)
 
-        tmp = model.context.add_nogood
+        tmp = self.model.context.add_nogood
 
         for ground_body in new_ground_cons:
             nogood = []
