@@ -56,7 +56,7 @@ def parse_args():
     parser.add_argument('--max-vars', type=int, default=None, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
     parser.add_argument('--max-rules', type=int, default=None, help=f'Maximum number of rules allowed in a recursive program (default: {MAX_RULES})')
     parser.add_argument('--eval-timeout', type=float, default=EVAL_TIMEOUT, help=f'Prolog evaluation timeout in seconds (default: {EVAL_TIMEOUT})')
-    parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
+    parser.add_argument('--stats', default=True, action='store_true', help='Print statistics at end of execution')
     parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--showcons', default=False, action='store_true', help='Show constraints deduced during the search')
