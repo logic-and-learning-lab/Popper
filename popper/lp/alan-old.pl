@@ -489,13 +489,26 @@ safe_bvar(Rule,Var):-
     num_in_args(P,0),
     var_member(Var,Vars).
 
-%% VAR SAFE IF ALL INPUT VARS ARE SAFE
 safe_bvar(Rule,Var):-
-    body_literal(Rule,P,_,Vars),
-    var_member(Var,Vars),
-    num_in_args(P,N),
-    N > 0,
-    #count{Pos : var_pos(Var2,Vars,Pos), direction_(P,Pos,in), safe_bvar(Rule,Var2)} == N.
+    not deffo_safe(Rule, Var),
+    body_literal(Rule, P, _, Vars),
+    var_member(Var, Vars),
+    num_in_args(P, K),
+    K>0,
+    safe_bvar(Rule,Var2) : var_pos(Var2,Vars,Pos), direction_(P,Pos,in).
+
+deffo_safe(Rule, Var):-
+    head_literal(Rule,P,_,Vars),
+    var_pos(Var,Vars,Pos),
+    direction_(P,Pos,in),
+    Rule = 0.
+%% %% VAR SAFE IF ALL INPUT VARS ARE SAFE
+%% safe_bvar(Rule,Var):-
+%%     body_literal(Rule,P,_,Vars),
+%%     var_member(Var,Vars),
+%%     num_in_args(P,N),
+%%     N > 0,
+%%     #count{Pos : var_pos(Var2,Vars,Pos), direction_(P,Pos,in), safe_bvar(Rule,Var2)} == N.
 
 :-
     direction_(_,_,_),

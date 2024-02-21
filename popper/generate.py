@@ -196,8 +196,8 @@ class Generator:
 
         encoding = '\n'.join(encoding)
 
-        # with open('ENCODING-GEN.pl', 'w') as f:
-            # f.write(encoding)
+        with open('ENCODING-GEN.pl', 'w') as f:
+            f.write(encoding)
 
         if self.settings.single_solve:
             solver = clingo.Control(['--heuristic=Domain','-Wnone'])
@@ -390,6 +390,7 @@ class Generator:
         if self.settings.no_bias:
             self.bad_handles = []
         for handle in self.bad_handles:
+            # print(handle)
             # if we know that rule_xyz is bad
             # we add the groundings of bad_stuff(R,ThisSize):- seen_rule(rule_xyz, R), R=0..MaxRules.
             for rule_id in range(0, self.settings.max_rules):
