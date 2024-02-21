@@ -535,7 +535,7 @@ class Generator:
             con_type = xs[0]
             con_prog = xs[1]
             # con_prog_ordering = xs[2]
-            print(con_type)
+            # print(con_type)
 
             # if con_type not in (1, 2):
                 # print(con_type)
@@ -589,7 +589,7 @@ class Generator:
                 _ground_head, ground_body = ground_rule
                 ground_bodies.add(ground_body)
                 # if con_type == Constraint.REDUNDANCY_CONSTRAINT1:
-                print(sorted(ground_body))
+                # print(sorted(ground_body))
                 self.all_ground_cons.add(frozenset(ground_body))
 
         nogoods = []
