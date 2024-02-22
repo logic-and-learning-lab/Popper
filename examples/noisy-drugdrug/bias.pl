@@ -1,3 +1,8 @@
+%% download from https://starling.utdallas.edu/datasets/ddi-relational/
+%% used in the paper
+%% Dhami DS, Kunapuli G, Das M, Page D, Natarajan S. Drug-Drug Interaction Discovery: Kernel Learning from Heterogeneous Similarities. Smart Health (Amst). 2018;9-10:88-100. doi:10.1016/j.smhl.2018.07.007
+
+
 body_pred(enzyme,2).
 body_pred(target,2).
 body_pred(transporter,2).
