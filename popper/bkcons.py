@@ -1147,3 +1147,42 @@ def deduce_recalls(settings):
     # print(out)
     return out
     # settings.deduced_bkcons += '\n' + '\n'.join(out)
+
+def deduce_type_cons(settings):
+
+    body_types = settings.body_types
+
+    if len(body_types) == 0:
+        return
+
+    type_objects = defaultdict(set)
+
+    with open(settings.bk_file) as f:
+        bk = f.read()
+    solver = clingo.Control(['-Wnone'])
+    solver.add('base', [], bk)
+    solver.ground([('base', [])])
+
+    for pred, arity in settings.body_preds:
+        for atom in solver.symbolic_atoms.by_signature(pred, arity=arity):
+            args = []
+            for i in range(arity):
+                arg = atom.symbol.arguments[i]
+                t = arg.type
+                if t == clingo.SymbolType.Number:
+                    x = arg.number
+                else:
+                    x = arg.name
+
+                arg_type = body_types[pred][i]
+                type_objects[arg_type].add(x)
+
+    for k, vs in type_objects.items():
+        n = len(vs)
+        if n > settings.max_vars:
+            continue
+        if settings.showcons:
+            print('max_vars', k, len(vs))
+        con = ":- clause(C), #count{V : var_type(C, V," + k + ")} > " + str(n) + "."
+        # print(con)
+        yield con

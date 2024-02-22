@@ -96,7 +96,7 @@ type(tile,(cell_type,)).
 
 :-
 	clause(C),
-	#count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
+	#count{V : var_type(C,V,ex)} != 1.
 
 body_pred(P,1):-
 	constant(P,_).

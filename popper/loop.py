@@ -4,7 +4,7 @@ from functools import cache
 from itertools import chain, combinations, permutations
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, format_prog, Constraint, bias_order, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal
 from . tester import Tester
-from . bkcons import deduce_bk_cons, deduce_recalls
+from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons
 
 def functional_rename_vars(rule):
     head, body = rule
@@ -1117,6 +1117,10 @@ def learn_solution(settings):
             settings.datalog = True
         except:
             settings.datalog = False
+
+    if settings.datalog:
+        bkcons.extend(deduce_type_cons(settings))
+        pass
 
     if not settings.datalog:
         settings.logger.debug(f'Loading recalls FAILURE')

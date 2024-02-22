@@ -197,7 +197,22 @@ safe_bvar(Rule,Var):-
 %% IDEAS FROM THE PAPER:
 %% Learning logic programs by discovering where not to search. A. Cropper and C. Hocquette. AAAI23.
 
-:- prop(ab_ba,(P,P)), body_literal(Rule,P,_,(A,B)), A>B.
-:- prop(abc_acb,(P,P)), body_literal(Rule,P,_,(A,B,C)), B>C.
-:- prop(abc_bac,P), body_literal(Rule,P,_,(A,B,C)), A>B.
-:- prop(abc_cba,P), body_literal(Rule,P,_,(A,B,C)), A>B.
+:- prop(ab_ba,(P,P)), body_literal(_,P,_,(A,B)), A>B.
+:- prop(abc_acb,(P,P)), body_literal(_,P,_,(A,B,C)), B>C.
+:- prop(abc_bac,P), body_literal(_,P,_,(A,B,C)), A>B.
+:- prop(abc_cba,P), body_literal(_,P,_,(A,B,C)), A>B.
+:- prop(abcd_acbd,P), body_literal(_,P,_,(A,B,C,D)), C>B.
+:- prop(abcd_adcb,P), body_literal(_,P,_,(A,B,C,D)), D>B.
+
+
+%% prop(abcde_acbed,(input_move,input_move)).
+%% prop(abcde_acdeb,(input_move,input_move)).
+%% prop(abcde_adcbe,(input_move,input_move)).
+%% prop(abcde_adebc,(input_move,input_move)).
+%% prop(abcde_aebcd,(input_move,input_move)).
+%% prop(abcde_aedcb,(input_move,input_move)).
+%% prop(abcd_badc,(distinctcell,distinctcell)).
+%% prop(abcd_bcda,(distinctcell,distinctcell)).
+%% prop(abcd_cbad,(blackpawnmove,blackpawnmove)).
+
+

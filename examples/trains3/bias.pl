@@ -39,3 +39,7 @@ type(rectangle,(load,)).
 type(diamond,(load,)).
 type(hexagon,(load,)).
 type(inverted_triangle,(load,)).
+
+:-
+    clause(C),
+    #count{V : var_type(C,V,train)} != 1.

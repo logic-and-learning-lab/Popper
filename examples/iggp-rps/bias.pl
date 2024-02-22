@@ -19,4 +19,4 @@ type(different,(player,player)).
 %% %% BECAUSE WE DO NOT LEARN FROM INTERPRETATIONS
 :-
     clause(C),
-    #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
+    #count{V : var_type(C,V,ex)} != 1.

@@ -119,7 +119,7 @@ body_pred(score_100,1).
 %% BECAUSE WE DO NOT LEARN FROM INTERPRETATIONS
 :-
     clause(C),
-    #count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
+    #count{V : var_type(C,V,ex)} != 1.
 
 type(goal,(ex,agent,score)).
 type(does_jump,(ex,agent,pos,pos)).

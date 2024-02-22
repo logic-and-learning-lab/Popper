@@ -19,14 +19,16 @@ class Literal:
         self.directions = directions
         self.positive = positive
         self.meta = meta
-        self.inputs = frozenset(arg for direction, arg in zip(directions, self.arguments) if direction == '+')
-        self.outputs = frozenset(arg for direction, arg in zip(directions, self.arguments) if direction == '-')
+        self.inputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
+        self.outputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
 
 clingo.script.enable_python()
 
 TIMEOUT=600
 EVAL_TIMEOUT=0.001
-MAX_LITERALS=50
+MAX_LITERALS=40
+MAX_SOLUTIONS=1
+CLINGO_ARGS=''
 MAX_RULES=2
 MAX_VARS=6
 MAX_BODY=6
@@ -35,6 +37,7 @@ BATCH_SIZE=20000
 ANYTIME_TIMEOUT=10
 BKCONS_TIMEOUT=10
 
+# class syntax
 class Constraint:
     GENERALISATION = 1
     SPECIALISATION = 2
@@ -43,6 +46,7 @@ class Constraint:
     REDUNDANCY_CONSTRAINT2 = 5
     TMP_ANDY = 6
     BANISH = 7
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper is an ILP system based on learning from failures')
@@ -68,6 +72,7 @@ def parse_args():
     # parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
     # parser.add_argument('--no-bias', default=False, action='store_true', help='EXPERIMENTAL FEATURE: do not use language bias')
     # parser.add_argument('--order-space', default=False, action='store_true', help='EXPERIMENTAL FEATURE: search space ordered by size')
+
 
     return parser.parse_args()
 
@@ -150,11 +155,11 @@ class Stats:
             else:
                 self.durations[operation].append(duration)
 
-def format_prog_with_ordering(prog):
+def format_prog(prog):
     return '\n'.join(format_rule(order_rule(rule)) for rule in order_prog(prog))
 
-def format_prog(prog):
-    return '\n'.join(format_rule(rule) for rule in prog)
+def format_prog2(prog):
+    return '\n'.join(format_rule(order_rule2(rule)) for rule in order_prog(prog))
 
 def format_literal(literal):
     args = ','.join(f'V{i}' for i in literal.arguments)
@@ -176,11 +181,13 @@ def rule_size(rule):
     return 1 + len(body)
 
 def reduce_prog(prog):
+    def f(literal):
+        return literal.predicate, literal.arguments
     reduced = {}
     for rule in prog:
         head, body = rule
-        head = (head.predicate, head.arguments)
-        body = frozenset((atom.predicate, atom.arguments) for atom in body)
+        head = f(head)
+        body = frozenset(f(literal) for literal in body)
         k = head, body
         reduced[k] = rule
     return reduced.values()
@@ -210,7 +217,16 @@ def rule_is_invented(rule):
         return False
     return head.predicate.startswith('inv')
 
+def order_rule2(rule, settings=None):
+    head, body = rule
+    return (head, sorted(body, key=lambda x: (len(x.arguments), x.predicate, x.arguments)))
+
+# def mdl_score(score):
+#     _, fn, _, fp, size = score
+#     return fn + fp + size
+
 def mdl_score(fn, fp, size):
+    # _, fn, _, fp, size = score
     return fn + fp + size
 
 def order_rule(rule, settings=None):
@@ -323,8 +339,11 @@ class DurationSummary:
         self.mean = mean
         self.maximum = maximum
 
+def flatten(xs):
+    return [item for sublist in xs for item in sublist]
+
 class Settings:
-    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=False, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=None, max_rules=None, max_vars=None, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, showcons=False, no_bias=False, order_space=False, noisy=False, batch_size=BATCH_SIZE, solver='rc2', anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT):
+    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=True, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=None, max_rules=None, max_vars=None, functional_test=False, kbpath=False, ex_file=False, bk_file=False, bias_file=False, showcons=False, no_bias=False, order_space=False, noisy=False, batch_size=BATCH_SIZE, solver='rc2', anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT):
 
         if cmd_line:
             args = parse_args()
@@ -446,10 +465,11 @@ class Settings:
             head_modes = tuple(self.directions[head_pred][i] for i in range(head_arity))
             self.head_literal = Literal(head_pred, head_args, head_modes)
 
-        if self.max_body == None:
+        if self.max_body is None:
             for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
                 self.max_body = x.symbol.arguments[0].number
-        if self.max_body == None:
+
+        if self.max_body is None:
             self.max_body = MAX_BODY
 
         if self.max_vars == None:
@@ -527,6 +547,15 @@ class Settings:
             self.logger.info(format_rule(order_rule(rule)))
         self.logger.info('*'*20)
 
+
+def non_empty_powerset(iterable):
+    s = tuple(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
+
+def non_empty_subset(iterable):
+    s = tuple(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)))
+
 def load_types(settings):
     enc = """
 #defined clause/1.
@@ -600,6 +629,85 @@ def bias_order(settings, max_size):
 
     settings.search_order = ret
     return settings.search_order
+
+def is_headless(prog):
+    return any(head is None for head, body in prog)
+
+@cache
+def head_connected(rule):
+    head, body = rule
+    head_connected_vars = set(head.arguments)
+    body_literals = set(body)
+
+    if not any(x in head_connected_vars for literal in body for x in literal.arguments):
+        return False
+
+    while body_literals:
+        changed = False
+        for literal in body_literals:
+            if any (x in head_connected_vars for x in literal.arguments):
+                head_connected_vars.update(literal.arguments)
+                body_literals = body_literals.difference({literal})
+                changed = True
+        if changed == False and body_literals:
+            return False
+
+    return True
+
+@cache
+def has_valid_directions(rule):
+    head, body = rule
+
+    if head:
+        if len(head.inputs) == 0:
+            return True
+
+        grounded_variables = head.inputs
+        body_literals = set(body)
+
+        while body_literals:
+            selected_literal = None
+            for literal in body_literals:
+                if not literal.inputs.issubset(grounded_variables):
+                    continue
+                if literal.predicate != head.predicate:
+                    # find the first ground non-recursive body literal and stop
+                    selected_literal = literal
+                    break
+                elif selected_literal == None:
+                    # otherwise use the recursive body literal
+                    selected_literal = literal
+
+            if selected_literal == None:
+                return False
+
+            grounded_variables = grounded_variables.union(selected_literal.outputs)
+            body_literals = body_literals.difference({selected_literal})
+        return True
+    else:
+        if all(len(literal.inputs) == 0 for literal in body):
+            return True
+
+        body_literals = set(body)
+        grounded_variables = set()
+
+        while body_literals:
+            selected_literal = None
+            for literal in body_literals:
+                if len(literal.outputs) == len(literal.arguments):
+                    selected_literal = literal
+                    break
+                if literal.inputs.issubset(grounded_variables):
+                    selected_literal = literal
+                    break
+
+            if selected_literal == None:
+                return False
+
+            grounded_variables = grounded_variables.union(selected_literal.arguments)
+            body_literals = body_literals.difference({selected_literal})
+
+        return True
 
 import os
 # AC: I do not know what this code below really does, but it works
