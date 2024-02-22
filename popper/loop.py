@@ -692,8 +692,15 @@ class Popper():
 
     # find unsat cores
     def explain_incomplete(self, prog):
+        # print('')
+        # print('')
+        # print('EXPLAIN_INCOMPLETE')
+        # print(format_prog(prog))
+
+
         settings, tester = self.settings, self.tester
         unsat_cores = self.explain_totally_incomplete(prog)
+
 
         for subprog, unsat_body in unsat_cores:
 
@@ -991,10 +998,16 @@ class Popper():
         return test_prog
 
     def explain_totally_incomplete(self, prog):
-        return list(self.explain_totally_incomplete_aux2(prog, set(), set()))
+        return list(self.explain_totally_incomplete_aux2(prog, unsat=set(), unsat2=set()))
 
-    def explain_totally_incomplete_aux2(self, prog, sat=set(), unsat=set()):
+    def explain_totally_incomplete_aux2(self, prog, unsat=set(), unsat2=set()):
         has_recursion = prog_is_recursive(prog)
+
+        # print('---')
+        # for rule in prog:
+        #     print('\t', 'A', format_rule(rule))
+        # for prog_ in unsat:
+        #     print('\t', 'unsat', prog_)
 
         out = []
         for subprog in generalisations(prog, allow_headless=True, recursive=has_recursion):
@@ -1003,18 +1016,16 @@ class Popper():
             # for rule in subprog:
             #     print('\t', 'A', format_rule(rule))
 
-            # raw_prog2 = get_raw_prog2(subprog)
-
-            # if raw_prog2 in self.seen_prog:
-                # continue
+            prog_key = get_prog_key(subprog)
+            if prog_key in self.seen_prog:
+                continue
+                # pass
+            self.seen_prog.add(prog_key)
 
             raw_prog = get_raw_prog(subprog)
             if raw_prog in self.seen_prog:
                 continue
-
             self.seen_prog.add(raw_prog)
-            # self.seen_prog.add(raw_prog2)
-
 
             # for rule in subprog:
                 # print('\t', 'B', format_rule(rule))
@@ -1024,30 +1035,29 @@ class Popper():
                     return False
                 h_, b_ = list(subprog)[0]
                 for x in non_empty_powerset(b_):
-                    if get_raw_prog([(None,x)]) in self.unsat:
+                    sub_ = [(None, x)]
+                    if get_prog_key(sub_) in self.unsat:
                         return True
-                    if get_raw_prog([(h_,x)]) in self.unsat:
+                    if get_raw_prog(sub_) in self.unsat:
+                        return True
+                    sub_ = [(h_, x)]
+                    if get_prog_key(sub_) in self.unsat:
+                        return True
+                    if get_raw_prog(sub_) in self.unsat:
                         return True
                 return False
 
             if should_skip():
                 continue
-                # pass
+
+            if seen_more_general_unsat(prog_key, unsat2):
+                continue
 
             if seen_more_general_unsat(raw_prog, unsat):
                 continue
-                # pass
-
-            # if seen_more_general_unsat(raw_prog2, unsat):
-                # continue
-                # pass
-
-            # for rule in subprog:
-                # print('\t', 'C', format_rule(rule))
-
 
             if not prog_is_ok(subprog):
-                xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
+                xs = self.explain_totally_incomplete_aux2(subprog, unsat, unsat2)
                 out.extend(xs)
                 continue
 
@@ -1055,10 +1065,9 @@ class Popper():
                 # print('\t', 'D', format_rule(rule))
 
             if self.tester.has_redundant_literal(subprog):
-                xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
+                xs = self.explain_totally_incomplete_aux2(subprog, unsat, unsat2)
                 out.extend(xs)
                 continue
-
 
             # if len(subprog) > 2 and self.tester.has_redundant_rule(subprog):
             #     xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat, noisy)
@@ -1074,21 +1083,20 @@ class Popper():
             if headless:
                 body = test_prog[0][1]
                 if self.tester.is_body_sat(body):
-                    sat.add(raw_prog)
+                    # print('\t\t\t SAT',format_prog(subprog))
                     continue
             else:
                 if self.tester.is_sat(test_prog):
                     # print('\t\t\t SAT',format_prog(subprog))
-                    sat.add(raw_prog)
                     continue
-                # print('\t\t\t UNSAT',format_prog(subprog))
+            # print('\t\t\t UNSAT',format_prog(subprog))
 
             unsat.add(raw_prog)
-            # unsat.add(raw_prog2)
+            unsat2.add(prog_key)
+            self.unsat.add(prog_key)
             self.unsat.add(raw_prog)
-            # self.unsat.add(raw_prog2)
 
-            xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
+            xs = self.explain_totally_incomplete_aux2(subprog, unsat, unsat2)
             if len(xs):
                 out.extend(xs)
             else:
@@ -1352,6 +1360,17 @@ def has_valid_directions(rule):
             body_literals = body_literals.difference({selected_literal})
 
         return True
+
+def get_prog_key(prog):
+    s = set()
+    for rule in prog:
+        head, body = rule
+        head_key = None
+        if head:
+            head_key = (head.predicate, head.arguments)
+        body_key = frozenset((atom.predicate, atom.arguments) for atom in body)
+        s.add((head_key, body_key))
+    return frozenset(s)
 
 def is_headless(prog):
     return any(head is None for head, body in prog)
