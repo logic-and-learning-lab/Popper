@@ -3,12 +3,6 @@ head([H|_],H).
 empty([]).
 zero(0).
 one(1).
-
-
-%% succ(A,B):-
-%%     B is A+1.
-%% succ(A,B):-
-    %% B is A+1.
 succ(0,1).
 succ(1,2).
 succ(2,3).

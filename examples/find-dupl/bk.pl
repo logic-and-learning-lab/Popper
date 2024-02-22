@@ -1,27 +1,11 @@
-%% background knowledge
 head([H|_],H).
 tail([_|T],T).
-mylast([A],A):-!.
-mylast([_|T],A):-
-    mylast(T,A).
+
 element([X|_T],X).
-element([_|T],X):-
-    element(T,X).
-mergesort([H|T],B):-
-    msort([H|T],B).
+element([_|T],X):- element(T,X).
 
-
-increment(A,B):-
-    ((nonvar(A), nonvar(B)) -> !, false),
-    %% (nonvar(A) -> \+ is_list(A); true),
-    %% (nonvar(B) -> \+ is_list(B); true),
-    succ(A,B).
-
-decrement(A,B):-
-    ((nonvar(A), nonvar(B)) -> !, false),
-    %% (nonvar(A) -> \+ is_list(A); true),
-    %% (nonvar(B) -> \+ is_list(B); true),
-    succ(B,A).
+increment(A,B):- succ(A,B).
+decrement(A,B):- succ(B,A).
 
 empty([]).
 

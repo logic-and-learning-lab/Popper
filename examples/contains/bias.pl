@@ -1,3 +1,8 @@
+%% checks whether a list contrains either 6 or 9
+%% f(V0):- head(V0,V1),c_6(V1).
+%% f(V0):- head(V0,V1),c_9(V1).
+%% f(V0):- tail(V0,V1),f(V1).
+
 enable_recursion.
 max_clauses(3).
 
@@ -22,6 +27,7 @@ body_pred(odd,1).
 body_pred(one,1).
 body_pred(tail,2).
 body_pred(zero,1).
+
 direction(c_0,(in,)).
 direction(c_1,(in,)).
 direction(c_10,(in,)).

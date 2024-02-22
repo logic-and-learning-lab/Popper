@@ -1,5 +1,3 @@
-:-style_check(-discontiguous).
-
 actor(aalancpeterson).
 actor(aalexandrawinisky).
 actor(aalicjajachiewicz).
@@ -268,27 +266,83 @@ director(atraykovatanas).
 director(avergnejeanpierre).
 director(averhoevenpauli).
 director(azensmichael).
+gender(aaaa,male).
+gender(aaab,male).
+gender(aaac,male).
+gender(aaba,male).
+gender(aabb,male).
+gender(aabc,female).
+gender(aaca,female).
+gender(aacb,female).
+gender(aacc,male).
 gender(aalancpeterson, male).
+gender(aalexandrawinisky,female).
+gender(aalicjajachiewicz,female).
+gender(aaltmanroberti,female).
 gender(aandreasschwaiger, male).
 gender(aandygarcia, male).
+gender(aangelahall,female).
+gender(aangelinasarova,female).
+gender(aannamariagherardi,female).
+gender(aannejacques,female).
 gender(aanthonyheald, male).
+gender(aantoniettacarbonetti,female).
 gender(aantoninobruschetta, male).
 gender(aantonradichev, male).
+gender(aapprederisfranck,female).
+gender(aarmelledeutsch,female).
+gender(aauroraquattrocchi,female).
+gender(abaa,male).
+gender(abab,female).
+gender(abac,female).
+gender(abarbaratabita,female).
+gender(abattiatofranco,female).
+gender(abba,female).
+gender(abbb,female).
+gender(abbc,male).
+gender(abca,male).
+gender(abcb,male).
+gender(abcc,male).
 gender(abenjaminmouton, male).
 gender(abenjohnson, male).
+gender(aberniemac,female).
 gender(abiagiobarone, male).
 gender(abillcable, male).
 gender(abillyconnolly, male).
 gender(abogomilsimeonov, male).
+gender(abonnetchristiani,female).
 gender(abradpitt, male).
+gender(abraunbettinai,female).
+gender(abrigittefossey,female).
 gender(abrionjames, male).
+gender(abrnicebejo,female).
 gender(abruceayoung, male).
+gender(acaa,male).
+gender(acab,female).
+gender(acac,female).
+gender(acaitlinoheaney,female).
 gender(acarmelogalati, male).
+gender(acarolflorence,female).
 gender(acaseyaffleck, male).
+gender(acatherinezetajones,female).
+gender(acatonjonesmichael,female).
+gender(acba,female).
+gender(acbb,male).
+gender(acbc,male).
+gender(acca,female).
+gender(accb,male).
+gender(accc,male).
+gender(accilecassel,female).
+gender(aceceliaannbirt,female).
 gender(acesareapolito, male).
+gender(acharlotterampling,female).
+gender(achelcieross,female).
+gender(aclaudiamessner,female).
 gender(aconnorwiddows, male).
 gender(aconsuelolupo, male).
+gender(acoralyzahonero,female).
 gender(acorradofortuna, male).
+gender(acynthiastevenson,female).
 gender(adanielegalea, male).
 gender(adanielvonbargen, male).
 gender(adannflorek, male).
@@ -297,28 +351,54 @@ gender(adavidmorrissey, male).
 gender(adavidsontag, male).
 gender(adavidthewlis, male).
 gender(adeanstockwell, male).
+gender(adebraengle,female).
 gender(adenisarndt, male).
 gender(adenzelwashington, male).
 gender(adidierdijoux, male).
 gender(adietermann, male).
 gender(adillonmoen, male).
 gender(adimitarhadzhiyanev, male).
+gender(adinaconnolly,female).
+gender(adinamerrill,female).
+gender(adonatellafinocchiaro,female).
 gender(adontiffany, male).
+gender(adorothymalone,female).
+gender(aeddasabatini,female).
+gender(aeddiejemison,female).
 gender(aedkross, male).
+gender(aellenthomas,female).
+gender(aelliottgould,female).
+gender(aemiliaradeva,female).
 gender(aemilmarkov, male).
+gender(aengelhardtwilhelm,female).
 gender(aenzodimartino, male).
+gender(aestefanacastro,female).
 gender(afabiolobello, male).
+gender(afirminerichard,female).
+gender(afloramontgomery,female).
+gender(afrancishuster,female).
+gender(afrancomirabella,female).
 gender(afrankcturner, male).
+gender(afrankpatton,female).
+gender(afranoisechristophe,female).
 gender(afredward, male).
+gender(agabrieleferzetti,female).
+gender(agabriellelazure,female).
 gender(aganchoganchev, male).
 gender(ageorgeclooney, male).
 gender(ageorgedzundza, male).
 gender(ageorgistamatov, male).
 gender(agerdlohmeyer, male).
+gender(agesinecukrowski,female).
 gender(agiancarloscuderi, male).
 gender(agilbellows, male).
+gender(aginachiarelli,female).
+gender(agretascacchi,female).
+gender(agrimaldiaurelioi,female).
 gender(aguillaumeromain, male).
 gender(agusmercurio, male).
+gender(agustemmanuelii,female).
+gender(agutjahrrainer,female).
 gender(aheathcotewilliams, male).
 gender(ahorstkummeth, male).
 gender(ahristodinev, male).
@@ -327,6 +407,7 @@ gender(ahughdancy, male).
 gender(ahughkeaysbyrne, male).
 gender(ahumecronyn, male).
 gender(aianholm, male).
+gender(aileanarigano,female).
 gender(aindiravarma, male).
 gender(aivanbratanov, male).
 gender(aivandimov, male).
@@ -336,55 +417,107 @@ gender(aivantonev, male).
 gender(ajackmcgee, male).
 gender(ajaimzwoolvett, male).
 gender(ajamessikking, male).
+gender(ajanchappell,female).
 gender(ajannowicki, male).
+gender(ajeannetripplehorn,female).
 gender(ajohnfinn, male).
 gender(ajohnheard, male).
 gender(ajohnlithgow, male).
+gender(ajorgerhernandez,female).
 gender(ajrggudzuhn, male).
 gender(ajuliaroberts, male).
+gender(ajuliedray,female).
+gender(ajurneesmollett,female).
 gender(ajustinmonjo, male).
+gender(ajuttawachowiak,female).
+gender(akappesstphane,female).
+gender(akarinthaler,female).
+gender(akinkelmartin,female).
 gender(akirilyanev, male).
+gender(aklischstefan,female).
+gender(akonstanzebreitebner,female).
 gender(akostatsonev, male).
+gender(akrgnther,female).
+gender(akronthalerthomas,female).
+gender(akunkabaeva,female).
+gender(aladogedominique,female).
 gender(alarrysontag, male).
+gender(alaurabetti,female).
+gender(aleahayres,female).
+gender(aleilanisarelle,female).
 gender(aleonardlansink, male).
 gender(alewissmith, male).
 gender(alloydalan, male).
 gender(aloccorbery, male).
+gender(alorigalinski,female).
 gender(alucavitrano, male).
+gender(aluciacammalleri,female).
+gender(aluciasardo,female).
 gender(aludwigbriand, male).
 gender(alylelovett, male).
 gender(alyubomirbachvarov, male).
 gender(alyubomirbobchevski, male).
 gender(alyubomirkanev, male).
 gender(amanliosgalambro, male).
+gender(amanueladolcemascolo,female).
 gender(amarccaleb, male).
 gender(amarcocavicchioli, male).
 gender(amarcoleonardi, male).
 gender(amarcospicuglia, male).
+gender(amarenschumacher,female).
+gender(amariashopova,female).
+gender(amarinovichanton,female).
+gender(amarisaburger,female).
+gender(amarkgantt,female).
+gender(amarksangster,female).
 gender(amarkusbker, male).
 gender(amaurizionicolosi, male).
 gender(amaurolenares, male).
 gender(amaxmller, male).
+gender(ametcalfestephen,female).
 gender(amichaeldouglas, male).
 gender(amichalbajor, male).
 gender(amiguelferrer, male).
 gender(amikhailmikhajlov, male).
+gender(amillergeorgei,female).
+gender(aminianden,female).
 gender(aneilmaskell, male).
 gender(anelsonpeltz, male).
+gender(anevenakokanova,female).
 gender(anicholaswoodeson, male).
+gender(anicolegrimaudo,female).
 gender(anikoladadov, male).
 gender(anormanarmour, male).
+gender(apakulaalanj,female).
+gender(apaolaciampi,female).
 gender(apatricejuiff, male).
+gender(apaullnolan,female).
+gender(apenlopecruz,female).
 gender(apetardespotov, male).
 gender(apetergallagher, male).
+gender(apetyasilyanova,female).
+gender(apieradegliesposti,female).
 gender(apierrearditi, male).
+gender(apunchevborislav,female).
+gender(aradarassimov,female).
+gender(araffaeladavi,female).
+gender(arenateschroeter,female).
 gender(arichardegrant, male).
 gender(arobertculp, male).
+gender(arobyndouglass,female).
+gender(aromeclaudemichel,female).
 gender(asalvatorelazzaro, male).
+gender(asamantharnier,female).
 gender(asamshepard, male).
 gender(asaromiano, male).
 gender(asavahashamov, male).
+gender(asciveresmarianna,female).
 gender(ascottcaan, male).
+gender(aserenaautieri,female).
+gender(asharonstone,female).
+gender(asheilapaterson,female).
+gender(asoderberghsteven,female).
+gender(asonyadjulgerova,female).
 gender(asotirmaynolovski, male).
 gender(astancollymore, male).
 gender(astanleyanderson, male).
@@ -393,27 +526,95 @@ gender(astefandanailov, male).
 gender(astefanodionisi, male).
 gender(astefanpejchev, male).
 gender(astefanpetrov, male).
+gender(astephanbernhard,female).
 gender(astephentobolowsky, male).
 gender(astevekalfa, male).
 gender(astevekuhn, male).
 gender(astoychomazgalov, male).
+gender(asummereric,female).
+gender(asurchadzhievstefani,female).
 gender(asydneypollack, male).
 gender(aterenceharvey, male).
+gender(atheresascholze,female).
 gender(athomasstielner, male).
+gender(atimberrington,female).
+gender(atimothypaulperez,female).
 gender(atimrobbins, male).
+gender(atizianalodato,female).
 gender(atommikulla, male).
+gender(atonetticlaudio,female).
 gender(atonygoldwyn, male).
+gender(atraykovatanas,female).
 gender(atzenokandov, male).
 gender(atzvetolyubrakovski, male).
 gender(aulrichmhe, male).
 gender(avannifois, male).
+gender(avergnejeanpierre,female).
+gender(averhoevenpauli,female).
 gender(aviktordanchenko, male).
 gender(avincentdonofrio, male).
 gender(avincentlecoeur, male).
 gender(avincenzocrivello, male).
 gender(avolkerranisch, male).
+gender(avyarakovacheva,female).
 gender(awayneknight, male).
+gender(awhoopigoldberg,female).
 gender(awilliamatherton, male).
+gender(azensmichael,female).
+gender(baaa,male).
+gender(baab,female).
+gender(baac,male).
+gender(baba,female).
+gender(babb,male).
+gender(babc,male).
+gender(baca,female).
+gender(bacb,female).
+gender(bacc,male).
+gender(bbaa,male).
+gender(bbab,male).
+gender(bbac,male).
+gender(bbba,male).
+gender(bbbb,male).
+gender(bbbc,female).
+gender(bbca,female).
+gender(bbcb,male).
+gender(bbcc,male).
+gender(bcaa,female).
+gender(bcab,male).
+gender(bcac,male).
+gender(bcba,male).
+gender(bcbb,male).
+gender(bcbc,male).
+gender(bcca,male).
+gender(bccb,male).
+gender(bccc,male).
+gender(caaa,female).
+gender(caab,male).
+gender(caac,male).
+gender(caba,male).
+gender(cabb,female).
+gender(cabc,female).
+gender(caca,female).
+gender(cacb,male).
+gender(cacc,female).
+gender(cbaa,female).
+gender(cbab,female).
+gender(cbac,female).
+gender(cbba,male).
+gender(cbbb,female).
+gender(cbbc,male).
+gender(cbca,female).
+gender(cbcb,male).
+gender(cbcc,male).
+gender(ccaa,female).
+gender(ccab,female).
+gender(ccac,female).
+gender(ccba,male).
+gender(ccbb,female).
+gender(ccbc,female).
+gender(ccca,male).
+gender(cccb,male).
+gender(cccc,female).
 genre(aaltmanroberti, acomedy).
 genre(aaltmanroberti, adrama).
 genre(aaltmanroberti, athriller).
@@ -475,22 +676,9 @@ movie(abadlands2005, amillergeorgei).
 movie(abadlands2005, arobyndouglass).
 movie(abadlands2005, asharonstone).
 movie(abadlands2005, astevekuhn).
-movie(abasicinstinct2, acatonjonesmichael).
-movie(abasicinstinct2, acharlotterampling).
-movie(abasicinstinct2, adavidmorrissey).
-movie(abasicinstinct2, adavidthewlis).
-movie(abasicinstinct2, aellenthomas).
-movie(abasicinstinct2, afloramontgomery).
-movie(abasicinstinct2, aheathcotewilliams).
-movie(abasicinstinct2, ahughdancy).
-movie(abasicinstinct2, aindiravarma).
-movie(abasicinstinct2, ajanchappell).
-movie(abasicinstinct2, amarksangster).
-movie(abasicinstinct2, aneilmaskell).
-movie(abasicinstinct2, asharonstone).
-movie(abasicinstinct2, astancollymore).
-movie(abasicinstinct2, aterenceharvey).
-movie(abasicinstinct2, atimberrington).
+movie(abadlands2005,bcaa).
+movie(abadlands2005,caaa).
+movie(abadlands2005,cbbb).
 movie(abasicinstinct, abenjaminmouton).
 movie(abasicinstinct, abillcable).
 movie(abasicinstinct, abruceayoung).
@@ -507,6 +695,27 @@ movie(abasicinstinct, asharonstone).
 movie(abasicinstinct, astephentobolowsky).
 movie(abasicinstinct, averhoevenpauli).
 movie(abasicinstinct, awayneknight).
+movie(abasicinstinct,bcba).
+movie(abasicinstinct,cbba).
+movie(abasicinstinct2, acatonjonesmichael).
+movie(abasicinstinct2, acharlotterampling).
+movie(abasicinstinct2, adavidmorrissey).
+movie(abasicinstinct2, adavidthewlis).
+movie(abasicinstinct2, aellenthomas).
+movie(abasicinstinct2, afloramontgomery).
+movie(abasicinstinct2, aheathcotewilliams).
+movie(abasicinstinct2, ahughdancy).
+movie(abasicinstinct2, aindiravarma).
+movie(abasicinstinct2, ajanchappell).
+movie(abasicinstinct2, amarksangster).
+movie(abasicinstinct2, aneilmaskell).
+movie(abasicinstinct2, asharonstone).
+movie(abasicinstinct2, astancollymore).
+movie(abasicinstinct2, aterenceharvey).
+movie(abasicinstinct2, atimberrington).
+movie(abasicinstinct2,aaba).
+movie(abasicinstinct2,babb).
+movie(abasicinstinct2,cbbc).
 movie(abeautifuljoe, aalancpeterson).
 movie(abeautifuljoe, abenjohnson).
 movie(abeautifuljoe, abillyconnolly).
@@ -523,6 +732,14 @@ movie(abeautifuljoe, ametcalfestephen).
 movie(abeautifuljoe, anormanarmour).
 movie(abeautifuljoe, asharonstone).
 movie(abeautifuljoe, asheilapaterson).
+movie(abeautifuljoe,aabb).
+movie(abeautifuljoe,abba).
+movie(abeautifuljoe,abca).
+movie(abeautifuljoe,acca).
+movie(abeautifuljoe,bbca).
+movie(abeautifuljoe,cbab).
+movie(abeautifuljoe,cbcc).
+movie(abeautifuljoe,cccc).
 movie(ageratzite, aangelinasarova).
 movie(ageratzite, aganchoganchev).
 movie(ageratzite, ageorgistamatov).
@@ -537,6 +754,9 @@ movie(ageratzite, astefanpejchev).
 movie(ageratzite, astefanpetrov).
 movie(ageratzite, atzvetolyubrakovski).
 movie(ageratzite, avyarakovacheva).
+movie(ageratzite,aacc).
+movie(ageratzite,abac).
+movie(ageratzite,bbcb).
 movie(agrandpatronle, abonnetchristiani).
 movie(agrandpatronle, accilecassel).
 movie(agrandpatronle, acoralyzahonero).
@@ -551,6 +771,11 @@ movie(agrandpatronle, aromeclaudemichel).
 movie(agrandpatronle, astevekalfa).
 movie(agrandpatronle, asummereric).
 movie(agrandpatronle, atonetticlaudio).
+movie(agrandpatronle,baba).
+movie(agrandpatronle,bbbc).
+movie(agrandpatronle,bcbc).
+movie(agrandpatronle,cacc).
+movie(agrandpatronle,ccab).
 movie(akristali, adimitarhadzhiyanev).
 movie(akristali, aemiliaradeva).
 movie(akristali, aivangrigorov).
@@ -573,6 +798,10 @@ movie(alegendazapaisiy, astoychomazgalov).
 movie(alegendazapaisiy, asurchadzhievstefani).
 movie(alegendazapaisiy, atzenokandov).
 movie(alegendazapaisiy, aviktordanchenko).
+movie(alegendazapaisiy,abcc).
+movie(alegendazapaisiy,acab).
+movie(alegendazapaisiy,cbcb).
+movie(alegendazapaisiy,ccaa).
 movie(aletztezeugeder, aandreasschwaiger).
 movie(aletztezeugeder, aclaudiamessner).
 movie(aletztezeugeder, adietermann).
@@ -587,6 +816,8 @@ movie(aletztezeugeder, atheresascholze).
 movie(aletztezeugeder, aulrichmhe).
 movie(aletztezeugeder, avolkerranisch).
 movie(aletztezeugeder, azensmichael).
+movie(aletztezeugeder,bccb).
+movie(aletztezeugeder,ccac).
 movie(anerolio, aantoniettacarbonetti).
 movie(anerolio, aenzodimartino).
 movie(anerolio, afabiolobello).
@@ -602,6 +833,12 @@ movie(anerolio, apieradegliesposti).
 movie(anerolio, asalvatorelazzaro).
 movie(anerolio, asaromiano).
 movie(anerolio, avincenzocrivello).
+movie(anerolio,aaca).
+movie(anerolio,aacb).
+movie(anerolio,abbc).
+movie(anerolio,bbab).
+movie(anerolio,bcca).
+movie(anerolio,caac).
 movie(aoceanseleven, aberniemac).
 movie(aoceanseleven, abradpitt).
 movie(aoceanseleven, acarolflorence).
@@ -618,6 +855,12 @@ movie(aoceanseleven, apaullnolan).
 movie(aoceanseleven, ascottcaan).
 movie(aoceanseleven, asoderberghsteven).
 movie(aoceanseleven, atimothypaulperez).
+movie(aoceanseleven,abaa).
+movie(aoceanseleven,acbb).
+movie(aoceanseleven,bacc).
+movie(aoceanseleven,bcab).
+movie(aoceanseleven,caca).
+movie(aoceanseleven,ccca).
 movie(aoceanstwelve, aandygarcia).
 movie(aoceanstwelve, aannejacques).
 movie(aoceanstwelve, abradpitt).
@@ -634,6 +877,9 @@ movie(aoceanstwelve, aminianden).
 movie(aoceanstwelve, anelsonpeltz).
 movie(aoceanstwelve, ascottcaan).
 movie(aoceanstwelve, asoderberghsteven).
+movie(aoceanstwelve,aaac).
+movie(aoceanstwelve,cabc).
+movie(aoceanstwelve,cacb).
 movie(apelicanbriefthe, aanthonyheald).
 movie(apelicanbriefthe, adenzelwashington).
 movie(apelicanbriefthe, ahumecronyn).
@@ -650,6 +896,9 @@ movie(apelicanbriefthe, astanleyanderson).
 movie(apelicanbriefthe, astanleytucci).
 movie(apelicanbriefthe, atonygoldwyn).
 movie(apelicanbriefthe, awilliamatherton).
+movie(apelicanbriefthe,accb).
+movie(apelicanbriefthe,bbcc).
+movie(apelicanbriefthe,cabb).
 movie(aperdutoamor, aannamariagherardi).
 movie(aperdutoamor, aantoninobruschetta).
 movie(aperdutoamor, abattiatofranco).
@@ -662,6 +911,9 @@ movie(aperdutoamor, amanliosgalambro).
 movie(aperdutoamor, anicolegrimaudo).
 movie(aperdutoamor, aradarassimov).
 movie(aperdutoamor, atizianalodato).
+movie(aperdutoamor,aaab).
+movie(aperdutoamor,ccbc).
+movie(aperdutoamor,cccb).
 movie(aplayerthe, aaltmanroberti).
 movie(aplayerthe, aangelahall).
 movie(aplayerthe, abrionjames).
@@ -678,6 +930,9 @@ movie(aplayerthe, asydneypollack).
 movie(aplayerthe, atimrobbins).
 movie(aplayerthe, avincentdonofrio).
 movie(aplayerthe, awhoopigoldberg).
+movie(aplayerthe,aaaa).
+movie(aplayerthe,bbbb).
+movie(aplayerthe,caab).
 movie(aribellela, aauroraquattrocchi).
 movie(aribellela, acesareapolito).
 movie(aribellela, adanielegalea).
@@ -689,6 +944,15 @@ movie(aribellela, apaolaciampi).
 movie(aribellela, apenlopecruz).
 movie(aribellela, araffaeladavi).
 movie(aribellela, astefanodionisi).
+movie(aribellela,abab).
+movie(aribellela,abbb).
+movie(aribellela,acba).
+movie(aribellela,acbc).
+movie(aribellela,baaa).
+movie(aribellela,babc).
+movie(aribellela,bbba).
+movie(aribellela,bcac).
+movie(aribellela,cbca).
 movie(arosenheimcopsdie, aandreasschwaiger).
 movie(arosenheimcopsdie, abraunbettinai).
 movie(arosenheimcopsdie, aengelhardtwilhelm).
@@ -707,6 +971,9 @@ movie(arosenheimcopsdie, amarkusbker).
 movie(arosenheimcopsdie, amaxmller).
 movie(arosenheimcopsdie, athomasstielner).
 movie(arosenheimcopsdie, atommikulla).
+movie(arosenheimcopsdie,baac).
+movie(arosenheimcopsdie,cbaa).
+movie(arosenheimcopsdie,ccbb).
 movie(asaramay, abarbaratabita).
 movie(asaramay, abiagiobarone).
 movie(asaramay, acarmelogalati).
@@ -718,6 +985,10 @@ movie(asaramay, amanueladolcemascolo).
 movie(asaramay, asciveresmarianna).
 movie(asaramay, aserenaautieri).
 movie(asaramay, avannifois).
+movie(asaramay,acac).
+movie(asaramay,accc).
+movie(asaramay,baab).
+movie(asaramay,bacb).
 movie(aspasenieto, aalicjajachiewicz).
 movie(aspasenieto, aantonradichev).
 movie(aspasenieto, abogomilsimeonov).
@@ -731,6 +1002,10 @@ movie(aspasenieto, anevenakokanova).
 movie(aspasenieto, apunchevborislav).
 movie(aspasenieto, asotirmaynolovski).
 movie(aspasenieto, astoychomazgalov).
+movie(aspasenieto,acaa).
+movie(aspasenieto,bbac).
+movie(aspasenieto,bcbb).
+movie(aspasenieto,cbac).
 movie(aunetunfontsix, aalexandrawinisky).
 movie(aunetunfontsix, aapprederisfranck).
 movie(aunetunfontsix, aarmelledeutsch).
@@ -747,6 +1022,13 @@ movie(aunetunfontsix, apierrearditi).
 movie(aunetunfontsix, asamantharnier).
 movie(aunetunfontsix, avergnejeanpierre).
 movie(aunetunfontsix, avincentlecoeur).
+movie(aunetunfontsix,aabc).
+movie(aunetunfontsix,abcb).
+movie(aunetunfontsix,baca).
+movie(aunetunfontsix,bbaa).
+movie(aunetunfontsix,bccc).
+movie(aunetunfontsix,caba).
+movie(aunetunfontsix,ccba).
 samegender(female, female).
 samegender(male, male).
 samegenre(aaction, aaction).
@@ -759,8 +1041,8 @@ samegenre(aromance, aromance).
 samegenre(ascifi, ascifi).
 samegenre(athriller, athriller).
 samemovie(abadlands2005, abadlands2005).
-samemovie(abasicinstinct2, abasicinstinct2).
 samemovie(abasicinstinct, abasicinstinct).
+samemovie(abasicinstinct2, abasicinstinct2).
 samemovie(abeautifuljoe, abeautifuljoe).
 samemovie(ageratzite, ageratzite).
 samemovie(agrandpatronle, agrandpatronle).
@@ -1046,287 +1328,3 @@ sameperson(awayneknight, awayneknight).
 sameperson(awhoopigoldberg, awhoopigoldberg).
 sameperson(awilliamatherton, awilliamatherton).
 sameperson(azensmichael, azensmichael).
-gender(aaaa,male).
-gender(aaab,male).
-gender(aaac,male).
-gender(aaba,male).
-gender(aabb,male).
-gender(aabc,female).
-gender(aaca,female).
-gender(aacb,female).
-gender(aacc,male).
-gender(abaa,male).
-gender(abab,female).
-gender(abac,female).
-gender(abba,female).
-gender(abbb,female).
-gender(abbc,male).
-gender(abca,male).
-gender(abcb,male).
-gender(abcc,male).
-gender(acaa,male).
-gender(acab,female).
-gender(acac,female).
-gender(acba,female).
-gender(acbb,male).
-gender(acbc,male).
-gender(acca,female).
-gender(accb,male).
-gender(accc,male).
-gender(baaa,male).
-gender(baab,female).
-gender(baac,male).
-gender(baba,female).
-gender(babb,male).
-gender(babc,male).
-gender(baca,female).
-gender(bacb,female).
-gender(bacc,male).
-gender(bbaa,male).
-gender(bbab,male).
-gender(bbac,male).
-gender(bbba,male).
-gender(bbbb,male).
-gender(bbbc,female).
-gender(bbca,female).
-gender(bbcb,male).
-gender(bbcc,male).
-gender(bcaa,female).
-gender(bcab,male).
-gender(bcac,male).
-gender(bcba,male).
-gender(bcbb,male).
-gender(bcbc,male).
-gender(bcca,male).
-gender(bccb,male).
-gender(bccc,male).
-gender(caaa,female).
-gender(caab,male).
-gender(caac,male).
-gender(caba,male).
-gender(cabb,female).
-gender(cabc,female).
-gender(caca,female).
-gender(cacb,male).
-gender(cacc,female).
-gender(cbaa,female).
-gender(cbab,female).
-gender(cbac,female).
-gender(cbba,male).
-gender(cbbb,female).
-gender(cbbc,male).
-gender(cbca,female).
-gender(cbcb,male).
-gender(cbcc,male).
-gender(ccaa,female).
-gender(ccab,female).
-gender(ccac,female).
-gender(ccba,male).
-gender(ccbb,female).
-gender(ccbc,female).
-gender(ccca,male).
-gender(cccb,male).
-gender(cccc,female).
-gender(aalexandrawinisky,female).
-gender(aalicjajachiewicz,female).
-gender(aangelahall,female).
-gender(aangelinasarova,female).
-gender(aannamariagherardi,female).
-gender(aannejacques,female).
-gender(aantoniettacarbonetti,female).
-gender(aarmelledeutsch,female).
-gender(aauroraquattrocchi,female).
-gender(abarbaratabita,female).
-gender(aberniemac,female).
-gender(abrigittefossey,female).
-gender(abrnicebejo,female).
-gender(acaitlinoheaney,female).
-gender(acarolflorence,female).
-gender(acatherinezetajones,female).
-gender(accilecassel,female).
-gender(aceceliaannbirt,female).
-gender(acharlotterampling,female).
-gender(achelcieross,female).
-gender(aclaudiamessner,female).
-gender(acoralyzahonero,female).
-gender(acynthiastevenson,female).
-gender(adebraengle,female).
-gender(adinaconnolly,female).
-gender(adinamerrill,female).
-gender(adonatellafinocchiaro,female).
-gender(adorothymalone,female).
-gender(aeddasabatini,female).
-gender(aeddiejemison,female).
-gender(aellenthomas,female).
-gender(aelliottgould,female).
-gender(aemiliaradeva,female).
-gender(aestefanacastro,female).
-gender(afirminerichard,female).
-gender(afloramontgomery,female).
-gender(afrancishuster,female).
-gender(afrancomirabella,female).
-gender(afrankpatton,female).
-gender(afranoisechristophe,female).
-gender(agabrieleferzetti,female).
-gender(agabriellelazure,female).
-gender(agesinecukrowski,female).
-gender(aginachiarelli,female).
-gender(agretascacchi,female).
-gender(aileanarigano,female).
-gender(ajanchappell,female).
-gender(ajeannetripplehorn,female).
-gender(ajorgerhernandez,female).
-gender(ajuliedray,female).
-gender(ajurneesmollett,female).
-gender(ajuttawachowiak,female).
-gender(akarinthaler,female).
-gender(akonstanzebreitebner,female).
-gender(akunkabaeva,female).
-gender(alaurabetti,female).
-gender(aleahayres,female).
-gender(aleilanisarelle,female).
-gender(alorigalinski,female).
-gender(aluciacammalleri,female).
-gender(aluciasardo,female).
-gender(amanueladolcemascolo,female).
-gender(amarenschumacher,female).
-gender(amariashopova,female).
-gender(amarisaburger,female).
-gender(amarkgantt,female).
-gender(amarksangster,female).
-gender(aminianden,female).
-gender(anevenakokanova,female).
-gender(anicolegrimaudo,female).
-gender(apaolaciampi,female).
-gender(apaullnolan,female).
-gender(apenlopecruz,female).
-gender(apetyasilyanova,female).
-gender(apieradegliesposti,female).
-gender(aradarassimov,female).
-gender(araffaeladavi,female).
-gender(arenateschroeter,female).
-gender(arobyndouglass,female).
-gender(asamantharnier,female).
-gender(aserenaautieri,female).
-gender(asharonstone,female).
-gender(asheilapaterson,female).
-gender(asonyadjulgerova,female).
-gender(atheresascholze,female).
-gender(atimberrington,female).
-gender(atimothypaulperez,female).
-gender(atizianalodato,female).
-gender(avyarakovacheva,female).
-gender(awhoopigoldberg,female).
-gender(aaltmanroberti,female).
-gender(aapprederisfranck,female).
-gender(abattiatofranco,female).
-gender(abonnetchristiani,female).
-gender(abraunbettinai,female).
-gender(acatonjonesmichael,female).
-gender(aengelhardtwilhelm,female).
-gender(agrimaldiaurelioi,female).
-gender(agustemmanuelii,female).
-gender(agutjahrrainer,female).
-gender(akappesstphane,female).
-gender(akinkelmartin,female).
-gender(aklischstefan,female).
-gender(akrgnther,female).
-gender(akronthalerthomas,female).
-gender(aladogedominique,female).
-gender(amarinovichanton,female).
-gender(ametcalfestephen,female).
-gender(amillergeorgei,female).
-gender(apakulaalanj,female).
-gender(apunchevborislav,female).
-gender(aromeclaudemichel,female).
-gender(asciveresmarianna,female).
-gender(asoderberghsteven,female).
-gender(astephanbernhard,female).
-gender(asummereric,female).
-gender(asurchadzhievstefani,female).
-gender(atonetticlaudio,female).
-gender(atraykovatanas,female).
-gender(avergnejeanpierre,female).
-gender(averhoevenpauli,female).
-gender(azensmichael,female).
-movie(aplayerthe,aaaa).
-movie(aperdutoamor,aaab).
-movie(aoceanstwelve,aaac).
-movie(abasicinstinct2,aaba).
-movie(abeautifuljoe,aabb).
-movie(aunetunfontsix,aabc).
-movie(anerolio,aaca).
-movie(anerolio,aacb).
-movie(ageratzite,aacc).
-movie(aoceanseleven,abaa).
-movie(aribellela,abab).
-movie(ageratzite,abac).
-movie(abeautifuljoe,abba).
-movie(aribellela,abbb).
-movie(anerolio,abbc).
-movie(abeautifuljoe,abca).
-movie(aunetunfontsix,abcb).
-movie(alegendazapaisiy,abcc).
-movie(aspasenieto,acaa).
-movie(alegendazapaisiy,acab).
-movie(asaramay,acac).
-movie(aribellela,acba).
-movie(aoceanseleven,acbb).
-movie(aribellela,acbc).
-movie(abeautifuljoe,acca).
-movie(apelicanbriefthe,accb).
-movie(asaramay,accc).
-movie(aribellela,baaa).
-movie(asaramay,baab).
-movie(arosenheimcopsdie,baac).
-movie(agrandpatronle,baba).
-movie(abasicinstinct2,babb).
-movie(aribellela,babc).
-movie(aunetunfontsix,baca).
-movie(asaramay,bacb).
-movie(aoceanseleven,bacc).
-movie(aunetunfontsix,bbaa).
-movie(anerolio,bbab).
-movie(aspasenieto,bbac).
-movie(aribellela,bbba).
-movie(aplayerthe,bbbb).
-movie(agrandpatronle,bbbc).
-movie(abeautifuljoe,bbca).
-movie(ageratzite,bbcb).
-movie(apelicanbriefthe,bbcc).
-movie(abadlands2005,bcaa).
-movie(aoceanseleven,bcab).
-movie(aribellela,bcac).
-movie(abasicinstinct,bcba).
-movie(aspasenieto,bcbb).
-movie(agrandpatronle,bcbc).
-movie(anerolio,bcca).
-movie(aletztezeugeder,bccb).
-movie(aunetunfontsix,bccc).
-movie(abadlands2005,caaa).
-movie(aplayerthe,caab).
-movie(anerolio,caac).
-movie(aunetunfontsix,caba).
-movie(apelicanbriefthe,cabb).
-movie(aoceanstwelve,cabc).
-movie(aoceanseleven,caca).
-movie(aoceanstwelve,cacb).
-movie(agrandpatronle,cacc).
-movie(arosenheimcopsdie,cbaa).
-movie(abeautifuljoe,cbab).
-movie(aspasenieto,cbac).
-movie(abasicinstinct,cbba).
-movie(abadlands2005,cbbb).
-movie(abasicinstinct2,cbbc).
-movie(aribellela,cbca).
-movie(alegendazapaisiy,cbcb).
-movie(abeautifuljoe,cbcc).
-movie(alegendazapaisiy,ccaa).
-movie(agrandpatronle,ccab).
-movie(aletztezeugeder,ccac).
-movie(aunetunfontsix,ccba).
-movie(arosenheimcopsdie,ccbb).
-movie(aperdutoamor,ccbc).
-movie(aoceanseleven,ccca).
-movie(aperdutoamor,cccb).
-movie(abeautifuljoe,cccc).

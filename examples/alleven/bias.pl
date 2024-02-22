@@ -1,3 +1,7 @@
+%% check whether every element in a list is even
+%% f(V0):- empty(V0).
+%% f(V0):- tail(V0,V2),head(V0,V1),even(V1),f(V2).
+
 enable_recursion.
 
 head_pred(f,1).
@@ -20,8 +24,6 @@ direction(f,(in,)).
 direction(tail,(in,out)).
 direction(head,(in,out)).
 direction(last,(in,out)).
-direction(empty,(in,)).
-direction(zero,(in,)).
+direction(empty,(out,)).
+direction(zero,(out,)).
 direction(even,(in,)).
-
-%% max_vars(3).

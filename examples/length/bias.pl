@@ -1,3 +1,7 @@
+%% calculate the length of a list
+%% f(V0,V1):- zero(V1),empty(V0).
+%% f(V0,V1):- tail(V0,V3),f(V3,V2),succ(V2,V1).
+
 enable_recursion.
 
 head_pred(f,2).

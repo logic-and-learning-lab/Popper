@@ -1,6 +1,8 @@
+%% reverse a list
+%% f(V0,V1):- empty(V1),empty(V0).
+%% f(V0,V1):- head(V0,V4),tail(V0,V3),f(V3,V2),my_append(V2,V4,V1).
+
 enable_recursion.
-%% max_vars(7).
-%% max_body(5).
 
 head_pred(f,2).
 body_pred(head,2).

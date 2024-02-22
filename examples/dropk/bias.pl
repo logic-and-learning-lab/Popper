@@ -1,3 +1,7 @@
+%% drops the first k elements from a list
+%% f(V0,V1,V2):- tail(V0,V2),one(V1).
+%% f(V0,V1,V2):- decrement(V1,V4),f(V0,V4,V3),tail(V3,V2).
+
 enable_recursion.
 
 head_pred(f,3).
@@ -33,8 +37,8 @@ direction(element,(in,out)).
 direction(increment,(in,out)).
 direction(decrement,(in,out)).
 direction(geq,(in,in)).
-direction(empty,(in,)).
+direction(empty,(out,)).
 direction(even,(in,)).
 direction(odd,(in,)).
-direction(one,(in,)).
+direction(one,(out,)).
 direction(zero,(out,)).

@@ -1,22 +1,14 @@
-%% :-table (f/2) as incremental.
-%% :-dynamic([f/2], [incremental(true)]).
+%% filter/keep the even elements of a list
+%% f(V0,V1):- empty(V0),empty(V1).
+%% f(V0,V1):- tail(V0,V3),head(V0,V2),odd(V2),f(V3,V1).
+%% f(V0,V1):- head(V0,V3),tail(V0,V2),even(V3),f(V2,V4),prepend(V3,V4,V1).
 
 
-cons(A,B,C):-
-    append([A],B,C).
 tail([_|T],T).
 head([H|_],H).
 empty([]).
-
-prepend(A,B,C):-
-    append([A],B,C).
-
-cons1(A,B,C):-
-    cons(A,B,C).
-cons2(A,B,C):-
-    cons(A,B,C).
-succ(A,B):-
-    B is A+1.
+prepend(A,B,C):- append([A],B,C).
+succ(A,B):- B is A+1.
 
 odd(1).
 odd(3).

@@ -1,4 +1,9 @@
+%% find a duplicate element in a list
+%% f(V0,V1):- tail(V0,V2),element(V2,V1),head(V0,V1).
+%% f(V0,V1):- tail(V0,V2),f(V2,V1).
+
 enable_recursion.
+max_vars(4). % make the example a little quicker to run
 
 head_pred(f,2).
 body_pred(head,2).
@@ -33,8 +38,8 @@ direction(element,(in,out)).
 direction(increment,(in,out)).
 direction(decrement,(in,out)).
 direction(geq,(in,in)).
-direction(empty,(in,)).
+direction(empty,(out,)).
 direction(even,(in,)).
 direction(odd,(in,)).
-direction(one,(in,)).
+direction(one,(out,)).
 direction(zero,(out,)).

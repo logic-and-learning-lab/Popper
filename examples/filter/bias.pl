@@ -1,3 +1,9 @@
+%% keep/filter even elements in a list
+%% f(V0,V1):- empty(V0),empty(V1).
+%% f(V0,V1):- head(V0,V3),odd(V3),tail(V0,V2),f(V2,V1).
+%% f(V0,V1):- tail(V0,V2),head(V0,V3),even(V3),f(V2,V4),prepend(V3,V4,V1).
+
+
 enable_recursion.
 
 max_clauses(3).

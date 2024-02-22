@@ -773,3 +773,31 @@ def get_raw_prog(prog):
 def prog_hash(prog):
     new_prog = get_raw_prog(prog)
     return hash(new_prog)
+
+def functional_rename_vars(rule):
+    head, body = rule
+    seen_args = set(atom.arguments for atom in body)
+
+    if head:
+        head_vars = set(head.arguments)
+    else:
+        head_vars = set()
+    next_var = len(head_vars)
+    new_body = []
+    lookup = {}
+
+    new_body = set()
+    for body_literal in sorted(body, key=lambda x: x.predicate):
+        new_args = []
+        for var in body_literal.arguments:
+            if var in head_vars:
+                new_args.append(var)
+                continue
+            elif var not in lookup:
+                lookup[var] = next_var
+                next_var+=1
+            new_args.append(lookup[var])
+        new_atom = Literal(body_literal.predicate, tuple(new_args), body_literal.directions)
+        new_body.add(new_atom)
+
+    return head, frozenset(new_body)
