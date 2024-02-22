@@ -193,12 +193,12 @@ class Tester():
                     return self.reduce_inconsistent(subprog)
         return program
 
-    def is_sat(self, prog, noise=False):
+    def is_sat(self, prog):
         if len(prog) == 1:
             rule = list(prog)[0]
             head, _body = rule
             head, ordered_body = order_rule(rule, self.settings)
-            if noise:
+            if self.settings.noisy:
                 new_head = f'pos_index(_ID, {format_literal_janus(head)})'
                 x = format_rule_janus((None, ordered_body))[2:-1]
                 q = f'succeeds_k_times({new_head},({x}),K)'
@@ -210,7 +210,7 @@ class Tester():
                 return bool_query(x)
         else:
             with self.using(prog):
-                if noise:
+                if self.settings.noisy:
                     return query_once(f'covers_at_least_k_pos(K)',{'K':calc_prog_size(prog)})['truth']
                 else:
                     return bool_query('sat')

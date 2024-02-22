@@ -68,17 +68,18 @@ class Generator:
                     encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
 
         type_encoding = set()
-        types = tuple(self.settings.head_types)
-        str_types = str(types).replace("'","")
-        for i, x in enumerate(self.settings.head_types):
-            type_encoding.add(f'type_pos({str_types}, {i}, {x}).')
-
-        for pred, types in self.settings.body_types.items():
-            types = tuple(types)
+        if self.settings.head_types:
+            types = tuple(self.settings.head_types)
             str_types = str(types).replace("'","")
-            for i, x in enumerate(types):
+            for i, x in enumerate(self.settings.head_types):
                 type_encoding.add(f'type_pos({str_types}, {i}, {x}).')
-        encoding.extend(type_encoding)
+
+            for pred, types in self.settings.body_types.items():
+                types = tuple(types)
+                str_types = str(types).replace("'","")
+                for i, x in enumerate(types):
+                    type_encoding.add(f'type_pos({str_types}, {i}, {x}).')
+            encoding.extend(type_encoding)
 
         for pred, xs in self.settings.directions.items():
             for i, v in xs.items():

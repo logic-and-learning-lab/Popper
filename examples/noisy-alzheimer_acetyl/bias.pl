@@ -10,7 +10,7 @@ body_pred(ring_subst_2,2).
 body_pred(ring_subst_3,2).
 body_pred(ring_subst_4,2).
 body_pred(ring_subst_5,2).
-body_pred(ring_subst_6,2).
+%% body_pred(ring_subst_6,2).
 body_pred(polar,2).
 body_pred(size,2).
 body_pred(flex,2).

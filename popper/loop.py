@@ -1077,7 +1077,7 @@ class Popper():
                     sat.add(raw_prog)
                     continue
             else:
-                if self.tester.is_sat(test_prog, self.settings.noisy):
+                if self.tester.is_sat(test_prog):
                     # print('\t\t\t SAT',format_prog(subprog))
                     sat.add(raw_prog)
                     continue
