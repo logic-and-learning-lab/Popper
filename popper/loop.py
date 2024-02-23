@@ -185,27 +185,19 @@ class Popper():
         for i in range(max_size+1):
             could_prune_later[i] = dict()
 
-
         to_combine = []
 
         last_size = None
 
-        search_order = bias_order(settings, max_size)
+        # search_order = bias_order(settings, max_size)
+        # for (size, n_vars, n_rules, _) in search_order:
 
-        for (size, n_vars, n_rules, _) in search_order:
+        for size in range(2, max_size+1):
             if size > settings.max_literals:
-                #break # Here we have to continue the loop given that we might be jumping back and forth over the size
                 continue
 
-            # code is odd/crap:
-            # if there is no PI or recursion, we only add nogoods
-            # otherwise we build constraints and add them as nogoods and then again as constraints to the solver
-            if not settings.single_solve:
-                if settings.order_space:
-                    settings.logger.info(f'SIZE: {size} VARS: {n_vars} RULES: {n_rules} MAX_SIZE: {settings.max_literals}')
-
-                with settings.stats.duration('init'):
-                    generator.update_solver(size, n_vars, n_rules)
+            with settings.stats.duration('init'):
+                generator.update_solver(size)
 
             while True:
                 pruned_sub_incomplete = False
@@ -222,6 +214,7 @@ class Popper():
                 neg_covered = None
                 inconsistent = None
 
+                # new cons to add to the solver
                 new_cons = []
 
                 # generate a program
@@ -231,6 +224,8 @@ class Popper():
                         break
 
                 prog_size = calc_prog_size(prog)
+                is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
+                has_invention = settings.pi_enabled and prog_has_invention(prog)
 
                 settings.stats.total_programs += 1
 
@@ -241,19 +236,11 @@ class Popper():
                 if last_size is None or prog_size != last_size:
                     size_change = True
                     last_size = prog_size
-                    if not settings.order_space:
-                        settings.logger.info(f'Generating programs of size: {prog_size}')
-
-                # AC: TODO: CLINGO SPECIFIC
-                if settings.single_solve and last_size > settings.max_literals:
-                    break
+                    settings.logger.info(f'Generating programs of size: {prog_size}')
 
                 if last_size > settings.max_literals:
                     print("last_size > settings.max_literals")
                     assert(False)
-
-                is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
-                has_invention = settings.pi_enabled and prog_has_invention(prog)
 
                 # TODO: refactor out for readability
                 # test a program
@@ -568,6 +555,10 @@ class Popper():
                             settings.solution_found = True
                             settings.max_literals = hypothesis_size-1
 
+                            # AC: sometimes adding these size constraints can take longer
+                            for i in range(settings.max_literals+1, max_size+1):
+                                generator.prune_size(i)
+
                         call_combine = len(uncovered) == 0
 
                 if call_combine:
@@ -592,6 +583,7 @@ class Popper():
                         best_score = mdl_score(fn, fp, hypothesis_size)
                         # if settings.noisy:
                             # print('new_hypothesis_found', settings.best_mdl, best_score)
+                        # print('here???')
                         settings.print_incomplete_solution2(new_hypothesis, tp, fn, tn, fp, hypothesis_size)
 
                         if settings.noisy and best_score < settings.best_mdl:
@@ -662,6 +654,7 @@ class Popper():
                     # print('calling combine', len(to_combine))
                     # t1 = time.time()
                     is_new_solution_found = combiner.update_best_prog(to_combine)
+                    # print('is_new_solution_found2', is_new_solution_found)
                     # print(f'combine time: {time.time()-t1}')
                 to_combine=[]
 
@@ -670,6 +663,7 @@ class Popper():
                 # if we find a new solution, update the maximum program size
                 # if only adding nogoods, eliminate larger programs
                 if new_hypothesis_found:
+                    # print('HERE?????')
                     new_hypothesis, conf_matrix = is_new_solution_found
                     tp, fn, tn, fp, hypothesis_size = conf_matrix
                     settings.best_prog_score = conf_matrix
@@ -1235,8 +1229,7 @@ class Popper():
         return False
 
 def popper(settings, tester, bkcons):
-    x = Popper(settings, tester, bkcons)
-    x.run()
+    Popper(settings, tester, bkcons).run()
 
 def learn_solution(settings):
     t1 = time.time()

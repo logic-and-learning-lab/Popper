@@ -9,10 +9,9 @@ from itertools import permutations, chain, combinations
 from collections import defaultdict
 from time import perf_counter
 from contextlib import contextmanager
-from math import comb
 
 class Literal:
-    def __init__(self, predicate, arguments, positive = True, meta=False):
+    def __init__(self, predicate, arguments, positive=True, meta=False):
         self.predicate = predicate
         self.arguments = arguments
         self.arity = len(arguments)
@@ -43,7 +42,6 @@ class Constraint:
     TMP_ANDY = 6
     BANISH = 7
 
-
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper is an ILP system based on learning from failures')
 
@@ -68,7 +66,6 @@ def parse_args():
     # parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
     # parser.add_argument('--no-bias', default=False, action='store_true', help='EXPERIMENTAL FEATURE: do not use language bias')
     # parser.add_argument('--order-space', default=False, action='store_true', help='EXPERIMENTAL FEATURE: search space ordered by size')
-
 
     return parser.parse_args()
 
@@ -222,11 +219,6 @@ def rule_is_invented(rule):
 def mdl_score(fn, fp, size):
     # _, fn, _, fp, size = score
     return fn + fp + size
-
-
-
-
-
 
 class DurationSummary:
     def __init__(self, operation, called, total, mean, maximum):
