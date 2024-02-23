@@ -1,3 +1,11 @@
+%% From the paper: Céline Hocquette, Andrew Cropper: Relational Program Synthesis with Numerical Reasoning. AAAI 2023: 6425-6433
+
+%% a zendo structure must follow the rules:
+%% zendo(V0):- piece(V0,V1),rhs(V1),contact(V1,V2),size(V2,V3),large(V3).
+%% zendo(V0):- piece(V0,V1),contact(V1,V2),size(V2,V3),large(V3),blue(V2).
+%% zendo(V0):- piece(V0,V1),red(V1),coord1(V1,V2),piece(V0,V3),blue(V3),coord1(V3,V2).
+
+
 head_pred(zendo,1).
 body_pred(piece,2).
 body_pred(contact,2).

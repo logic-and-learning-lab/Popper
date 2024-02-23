@@ -3,7 +3,6 @@
 %% f(V0,V1):- head(V0,V3),odd(V3),tail(V0,V2),f(V2,V1).
 %% f(V0,V1):- tail(V0,V2),head(V0,V3),even(V3),f(V2,V4),prepend(V3,V4,V1).
 
-
 enable_recursion.
 
 max_clauses(3).
@@ -46,3 +45,4 @@ only_once(prepend).
     body_literal(0,_,3,_).
 :-
     body_literal(1,empty,_,_).
+

@@ -1,3 +1,5 @@
+%% taken from https://starling.utdallas.edu/datasets/
+
 body_pred(movie,2).
 body_pred(actor,1).
 body_pred(director,1).

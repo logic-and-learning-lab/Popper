@@ -1,3 +1,11 @@
+%% From the paper: Céline Hocquette, Andrew Cropper: Relational Program Synthesis with Numerical Reasoning. AAAI 2023: 6425-6433
+%% 10% of the examples are misclassified, i.e. have inverted positive/negative labels
+
+%% a zendo structure must follow the rules:
+%% zendo(V0):- piece(V0,V2),piece(V0,V1),green(V2),coord1(V1,V3),coord1(V2,V3),lhs(V1).
+%% zendo(V0):- piece(V0,V2),red(V2),piece(V0,V3),green(V3),piece(V0,V1),blue(V1).
+
+
 head_pred(zendo,1).
 body_pred(piece,2).
 body_pred(contact,2).

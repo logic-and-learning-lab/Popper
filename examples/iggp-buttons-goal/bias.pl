@@ -1,3 +1,8 @@
+%% taken from the paper:
+%% Andrew Cropper, Richard Evans, Mark Law: Inductive general game playing. Mach. Learn. 109(7): 1393-1434 (2020)
+%% https://arxiv.org/pdf/1906.09627.pdf
+%% Three buttons and three lights. The first button toggles the first light. The second button interchanges first and second lights. The third button interchanges the second and third lights. All lights initially off. The goal is to get them all on. The game terminates when all three lights are on or after 6 steps, whichever comes first.
+
 max_body(8).
 
 head_pred(goal,3).

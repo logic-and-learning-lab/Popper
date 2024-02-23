@@ -1,3 +1,25 @@
+%% taken from the paper:
+%% Andrew Cropper, Richard Evans, Mark Law: Inductive general game playing. Mach. Learn. 109(7): 1393-1434 (2020)
+%% https://arxiv.org/pdf/1906.09627.pdf
+
+
+%% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+%% ;;;
+%% ;;;  Game Theory: Iterated Chicken
+%% ;;;
+%% ;;;  A two player game with simultaneous play in which, in each round,
+%% ;;;  players choose either to drive straight forward toward each other
+%% ;;;  or swerve off the road. If both players drive straight forward,
+%% ;;;  they both crash and receive zero points. If one drives straight
+%% ;;;  and the other swerves, the player who drove straight wins and gets
+%% ;;;  five points, and the other player gets three points. If both players
+%% ;;;  swerve, they each get four points.
+%% ;;;
+%% ;;;  Background: http://en.wikipedia.org/wiki/Chicken_(game)
+%% ;;;
+%% ;;;  GDL BY: Sam Schreiber (schreib@cs.stanford.edu)
+%% ;;;
+
 head_pred(goal,3).
 body_pred(true_whiteScore,2).
 body_pred(true_blackScore,2).
