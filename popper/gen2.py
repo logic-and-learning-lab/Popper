@@ -7,7 +7,7 @@ import clingo
 import numbers
 import clingo.script
 import pkg_resources
-from . util import rule_is_recursive, Constraint, format_prog, bias_order, Literal
+from . util import rule_is_recursive, Constraint, bias_order, Literal
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations

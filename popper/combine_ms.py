@@ -4,7 +4,7 @@ import clingo
 import time
 import pickle
 import itertools
-from . util import format_rule, calc_prog_size, format_prog, reduce_prog, prog_is_recursive, prog_has_invention, \
+from . util import format_rule, calc_prog_size, reduce_prog, prog_is_recursive, prog_has_invention, \
     rule_size, rule_is_recursive
 import collections
 

@@ -2,7 +2,7 @@ import time
 from collections import defaultdict
 from functools import cache
 from itertools import chain, combinations, permutations
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, format_prog, Constraint, bias_order, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal
+from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, bias_order, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal
 from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons
 
@@ -29,7 +29,7 @@ def functional_rename_vars(rule):
                 lookup[var] = next_var
                 next_var+=1
             new_args.append(lookup[var])
-        new_atom = Literal(body_literal.predicate, tuple(new_args), body_literal.directions)
+        new_atom = Literal(body_literal.predicate, tuple(new_args))
         new_body.add(new_atom)
 
     return head, frozenset(new_body)
@@ -146,7 +146,7 @@ class Popper():
         settings = self.settings
         tester = self.tester
         num_pos, num_neg = self.num_pos, self.num_neg = len(settings.pos_index), len(settings.neg_index)
-
+        format_prog = settings.format_prog
         uncovered = set(settings.pos_index)
 
         if settings.noisy:
@@ -830,7 +830,7 @@ class Popper():
                 out.update(xs)
                 continue
 
-            if not has_valid_directions(new_rule):
+            if not self.has_valid_directions(new_rule):
                 xs = self.subsumed_or_covers_too_few(new_prog, check_coverage, check_subsumed, seen)
                 out.update(xs)
                 continue
@@ -915,7 +915,7 @@ class Popper():
                 if not head_connected(new_rule):
                     continue
 
-                if not has_valid_directions(new_rule):
+                if not self.has_valid_directions(new_rule):
                     continue
 
                 tmp = frozenset((y.predicate, y.arguments) for y in new_body)
@@ -985,14 +985,12 @@ class Popper():
         test_prog = []
         for head, body in subprog:
             if head:
-                head_modes = tuple(directions[head.predicate][i] for i in range(head.arity))
-                head_literal = Literal(head.predicate, head.arguments, head_modes)
+                head_literal = Literal(head.predicate, head.arguments)
             else:
                 head_literal = False
             body_literals = set()
             for body_literal in body:
-                body_modes = tuple(directions[body_literal.predicate][i] for i in range(body_literal.arity))
-                body_literals.add(Literal(body_literal.predicate, body_literal.arguments, body_modes))
+                body_literals.add(Literal(body_literal.predicate, body_literal.arguments))
             rule = head_literal, body_literals
             test_prog.append(rule)
         return test_prog
@@ -1056,7 +1054,7 @@ class Popper():
             if seen_more_general_unsat(raw_prog, unsat):
                 continue
 
-            if not prog_is_ok(subprog):
+            if not self.prog_is_ok(subprog):
                 xs = self.explain_totally_incomplete_aux2(subprog, unsat, unsat2)
                 out.extend(xs)
                 continue
@@ -1102,6 +1100,114 @@ class Popper():
             else:
                 out.append((subprog, headless))
         return out
+
+    @cache
+    def has_valid_directions(self, rule):
+        if not self.settings.has_directions:
+            return True
+        head, body = rule
+
+        if head:
+            if len(head.inputs) == 0:
+                return True
+
+            grounded_variables = head.inputs
+            body_literals = set(body)
+
+            while body_literals:
+                selected_literal = None
+                for literal in body_literals:
+                    if not literal.inputs.issubset(grounded_variables):
+                        continue
+                    if literal.predicate != head.predicate:
+                        # find the first ground non-recursive body literal and stop
+                        selected_literal = literal
+                        break
+                    elif selected_literal == None:
+                        # otherwise use the recursive body literal
+                        selected_literal = literal
+
+                if selected_literal == None:
+                    return False
+
+                grounded_variables = grounded_variables.union(selected_literal.outputs)
+                body_literals = body_literals.difference({selected_literal})
+            return True
+        else:
+            if all(len(literal.inputs) == 0 for literal in body):
+                return True
+
+            body_literals = set(body)
+            grounded_variables = set()
+
+            while body_literals:
+                selected_literal = None
+                for literal in body_literals:
+                    if len(literal.outputs) == len(literal.arguments):
+                        selected_literal = literal
+                        break
+                    if literal.inputs.issubset(grounded_variables):
+                        selected_literal = literal
+                        break
+
+                if selected_literal == None:
+                    return False
+
+                grounded_variables = grounded_variables.union(selected_literal.arguments)
+                body_literals = body_literals.difference({selected_literal})
+
+            return True
+
+
+    def prog_is_ok(self, prog):
+        for rule in prog:
+            head, body = rule
+            if head and not head_connected(rule):
+                return False
+
+            if not head and not connected(body):
+                return False
+
+            if not self.has_valid_directions(rule):
+                return False
+
+        if len(prog) == 1:
+            return True
+
+        # if more than two rules then there must be recursion
+        has_recursion = False
+        for rule in prog:
+            h, b = rule
+
+            if h == None:
+                return False
+
+            if rule_is_recursive(rule):
+                has_recursion = True
+                h, b = rule
+                if len(b) == 1:
+                    return False
+
+        if not has_recursion:
+            return False
+
+
+        if needs_datalog(prog) and not tmp(prog):
+            return False
+
+        return True
+
+def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
+        self.logger.info('*'*20)
+        self.logger.info('New best hypothesis:')
+        if self.noisy:
+            self.logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} mdl:{size+fn+fp}')
+        else:
+            self.logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size}')
+        for rule in order_prog(prog):
+            self.logger.info(format_rule(order_rule(rule)))
+        self.logger.info('*'*20)
+
 
 def popper(settings, tester, bkcons):
     x = Popper(settings, tester, bkcons)
@@ -1185,43 +1291,6 @@ def generalisations(prog, allow_headless=True, recursive=False):
                 yield new_prog
 
 
-def prog_is_ok(prog):
-    for rule in prog:
-        head, body = rule
-        if head and not head_connected(rule):
-            return False
-
-        if not head and not connected(body):
-            return False
-
-        if not has_valid_directions(rule):
-            return False
-
-    if len(prog) == 1:
-        return True
-
-    # if more than two rules then there must be recursion
-    has_recursion = False
-    for rule in prog:
-        h, b = rule
-
-        if h == None:
-            return False
-
-        if rule_is_recursive(rule):
-            has_recursion = True
-            h, b = rule
-            if len(b) == 1:
-                return False
-
-    if not has_recursion:
-        return False
-
-
-    if needs_datalog(prog) and not tmp(prog):
-        return False
-
-    return True
 
 def needs_datalog(prog):
     for rule in prog:
@@ -1306,60 +1375,7 @@ def head_connected(rule):
 
     return True
 
-@cache
-def has_valid_directions(rule):
-    head, body = rule
 
-    if head:
-        if len(head.inputs) == 0:
-            return True
-
-        grounded_variables = head.inputs
-        body_literals = set(body)
-
-        while body_literals:
-            selected_literal = None
-            for literal in body_literals:
-                if not literal.inputs.issubset(grounded_variables):
-                    continue
-                if literal.predicate != head.predicate:
-                    # find the first ground non-recursive body literal and stop
-                    selected_literal = literal
-                    break
-                elif selected_literal == None:
-                    # otherwise use the recursive body literal
-                    selected_literal = literal
-
-            if selected_literal == None:
-                return False
-
-            grounded_variables = grounded_variables.union(selected_literal.outputs)
-            body_literals = body_literals.difference({selected_literal})
-        return True
-    else:
-        if all(len(literal.inputs) == 0 for literal in body):
-            return True
-
-        body_literals = set(body)
-        grounded_variables = set()
-
-        while body_literals:
-            selected_literal = None
-            for literal in body_literals:
-                if len(literal.outputs) == len(literal.arguments):
-                    selected_literal = literal
-                    break
-                if literal.inputs.issubset(grounded_variables):
-                    selected_literal = literal
-                    break
-
-            if selected_literal == None:
-                return False
-
-            grounded_variables = grounded_variables.union(selected_literal.arguments)
-            body_literals = body_literals.difference({selected_literal})
-
-        return True
 
 def get_prog_key(prog):
     s = set()
