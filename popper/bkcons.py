@@ -1113,16 +1113,23 @@ def deduce_recalls(settings):
 
     settings.recall = all_recalls
 
+    # for k, v in all_recalls.items():
+        # print(k ,v)
+
     out = []
 
     for (pred, key), recall in all_recalls.items():
         if recall > 4:
             continue
         if '1' not in key:
-            continue
+            pass
+            # continue
         arity = len(key)
         args = [f'V{i}' for i in range(arity)]
         args_str = ','.join(args)
+
+        if len(args) == 1:
+            args_str +=  ','
         subset = []
         fixer = []
 
@@ -1138,8 +1145,11 @@ def deduce_recalls(settings):
         fixer_str = ','.join(fixer)
         if len(fixer) == 1:
             fixer_str+= ','
+        # print(pred, key, fixer, fixer_str)
+        # print(args_str)
 
         con2 = f':- body_literal(Rule,{pred},_,({fixer_str})), #count{{{subset_str}: body_literal(Rule,{pred},_,({args_str}))}} > {recall}.'
+        # print(con2)
         out.append(con2)
 
     # for x in settings.recall.items():

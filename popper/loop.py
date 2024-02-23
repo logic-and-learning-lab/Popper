@@ -1117,18 +1117,23 @@ def learn_solution(settings):
 
     bkcons = []
 
+    recalls = False
     settings.logger.debug(f'Loading recalls')
     with suppress_stdout_stderr():
         try:
             with settings.stats.duration('recalls'):
-                bkcons.extend(deduce_recalls(settings))
+                recalls = deduce_recalls(settings)
             settings.datalog = True
         except:
             settings.datalog = False
 
+    if recalls:
+        # for x in recalls:
+            # print(x)
+        bkcons.extend(recalls)
+
     if settings.datalog:
         bkcons.extend(deduce_type_cons(settings))
-        pass
 
     if not settings.datalog:
         settings.logger.debug(f'Loading recalls FAILURE')
