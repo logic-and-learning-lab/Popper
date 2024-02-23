@@ -9,7 +9,7 @@ import numbers
 import clingo.script
 import pkg_resources
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, format_prog, bias_order, Literal
+from . util import rule_is_recursive, Constraint, bias_order, Literal
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
@@ -41,6 +41,7 @@ class Generator:
         self.handle = None
         self.cached_handles = {}
         self.cached4 = {}
+        self.pruned_sizes = set()
 
 
         self.debug = defaultdict(set)
@@ -201,7 +202,7 @@ class Generator:
         rule = head, frozenset(body)
         return frozenset([rule])
 
-    def update_solver(self, size, num_vars, num_rules):
+    def update_solver(self, size):
         self.update_number_of_literals(size)
 
         # rules to add via Clingo's backend interface
@@ -284,6 +285,10 @@ class Generator:
         self.solver.assign_external(symbol, True)
 
     def prune_size(self, size):
+        # pass
+        if size in self.pruned_sizes:
+            return
+        self.pruned_sizes.add(size)
         size_con = [(atom_to_symbol("size", (size,)), True)]
         self.model.context.add_nogood(size_con)
 
@@ -698,7 +703,7 @@ def remap_variables(rule):
                 lookup[var] = next_var
                 next_var+=1
             new_args.append(lookup[var])
-        new_atom = Literal(atom.predicate, tuple(new_args), atom.directions)
+        new_atom = Literal(atom.predicate, tuple(new_args))
         new_body.add(new_atom)
 
     return head, frozenset(new_body)

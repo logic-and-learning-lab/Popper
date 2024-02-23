@@ -4,7 +4,7 @@ import pkg_resources
 from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
-from . util import order_rule, order_prog, prog_is_recursive, rule_is_recursive, rule_size, calc_prog_size, prog_hash, format_rule, format_literal
+from . util import order_prog, prog_is_recursive, rule_is_recursive, rule_size, calc_prog_size, prog_hash, format_rule, format_literal
 
 def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
@@ -61,7 +61,7 @@ class Tester():
     def parse_single_rule(self, prog):
         rule = list(prog)[0]
         head, _body = rule
-        head, ordered_body = order_rule(rule, self.settings)
+        head, ordered_body = self.settings.order_rule(rule)
         atom_str = format_literal_janus(head)
         body_str = format_rule_janus((None, ordered_body))[2:-1]
         return atom_str, body_str
@@ -162,7 +162,7 @@ class Tester():
         current_clauses = set()
         for rule in prog:
             head, _body = rule
-            x = format_rule(order_rule(rule, self.settings))[:-1]
+            x = format_rule(self.settings.order_rule(rule))[:-1]
             str_prog.append(x)
             current_clauses.add((head.predicate, head.arity))
 
@@ -197,7 +197,7 @@ class Tester():
         if len(prog) == 1:
             rule = list(prog)[0]
             head, _body = rule
-            head, ordered_body = order_rule(rule, self.settings)
+            head, ordered_body = self.settings.order_rule(rule)
             if self.settings.noisy:
                 new_head = f'pos_index(_ID, {format_literal_janus(head)})'
                 x = format_rule_janus((None, ordered_body))[2:-1]
@@ -216,7 +216,7 @@ class Tester():
                     return bool_query('sat')
 
     def is_body_sat(self, body):
-        _, ordered_body = order_rule((None,body), self.settings)
+        _, ordered_body = self.settings.order_rule((None, body))
         query = ','.join(format_literal(literal) for literal in ordered_body)
         return bool_query(query)
 

@@ -9,7 +9,7 @@ import numbers
 import clingo.script
 import pkg_resources
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, format_prog, bias_order, Literal
+from . util import rule_is_recursive, Constraint, bias_order, Literal
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
@@ -351,17 +351,17 @@ class Generator:
             head = Literal(head_pred, head_args, {})
             body = set()
             for (body_pred, body_args, body_arity) in rule_index_to_body[rule_index]:
-                body.add(Literal(body_pred, body_args, {}))
+                body.add(Literal(body_pred, body_args))
             body = frozenset(body)
             rule = head, body
             prog.append((rule))
 
         return frozenset(prog)
 
-    def update_solver(self, size, num_vars, num_rules):
+    def update_solver(self, size):
         self.update_number_of_literals(size)
-        self.update_number_of_vars(num_vars)
-        self.update_number_of_rules(num_rules)
+        # self.update_number_of_vars(num_vars)
+        # self.update_number_of_rules(num_rules)
 
         # rules to add via Clingo's backend interface
         to_add = []

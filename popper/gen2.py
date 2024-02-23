@@ -1,13 +1,10 @@
 import time
 import re
-from pysat.formula import CNF
-from pysat.solvers import Solver
-from pysat.card import *
 import clingo
 import numbers
 import clingo.script
 import pkg_resources
-from . util import rule_is_recursive, Constraint, format_prog, bias_order, Literal
+from . util import rule_is_recursive, Constraint, bias_order, Literal
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
@@ -42,6 +39,8 @@ class Generator:
         self.cached_clingo_atoms = {}
         self.handle = None
         self.cached4 = {}
+
+        self.pruned_sizes = set()
 
         encoding = []
         alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
@@ -113,6 +112,10 @@ class Generator:
         solver.ground([('base', [])])
         self.solver = solver
 
+    def update_solver(self, size):
+        # not used when learning programs without pi or recursion
+        pass
+
     def get_prog(self):
         if self.handle is None:
             self.handle = iter(self.solver.solve(yield_ = True))
@@ -139,6 +142,9 @@ class Generator:
         return frozenset([rule])
 
     def prune_size(self, size):
+        if size in self.pruned_sizes:
+            return
+        self.pruned_sizes.add(size)
         size_con = [(atom_to_symbol("size", (size,)), True)]
         self.model.context.add_nogood(size_con)
 
@@ -295,7 +301,7 @@ def remap_variables(rule):
                 lookup[var] = next_var
                 next_var+=1
             new_args.append(lookup[var])
-        new_atom = Literal(atom.predicate, tuple(new_args), atom.directions)
+        new_atom = Literal(atom.predicate, tuple(new_args))
         new_body.add(new_atom)
 
     return head, frozenset(new_body)
