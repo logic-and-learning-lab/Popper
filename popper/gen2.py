@@ -4,8 +4,7 @@ import clingo
 import numbers
 import clingo.script
 import pkg_resources
-from . util import rule_is_recursive, Constraint, bias_order, Literal
-clingo.script.enable_python()
+from . util import Constraint, Literal
 from clingo import Function, Number, Tuple_
 from itertools import permutations
 
