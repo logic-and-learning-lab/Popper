@@ -290,8 +290,6 @@ class Settings:
         self.stats = Stats(info=info, debug=debug)
         self.stats.logger = self.logger
         self.show_stats = show_stats
-        # self.bkcons = bkcons
-        # self.datalog = datalog
         self.showcons = showcons
         self.max_literals = max_literals
         self.functional_test = functional_test
@@ -353,6 +351,7 @@ class Settings:
                     arg_dir = '-'
                 directions[pred][i] = arg_dir
 
+
         self.max_arity = 0
         for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
             self.max_arity = max(self.max_arity, x.symbol.arguments[1].number)
@@ -368,20 +367,22 @@ class Settings:
         if self.max_body is None:
             self.max_body = MAX_BODY
 
-        if self.max_vars == None:
+        if self.max_vars is None:
             for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
                 self.max_vars = x.symbol.arguments[0].number
-        if self.max_vars == None:
+        if self.max_vars is None:
             self.max_vars = MAX_VARS
 
-        if self.max_rules == None:
+        if self.max_rules is None:
             for x in solver.symbolic_atoms.by_signature('max_clauses', arity=1):
                 self.max_rules = x.symbol.arguments[0].number
-        if self.max_rules == None:
-            self.max_rules = 1
+        if self.max_rules is None:
             if self.pi_enabled or self.recursion_enabled:
                 self.max_rules = MAX_RULES
+            else:
+                self.max_rules = 1
 
+        # find all body preds
         self.body_preds = set()
         for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
             pred = x.symbol.arguments[0].name
@@ -389,14 +390,7 @@ class Settings:
             self.body_preds.add((pred, arity))
             self.max_arity = max(self.max_arity, arity)
 
-        self.cached_atom_args = {}
-        for i in range(1, self.max_arity+1):
-            for args in permutations(range(0, self.max_vars), i):
-                k = tuple(clingo.Number(x) for x in args)
-                self.cached_atom_args[k] = args
-
-        # self.body_modes = {}
-        self.cached_literals = {}
+        # check that directions are all given
         if self.has_directions:
             for pred, arity in self.body_preds:
                 if len(directions[pred]) != arity:
@@ -404,16 +398,49 @@ class Settings:
                     exit()
                 # self.body_modes[pred] = tuple(directions[pred][i] for i in range(arity))
 
+
+        # TODO: EVENTUALLY
+
+        # print(directions)
+
+        self.cached_atom_args = {}
+        for i in range(1, self.max_arity+1):
+            for args in permutations(range(0, self.max_vars), i):
+                k = tuple(clingo.Number(x) for x in args)
+                self.cached_atom_args[k] = args
+
+        self.cached_literals = {}
+        self.literal_inputs = {}
+        self.literal_outputs = {}
+
+        if self.has_directions:
+            head_pred, head_args = self.head_literal.predicate, self.head_literal.arguments
+            # print('head_args', head_args)
+            for head_args in permutations(range(self.max_vars), len(head_args)):
+                head_inputs = frozenset(arg for i, arg in enumerate(head_args) if directions[head_pred][i] == '+')
+                head_outputs = frozenset(arg for i, arg in enumerate(head_args) if directions[head_pred][i] == '-')
+                self.literal_inputs[(head_pred, head_args)] = head_inputs
+                self.literal_outputs[(head_pred, head_args)] = head_outputs
+
         for pred, arity in self.body_preds:
             for k, args in self.cached_atom_args.items():
                 if len(args) != arity:
                     continue
                 literal = Literal(pred, args)
                 self.cached_literals[(pred, k)] = literal
+                if self.has_directions:
+                    self.literal_inputs[(pred, args)] = frozenset(arg for i, arg in enumerate(args) if directions[pred][i] == '+')
+                    self.literal_outputs[(pred, args)] = frozenset(arg for i, arg in enumerate(args) if directions[pred][i] == '-')
+
+        # for k, vs in self.literal_inputs.items():
+            # print(k, vs)
+        # print('head_inputs', head_inputs)
+        # print('head_outputs', head_outputs)
+        # exit()
 
         pred = self.head_literal.predicate
         arity = self.head_literal.arity
-        # self.body_modes[pred] = tuple(directions[pred][i] for i in range(arity))
+
         for k, args in self.cached_atom_args.items():
             if len(args) != arity:
                 continue
@@ -472,13 +499,18 @@ class Settings:
         if self.datalog:
             return self.order_rule_datalog(head, frozenset(body))
 
+        if not self.has_directions:
+            return rule
+
+
         ordered_body = []
         grounded_variables = set()
 
         if head:
-            if head.inputs == []:
+            head_inputs = self.literal_inputs[(head.predicate, head.arguments)]
+            if head_inputs == []:
                 return rule
-            grounded_variables.update(head.inputs)
+            grounded_variables.update(head_inputs)
 
         body_literals = set(body)
 
@@ -486,11 +518,14 @@ class Settings:
         while body_literals:
             selected_literal = None
             for literal in body_literals:
-                if len(literal.outputs) == len(literal.arguments):
+                literal_outputs = self.literal_outputs[(literal.predicate, literal.arguments)]
+
+                if len(literal_outputs) == len(literal.arguments):
                     selected_literal = literal
                     break
 
-                if not literal.inputs.issubset(grounded_variables):
+                literal_inputs = self.literal_inputs[(literal.predicate, literal.arguments)]
+                if not literal_inputs.issubset(grounded_variables):
                     continue
 
                 if head and literal.predicate != head.predicate:
@@ -506,7 +541,8 @@ class Settings:
                 raise ValueError(message)
 
             ordered_body.append(selected_literal)
-            grounded_variables = grounded_variables.union(selected_literal.outputs)
+            selected_literal_outputs = self.literal_outputs[(selected_literal.predicate, selected_literal.arguments)]
+            grounded_variables = grounded_variables.union(selected_literal_outputs)
             body_literals = body_literals.difference({selected_literal})
 
         return head, tuple(ordered_body)
@@ -525,6 +561,8 @@ class Settings:
             if k in self.recall:
                 return self.recall[k]
             return 1000000
+
+
 
         # head, body = rule
         ordered_body = []

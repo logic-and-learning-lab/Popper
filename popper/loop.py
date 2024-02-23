@@ -1108,16 +1108,18 @@ class Popper():
         head, body = rule
 
         if head:
-            if len(head.inputs) == 0:
+            head_inputs = self.settings.literal_inputs[(head.predicate, head.arguments)]
+            if len(head_inputs) == 0:
                 return True
 
-            grounded_variables = head.inputs
+            grounded_variables = head_inputs
             body_literals = set(body)
 
             while body_literals:
                 selected_literal = None
                 for literal in body_literals:
-                    if not literal.inputs.issubset(grounded_variables):
+                    literal_inputs = self.settings.literal_inputs[(literal.predicate, literal.arguments)]
+                    if not literal_inputs.issubset(grounded_variables):
                         continue
                     if literal.predicate != head.predicate:
                         # find the first ground non-recursive body literal and stop
@@ -1130,11 +1132,14 @@ class Popper():
                 if selected_literal == None:
                     return False
 
-                grounded_variables = grounded_variables.union(selected_literal.outputs)
+                selected_literal_outputs = self.settings.literal_outputs[(selected_literal.predicate, selected_literal.arguments)]
+                grounded_variables = grounded_variables.union(selected_literal_outputs)
                 body_literals = body_literals.difference({selected_literal})
             return True
         else:
-            if all(len(literal.inputs) == 0 for literal in body):
+
+            # literal_inputs =
+            if all(len(self.settings.literal_inputs[(literal.predicate, literal.arguments)]) == 0 for literal in body):
                 return True
 
             body_literals = set(body)
@@ -1143,10 +1148,12 @@ class Popper():
             while body_literals:
                 selected_literal = None
                 for literal in body_literals:
-                    if len(literal.outputs) == len(literal.arguments):
+                    literal_outputs = self.settings.literal_outputs[(literal.predicate, literal.arguments)]
+                    if len(literal_outputs) == len(literal.arguments):
                         selected_literal = literal
                         break
-                    if literal.inputs.issubset(grounded_variables):
+                    literal_inputs = self.settings.literal_inputs[(literal.predicate, literal.arguments)]
+                    if literal_inputs.issubset(grounded_variables):
                         selected_literal = literal
                         break
 
@@ -1192,12 +1199,12 @@ class Popper():
             return False
 
 
-        if needs_datalog(prog) and not tmp(prog):
+        if self.needs_datalog(prog) and not tmp(prog):
             return False
 
         return True
 
-def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
+    def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
         self.logger.info('*'*20)
         self.logger.info('New best hypothesis:')
         if self.noisy:
@@ -1208,6 +1215,24 @@ def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
             self.logger.info(format_rule(order_rule(rule)))
         self.logger.info('*'*20)
 
+    def needs_datalog(self, prog):
+        if not self.settings.has_directions:
+            return False
+        for rule in prog:
+            rec_outputs = set()
+            non_rec_inputs = set()
+            head, body = rule
+            for literal in body:
+                if literal.predicate == head.predicate:
+                    literal_outputs = self.settings.literal_outputs[(literal.predicate, literal.arguments)]
+                    rec_outputs.update(literal_outputs)
+                else:
+                    # if any(x in xr)
+                    literal_inputs = self.settings.literal_inputs[(literal.predicate, literal.arguments)]
+                    non_rec_inputs.update(literal_inputs)
+            if any(x in rec_outputs for x in non_rec_inputs):
+                return True
+        return False
 
 def popper(settings, tester, bkcons):
     x = Popper(settings, tester, bkcons)
@@ -1297,20 +1322,7 @@ def generalisations(prog, allow_headless=True, recursive=False):
 
 
 
-def needs_datalog(prog):
-    for rule in prog:
-        rec_outputs = set()
-        non_rec_inputs = set()
-        head, body = rule
-        for literal in body:
-            if literal.predicate == head.predicate:
-                rec_outputs.update(literal.outputs)
-            else:
-                # if any(x in xr)
-                non_rec_inputs.update(literal.inputs)
-        if any(x in rec_outputs for x in non_rec_inputs):
-            return True
-    return False
+
 
 def tmp(prog):
     for rule in prog:
