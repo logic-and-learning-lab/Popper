@@ -100,9 +100,12 @@ valid_var(Rule,Var):-
     obeys_datalog_check(Rule,Var).
 
 %% if non_datalog is true, all vars are valid
-obeys_datalog_check(Rule,Var):-
+obeys_datalog_check(Rule, Var):-
     non_datalog,
-    clause_var(Rule,Var).
+    Rule=0..MaxRules-1,
+    max_clauses(MaxRules),
+    var(Var).
+    %% clause_var(Rule,Var).
 
 %% if non_datalog is false, a body only variable is valid
 obeys_datalog_check(Rule,Var):-
@@ -173,6 +176,7 @@ safe_bvar(Rule,Var):-
 
 %% VAR SAFE IF A OUTPUT VAR
 safe_bvar(Rule,Var):-
+    direction_(_,_,_),
     not deffo_safe(Rule, Var),
     body_literal(Rule,P,_,Vars),
     #count{Pos : direction_(P,Pos,in)} == 0,
