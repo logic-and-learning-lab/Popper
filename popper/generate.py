@@ -118,9 +118,10 @@ class Generator:
         encoding.append(f'max_vars({settings.max_vars}).')
 
         # ADD VARS, DIRECTIONS, AND TYPES
-        encoding.append(f'head_vars({settings.head_literal.arity}, {tuple(range(settings.head_literal.arity))}).')
+        head_arity = len(settings.head_literal.arguments)
+        encoding.append(f'head_vars({head_arity}, {tuple(range(head_arity))}).')
         arities = set(a for p, a in self.settings.body_preds)
-        arities.add(settings.head_literal.arity)
+        arities.add(head_arity)
         for arity in arities:
             for xs in permutations(range(settings.max_vars), arity):
                 encoding.append(f'vars({arity}, {tuple(xs)}).')

@@ -31,7 +31,7 @@ class Tester():
         test_pl_path = pkg_resources.resource_filename(__name__, "lp/test.pl")
 
         if not settings.pi_enabled:
-            consult('prog', f':- dynamic {settings.head_literal.predicate}/{settings.head_literal.arity}.')
+            consult('prog', f':- dynamic {settings.head_literal.predicate}/{len(settings.head_literal.arguments)}.')
 
         for x in [exs_pl_path, bk_pl_path, test_pl_path]:
             if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
@@ -164,7 +164,7 @@ class Tester():
             head, _body = rule
             x = format_rule(self.settings.order_rule(rule))[:-1]
             str_prog.append(x)
-            current_clauses.add((head.predicate, head.arity))
+            current_clauses.add((head.predicate, len(head.arguments)))
 
         if self.settings.pi_enabled:
             for p, a in current_clauses:

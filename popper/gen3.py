@@ -68,9 +68,10 @@ class Generator:
         encoding.append(f'max_vars({settings.max_vars}).')
 
         # ADD VARS, DIRECTIONS, AND TYPES
-        encoding.append(f'head_vars({settings.head_literal.arity}, {tuple(range(settings.head_literal.arity))}).')
+        head_arity = len(settings.head_literal.arguments)
+        encoding.append(f'head_vars({head_arity}, {tuple(range(head_arity))}).')
         arities = set(a for p, a in self.settings.body_preds)
-        arities.add(settings.head_literal.arity)
+        arities.add(head_arity)
         for arity in arities:
             for xs in permutations(range(settings.max_vars), arity):
                 encoding.append(f'vars({arity}, {tuple(xs)}).')
@@ -549,8 +550,9 @@ class Generator:
 
     def find_variants3(self, rule, ruleid=0):
         head, body = rule
-        body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head.arity)
-        subset = range(head.arity, self.settings.max_vars)
+        head_arity = len(self.settings.head_literal.arguments)
+        body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head_arity)
+        subset = range(head_arity, self.settings.max_vars)
         for xs in permutations(subset, len(body_vars)):
             xs = head.arguments + xs
             new_body = []
@@ -650,7 +652,8 @@ class Generator:
         # if there are types, only find type-safe permutations
         var_type_lookup = {i:head_type for i, head_type in enumerate(head_types)}
 
-        head_vars = set(range(self.settings.head_literal.arity))
+        head_arity = len(self.settings.head_literal.arguments)
+        head_vars = set(range(head_arity))
         body_vars = set()
 
         for atom in body:

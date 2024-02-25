@@ -1032,8 +1032,9 @@ class Popper():
 
     def find_variants(self, rule):
         head, body = rule
-        body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head.arity)
-        subset = range(head.arity, self.settings.max_vars)
+        head_arity = len(head.arguments)
+        body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head_arity)
+        subset = range(head_arity, self.settings.max_vars)
         for xs in permutations(subset, len(body_vars)):
             xs = head.arguments + xs
             new_body = []

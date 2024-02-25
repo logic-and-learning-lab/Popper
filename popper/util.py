@@ -7,14 +7,13 @@ import os
 import logging
 from itertools import permutations, chain, combinations
 from collections import defaultdict
+from typing import NamedTuple
 from time import perf_counter
 from contextlib import contextmanager
 
-class Literal:
-    def __init__(self, predicate, arguments):
-        self.predicate = predicate
-        self.arguments = arguments
-        self.arity = len(arguments)
+class Literal(NamedTuple):
+    predicate: str
+    arguments: tuple
 
 clingo.script.enable_python()
 
@@ -429,7 +428,7 @@ class Settings:
         # exit()
 
         pred = self.head_literal.predicate
-        arity = self.head_literal.arity
+        arity = len(self.head_literal.arguments)
 
         for k, args in self.cached_atom_args.items():
             if len(args) != arity:
