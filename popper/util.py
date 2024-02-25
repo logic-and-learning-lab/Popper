@@ -11,12 +11,10 @@ from time import perf_counter
 from contextlib import contextmanager
 
 class Literal:
-    def __init__(self, predicate, arguments, positive=True, meta=False):
+    def __init__(self, predicate, arguments):
         self.predicate = predicate
         self.arguments = arguments
         self.arity = len(arguments)
-        self.positive = positive
-        self.meta = meta
 
 clingo.script.enable_python()
 

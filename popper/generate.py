@@ -9,7 +9,7 @@ import numbers
 import clingo.script
 import pkg_resources
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, bias_order, Literal
+from . util import rule_is_recursive, Constraint, bias_order, Literal, format_rule
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
@@ -26,6 +26,8 @@ class RuleVar(Var):
 @dataclasses.dataclass(frozen=True)
 class VarVar(Var):
     rule: RuleVar
+
+META_PREDS = {'<', '==', '>='}
 
 def arg_to_symbol(arg):
     if isinstance(arg, tuple):
@@ -53,7 +55,7 @@ def find_all_vars(body):
 
 # AC: When grounding constraint rules, we only care about the vars and the constraints, not the actual literals
 def grounding_hash(body, all_vars):
-    cons = frozenset((lit.predicate, lit.arguments) for lit in body if lit.meta)
+    cons = frozenset((lit.predicate, lit.arguments) for lit in body if lit.predicate in META_PREDS)
     return hash((frozenset(all_vars), cons))
 
 def build_seen_rule_literal(handle, rule_var):
@@ -348,7 +350,7 @@ class Generator:
 
         for rule_index in rule_index_to_head:
             head_pred, head_args, head_arity = rule_index_to_head[rule_index]
-            head = Literal(head_pred, head_args, {})
+            head = Literal(head_pred, head_args)
             body = set()
             for (body_pred, body_args, body_arity) in rule_index_to_body[rule_index]:
                 body.add(Literal(body_pred, body_args))
@@ -509,7 +511,7 @@ class Generator:
         assignments = self.find_bindings(body, all_vars)
 
         # keep only standard literals
-        body = tuple(literal for literal in body if not literal.meta)
+        body = tuple(literal for literal in body if not literal.predicate in META_PREDS)
         # ground the rule for each variable assignment
         return set(self.ground_rule((head, body), assignment) for assignment in assignments)
 
@@ -746,7 +748,7 @@ class Generator:
             literals.append(lt(rule_var, len(prog)))
 
         if not self.settings.single_solve:
-            literals.append(Literal('clause', (len(prog), ), positive = False))
+            literals.append(Literal('clause', (len(prog), )))
 
         if spec_size:
             literals.append(Literal('program_size_at_least', (spec_size,)))
@@ -788,7 +790,7 @@ class Generator:
                     new_handles.update(xs)
                     literals.extend(tuple(build_rule_literals(rule, rule_var)))
             literals.append(body_size_literal(rule_var, len(body)))
-        literals.append(Literal('clause', (len(prog), ), positive=False))
+        literals.append(Literal('clause', (len(prog), )))
 
         # if rule_ordering:
         #     literals.extend(build_rule_ordering_literals(rule_index, rule_ordering))
@@ -965,11 +967,16 @@ class Generator:
         ground_head = None
         if head:
             ground_args = self.ground_literal(head.arguments, assignment, k)
-            ground_head = (head.positive, head.predicate, ground_args)
+            ground_head = (True, head.predicate, ground_args)
         ground_body = set()
         for literal in body:
             ground_args = self.ground_literal(literal.arguments, assignment, k)
-            ground_literal = (literal.positive, literal.predicate, ground_args)
+            # AC: NASTY TMP HACK!!!!!!!!
+            # IN OUR CONSTRAINTS, WE ALWAYS USE `not clause`
+            if literal.predicate == 'clause':
+                ground_literal = (False, literal.predicate, ground_args)
+            else:
+                ground_literal = (True, literal.predicate, ground_args)
             ground_body.add(ground_literal)
         return ground_head, frozenset(ground_body)
 
@@ -1015,7 +1022,7 @@ class Generator:
         # rule_var_to_int[var] = i
         # add constraints to the ASP program based on the AST thing
         for lit in body:
-            if not lit.meta:
+            if not lit.predicate in META_PREDS:
                 continue
             if lit.predicate == '==':
                 # pass
@@ -1219,13 +1226,13 @@ def vo_clause(variable):
     return RuleVar(name=f'R{variable}')
 
 def lt(a, b):
-    return Literal('<', (a,b), meta=True)
+    return Literal('<', (a,b))
 
 def eq(a, b):
-    return Literal('==', (a,b), meta=True)
+    return Literal('==', (a,b))
 
 def gteq(a, b):
-    return Literal('>=', (a,b), meta=True)
+    return Literal('>=', (a,b))
 
 def body_size_literal(clause_var, body_size):
     return Literal('body_size', (clause_var, body_size))

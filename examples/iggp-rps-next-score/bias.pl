@@ -2,7 +2,6 @@
 %% Andrew Cropper, Richard Evans, Mark Law: Inductive general game playing. Mach. Learn. 109(7): 1393-1434 (2020)
 %% https://arxiv.org/pdf/1906.09627.pdf
 
-enable_recursion.
 max_vars(7).
 
 head_pred(next_score,3).
