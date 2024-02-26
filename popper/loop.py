@@ -2,38 +2,9 @@ import time
 from collections import defaultdict
 from functools import cache
 from itertools import chain, combinations, permutations
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, bias_order, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables
+from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog
 from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons
-
-def functional_rename_vars(rule):
-    head, body = rule
-    seen_args = set(atom.arguments for atom in body)
-
-    if head:
-        head_vars = set(head.arguments)
-    else:
-        head_vars = set()
-    next_var = len(head_vars)
-    new_body = []
-    lookup = {}
-
-    new_body = set()
-    for body_literal in sorted(body, key=lambda x: x[0]):
-        pred, args = body_literal
-        new_args = []
-        for var in args:
-            if var in head_vars:
-                new_args.append(var)
-                continue
-            elif var not in lookup:
-                lookup[var] = next_var
-                next_var+=1
-            new_args.append(lookup[var])
-        new_atom = Literal(pred, tuple(new_args))
-        new_body.add(new_atom)
-
-    return head, frozenset(new_body)
 
 def explain_none_functional(settings, tester, prog):
     new_cons = []
@@ -69,12 +40,6 @@ def explain_none_functional(settings, tester, prog):
                 new_cons.append((Constraint.GENERALISATION, subprog))
 
     return new_cons
-
-
-def is_subsumed(pos_covered, prog_size, success_sets):
-    subsumed = pos_covered in success_sets and prog_size >= (success_sets[pos_covered])
-    subsumed = subsumed or any(pos_covered.issubset(xs) and prog_size >= prog_size2 for xs, prog_size2 in success_sets.items())
-    return subsumed
 
 def load_solver(settings, tester):
     if settings.debug:
@@ -147,7 +112,7 @@ class Popper():
         settings = self.settings
         tester = self.tester
         num_pos, num_neg = self.num_pos, self.num_neg = len(settings.pos_index), len(settings.neg_index)
-        format_prog = settings.format_prog
+        # format_prog = settings.format_prog
         uncovered = set(settings.pos_index)
 
         if settings.noisy:
@@ -179,7 +144,6 @@ class Popper():
         # track the success sets of tested hypotheses
         success_sets = self.success_sets = {}
         success_sets_noise = {}
-        # success_sets_recursion = {}
 
         # maintain a set of programs that we have not yet pruned
         could_prune_later = self.could_prune_later = [0]*(max_size+1)
@@ -680,6 +644,12 @@ class Popper():
 
     # find unsat cores
     def explain_incomplete(self, prog):
+
+        # print('')
+        # print('')
+        # print('EXPLAIN_INCOMPLETE')
+        # print(format_prog(prog))
+
         settings, tester = self.settings, self.tester
         unsat_cores = self.explain_totally_incomplete(prog)
 
@@ -697,13 +667,13 @@ class Popper():
                 continue
 
             if not (settings.recursion_enabled or settings.pi_enabled):
-                yield (Constraint.SPECIALISATION, [functional_rename_vars(subprog[0])])
+                yield (Constraint.SPECIALISATION, [remap_variables(subprog[0])])
                 continue
 
             if len(subprog) == 1:
-                yield (Constraint.REDUNDANCY_CONSTRAINT1, [functional_rename_vars(subprog[0])])
+                yield (Constraint.REDUNDANCY_CONSTRAINT1, [remap_variables(subprog[0])])
 
-            yield (Constraint.REDUNDANCY_CONSTRAINT2, [functional_rename_vars(rule) for rule in subprog])
+            yield (Constraint.REDUNDANCY_CONSTRAINT2, [remap_variables(rule) for rule in subprog])
 
     # given a program with more than one rule, look for inconsistent subrules/subprograms
     def explain_inconsistent(self, prog):
@@ -849,7 +819,7 @@ class Popper():
 
             # for each pruned program, add the variants to the list of pruned programs
             # doing so reduces the number of pointless checks
-            for x in self.find_variants(functional_rename_vars(new_rule)):
+            for x in self.find_variants(remap_variables(new_rule)):
                 self.pruned2.add(x)
 
             out.add(new_prog)
@@ -908,7 +878,7 @@ class Popper():
         return out
 
     def prune_subsumed_backtrack2(self, pos_covered, prog_size, check_coverage):
-        format_prog = self.settings.format_prog
+        # format_prog = format_prog
         could_prune_later, tester = self.could_prune_later, self.tester
         to_prune = set()
         to_delete = set()
@@ -980,7 +950,7 @@ class Popper():
                 if sub_prog_subsumed or sub_covers_too_few:
                     to_prune.add(new_prog)
                     pruned_subprog = True
-                    for x in self.find_variants(functional_rename_vars(new_rule)):
+                    for x in self.find_variants(remap_variables(new_rule)):
                         pruned2.add(x)
                     break
 
@@ -989,7 +959,7 @@ class Popper():
             if pruned_subprog:
                 continue
 
-            for x in self.find_variants(functional_rename_vars((head, body))):
+            for x in self.find_variants(remap_variables((head, body))):
                 pruned2.add(x)
 
             if self.settings.showcons:
@@ -1014,6 +984,21 @@ class Popper():
                 new_literal = (pred, new_args)
                 new_body.append(new_literal)
             yield frozenset(new_body)
+
+    def find_variants2(self, rule):
+        head, body = rule
+        _head_pred, head_args = head
+        head_arity = len(head_args)
+        body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head_arity)
+        subset = range(head_arity, self.settings.max_vars)
+        for xs in permutations(subset, len(body_vars)):
+            xs = head.arguments + xs
+            new_body = []
+            for pred, args in body:
+                new_args = tuple(xs[arg] for arg in args)
+                new_literal = (pred, new_args)
+                new_body.append(new_literal)
+            yield head, frozenset(new_body)
 
     def build_test_prog(self, subprog):
         directions = self.settings.directions
@@ -1046,23 +1031,15 @@ class Popper():
         out = []
         for subprog in generalisations(prog, allow_headless=True, recursive=has_recursion):
 
-            # print('---')
-            # for rule in subprog:
-            #     print('\t', 'A', format_rule(rule))
-
             prog_key = frozenset(subprog)
             if prog_key in self.seen_prog:
                 continue
-                # pass
             self.seen_prog.add(prog_key)
 
             raw_prog = get_raw_prog(subprog)
             if raw_prog in self.seen_prog:
                 continue
             self.seen_prog.add(raw_prog)
-
-            # for rule in subprog:
-                # print('\t', 'B', format_rule(rule))
 
             def should_skip():
                 if len(subprog) > 0:
@@ -1336,14 +1313,13 @@ def generalisations(prog, allow_headless=True, recursive=False):
         head, body = rule
 
         if allow_headless:
-            if head and len(body) > 0:
+            if head and len(body) > 1:
                 new_rule = (None, body)
                 new_prog = [new_rule]
                 yield new_prog
 
-        if (recursive and len(body) > 2 and head) or (not recursive and len(body) > 1):
+        if (recursive and len(body) > 2 and head) or (not recursive and head and len(body) > 1) or (not recursive and not head and len(body) > 2):
             body = list(body)
-            # print(head, type(head))
 
             for i in range(len(body)):
                 # do not remove recursive literals
@@ -1365,10 +1341,6 @@ def generalisations(prog, allow_headless=True, recursive=False):
             for new_subrule in generalisations([subrule], allow_headless=False, recursive=recursive):
                 new_prog = prog[:i] + new_subrule + prog[i+1:]
                 yield new_prog
-
-
-
-
 
 def tmp(prog):
     for rule in prog:

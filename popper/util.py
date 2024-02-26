@@ -15,17 +15,6 @@ class Literal(NamedTuple):
     predicate: str
     arguments: tuple
 
-# class Literal2:
-#     def __init__(self, predicate, arguments, directions = [], positive = True, meta=False):
-#         self.predicate = predicate
-#         self.arguments = arguments
-#         self.arity = len(arguments)
-#         self.directions = directions
-#         self.positive = positive
-#         self.meta = meta
-#         self.inputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
-#         self.outputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
-
 clingo.script.enable_python()
 
 TIMEOUT=600
@@ -161,8 +150,9 @@ class Stats:
     # return '\n'.join(format_rule(order_rule2(rule)) for rule in order_prog(prog))
 
 def format_literal(literal):
-    args = ','.join(f'V{i}' for i in literal.arguments)
-    return f'{literal.predicate}({args})'
+    pred, args = literal
+    args = ','.join(f'V{i}' for i in args)
+    return f'{pred}({args})'
 
 def format_rule(rule):
     head, body = rule
@@ -180,14 +170,10 @@ def rule_size(rule):
     return 1 + len(body)
 
 def reduce_prog(prog):
-    def f(literal):
-        return literal.predicate, literal.arguments
     reduced = {}
     for rule in prog:
         head, body = rule
-        head = f(head)
-        body = frozenset(f(literal) for literal in body)
-        k = head, body
+        k = head, frozenset(body)
         reduced[k] = rule
     return reduced.values()
 
@@ -216,16 +202,7 @@ def rule_is_invented(rule):
         return False
     return head.predicate.startswith('inv')
 
-# def order_rule2(rule, settings=None):
-    # head, body = rule
-    # return (head, sorted(body, key=lambda x: (len(x.arguments), x.predicate, x.arguments)))
-
-# def mdl_score(score):
-#     _, fn, _, fp, size = score
-#     return fn + fp + size
-
 def mdl_score(fn, fp, size):
-    # _, fn, _, fp, size = score
     return fn + fp + size
 
 class DurationSummary:
@@ -474,9 +451,6 @@ class Settings:
             self.logger.info(format_rule(self.order_rule(rule)))
         self.logger.info('*'*20)
 
-    def format_prog(self, prog):
-        return '\n'.join(format_rule(self.order_rule(rule)) for rule in order_prog(prog))
-
     def print_prog_score(self, prog, score):
         tp, fn, tn, fp, size = score
         precision = 'n/a'
@@ -490,7 +464,10 @@ class Settings:
             print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size} MDL:{size+fn+fp}')
         else:
           print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
-        print(self.format_prog(order_prog(prog)))
+        # print(self.format_prog(order_prog(prog)))
+        for rule in order_prog(prog):
+            self.logger.info(format_rule(self.order_rule(rule)))
+        # print(self.format_prog(order_prog(prog)))
         print('*'*30)
 
     def order_rule(self, rule):
@@ -676,17 +653,19 @@ def is_headless(prog):
 @cache
 def head_connected(rule):
     head, body = rule
-    head_connected_vars = set(head.arguments)
+    _head_pred, head_args = head
+    head_connected_vars = set(head_args)
     body_literals = set(body)
 
-    if not any(x in head_connected_vars for literal in body for x in literal.arguments):
+    if not any(x in head_connected_vars for _pred, args in body for x in args):
         return False
 
     while body_literals:
         changed = False
         for literal in body_literals:
-            if any (x in head_connected_vars for x in literal.arguments):
-                head_connected_vars.update(literal.arguments)
+            pred, args = literal
+            if any (x in head_connected_vars for x in args):
+                head_connected_vars.update(args)
                 body_literals = body_literals.difference({literal})
                 changed = True
         if changed == False and body_literals:
@@ -734,7 +713,8 @@ def has_valid_directions(rule):
         while body_literals:
             selected_literal = None
             for literal in body_literals:
-                if len(literal.outputs) == len(literal.arguments):
+                _pred, args = literal
+                if len(literal.outputs) == len(args):
                     selected_literal = literal
                     break
                 if literal.inputs.issubset(grounded_variables):
@@ -744,7 +724,9 @@ def has_valid_directions(rule):
             if selected_literal == None:
                 return False
 
-            grounded_variables = grounded_variables.union(selected_literal.arguments)
+
+            _pred, args = selected_literal
+            grounded_variables = grounded_variables.union(args)
             body_literals = body_literals.difference({selected_literal})
 
         return True
@@ -817,53 +799,28 @@ def prog_hash(prog):
     new_prog = get_raw_prog(prog)
     return hash(new_prog)
 
-def functional_rename_vars(rule):
-    head, body = rule
-    seen_args = set(atom.arguments for atom in body)
-
-    if head:
-        head_vars = set(head.arguments)
-    else:
-        head_vars = set()
-    next_var = len(head_vars)
-    new_body = []
-    lookup = {}
-
-    new_body = set()
-    for body_literal in sorted(body, key=lambda x: x.predicate):
-        new_args = []
-        for var in body_literal.arguments:
-            if var in head_vars:
-                new_args.append(var)
-                continue
-            elif var not in lookup:
-                lookup[var] = next_var
-                next_var+=1
-            new_args.append(lookup[var])
-        new_atom = Literal(body_literal.predicate, tuple(new_args), body_literal.directions)
-        new_body.add(new_atom)
-
-    return head, frozenset(new_body)
-
 def remap_variables(rule):
     head, body = rule
-    head_vars = set()
+    head_vars = frozenset()
 
     if head:
-        head_vars.update(head.arguments)
+        head_vars = frozenset(head.arguments)
 
     next_var = len(head_vars)
     lookup = {i:i for i in head_vars}
 
-    new_body = set()
-    for atom in body:
+    new_body = []
+    for pred, args in body:
         new_args = []
-        for var in atom.arguments:
+        for var in args:
             if var not in lookup:
                 lookup[var] = next_var
                 next_var+=1
             new_args.append(lookup[var])
-        new_atom = Literal(atom.predicate, tuple(new_args))
-        new_body.add(new_atom)
+        new_atom = Literal(pred, tuple(new_args))
+        new_body.append(new_atom)
 
     return head, frozenset(new_body)
+
+def format_prog(prog):
+    return '\n'.join(format_rule(rule) for rule in prog)

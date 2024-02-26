@@ -353,7 +353,7 @@ class Generator:
             return cached_handles[k]
         head, body = rule
         body_literals = sorted(body, key = operator.attrgetter('predicate'))
-        handle = ''.join(f'{literal.predicate}{"".join(map(str,literal.arguments))}' for literal in [head] + body_literals)
+        handle = ''.join(f'{pred}{"".join(map(str, args))}' for pred, args in [head] + body_literals)
         cached_handles[k] = handle
         return handle
 
@@ -556,9 +556,9 @@ class Generator:
         for xs in permutations(subset, len(body_vars)):
             xs = head.arguments + xs
             new_body = []
-            for atom in body:
-                new_args = tuple(xs[arg] for arg in atom.arguments)
-                new_literal = (True, 'body_literal', (ruleid, atom.predicate, len(new_args), new_args))
+            for pred, args in body:
+                new_args = tuple(xs[arg] for arg in args)
+                new_literal = (True, 'body_literal', (ruleid, pred, len(new_args), new_args))
                 new_body.append(new_literal)
             yield frozenset(new_body)
 
@@ -585,19 +585,18 @@ class Generator:
             new_head = ('seen_rule', (handle, rule_id))
             for xs in perms:
                 new_body = []
-                # new_body.append((True, 'head_literal', (rule_id, head.predicate, len(head.arguments), ground_head_args)))
                 if pi:
                     new_body.append(('head_literal', (rule_id, head.predicate, len(head.arguments), ground_head_args)))
-                for atom in body:
+                for pred, args in body:
                     new_args = []
-                    for x in atom.arguments:
+                    for x in args:
                         if x in head_vars:
                             # v = ord(x)- ord('A')
                             new_args.append(x)
                         else:
                             new_args.append(xs[indexes[x]])
                     new_args = tuple(new_args)
-                    new_body.append(('body_literal', (rule_id, atom.predicate, len(atom.arguments), new_args)))
+                    new_body.append(('body_literal', (rule_id, pred, len(args), new_args)))
                 new_rule = (new_head, frozenset(new_body))
                 out.append(new_rule)
         return frozenset(out)
@@ -632,9 +631,9 @@ class Generator:
         for rule_id in range(self.settings.max_rules):
             for assignment in assignments:
                 rule = []
-                for atom in body:
-                    args2 = tuple(assignment[x] for x in atom.arguments)
-                    rule.append((True, 'body_literal', (rule_id, atom.predicate, len(atom.arguments), args2)))
+                for pred, args in body:
+                    args2 = tuple(assignment[x] for x in args)
+                    rule.append((True, 'body_literal', (rule_id, pred, len(args), args2)))
                 yield frozenset(rule)
 
     def find_deep_bindings4(self, body):
