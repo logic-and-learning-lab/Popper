@@ -348,6 +348,8 @@ class Popper():
                         if subsumed:
                             add_spec = True
 
+                        assert(not pruned_more_general)
+
                         if not has_invention:
                             # we check whether a program does not cover enough examples to be useful
                             # if the program only not cover enough examples, we prune it specialisations
@@ -516,26 +518,19 @@ class Popper():
                         add_to_combiner = True
                 else:
                     # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
-                    # if not inconsistent and not subsumed and not add_gen and tp > 0 and not seen_better_rec and not pruned_more_general:
                     if not inconsistent and not subsumed and not add_gen and tp > 0 and not pruned_more_general:
                         add_to_combiner = True
-
-                    # if settings.order_space and not inconsistent and not subsumed and tp > 0 and not seen_better_rec and not pruned_more_general:
-                        # add_to_combiner = True
-
-                    if add_to_combiner:
                         success_sets[pos_covered] = prog_size
-                        # if is_recursive:
-                            # success_sets_recursion[pos_covered] = prog_size
 
                 if add_to_combiner:
                     to_combine.append((prog, pos_covered, neg_covered))
 
                     if not settings.noisy and not has_invention and not is_recursive:
                         with settings.stats.duration('prune backtrack'):
-                            xs = self.prune_subsumed_backtrack2(pos_covered, prog_size, check_coverage=settings.solution_found)
-                            for x in xs:
-                                new_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(list(x)[0])]))
+                            subsumed_progs = tuple(self.prune_subsumed_backtrack2(pos_covered, prog_size, check_coverage=settings.solution_found))
+                            for subsumed_prog_ in subsumed_progs:
+                                subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
+                                new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
                 call_combine = len(to_combine) > 0
                 call_combine = call_combine and (settings.noisy or settings.solution_found)
@@ -657,12 +652,7 @@ class Popper():
                 # TODO: AWFUL: FIX REFACOTRING
                 # COMBINE
                 with settings.stats.duration('combine'):
-                    # is_new_solution_found = combiner.update_best_prog([(prog, pos_covered, [])])
-                    # print('calling combine', len(to_combine))
-                    # t1 = time.time()
                     is_new_solution_found = combiner.update_best_prog(to_combine)
-                    # print('is_new_solution_found2', is_new_solution_found)
-                    # print(f'combine time: {time.time()-t1}')
                 to_combine=[]
 
                 new_hypothesis_found = is_new_solution_found != None
@@ -670,7 +660,6 @@ class Popper():
                 # if we find a new solution, update the maximum program size
                 # if only adding nogoods, eliminate larger programs
                 if new_hypothesis_found:
-                    # print('HERE?????')
                     new_hypothesis, conf_matrix = is_new_solution_found
                     tp, fn, tn, fp, hypothesis_size = conf_matrix
                     settings.best_prog_score = conf_matrix
@@ -684,25 +673,15 @@ class Popper():
 
                         # if size >= settings.max_literals and not settings.order_space:
                         if size >= settings.max_literals:
-                            print('POOPER')
-                            return
+                            assert(False)
             if settings.single_solve:
                 break
-            # print('I AM HERE!!!!!!', len(to_combine))
-        # print('PLEASE NOOOOO', len(to_combine))
         assert(len(to_combine) == 0)
 
     # find unsat cores
     def explain_incomplete(self, prog):
-        # print('')
-        # print('')
-        # print('EXPLAIN_INCOMPLETE')
-        # print(format_prog(prog))
-
-
         settings, tester = self.settings, self.tester
         unsat_cores = self.explain_totally_incomplete(prog)
-
 
         for subprog, unsat_body in unsat_cores:
 
