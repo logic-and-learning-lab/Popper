@@ -23,7 +23,7 @@ size(N):-
 %% THIS DOES NOT WORK!!!???
 %% size(N+1):-
 %%     body_size(0,N).
-%% :- not size(_).
+:- not size(_).
 
 %% ********** BASE CASE (RULE 0) **********
 head_literal(0,P,A,Vars):-
