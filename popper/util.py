@@ -182,9 +182,10 @@ def order_prog(prog):
 
 def rule_is_recursive(rule):
     head, body = rule
+    head_pred, _head_args = head
     if not head:
         return False
-    return any(head.predicate  == literal.predicate for literal in body if isinstance(literal, Literal))
+    return any(head_pred == pred for pred, _args in body)
 
 def prog_is_recursive(prog):
     if len(prog) < 2:
@@ -200,7 +201,8 @@ def rule_is_invented(rule):
     head, body = rule
     if not head:
         return False
-    return head.predicate.startswith('inv')
+    head_pred, _head_arg = head
+    return head_pred.startswith('inv')
 
 def mdl_score(fn, fp, size):
     return fn + fp + size
@@ -391,7 +393,7 @@ class Settings:
         self.literal_outputs = {}
 
         if self.has_directions:
-            head_pred, head_args = self.head_literal.predicate, self.head_literal.arguments
+            head_pred, head_args = self.head_literal
             # print('head_args', head_args)
             for head_args in permutations(range(self.max_vars), len(head_args)):
                 head_inputs = frozenset(arg for i, arg in enumerate(head_args) if directions[head_pred][i] == '+')
@@ -484,7 +486,8 @@ class Settings:
         grounded_variables = set()
 
         if head:
-            head_inputs = self.literal_inputs[(head.predicate, head.arguments)]
+            head_pred, head_args = head
+            head_inputs = self.literal_inputs[(head_pred, head_args)]
             if head_inputs == []:
                 return rule
             grounded_variables.update(head_inputs)
@@ -495,17 +498,18 @@ class Settings:
         while body_literals:
             selected_literal = None
             for literal in body_literals:
-                literal_outputs = self.literal_outputs[(literal.predicate, literal.arguments)]
+                pred, args = literal
+                literal_outputs = self.literal_outputs[(pred, args)]
 
-                if len(literal_outputs) == len(literal.arguments):
+                if len(literal_outputs) == len(args):
                     selected_literal = literal
                     break
 
-                literal_inputs = self.literal_inputs[(literal.predicate, literal.arguments)]
+                literal_inputs = self.literal_inputs[(pred, args)]
                 if not literal_inputs.issubset(grounded_variables):
                     continue
 
-                if head and literal.predicate != head.predicate:
+                if head and pred != head.predicate:
                     # find the first ground non-recursive body literal and stop
                     selected_literal = literal
                     break
@@ -518,7 +522,8 @@ class Settings:
                 raise ValueError(message)
 
             ordered_body.append(selected_literal)
-            selected_literal_outputs = self.literal_outputs[(selected_literal.predicate, selected_literal.arguments)]
+            pred, args = selected_literal
+            selected_literal_outputs = self.literal_outputs[(pred, args)]
             grounded_variables = grounded_variables.union(selected_literal_outputs)
             body_literals = body_literals.difference({selected_literal})
 
@@ -527,14 +532,15 @@ class Settings:
     @cache
     def order_rule_datalog(self, head, body):
         def tmp_score(seen_vars, literal):
+            pred, args = literal
             key = []
-            for x in literal.arguments:
+            for x in args:
                 if x in seen_vars:
                     key.append('1')
                 else:
                     key.append('0')
             key = ''.join(key)
-            k = (literal.predicate, key)
+            k = (pred, key)
             if k in self.recall:
                 return self.recall[k]
             return 1000000
@@ -673,67 +679,6 @@ def head_connected(rule):
 
     return True
 
-@cache
-def has_valid_directions(rule):
-    head, body = rule
-
-    if head:
-        if len(head.inputs) == 0:
-            return True
-
-        grounded_variables = head.inputs
-        body_literals = set(body)
-
-        while body_literals:
-            selected_literal = None
-            for literal in body_literals:
-                if not literal.inputs.issubset(grounded_variables):
-                    continue
-                if literal.predicate != head.predicate:
-                    # find the first ground non-recursive body literal and stop
-                    selected_literal = literal
-                    break
-                elif selected_literal == None:
-                    # otherwise use the recursive body literal
-                    selected_literal = literal
-
-            if selected_literal == None:
-                return False
-
-            grounded_variables = grounded_variables.union(selected_literal.outputs)
-            body_literals = body_literals.difference({selected_literal})
-        return True
-    else:
-        if all(len(literal.inputs) == 0 for literal in body):
-            return True
-
-        body_literals = set(body)
-        grounded_variables = set()
-
-        while body_literals:
-            selected_literal = None
-            for literal in body_literals:
-                _pred, args = literal
-                if len(literal.outputs) == len(args):
-                    selected_literal = literal
-                    break
-                if literal.inputs.issubset(grounded_variables):
-                    selected_literal = literal
-                    break
-
-            if selected_literal == None:
-                return False
-
-
-            _pred, args = selected_literal
-            grounded_variables = grounded_variables.union(args)
-            body_literals = body_literals.difference({selected_literal})
-
-        return True
-
-
-
-
 import os
 # AC: I do not know what this code below really does, but it works
 class suppress_stdout_stderr(object):
@@ -769,15 +714,14 @@ def rename_variables(rule):
     head, body = rule
     if head:
         head_vars = set(head.arguments)
-        head = (head.predicate, head.arguments)
     else:
         head_vars = set()
     next_var = len(head_vars)
     new_body = []
     lookup = {}
-    for body_literal in sorted(body, key=lambda x: x.predicate):
+    for pred, args in sorted(body, key=lambda x: x.predicate):
         new_args = []
-        for var in body_literal.arguments:
+        for var in args:
             if var in head_vars:
                 new_args.append(var)
                 continue
@@ -785,7 +729,7 @@ def rename_variables(rule):
                 lookup[var] = next_var
                 next_var+=1
             new_args.append(lookup[var])
-        new_body.append((body_literal.predicate, tuple(new_args)))
+        new_body.append((pred, tuple(new_args)))
     return (head, new_body)
 
 def get_raw_prog(prog):

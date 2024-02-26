@@ -784,12 +784,6 @@ class Popper():
 
             sub_prog_pos_covered = tester.get_pos_covered(new_prog, ignore=True)
 
-
-            # if settings.order_space:
-                # this check does not assume that we search by increasing program size
-                # subsumed = is_subsumed(sub_prog_pos_covered, calc_prog_size(new_prog), success_sets)
-            # else:
-                # this check assumes that we search by increasing program size
             subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
 
             prune = check_subsumed and subsumed
@@ -819,9 +813,6 @@ class Popper():
 
     def subsumed_or_covers_too_few2(self, prog, check_coverage=False, check_subsumed=False, seen=set()):
         tester, success_sets, settings = self.tester, self.success_sets, self.settings
-
-        # out = set()
-        # head_vars = set(head.arguments)
 
         out = []
         for subprog in generalisations(prog, allow_headless=False, recursive=True):
@@ -971,32 +962,18 @@ class Popper():
 
     def find_variants(self, rule):
         head, body = rule
-        head_arity = len(head.arguments)
+        _head_pred, head_args = head
+        head_arity = len(head_args)
         body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head_arity)
         subset = range(head_arity, self.settings.max_vars)
         for xs in permutations(subset, len(body_vars)):
-            xs = head.arguments + xs
+            xs = head_args + xs
             new_body = []
             for pred, args in body:
                 new_args = tuple(xs[arg] for arg in args)
                 new_literal = (pred, new_args)
                 new_body.append(new_literal)
             yield frozenset(new_body)
-
-    def find_variants2(self, rule):
-        head, body = rule
-        _head_pred, head_args = head
-        head_arity = len(head_args)
-        body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head_arity)
-        subset = range(head_arity, self.settings.max_vars)
-        for xs in permutations(subset, len(body_vars)):
-            xs = head.arguments + xs
-            new_body = []
-            for pred, args in body:
-                new_args = tuple(xs[arg] for arg in args)
-                new_literal = (pred, new_args)
-                new_body.append(new_literal)
-            yield head, frozenset(new_body)
 
     def build_test_prog(self, subprog):
         directions = self.settings.directions
@@ -1343,8 +1320,9 @@ def generalisations(prog, allow_headless=True, recursive=False):
 def tmp(prog):
     for rule in prog:
         head, body = rule
-        body_args = set(x for atom in body for x in atom.arguments)
-        if any(x not in body_args for x in head.arguments):
+        _head_pred, head_args = head
+        body_args = set(x for _pred, args in body for x in args)
+        if any(x not in body_args for x in head_args):
             return False
     return True
 
