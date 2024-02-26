@@ -844,3 +844,26 @@ def functional_rename_vars(rule):
         new_body.add(new_atom)
 
     return head, frozenset(new_body)
+
+def remap_variables(rule):
+    head, body = rule
+    head_vars = set()
+
+    if head:
+        head_vars.update(head.arguments)
+
+    next_var = len(head_vars)
+    lookup = {i:i for i in head_vars}
+
+    new_body = set()
+    for atom in body:
+        new_args = []
+        for var in atom.arguments:
+            if var not in lookup:
+                lookup[var] = next_var
+                next_var+=1
+            new_args.append(lookup[var])
+        new_atom = Literal(atom.predicate, tuple(new_args))
+        new_body.add(new_atom)
+
+    return head, frozenset(new_body)

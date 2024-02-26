@@ -2,7 +2,7 @@ import time
 from collections import defaultdict
 from functools import cache
 from itertools import chain, combinations, permutations
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, bias_order, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal
+from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, bias_order, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables
 from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons
 
@@ -179,7 +179,7 @@ class Popper():
         # track the success sets of tested hypotheses
         success_sets = self.success_sets = {}
         success_sets_noise = {}
-        success_sets_recursion = {}
+        # success_sets_recursion = {}
 
         # maintain a set of programs that we have not yet pruned
         could_prune_later = self.could_prune_later = [0]*(max_size+1)
@@ -189,9 +189,6 @@ class Popper():
         to_combine = []
 
         last_size = None
-
-        # search_order = bias_order(settings, max_size)
-        # for (size, n_vars, n_rules, _) in search_order:
 
         for size in range(2, max_size+1):
             if size > settings.max_literals:
@@ -246,7 +243,7 @@ class Popper():
                 # TODO: refactor out for readability
                 # test a program
                 skipped, skip_early_neg = False, False
-                # print('testing?')
+
                 with settings.stats.duration('test'):
                     if settings.noisy:
                         if settings.recursion_enabled or settings.pi_enabled:
@@ -346,11 +343,6 @@ class Popper():
 
                 if not settings.noisy:
                     if not is_recursive and tp > 0:
-                        # if we do not search by increasing size, we need to use a strict form of subsumption
-                        # if settings.order_space:
-                            # subsumed = is_subsumed(pos_covered, prog_size, success_sets)
-                        # else:
-
                         subsumed = pos_covered in success_sets
                         subsumed = subsumed or any(pos_covered.issubset(xs) for xs in success_sets)
 
@@ -360,7 +352,7 @@ class Popper():
                         if not has_invention:
                             # we check whether a program does not cover enough examples to be useful
                             # if the program only not cover enough examples, we prune it specialisations
-                            covers_too_few = settings.solution_found and not settings.order_space and tp == 1
+                            covers_too_few = settings.solution_found and tp == 1
                             if covers_too_few:
                                 add_spec = True
 
@@ -368,21 +360,22 @@ class Popper():
                                 # If a program is subsumed or doesn't cover enough examples, we search for the most general subprogram that also is also subsumed or doesn't cover enough examples
                                 # only applies to non-recursive and non-PI programs
                                 with settings.stats.duration('self.subsumed_or_covers_too_few'):
-                                    xs = self.subsumed_or_covers_too_few(prog, check_coverage=covers_too_few, check_subsumed=subsumed, seen=set())
-                                pruned_more_general = len(xs) > 0
+                                    subsumed_progs = self.subsumed_or_covers_too_few(prog, check_coverage=covers_too_few, check_subsumed=subsumed, seen=set())
+                                pruned_more_general = len(subsumed_progs) > 0
                                 if settings.showcons and not pruned_more_general:
                                     if subsumed:
                                         print('\t', format_prog(prog), '\t', 'subsumed')
                                     else:
                                         print('\t', format_prog(prog), '\t', 'covers_too_few')
-                                for x in xs:
+                                for subsumed_prog in subsumed_progs:
                                     if settings.showcons:
                                         if subsumed:
-                                            print('\t', format_prog(x), '\t', 'subsumed (generalisation)')
+                                            print('\t', format_prog(subsumed_prog), '\t', 'subsumed (generalisation)')
                                         else:
-                                            print('\t', format_prog(x), '\t', 'covers_too_few (generalisation)', tp)
+                                            print('\t', format_prog(subsumed_prog), '\t', 'covers_too_few (generalisation)', tp)
 
-                                    new_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(list(x)[0])]))
+                                    subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog)
+                                    new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
                     if inconsistent:
                         # if inconsistent, prune generalisations
@@ -390,7 +383,7 @@ class Popper():
                         if is_recursive:
                             combiner.add_inconsistent(prog)
                             with settings.stats.duration('find sub inconsistent'):
-                                cons_ = set(self.explain_inconsistent(prog))
+                                cons_ = frozenset(self.explain_inconsistent(prog))
                                 new_cons.extend(cons_)
                                 pruned_sub_inconsistent = len(cons_) > 0
                     else:
@@ -412,14 +405,9 @@ class Popper():
                                 cons_ = explain_none_functional(settings, tester, prog)
                                 new_cons.extend(cons_)
 
-                    seen_better_rec = False
-                    if is_recursive and not inconsistent and not subsumed and not add_gen and tp > 0:
-                        # if settings.order_space:
-                        #     # this check does not assume that we search by increasing program size
-                        #     subsumed = is_subsumed(pos_covered, prog_size, success_sets_recursion)
-                        # else:
-                        # this check assumes that we search by increasing program size
-                        seen_better_rec = pos_covered in success_sets_recursion or any(pos_covered.issubset(xs) for xs in success_sets_recursion)
+                    # seen_better_rec = False
+                    # if is_recursive and not inconsistent and not subsumed and not add_gen and tp > 0:
+                    #     seen_better_rec = pos_covered in success_sets_recursion or any(pos_covered.issubset(xs) for xs in success_sets_recursion)
 
                 if settings.noisy:
                     # if a program of size k covers less than k positive examples, we can prune its specialisations
@@ -498,7 +486,8 @@ class Popper():
                 #             print('\t','r2',format_rule(order_rule(r2)))
                 #         new_cons.append((Constraint.GENERALISATION, [r1,r2], None, None))
 
-                if not add_spec and not pruned_more_general and is_recursive and not seen_better_rec:
+                # if not add_spec and not pruned_more_general and is_recursive and not seen_better_rec:
+                if not add_spec and not pruned_more_general and is_recursive:
                     subsumed = pos_covered in success_sets
                     subsumed = subsumed or any(pos_covered.issubset(xs) for xs in success_sets)
                     if subsumed:
@@ -528,16 +517,17 @@ class Popper():
                         add_to_combiner = True
                 else:
                     # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
-                    if not inconsistent and not subsumed and not add_gen and tp > 0 and not seen_better_rec and not pruned_more_general:
+                    # if not inconsistent and not subsumed and not add_gen and tp > 0 and not seen_better_rec and not pruned_more_general:
+                    if not inconsistent and not subsumed and not add_gen and tp > 0 and not pruned_more_general:
                         add_to_combiner = True
 
-                    if settings.order_space and not inconsistent and not subsumed and tp > 0 and not seen_better_rec and not pruned_more_general:
-                        add_to_combiner = True
+                    # if settings.order_space and not inconsistent and not subsumed and tp > 0 and not seen_better_rec and not pruned_more_general:
+                        # add_to_combiner = True
 
                     if add_to_combiner:
                         success_sets[pos_covered] = prog_size
-                        if is_recursive:
-                            success_sets_recursion[pos_covered] = prog_size
+                        # if is_recursive:
+                            # success_sets_recursion[pos_covered] = prog_size
 
                 if add_to_combiner:
                     to_combine.append((prog, pos_covered, neg_covered))
@@ -616,7 +606,8 @@ class Popper():
                             settings.solution_found = True
                             settings.max_literals = hypothesis_size-1
 
-                            if size >= settings.max_literals and not settings.order_space:
+                            # if size >= settings.max_literals and not settings.order_space:
+                            if size >= settings.max_literals:
                                 print('POOPER')
                                 return
 
@@ -692,7 +683,8 @@ class Popper():
                         settings.solution_found = True
                         settings.max_literals = hypothesis_size-1
 
-                        if size >= settings.max_literals and not settings.order_space:
+                        # if size >= settings.max_literals and not settings.order_space:
+                        if size >= settings.max_literals:
                             print('POOPER')
                             return
             if settings.single_solve:
@@ -854,12 +846,12 @@ class Popper():
             sub_prog_pos_covered = tester.get_pos_covered(new_prog, ignore=True)
 
 
-            if settings.order_space:
+            # if settings.order_space:
                 # this check does not assume that we search by increasing program size
-                subsumed = is_subsumed(sub_prog_pos_covered, calc_prog_size(new_prog), success_sets)
-            else:
+                # subsumed = is_subsumed(sub_prog_pos_covered, calc_prog_size(new_prog), success_sets)
+            # else:
                 # this check assumes that we search by increasing program size
-                subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
+            subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
 
             prune = check_subsumed and subsumed
             prune = prune or (check_coverage and len(sub_prog_pos_covered) == 1)
