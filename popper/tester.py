@@ -60,7 +60,6 @@ class Tester():
     @cache
     def parse_single_rule(self, prog):
         rule = list(prog)[0]
-        head, _body = rule
         head, ordered_body = self.settings.order_rule(rule)
         atom_str = format_literal_janus(head)
         body_str = format_rule_janus((None, ordered_body))[2:-1]
