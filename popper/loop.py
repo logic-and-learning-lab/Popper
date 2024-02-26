@@ -198,7 +198,6 @@ class Popper():
                 generator.update_solver(size)
 
             while True:
-                pruned_sub_incomplete = False
                 pruned_sub_inconsistent = False
                 pruned_more_general = False
                 add_spec = False
@@ -339,7 +338,7 @@ class Popper():
                         with settings.stats.duration('find mucs'):
                             cons_ = tuple(self.explain_incomplete(prog))
                             new_cons.extend(cons_)
-                            pruned_sub_incomplete = len(cons_) > 0
+                            pruned_more_general = len(cons_) > 0
 
                 if not settings.noisy:
                     if not is_recursive and tp > 0:
@@ -507,7 +506,7 @@ class Popper():
                         #         new_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(rule) for rule in x]))
 
 
-                if not add_spec and not pruned_more_general and not pruned_sub_incomplete:
+                if not add_spec and not pruned_more_general:
                     could_prune_later[prog_size][prog] = pos_covered
 
                 add_to_combiner = False
@@ -616,32 +615,32 @@ class Popper():
                                 generator.prune_size(i)
 
                 # BUILD CONSTRAINTS
-                if add_spec and not pruned_sub_incomplete and not pruned_more_general and not add_redund2:
+                if add_spec and not pruned_more_general and not add_redund2:
                     new_cons.append((Constraint.SPECIALISATION, prog))
 
                 if not skipped:
-                    if settings.noisy and not add_spec and spec_size and not pruned_sub_incomplete:
+                    if settings.noisy and not add_spec and spec_size and not pruned_more_general:
                         if spec_size <= settings.max_literals and ((is_recursive or has_invention or spec_size <= settings.max_body)):
                             new_cons.append((Constraint.SPECIALISATION, prog, spec_size))
                             self.seen_hyp_spec[fp+prog_size+mdl].append([prog, tp, fn, tn, fp, prog_size])
 
                 if add_gen and not pruned_sub_inconsistent:
                     if settings.noisy or settings.recursion_enabled or settings.pi_enabled:
-                        if not pruned_sub_incomplete:
+                        if not pruned_more_general:
                             new_cons.append((Constraint.GENERALISATION, prog))
                     else:
                         if not add_spec:
                             new_cons.append((Constraint.GENERALISATION, prog))
 
                 if settings.noisy and not add_gen and gen_size and not pruned_sub_inconsistent:
-                    if gen_size <= settings.max_literals and (settings.recursion_enabled or settings.pi_enabled) and not pruned_sub_incomplete:
+                    if gen_size <= settings.max_literals and (settings.recursion_enabled or settings.pi_enabled) and not pruned_more_general:
                         new_cons.append((Constraint.GENERALISATION, prog, gen_size))
                         self.seen_hyp_gen[fn+prog_size+mdl].append([prog, tp, fn, tn, fp, prog_size])
 
-                if add_redund1 and not pruned_sub_incomplete:
+                if add_redund1 and not pruned_more_general:
                     new_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, prog))
 
-                if add_redund2 and not pruned_sub_incomplete:
+                if add_redund2 and not pruned_more_general:
                     new_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, prog))
 
                 if settings.noisy and not add_spec and not add_gen:
