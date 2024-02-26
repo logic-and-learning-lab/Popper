@@ -14,13 +14,9 @@ FIND_SUBSET_PROG3 = """
 #show covered/1.
 """
 
-
 def get_rule_hash(rule):
     head, body = rule
-    head = (head.predicate, head.arguments)
-    body = frozenset((literal.predicate, literal.arguments) for literal in body)
     return hash((head, body))
-
 
 class Combiner:
     def __init__(self, settings, tester):

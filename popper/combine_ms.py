@@ -14,8 +14,6 @@ from pysat.formula import IDPool
 
 def get_rule_hash(rule):
     head, body = rule
-    head = (head.predicate, head.arguments)
-    body = frozenset((literal.predicate, literal.arguments) for literal in body)
     return hash((head, body))
 
 class Combiner:

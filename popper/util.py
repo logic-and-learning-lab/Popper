@@ -15,6 +15,17 @@ class Literal(NamedTuple):
     predicate: str
     arguments: tuple
 
+# class Literal2:
+#     def __init__(self, predicate, arguments, directions = [], positive = True, meta=False):
+#         self.predicate = predicate
+#         self.arguments = arguments
+#         self.arity = len(arguments)
+#         self.directions = directions
+#         self.positive = positive
+#         self.meta = meta
+#         self.inputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '+')
+#         self.outputs = frozenset(arg for direction, arg in zip(self.directions, self.arguments) if direction == '-')
+
 clingo.script.enable_python()
 
 TIMEOUT=600

@@ -19,9 +19,10 @@ def functional_rename_vars(rule):
     lookup = {}
 
     new_body = set()
-    for body_literal in sorted(body, key=lambda x: x.predicate):
+    for body_literal in sorted(body, key=lambda x: x[0]):
+        pred, args = body_literal
         new_args = []
-        for var in body_literal.arguments:
+        for var in args:
             if var in head_vars:
                 new_args.append(var)
                 continue
@@ -29,7 +30,7 @@ def functional_rename_vars(rule):
                 lookup[var] = next_var
                 next_var+=1
             new_args.append(lookup[var])
-        new_atom = Literal(body_literal.predicate, tuple(new_args))
+        new_atom = Literal(pred, tuple(new_args))
         new_body.add(new_atom)
 
     return head, frozenset(new_body)
@@ -819,7 +820,7 @@ class Popper():
                 continue
 
             # check whether we have seen this body before
-            k1 = frozenset((y.predicate, y.arguments) for y in new_body)
+            k1 = frozenset(new_body)
             if k1 in seen:
                 continue
             seen.add(k1)
@@ -832,7 +833,7 @@ class Popper():
                 continue
 
             # check whether we have pruned any subset (HORRIBLE CODE)
-            if any(frozenset((y.predicate, y.arguments) for y in x) in self.pruned2 for x in non_empty_powerset(new_body)):
+            if any(frozenset(x) in self.pruned2 for x in non_empty_powerset(new_body)):
                 continue
 
             if not head_connected(new_rule):
@@ -965,7 +966,7 @@ class Popper():
             seen.add(body)
 
             # If we have seen a subset of the body then ignore this program
-            if any(frozenset((y.predicate, y.arguments) for y in x) in pruned2 for x in non_empty_powerset(body)):
+            if any(frozenset(x) in pruned2 for x in non_empty_powerset(body)):
                 to_delete.add(prog2)
                 continue
 
@@ -981,7 +982,7 @@ class Popper():
                 if not self.has_valid_directions(new_rule):
                     continue
 
-                tmp = frozenset((y.predicate, y.arguments) for y in new_body)
+                tmp = frozenset(new_body)
                 if tmp in seen:
                     continue
                 seen.add(tmp)
@@ -1038,9 +1039,9 @@ class Popper():
         for xs in permutations(subset, len(body_vars)):
             xs = head.arguments + xs
             new_body = []
-            for atom in body:
-                new_args = tuple(xs[arg] for arg in atom.arguments)
-                new_literal = (atom.predicate, new_args)
+            for pred, args in body:
+                new_args = tuple(xs[arg] for arg in args)
+                new_literal = (pred, new_args)
                 new_body.append(new_literal)
             yield frozenset(new_body)
 
@@ -1049,12 +1050,13 @@ class Popper():
         test_prog = []
         for head, body in subprog:
             if head:
-                head_literal = Literal(head.predicate, head.arguments)
+                head_pred, head_args = head
+                head_literal = Literal(head_pred, head_args)
             else:
                 head_literal = False
             body_literals = set()
-            for body_literal in body:
-                body_literals.add(Literal(body_literal.predicate, body_literal.arguments))
+            for pred, args in body:
+                body_literals.add(Literal(pred, args))
             rule = head_literal, frozenset(body_literals)
             test_prog.append(rule)
         return frozenset(test_prog)
@@ -1078,7 +1080,7 @@ class Popper():
             # for rule in subprog:
             #     print('\t', 'A', format_rule(rule))
 
-            prog_key = get_prog_key(subprog)
+            prog_key = frozenset(subprog)
             if prog_key in self.seen_prog:
                 continue
                 # pass
@@ -1098,12 +1100,12 @@ class Popper():
                 h_, b_ = list(subprog)[0]
                 for x in non_empty_powerset(b_):
                     sub_ = [(None, x)]
-                    if get_prog_key(sub_) in self.unsat:
+                    if frozenset(sub_) in self.unsat:
                         return True
                     if get_raw_prog(sub_) in self.unsat:
                         return True
                     sub_ = [(h_, x)]
-                    if get_prog_key(sub_) in self.unsat:
+                    if frozenset(sub_) in self.unsat:
                         return True
                     if get_raw_prog(sub_) in self.unsat:
                         return True
@@ -1172,7 +1174,8 @@ class Popper():
         head, body = rule
 
         if head:
-            head_inputs = self.settings.literal_inputs[(head.predicate, head.arguments)]
+            head_pred, head_args = head
+            head_inputs = self.settings.literal_inputs[(head_pred, head_args)]
             if len(head_inputs) == 0:
                 return True
 
@@ -1182,10 +1185,11 @@ class Popper():
             while body_literals:
                 selected_literal = None
                 for literal in body_literals:
-                    literal_inputs = self.settings.literal_inputs[(literal.predicate, literal.arguments)]
+                    pred, args = literal
+                    literal_inputs = self.settings.literal_inputs[(pred, args)]
                     if not literal_inputs.issubset(grounded_variables):
                         continue
-                    if literal.predicate != head.predicate:
+                    if pred != head_pred:
                         # find the first ground non-recursive body literal and stop
                         selected_literal = literal
                         break
@@ -1196,14 +1200,15 @@ class Popper():
                 if selected_literal == None:
                     return False
 
-                selected_literal_outputs = self.settings.literal_outputs[(selected_literal.predicate, selected_literal.arguments)]
+                pred, args = selected_literal
+                selected_literal_outputs = self.settings.literal_outputs[(pred, args)]
                 grounded_variables = grounded_variables.union(selected_literal_outputs)
                 body_literals = body_literals.difference({selected_literal})
             return True
         else:
 
             # literal_inputs =
-            if all(len(self.settings.literal_inputs[(literal.predicate, literal.arguments)]) == 0 for literal in body):
+            if all(len(self.settings.literal_inputs[(pred, args)]) == 0 for pred, args in body):
                 return True
 
             body_literals = set(body)
@@ -1212,11 +1217,12 @@ class Popper():
             while body_literals:
                 selected_literal = None
                 for literal in body_literals:
-                    literal_outputs = self.settings.literal_outputs[(literal.predicate, literal.arguments)]
+                    pred, args = literal
+                    literal_outputs = self.settings.literal_outputs[(pred, args)]
                     if len(literal_outputs) == len(literal.arguments):
                         selected_literal = literal
                         break
-                    literal_inputs = self.settings.literal_inputs[(literal.predicate, literal.arguments)]
+                    literal_inputs = self.settings.literal_inputs[(pred, args)]
                     if literal_inputs.issubset(grounded_variables):
                         selected_literal = literal
                         break
@@ -1286,13 +1292,15 @@ class Popper():
             rec_outputs = set()
             non_rec_inputs = set()
             head, body = rule
+            head_pred, _head_args = head
             for literal in body:
-                if literal.predicate == head.predicate:
-                    literal_outputs = self.settings.literal_outputs[(literal.predicate, literal.arguments)]
+                pred, args = literal
+                if pred == head_pred:
+                    literal_outputs = self.settings.literal_outputs[(pred, args)]
                     rec_outputs.update(literal_outputs)
                 else:
                     # if any(x in xr)
-                    literal_inputs = self.settings.literal_inputs[(literal.predicate, literal.arguments)]
+                    literal_inputs = self.settings.literal_inputs[(pred, args)]
                     non_rec_inputs.update(literal_inputs)
             if any(x in rec_outputs for x in non_rec_inputs):
                 return True
@@ -1365,10 +1373,15 @@ def generalisations(prog, allow_headless=True, recursive=False):
 
         if (recursive and len(body) > 2 and head) or (not recursive and len(body) > 1):
             body = list(body)
+            # print(head, type(head))
+
             for i in range(len(body)):
                 # do not remove recursive literals
-                if recursive and body[i].predicate == head.predicate:
-                    continue
+                pred, args = body[i]
+                if recursive:
+                    head_pred, head_args = head
+                    if pred == head_pred:
+                        continue
                 new_body = body[:i] + body[i+1:]
                 new_rule = (head, frozenset(new_body))
                 new_prog = [new_rule]
@@ -1454,19 +1467,6 @@ def head_connected(rule):
             return False
 
     return True
-
-
-
-def get_prog_key(prog):
-    s = set()
-    for rule in prog:
-        head, body = rule
-        head_key = None
-        if head:
-            head_key = (head.predicate, head.arguments)
-        body_key = frozenset((atom.predicate, atom.arguments) for atom in body)
-        s.add((head_key, body_key))
-    return frozenset(s)
 
 def is_headless(prog):
     return any(head is None for head, body in prog)

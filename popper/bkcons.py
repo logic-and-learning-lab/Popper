@@ -4,7 +4,6 @@ import numbers
 import operator
 import pkg_resources
 import time
-# from . core import Literal, RuleVar, VarVar, Var
 from . util import rule_is_recursive, format_rule, Constraint, order_prog, Literal
 from clingo import Function, Number, Tuple_
 from collections import defaultdict
@@ -630,11 +629,11 @@ def atom_to_symbol(pred, args):
     return Function(name = pred, arguments = xs)
 
 
-def tmpprint(body):
-    out = []
-    for x in sorted(body, key=lambda x: (-x.arity, x.arguments, x.predicate)):
-        out.append(f'{x.predicate}{x.arguments}')
-    return ', '.join(out)
+# def tmpprint(body):
+#     out = []
+#     for x in sorted(body, key=lambda x: (-x.arity, x.arguments, x.predicate)):
+#         out.append(f'{x.predicate}{x.arguments}')
+#     return ', '.join(out)
 
 
 # def deduce_bk_cons1(settings, tester):

@@ -194,9 +194,9 @@ class Generator:
         for assignment in assignments:
             # print(assignment)
             rule = []
-            for atom in body:
-                args2 = tuple(assignment[x] for x in atom.arguments)
-                rule.append((True, 'body_literal', (0, atom.predicate, len(atom.arguments), args2)))
+            for pred, args in body:
+                args2 = tuple(assignment[x] for x in args)
+                rule.append((True, 'body_literal', (0, pred, len(args), args2)))
 
             yield frozenset(rule)
 
@@ -227,9 +227,9 @@ class Generator:
         for xs in permutations(subset, len(body_vars)):
             xs = head.arguments + xs
             new_body = []
-            for atom in body:
-                new_args = tuple(xs[arg] for arg in atom.arguments)
-                new_literal = (True, 'body_literal', (0, atom.predicate, len(new_args), new_args))
+            for pred, args in body:
+                new_args = tuple(xs[arg] for arg in args)
+                new_literal = (True, 'body_literal', (0, pred, len(new_args), new_args))
                 new_body.append(new_literal)
             yield frozenset(new_body)
 
@@ -251,9 +251,8 @@ class Generator:
         head_vars = set(range(len(self.settings.head_literal.arguments)))
         body_vars = set()
 
-        for atom in body:
-            pred = atom.predicate
-            for i, x in enumerate(atom.arguments):
+        for pred, args in body:
+            for i, x in enumerate(args):
                 body_vars.add(x)
                 if x in head_vars:
                     continue
@@ -294,14 +293,14 @@ def remap_variables(rule):
     lookup = {i:i for i in head_vars}
 
     new_body = set()
-    for atom in body:
+    for pred, args in body:
         new_args = []
-        for var in atom.arguments:
+        for var in args:
             if var not in lookup:
                 lookup[var] = next_var
                 next_var+=1
             new_args.append(lookup[var])
-        new_atom = Literal(atom.predicate, tuple(new_args))
+        new_atom = Literal(pred, tuple(new_args))
         new_body.add(new_atom)
 
     return head, frozenset(new_body)
