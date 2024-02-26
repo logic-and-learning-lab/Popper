@@ -305,16 +305,32 @@ class Popper():
                             pruned_more_general = len(cons_) > 0
 
                 if not settings.noisy:
-                    if not is_recursive and tp > 0:
+                    if tp > 0:
                         subsumed = pos_covered in success_sets
                         subsumed = subsumed or any(pos_covered.issubset(xs) for xs in success_sets)
 
                         if subsumed:
                             add_spec = True
 
+                        if not add_spec and is_recursive:
+                            covers_too_few = settings.solution_found and tp == 1
+                            if covers_too_few:
+                                assert(False)
+
                         assert(not pruned_more_general)
 
-                        if not has_invention:
+                        # TODO: FIND MOST GENERAL SUBSUMED RECURSIVE PROGRAM
+                        # xs = self.subsumed_or_covers_too_few2(prog, check_coverage=False, check_subsumed=True)
+                        # if xs:
+                        # pruned_more_general
+                        #     for x in xs:
+                        #         print('')
+                        #         for rule in x:
+                        #             # print(rule)
+                        #             print('\t', 'moo', format_rule(rule))
+                        #         new_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(rule) for rule in x]))
+
+                        if not has_invention and not is_recursive:
                             # we check whether a program does not cover enough examples to be useful
                             # if the program only not cover enough examples, we prune it specialisations
                             covers_too_few = settings.solution_found and tp == 1
@@ -369,10 +385,6 @@ class Popper():
                             with settings.stats.duration('explain_none_functional'):
                                 cons_ = explain_none_functional(settings, tester, prog)
                                 new_cons.extend(cons_)
-
-                    # seen_better_rec = False
-                    # if is_recursive and not inconsistent and not subsumed and not add_gen and tp > 0:
-                    #     seen_better_rec = pos_covered in success_sets_recursion or any(pos_covered.issubset(xs) for xs in success_sets_recursion)
 
                 if settings.noisy:
                     # if a program of size k covers less than k positive examples, we can prune its specialisations
@@ -451,27 +463,6 @@ class Popper():
                 #             print('\t','r2',format_rule(order_rule(r2)))
                 #         new_cons.append((Constraint.GENERALISATION, [r1,r2], None, None))
 
-                # if not add_spec and not pruned_more_general and is_recursive and not seen_better_rec:
-                if not add_spec and not pruned_more_general and is_recursive:
-                    subsumed = pos_covered in success_sets
-                    subsumed = subsumed or any(pos_covered.issubset(xs) for xs in success_sets)
-                    if subsumed:
-                        add_spec = True
-                        # print('')
-                        # print('POOOOOP')
-                        # print(format_prog(prog))
-                        # print(prog, type(prog))
-                        # xs = self.subsumed_or_covers_too_few2(prog, check_coverage=False, check_subsumed=True)
-                        # if xs:
-                        # pruned_more_general
-                        #     for x in xs:
-                        #         print('')
-                        #         for rule in x:
-                        #             # print(rule)
-                        #             print('\t', 'moo', format_rule(rule))
-                        #         new_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(rule) for rule in x]))
-
-
                 if not add_spec and not pruned_more_general:
                     could_prune_later[prog_size][prog] = pos_covered
 
@@ -489,9 +480,9 @@ class Popper():
                 if add_to_combiner:
                     to_combine.append((prog, pos_covered, neg_covered))
 
-                    if not settings.noisy and not has_invention and not is_recursive:
+                    if not settings.noisy and not has_invention:
                         with settings.stats.duration('prune backtrack'):
-                            subsumed_progs = tuple(self.prune_subsumed_backtrack2(pos_covered, prog_size, check_coverage=settings.solution_found))
+                            subsumed_progs = tuple(self.prune_subsumed_backtrack(pos_covered, prog_size, check_coverage=settings.solution_found))
                             for subsumed_prog_ in subsumed_progs:
                                 subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
                                 new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
@@ -877,8 +868,7 @@ class Popper():
             out.append(subprog)
         return out
 
-    def prune_subsumed_backtrack2(self, pos_covered, prog_size, check_coverage):
-        # format_prog = format_prog
+    def prune_subsumed_backtrack(self, pos_covered, prog_size, check_coverage):
         could_prune_later, tester = self.could_prune_later, self.tester
         to_prune = set()
         to_delete = set()
@@ -892,6 +882,14 @@ class Popper():
         for prog2, pos_covered2 in get_zs():
 
             if len(prog2) > 1:
+                should_prune = check_coverage and len(pos_covered2) == 1
+                subsumed = pos_covered2.issubset(pos_covered)
+                if should_prune or subsumed:
+                    # print('PRUNE!!!')
+                    # print(format_prog(prog2))
+                    # TODO: FIND MOST GENERAL SUBSUMED PROGRAM
+                    to_delete.add(prog2)
+                    to_prune.add(prog2)
                 continue
 
             should_prune = check_coverage and len(pos_covered2) == 1
