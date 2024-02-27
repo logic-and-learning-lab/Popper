@@ -297,7 +297,7 @@ class Popper():
 
                 if not has_invention:
                     self.seen_prog.add(get_raw_prog(prog))
-                    if tp == 0 or (settings.noisy and tp < prog_size):
+                    if tp == 0 or (settings.noisy and tp <= prog_size):
                         # if the program does not cover any positive examples, check whether it is has an unsat core
                         with settings.stats.duration('find mucs'):
                             cons_ = tuple(self.explain_incomplete(prog))
