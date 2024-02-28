@@ -464,7 +464,7 @@ class Popper():
                 #         new_cons.append((Constraint.GENERALISATION, [r1,r2], None, None))
 
                 # if not add_spec and not pruned_more_general and False:
-                if not add_spec and not pruned_more_general:
+                if not settings.noisy and not add_spec and not pruned_more_general:
                     with settings.stats.duration('subsumed by two'):
                         something = set()
                         for pos_covered2, size2 in success_sets.items():
