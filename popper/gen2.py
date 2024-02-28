@@ -50,6 +50,11 @@ class Generator:
         bias_text = re.sub(r'max_vars\(\d*\).','', bias_text)
         bias_text = re.sub(r'max_body\(\d*\).','', bias_text)
         bias_text = re.sub(r'max_clauses\(\d*\).','', bias_text)
+
+        for p,a in settings.pointless:
+            bias_text = re.sub(rf'body_pred\({p},{a}\).','', bias_text)
+
+
         encoding.append(bias_text)
         encoding.append(f'max_clauses({settings.max_rules}).')
         encoding.append(f'max_body({settings.max_body}).')
@@ -101,8 +106,8 @@ class Generator:
 
         encoding = '\n'.join(encoding)
 
-        # with open('ENCODING-GEN.pl', 'w') as f:
-            # f.write(encoding)
+        with open('ENCODING-GEN.pl', 'w') as f:
+            f.write(encoding)
 
         if self.settings.single_solve:
             solver = clingo.Control(['--heuristic=Domain','-Wnone'])

@@ -463,6 +463,48 @@ class Popper():
                 #             print('\t','r2',format_rule(order_rule(r2)))
                 #         new_cons.append((Constraint.GENERALISATION, [r1,r2], None, None))
 
+                # if not add_spec and not pruned_more_general and False:
+                if not add_spec and not pruned_more_general:
+                    with settings.stats.duration('subsumed by two'):
+                        something = set()
+                        for pos_covered2, size2 in success_sets.items():
+                            if size2 + 1 >= prog_size:
+                                continue
+                            if pos_covered2.issubset(pos_covered):
+                                something.add((pos_covered2, size2))
+
+                        for p1, s1 in something:
+                            if add_spec:
+                                break
+                            for p2, s2 in something:
+                                if add_spec:
+                                    break
+                                # print(s1+s2-1)
+                                if s1+s2-1 > prog_size:
+                                    continue
+                                # print('x', p1|p2)
+                                if pos_covered.issubset((p1|p2)):
+                                    # print(s1+s2, prog_size)
+                                    # print("SHIT", format_prog(prog))
+                                    if settings.showcons:
+                                        print('\t', format_prog(prog), '\t', 'subsumed by two')
+
+                                    # self.check_more_general_subsumed_by_two(prog)
+                                    add_spec = True
+                                    break
+                                # for p3, s3 in something:
+                                #     if add_spec:
+                                #         break
+                                #     # print(s1+s2-1)
+                                #     if s1+s2+s3-1 > prog_size:
+                                #         continue
+                                #     # print('x', p1|p2)
+                                #     if pos_covered.issubset((p1|p2|p3)):
+                                #         # print(s1+s2+s3, prog_size)
+                                #         print("MAJOR WOOOO SHIT", format_prog(prog))
+                                #         add_spec = True
+                                #         break
+
                 if not add_spec and not pruned_more_general:
                     could_prune_later[prog_size][prog] = pos_covered
 
@@ -760,7 +802,7 @@ class Popper():
             new_prog = frozenset({new_rule})
 
             # ensure at least one head variable is in the body
-            if not any(x in head_vars for literal in new_body for x in literal.arguments):
+            if not settings.non_datalog_flag and not any(x in head_vars for literal in new_body for x in literal.arguments):
                 continue
 
             # check whether we have pruned any subset (HORRIBLE CODE)
@@ -786,6 +828,9 @@ class Popper():
 
             subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
 
+            if settings.non_datalog_flag and not any(x in head_vars for literal in new_body for x in literal.arguments) and subsumed:
+                print('CHEEKY BUGGER')
+
             prune = check_subsumed and subsumed
             prune = prune or (check_coverage and len(sub_prog_pos_covered) == 1)
 
@@ -806,6 +851,109 @@ class Popper():
             # doing so reduces the number of pointless checks
             for x in self.find_variants(remap_variables(new_rule)):
                 self.pruned2.add(x)
+
+            out.add(new_prog)
+        return out
+
+
+
+    def check_more_general_subsumed_by_two(self, prog):
+        tester, success_sets, settings = self.tester, self.success_sets, self.settings
+        head, body = list(prog)[0]
+        body = list(body)
+
+        if len(body) == 0:
+            return []
+
+        out = set()
+        head_vars = set(head.arguments)
+
+        # try the body with one literal removed (the literal at position i)
+        for i in range(len(body)):
+            new_body = body[:i] + body[i+1:]
+            new_body = frozenset(new_body)
+
+            if len(new_body) == 0:
+                continue
+
+            # # check whether we have seen this body before
+            # k1 = frozenset(new_body)
+            # if k1 in seen:
+            #     continue
+            # seen.add(k1)
+
+            new_rule = (head, new_body)
+            new_prog = frozenset({new_rule})
+
+            # ensure at least one head variable is in the body
+            if not settings.non_datalog_flag and not any(x in head_vars for literal in new_body for x in literal.arguments):
+                continue
+
+            # check whether we have pruned any subset (HORRIBLE CODE)
+            # if any(frozenset(x) in self.pruned2 for x in non_empty_powerset(new_body)):
+                # continue
+
+            if not head_connected(new_rule):
+                xs = self.check_more_general_subsumed_by_two(new_prog)
+                out.update(xs)
+                continue
+
+            if not self.has_valid_directions(new_rule):
+                xs = self.check_more_general_subsumed_by_two(new_prog)
+                out.update(xs)
+                continue
+
+            # if tester.has_redundant_literal(new_prog):
+            #     xs = self.check_more_general_subsumed_by_two(new_prog)
+            #     out.update(xs)
+            #     continue
+
+            # print('MOOOOO')
+            pos_covered = tester.get_pos_covered(new_prog, ignore=True)
+
+            # subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
+
+            # prune = check_subsumed and subsumed
+            # prune = prune or (check_coverage and len(sub_prog_pos_covered) == 1)
+
+            prog_size = calc_prog_size(new_prog)
+
+            something = set()
+            for pos_covered2, size2 in success_sets.items():
+                if size2 + 1 == prog_size:
+                    continue
+                if pos_covered2.issubset(pos_covered):
+                    something.add((pos_covered2, size2))
+
+            shitsub = False
+            for p1, s1 in something:
+                if shitsub:
+                    break
+                for p2, s2 in something:
+                    if shitsub:
+                        break
+                    # print(s1+s2-1)
+                    if s1+s2-1 > prog_size:
+                        continue
+                    # print('x', p1|p2)
+                    if pos_covered.issubset((p1|p2)):
+                        shitsub = True
+                        # print(s1+s2, prog_size)
+                        print("SHIT_SUB"*4, format_prog(prog))
+                        break
+
+            if not shitsub:
+                continue
+
+            xs = self.check_more_general_subsumed_by_two(new_prog)
+            if len(xs) > 0:
+                out.update(xs)
+                continue
+
+            # for each pruned program, add the variants to the list of pruned programs
+            # doing so reduces the number of pointless checks
+            # for x in self.find_variants(remap_variables(new_rule)):
+                # self.pruned2.add(x)
 
             out.add(new_prog)
         return out
@@ -1241,23 +1389,34 @@ def learn_solution(settings):
 
     bkcons = []
 
-    recalls = False
+
+    pointless = settings.pointless = set()
     settings.logger.debug(f'Loading recalls')
     with suppress_stdout_stderr():
         try:
-            with settings.stats.duration('recalls'):
-                recalls = deduce_recalls(settings)
+            pointless = settings.pointless = find_pointless_relations(settings)
             settings.datalog = True
         except:
             settings.datalog = False
 
-    if recalls:
-        # for x in recalls:
-            # print(x)
-        bkcons.extend(recalls)
+    for p,a in pointless:
+        if settings.showcons:
+            print('remove pointless relation', p, a)
+        settings.body_preds.remove((p,a))
 
     if settings.datalog:
-        bkcons.extend(deduce_type_cons(settings))
+        with settings.stats.duration('recalls'):
+            recalls = tuple(deduce_recalls(settings))
+        if settings.showcons:
+            for x in recalls:
+                print('recall', x)
+        bkcons.extend(recalls)
+
+        type_cons = tuple(deduce_type_cons(settings))
+        if settings.showcons:
+            for x in type_cons:
+                print('type_con', x)
+        bkcons.extend(type_cons)
 
     if not settings.datalog:
         settings.logger.debug(f'Loading recalls FAILURE')
@@ -1273,6 +1432,7 @@ def learn_solution(settings):
             signal.alarm(settings.bkcons_timeout)
             try:
                 bkcons.extend(deduce_bk_cons(settings, tester))
+                # exit()
             except TimeoutError as _exc:
                 settings.logger.debug(f'Loading bkcons FAILURE')
             finally:
@@ -1396,3 +1556,110 @@ def non_empty_powerset(iterable):
 def non_empty_subset(iterable):
     s = tuple(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)))
+
+def find_pointless_relations(settings):
+
+    import clingo
+    encoding = []
+
+    encoding.append('#show same/2.')
+
+    arities = {}
+
+    for p, pa in settings.body_preds:
+        arities[p] = pa
+        for q, qa in settings.body_preds:
+            if p == q:
+                continue
+            if pa != qa:
+                continue
+
+            if settings.body_types[p] != settings.body_types[q]:
+                continue
+
+            arg_str = ','.join(f'V{i}' for i in range(pa))
+
+            rule1 = f'diff({p},{q}):- {p}({arg_str}), not {q}({arg_str}).'
+            rule2 = f'diff({p},{q}):- {q}({arg_str}), not {p}({arg_str}).'
+            rule3 = f'same({p},{q}):- {p}<{q}, not diff({p},{q}).'
+
+            encoding.extend([rule1, rule2, rule3])
+
+    encoding.append('\n')
+    with open(settings.bk_file) as f:
+        bk = f.read()
+        encoding.append(bk)
+
+    encoding = '\n'.join(encoding)
+
+    # with open('encoding.pl', 'w') as f:
+    #     f.write(encoding)
+
+    solver = clingo.Control(['-Wnone'])
+    solver.add('base', [], encoding)
+    solver.ground([('base', [])])
+
+    keep = set()
+    pointless = set()
+
+    with solver.solve(yield_=True) as handle:
+        for m in handle:
+            for atom in m.symbols(shown = True):
+                # print(str(atom))
+                a, b = str(atom)[5:-1].split(',')
+                if a in keep and b in keep:
+                    assert(False)
+                if a not in pointless and b not in pointless:
+                    if a in keep:
+                        pointless.add(b)
+                        # print('drop1', b)
+                    elif b in keep:
+                        pointless.add(a)
+                        # print('drop1', a)
+                    else:
+                        keep.add(a)
+                        pointless.add(b)
+                        # print('drop1', b)
+                elif a in pointless or b in pointless:
+                    if a not in keep:
+                        pointless.add(a)
+                        # print('drop5', a)
+                    if b not in keep:
+                        pointless.add(b)
+                        # print('drop5', b)
+                elif a not in pointless and b not in pointless:
+                    keep.add(a)
+                    pointless.add(b)
+                    # print('drop2', b)
+                elif a in pointless:
+                    pointless.add(b)
+                    # print('drop3', b)
+                elif b in pointless:
+                    pointless.add(b)
+                    # print('keep', a)
+                    # print('drop4', b)
+
+
+                # if a in keep and b in keep:
+                #     assert(False)
+                # elif a in keep and b not in keep:
+                #     pointless.add(b)
+                #     print('drop', b)
+                # elif a not in keep and b in keep:
+                #     pointless.add(a)
+                #     print('drop', a)
+                # elif a not in keep and b not in keep:
+                #     keep.add(a)
+                #     pointless.add(b)
+                #     print('keep', a)
+                #     print('drop', b)
+
+                # same(input_plow_row,input_harvest_col)
+    # print('-----')
+    # for x in keep:
+        # print('keep', x)
+    # for x in pointless:
+        # print('drop', x)
+    # exit()
+    return frozenset((p, arities[p]) for p in pointless)
+    # settings.drop_preds = pointless

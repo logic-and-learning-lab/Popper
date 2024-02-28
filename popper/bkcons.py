@@ -26,30 +26,30 @@ TIDY_OUTPUT = """
 #defined clause/1.
 """
 
-def get_bias_preds(settings):
-    solver = clingo.Control(['-Wnone'])
-    with open(settings.bias_file) as f:
-        solver.add('bias', [], f.read())
-    solver.add('bias', [], TIDY_OUTPUT)
-    solver.ground([('bias', [])])
+# def get_bias_preds(settings):
+#     solver = clingo.Control(['-Wnone'])
+#     with open(settings.bias_file) as f:
+#         solver.add('bias', [], f.read())
+#     solver.add('bias', [], TIDY_OUTPUT)
+#     solver.ground([('bias', [])])
 
-    for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
-        args = x.symbol.arguments
-        symbol = args[0].name
-        arity = args[1].number
-        head_pred = symbol, arity
+#     for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
+#         args = x.symbol.arguments
+#         symbol = args[0].name
+#         arity = args[1].number
+#         head_pred = symbol, arity
 
-    head_pred, head_arity=  head_pred
-    head_literal = Literal(head_pred, tuple(arg_lookup[clingo.Number(arg)] for arg in range(head_arity)))
-    head_str =  f'{head_pred}({tmp_map[head_arity]})'
+#     head_pred, head_arity=  head_pred
+#     head_literal = Literal(head_pred, tuple(arg_lookup[clingo.Number(arg)] for arg in range(head_arity)))
+#     head_str =  f'{head_pred}({tmp_map[head_arity]})'
 
-    body_preds = set()
-    for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
-        args = x.symbol.arguments
-        symbol = args[0]
-        arity = args[1].number
-        body_preds.add((symbol, arity))
-    return (head_pred, arity), body_preds
+#     body_preds = set()
+#     for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
+#         args = x.symbol.arguments
+#         symbol = args[0]
+#         arity = args[1].number
+#         body_preds.add((symbol, arity))
+#     return (head_pred, arity), body_preds
 
 
 from itertools import permutations, combinations
@@ -628,14 +628,17 @@ def atom_to_symbol(pred, args):
     return Function(name = pred, arguments = xs)
 
 def deduce_bk_cons(settings, tester):
+    import re
     prog = []
     lookup2 = {k: f'({v})' for k,v in tmp_map.items()}
     lookup1 = {k:v for k,v in lookup2.items()}
     lookup1[1] = '(V0,)'
-    (head_pred, head_arity), body_preds = get_bias_preds(settings)
+    head_pred, head_arity = settings.head_literal
+
+    # for pred, arity in :
 
     arities = set()
-    for p, a in body_preds:
+    for p, a in settings.body_preds:
         arities.add(a)
         arg_str = lookup1[a]
         arg_str2 = lookup2[a]
@@ -645,6 +648,9 @@ def deduce_bk_cons(settings, tester):
 
     with open(settings.bias_file) as f:
         bias = f.read()
+        for p,a in settings.pointless:
+            bias = re.sub(rf'body_pred\({p},{a}\).','', bias)
+
     with open(settings.bk_file) as f:
         bk = f.read()
 

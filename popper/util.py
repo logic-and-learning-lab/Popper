@@ -315,6 +315,13 @@ class Settings:
         for x in solver.symbolic_atoms.by_signature('enable_pi', arity=0):
             self.pi_enabled = True
 
+        # determine whether non_datalog flag is enabled
+        self.non_datalog_flag = False
+        for x in solver.symbolic_atoms.by_signature('non_datalog', arity=0):
+            self.non_datalog_flag = True
+
+
+
         # read directions from bias file when there is no PI
         # if not self.pi_enabled:
         self.directions = directions = defaultdict(dict)

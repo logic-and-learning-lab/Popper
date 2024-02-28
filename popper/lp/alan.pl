@@ -95,26 +95,24 @@ var_member(Var,Vars):-
     head_var(Rule,Var),
     not body_var(Rule,Var).
 
+%% if non_datalog is true, all vars are valid
 %% constraints used by bk cons
 valid_var(Rule,Var):-
-    obeys_datalog_check(Rule,Var).
-
-%% if non_datalog is true, all vars are valid
-obeys_datalog_check(Rule, Var):-
     non_datalog,
     Rule=0..MaxRules-1,
     max_clauses(MaxRules),
     var(Var).
-    %% clause_var(Rule,Var).
 
-%% if non_datalog is false, a body only variable is valid
-obeys_datalog_check(Rule,Var):-
+%% if datalog, a body only variable is valid
+valid_var(Rule,Var):-
     not non_datalog,
-    clause_var(Rule,Var),
-    not head_var(Rule,Var).
+    Rule=0..MaxRules-1,
+    max_clauses(MaxRules),
+    var(Var),
+    not head_var(Rule, Var).
 
-%% if non_datalog is false, a head var must also appear in the body
-obeys_datalog_check(Rule,Var):-
+%% if datalog, a head var must also appear in the body
+valid_var(Rule,Var):-
     not non_datalog,
     head_var(Rule,Var),
     body_var(Rule,Var).
