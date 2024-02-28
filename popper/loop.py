@@ -335,7 +335,7 @@ class Popper():
                             # we check whether a program does not cover enough examples to be useful
                             # if the program only not cover enough examples, we prune it specialisations
                             covers_too_few = settings.solution_found and tp == 1
-                            covers_too_few = covers_too_few or (settings.solution_found and not settings.noisy and len(settings.solution) == 2 and tp != num_pos)
+                            covers_too_few = covers_too_few or (settings.solution_found and not settings.recursion_enabled and not settings.noisy and len(settings.solution) == 2 and tp != num_pos)
                             if covers_too_few:
                                 add_spec = True
 
@@ -559,7 +559,7 @@ class Popper():
                             for i in range(settings.max_literals+1, max_size+1):
                                 generator.prune_size(i)
 
-                            if not settings.noisy and len(settings.solution) == 2:
+                            if not settings.noisy and len(settings.solution) == 2 and not settings.recursion_enabled:
                                 with settings.stats.duration('prune backtrack specialcase'):
                                     subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
                                     for subsumed_prog_ in subsumed_progs:
@@ -1057,7 +1057,7 @@ class Popper():
             # if settings.solution_found and not settings.noisy and len(settings.solution) == 2:
                 # print('RAH1!!')
                 # exit()
-            should_prune = should_prune or (settings.solution_found and not settings.noisy and len(settings.solution) == 2 and len(pos_covered2) != num_pos)
+            should_prune = should_prune or (settings.solution_found and not settings.recursion_enabled and not settings.noisy and len(settings.solution) == 2 and len(pos_covered2) != num_pos)
 
             subsumed = pos_covered2.issubset(pos_covered)
 
@@ -1099,7 +1099,7 @@ class Popper():
 
                 # prune if we have a solution and the subprogram only covers one example
                 sub_covers_too_few = check_coverage and len(sub_prog_pos_covered) == 1
-                sub_covers_too_few = sub_covers_too_few or (settings.solution_found and not settings.noisy and len(settings.solution) == 2 and len(sub_prog_pos_covered) != num_pos)
+                sub_covers_too_few = sub_covers_too_few or (settings.solution_found and not settings.recursion_enabled and not settings.noisy and len(settings.solution) == 2 and len(sub_prog_pos_covered) != num_pos)
 
                 sub_prog_subsumed = sub_prog_pos_covered == pos_covered2
 
