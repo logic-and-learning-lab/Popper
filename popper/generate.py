@@ -9,7 +9,7 @@ import numbers
 import clingo.script
 import pkg_resources
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, bias_order, Literal, format_rule
+from . util import rule_is_recursive, Constraint, bias_order, Literal, format_rule, remap_variables
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
@@ -926,6 +926,9 @@ class Generator:
     # def redundant_rules_check(self, rule1, rule2):-
 
     def unsat_constraint2(self, body):
+        if len(self.settings.body_types) == 0:
+            _, body = remap_variables((None, body))
+
         assignments = self.find_deep_bindings4(body)
         out = []
         # print(format_prog([(None, body)]))
@@ -1093,97 +1096,52 @@ class Generator:
         head_types = self.settings.head_types
         body_types = self.settings.body_types
 
-        var_type_lookup = {}
+        # if no types, find all permutations of variables
+        if len(body_types) == 0:
+            num_vars = len({var for atom in body for var in atom.arguments})
+            for xs in permutations(range(self.settings.max_vars), num_vars):
+                x = {i:xs[i] for i in range(num_vars)}
+                yield x
+            return
 
-        head_vars = set()
-        if head_types:
-            for i, head_type in enumerate(head_types):
-                var_type_lookup[i] = head_type
-                head_vars.add(i)
+        # if there are types, only find type-safe permutations
+        var_type_lookup = {i:head_type for i, head_type in enumerate(head_types)}
 
+        head_arity = len(self.settings.head_literal.arguments)
+        head_vars = set(range(head_arity))
         body_vars = set()
+
         for atom in body:
             pred = atom.predicate
-            if pred not in body_types:
-                continue
             for i, x in enumerate(atom.arguments):
                 body_vars.add(x)
-                var_type = body_types[pred][i]
-                var_type_lookup[x] = var_type
+                if x in head_vars:
+                    continue
+                var_type_lookup[x] = body_types[pred][i]
 
-        if body_vars:
-            key = hash(frozenset((k,v) for k,v in var_type_lookup.items() if k in body_vars))
-        else:
-            assert(False)
-            # all_vars = set(x for atom in body for x in atom.arguments)
-            # key = hash(frozenset(all_vars))
-
-        if key in self.cached4:
-            return self.cached4[key]
-
-        bad_matchings = set()
+        # prohibit bad type matchings
+        bad_type_matching = set()
         for x in body_vars:
-            if x not in var_type_lookup:
-                continue
             for y in head_vars:
-                if x == y:
-                    continue
-                if y not in var_type_lookup:
-                    continue
                 if var_type_lookup[x] == var_type_lookup[y]:
                     continue
                 k = (x, y)
-                bad_matchings.add(k)
+                bad_type_matching.add(k)
 
-        solver_values = tuple(range(self.settings.max_vars))
-        var_lookup = {}
-        solver_index = {}
-        index = 1
+        lookup = {x:i for i, x in enumerate(body_vars)}
 
-        formula = CNF()
-
-        for x in body_vars:
-            x_clause = []
-            for y in solver_values:
-                # match x to y
-                k = (x,y)
-                if k in bad_matchings:
-                    continue
-                var_lookup[k] = index
-                solver_index[index] = k
-                index+=1
-                x_clause.append(var_lookup[k])
-            formula.append(x_clause)
-            for z in CardEnc.equals(lits=x_clause, encoding=EncType.pairwise).clauses:
-                formula.append(z)
-
-        for y in solver_values:
-            y_clause = []
-            for x in body_vars:
-                k = (x,y)
-                if k in bad_matchings:
-                    continue
-                y_clause.append(var_lookup[k])
-            for z in CardEnc.atmost(lits=y_clause, encoding=EncType.pairwise).clauses:
-                formula.append(z)
-
-        solver = Solver(name='m22')
-        for x in formula.clauses:
-            solver.add_clause(x)
-
-        out = []
-        for m in solver.enum_models():
+        for xs in permutations(range(self.settings.max_vars), len(lookup)):
             assignment = {}
-            for x in m:
-                if x < 0:
-                    continue
-                x, y = solver_index[x]
-                assignment[x] = y
-            out.append(assignment)
-            # print('moo2', assignment)
-
-        self.cached4[key] = out
-        return out
+            bad = False
+            for x in body_vars:
+                v = xs[lookup[x]]
+                if (x, v) in bad_type_matching:
+                    bad = True
+                    break
+                assignment[x] = v
+            if bad:
+                continue
+            yield assignment
 
 
 
