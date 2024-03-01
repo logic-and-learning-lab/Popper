@@ -335,7 +335,7 @@ class Popper():
                             # we check whether a program does not cover enough examples to be useful
                             # if the program only not cover enough examples, we prune it specialisations
                             covers_too_few = settings.solution_found and tp == 1
-                            covers_too_few = covers_too_few or (settings.solution_found and not settings.recursion_enabled and not settings.noisy and len(settings.solution) == 2 and tp != num_pos)
+                            # covers_too_few = covers_too_few or (settings.solution_found and not settings.recursion_enabled and not settings.noisy and len(settings.solution) == 2 and tp != num_pos)
                             if covers_too_few:
                                 add_spec = True
 
@@ -1099,7 +1099,7 @@ class Popper():
 
                 # prune if we have a solution and the subprogram only covers one example
                 sub_covers_too_few = check_coverage and len(sub_prog_pos_covered) == 1
-                sub_covers_too_few = sub_covers_too_few or (settings.solution_found and not settings.recursion_enabled and not settings.noisy and len(settings.solution) == 2 and len(sub_prog_pos_covered) != num_pos)
+                # sub_covers_too_few = sub_covers_too_few or (settings.solution_found and not settings.recursion_enabled and not settings.noisy and len(settings.solution) == 2 and len(sub_prog_pos_covered) != num_pos)
 
                 sub_prog_subsumed = sub_prog_pos_covered == pos_covered2
 
@@ -1196,7 +1196,7 @@ class Popper():
 
                 # prune if we have a solution and the subprogram only covers one example
                 sub_covers_too_few = len(sub_prog_pos_covered) == 1
-                sub_covers_too_few = sub_covers_too_few or (settings.solution_found and not settings.noisy and len(settings.solution) == 2 and len(sub_prog_pos_covered) != self.num_pos)
+                # sub_covers_too_few = sub_covers_too_few or (settings.solution_found and not settings.noisy and len(settings.solution) == 2 and len(sub_prog_pos_covered) != self.num_pos)
 
                 if sub_covers_too_few:
                     if self.settings.showcons:
