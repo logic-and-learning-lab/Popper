@@ -199,6 +199,7 @@ class Popper():
                 if last_size is None or prog_size != last_size:
                     size_change = True
                     last_size = prog_size
+                    settings.search_depth = prog_size
                     settings.logger.info(f'Generating programs of size: {prog_size}')
 
                 if last_size > settings.max_literals:
@@ -498,6 +499,7 @@ class Popper():
                                 if pos_covered.issubset(union):
                                     if settings.showcons:
                                         print('\t', format_prog(prog), '\t', 'subsumed by two')
+                                    # assert(False)
                                     add_spec = True
                                     break
 
@@ -761,14 +763,30 @@ class Popper():
                 # print('\tPRUNE MAX RULES 1')
                 return True
         elif min_size and ((prog_size + (min_size*2)) > max_literals):
+
+            for i in range(min_size, settings.max_body+1):
+                if i+prog_size > max_literals:
+                    continue
+                if i >= settings.search_depth:
+                    return False
             for pos_covered2, size2 in success_sets.items():
                 if size2 + prog_size > max_literals:
                     continue
                 if len(pos_covered2|pos_covered) == num_pos:
                     return False
-            # print('\tPRUNE MAX RULES 2', f'prog size:{prog_size}', f'min size:{min_size}', f'max size:{max_literals}', )
+            # print('\tPRUNE MAX RULES 2', f'prog size:{prog_size}', f'min size:{min_size}', f'max size:{max_literals}', f'settings.search_depth:{settings.search_depth}')
             return True
         elif min_size and ((prog_size + (min_size*3)) > max_literals):
+            for i in range(min_size, settings.max_body+1):
+                if i+prog_size > max_literals:
+                    continue
+                for j in range(min_size, settings.max_body+1):
+                    if i+j+prog_size > max_literals:
+                        continue
+                    if i >= settings.search_depth:
+                        return False
+                    if j >= settings.search_depth:
+                        return False
             for pos_covered2, size2 in success_sets.items():
                 if size2 + prog_size > max_literals:
                     continue
@@ -782,11 +800,53 @@ class Popper():
                         continue
                     if len(moo|pos_covered3) == num_pos:
                         return False
-            # print('\tPRUNE MAX RULES 3', f'prog size:{prog_size}', f'min size:{min_size}', f'max size:{max_literals}', )
+            # print('\tPRUNE MAX RULES 3', f'prog size:{prog_size}', f'min size:{min_size}', f'max size:{max_literals}', f'search_depth{settings.search_depth}')
             return True
         # elif min_size and prog_size + (min_size*4) > max_literals:
-            # print('MAX RULES 4????')
+        #     # pass
 
+        #     for i in range(min_size, settings.max_body+1):
+        #         if i+prog_size > max_literals:
+        #             continue
+        #         for j in range(min_size, settings.max_body+1):
+        #             if i+j+prog_size > max_literals:
+        #                 continue
+        #             for k in range(min_size, settings.max_body+1):
+        #                 if i+j+k+prog_size > max_literals:
+        #                     continue
+        #                 if i >= settings.search_depth:
+        #                     return False
+        #                 if j >= settings.search_depth:
+        #                     return False
+        #                 if k >= settings.search_depth:
+        #                     return False
+
+        #     for pos_covered2, size2 in success_sets.items():
+        #         if size2 + prog_size > max_literals:
+        #             continue
+        #         moo = pos_covered2|pos_covered
+        #         if len(moo) == len(pos_covered):
+        #             continue
+        #         if len(moo) == num_pos:
+        #             return False
+        #         for pos_covered3, size3 in success_sets.items():
+        #             if size2 +size3 + prog_size > max_literals:
+        #                 continue
+        #             moo2 = moo|pos_covered3
+        #             if len(moo2) == len(pos_covered):
+        #                 continue
+        #             if len(moo2) == num_pos:
+        #                 return False
+        #             for pos_covered4, size4 in success_sets.items():
+        #                 if size2 + size3 + size4 + prog_size > max_literals:
+        #                     continue
+        #                 moo3 = moo2|pos_covered4
+        #                 # if len(moo2) == len(pos_covered):
+        #                     # continue
+        #                 if len(moo3) == num_pos:
+        #                     return False
+        #     # print('PRUNE MAX RULES 4????')
+        #     return True
         return False
 
     # @profile
@@ -993,7 +1053,8 @@ class Popper():
 
                 # print('')
 
-                covers_too_few = self.check_covers_too_few(calc_prog_size(new_prog), sub_prog_pos_covered)
+                with settings.stats.duration('check_covers_too_few'):
+                    covers_too_few = self.check_covers_too_few(calc_prog_size(new_prog), sub_prog_pos_covered)
                 if covers_too_few:
                     pass
                     # print(format_prog(new_prog))
@@ -1308,10 +1369,11 @@ class Popper():
             if len(prog2) > 1:
                 continue
 
-            covers_too_few = self.check_covers_too_few(calc_prog_size(prog2), pos_covered2)
+            with settings.stats.duration('check_covers_too_few'):
+                covers_too_few = self.check_covers_too_few(calc_prog_size(prog2), pos_covered2)
             if not covers_too_few:
                 continue
-            print('SUB_COVERS_TOO_FEW BACKTRACKING')
+            # print('SUB_COVERS_TOO_FEW BACKTRACKING')
 
             head, body = tuple(prog2)[0]
 
@@ -1346,13 +1408,13 @@ class Popper():
 
                 sub_prog_pos_covered = tester.get_pos_covered(new_prog)
 
-                sub_covers_too_few = self.check_covers_too_few(calc_prog_size(new_prog), sub_prog_pos_covered)
+                with settings.stats.duration('check_covers_too_few'):
+                    sub_covers_too_few = self.check_covers_too_few(calc_prog_size(new_prog), sub_prog_pos_covered)
                 # prune if we have a solution and the subprogram only covers one example
                 # sub_covers_too_few = len(sub_prog_pos_covered) == 1
                 # sub_covers_too_few = sub_covers_too_few or self.check_covers_too_few(sub_prog_pos_covered, calc_prog_size(new_prog))
 
                 if sub_covers_too_few:
-                    print('COVERS TOO FEW (GENERALISATION) BACKTRACK')
                     if self.settings.showcons:
                         print('\t', format_prog(new_prog), '\t', 'covers too few (generalisation) backtrack')
                     to_prune.add(new_prog)
@@ -1369,7 +1431,6 @@ class Popper():
             for x in self.find_variants(remap_variables((head, body))):
                 pruned2.add(x)
 
-            print('\t', format_prog(prog2), '\t', 'COVERS TOO FEW (backtrack)')
             if self.settings.showcons:
 
                 print('\t', format_prog(prog2), '\t', 'COVERS TOO FEW (backtrack)')
