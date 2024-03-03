@@ -43,6 +43,8 @@ class Tester():
         self.pos_index = query_once('findall(_K, pos_index(_K, _Atom), S)')['S']
         self.neg_index = query_once('findall(_K, neg_index(_K, _Atom), S)')['S']
 
+        self.pos_examples = set(self.pos_index)
+
         self.num_pos = len(self.pos_index)
         self.num_neg = len(self.neg_index)
 

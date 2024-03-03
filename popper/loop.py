@@ -753,101 +753,121 @@ class Popper():
                 break
         assert(len(to_combine) == 0)
 
+    # @profile
     def check_covers_too_few(self, prog_size, pos_covered):
-        min_size, settings, success_sets, num_pos, max_literals = self.min_size, self.settings, self.success_sets, self.num_pos, self.settings.max_literals
+        min_size = self.min_size
+        if not min_size:
+            return False
 
+        num_pos = self.num_pos
         if len(pos_covered) == num_pos:
             return False
 
-        if min_size and ((prog_size + min_size) > max_literals):
-            if len(pos_covered) != num_pos:
-                # print('\tPRUNE MAX RULES 1')
-                return True
-        elif min_size and ((prog_size + (min_size*2)) > max_literals):
+        max_literals = self.settings.max_literals
 
-            for i in range(min_size, settings.max_body+1):
+
+        if ((prog_size + min_size) > max_literals):
+            if len(pos_covered) != num_pos:
+                return True
+        elif ((prog_size + (min_size*2)) > max_literals):
+            success_sets = self.success_sets
+            pos_index = self.tester.pos_examples
+            search_depth = self.settings.search_depth
+
+            for i in range(min_size, self.settings.max_body+1):
                 if i+prog_size > max_literals:
                     continue
-                if i >= settings.search_depth:
+                if i >= search_depth:
                     return False
+
+            missing = pos_index-pos_covered
             for pos_covered2, size2 in success_sets.items():
                 if size2 + prog_size > max_literals:
                     continue
-                if len(pos_covered2|pos_covered) == num_pos:
+                if missing.issubset(pos_covered2):
                     return False
-            # print('\tPRUNE MAX RULES 2', f'prog size:{prog_size}', f'min size:{min_size}', f'max size:{max_literals}', f'settings.search_depth:{settings.search_depth}')
+
             return True
-        elif min_size and ((prog_size + (min_size*3)) > max_literals):
-            for i in range(min_size, settings.max_body+1):
+        elif ((prog_size + (min_size*3)) > max_literals):
+            success_sets = self.success_sets
+            pos_index = self.tester.pos_examples
+            search_depth = self.settings.search_depth
+            max_body = self.settings.max_body
+
+            for i in range(min_size, max_body+1):
                 if i+prog_size > max_literals:
                     continue
-                for j in range(min_size, settings.max_body+1):
+                for j in range(min_size, max_body+1):
                     if i+j+prog_size > max_literals:
                         continue
-                    if i >= settings.search_depth:
+                    if i >= search_depth:
                         return False
-                    if j >= settings.search_depth:
+                    if j >= search_depth:
                         return False
+
+            missing = pos_index-pos_covered
             for pos_covered2, size2 in success_sets.items():
-                if size2 + prog_size > max_literals:
+                size_ = size2 + prog_size
+                if size_ > max_literals:
                     continue
-                moo = pos_covered2|pos_covered
-                if len(moo) == len(pos_covered):
+                missing2 = missing-pos_covered2
+                if len(missing2) == len(missing):
                     continue
-                if len(moo) == num_pos:
+                if len(missing2) == 0:
                     return False
                 for pos_covered3, size3 in success_sets.items():
-                    if size2 +size3 + prog_size > max_literals:
+                    if size_ + size3 > max_literals:
                         continue
-                    if len(moo|pos_covered3) == num_pos:
+                    if missing2.issubset(pos_covered3):
                         return False
-            # print('\tPRUNE MAX RULES 3', f'prog size:{prog_size}', f'min size:{min_size}', f'max size:{max_literals}', f'search_depth{settings.search_depth}')
             return True
-        # elif min_size and prog_size + (min_size*4) > max_literals:
-        #     # pass
+        elif prog_size + (min_size*4) > max_literals:
+            success_sets = self.success_sets
+            pos_index = self.tester.pos_examples
+            search_depth = self.settings.search_depth
+            max_body = self.settings.max_body
 
-        #     for i in range(min_size, settings.max_body+1):
-        #         if i+prog_size > max_literals:
-        #             continue
-        #         for j in range(min_size, settings.max_body+1):
-        #             if i+j+prog_size > max_literals:
-        #                 continue
-        #             for k in range(min_size, settings.max_body+1):
-        #                 if i+j+k+prog_size > max_literals:
-        #                     continue
-        #                 if i >= settings.search_depth:
-        #                     return False
-        #                 if j >= settings.search_depth:
-        #                     return False
-        #                 if k >= settings.search_depth:
-        #                     return False
+            for i in range(min_size, max_body+1):
+                if i+prog_size > max_literals:
+                    continue
+                for j in range(min_size, max_body+1):
+                    if i+j+prog_size > max_literals:
+                        continue
+                    for k in range(min_size, max_body+1):
+                        if i+j+k+prog_size > max_literals:
+                            continue
+                        if i >= search_depth:
+                            return False
+                        if j >= search_depth:
+                            return False
+                        if k >= search_depth:
+                            return False
 
-        #     for pos_covered2, size2 in success_sets.items():
-        #         if size2 + prog_size > max_literals:
-        #             continue
-        #         moo = pos_covered2|pos_covered
-        #         if len(moo) == len(pos_covered):
-        #             continue
-        #         if len(moo) == num_pos:
-        #             return False
-        #         for pos_covered3, size3 in success_sets.items():
-        #             if size2 +size3 + prog_size > max_literals:
-        #                 continue
-        #             moo2 = moo|pos_covered3
-        #             if len(moo2) == len(pos_covered):
-        #                 continue
-        #             if len(moo2) == num_pos:
-        #                 return False
-        #             for pos_covered4, size4 in success_sets.items():
-        #                 if size2 + size3 + size4 + prog_size > max_literals:
-        #                     continue
-        #                 moo3 = moo2|pos_covered4
-        #                 # if len(moo2) == len(pos_covered):
-        #                     # continue
-        #                 if len(moo3) == num_pos:
-        #                     return False
-        #     # print('PRUNE MAX RULES 4????')
-        #     return True
+            missing = pos_index-pos_covered
+            for pos_covered2, size2 in success_sets.items():
+                comb_size = size2 + prog_size
+                if comb_size > max_literals:
+                    continue
+                missing2 = missing-pos_covered2
+                if len(missing2) == len(missing):
+                    continue
+                if len(missing2) == 0:
+                    return False
+                for pos_covered3, size3 in success_sets.items():
+                    comb_size_ = comb_size+size3
+                    if comb_size_ > max_literals:
+                        continue
+                    missing3 = missing2-pos_covered3
+                    if len(missing3) == len(missing2):
+                        continue
+                    if len(missing3) == 0:
+                        return False
+                    for pos_covered4, size4 in success_sets.items():
+                        if comb_size_ + size4 > max_literals:
+                            continue
+                        if missing3.issubset(pos_covered4):
+                            return False
+            return True
         return False
 
     # @profile
@@ -985,7 +1005,7 @@ class Popper():
         return cons
 
 
-    @profile
+    # @profile
     def subsumed_or_covers_too_few(self, prog, check_coverage=False, check_subsumed=False, seen=set()):
         assert(check_coverage or check_subsumed)
         tester, success_sets, settings = self.tester, self.success_sets, self.settings
