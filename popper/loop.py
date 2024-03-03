@@ -484,84 +484,24 @@ class Popper():
                         for pos_covered2, size2 in success_sets.items():
                             if size2 + 1 >= prog_size:
                                 continue
-                            if pos_covered2.issubset(pos_covered):
-                                # assert(False)
+                            if not pos_covered2.isdisjoint(pos_covered):
                                 something.add((pos_covered2, size2))
 
                         for p1, s1 in something:
                             if add_spec:
                                 break
+                            missing = pos_covered-p1
                             for p2, s2 in something:
                                 if add_spec:
                                     break
                                 if s1+s2 > prog_size+1:
                                     break
-                                union = p1|p2
-                                if pos_covered.issubset(union):
-                                    if settings.showcons:
+                                if missing.issubset(p2):
+                                    if settings.showcons or True:
                                         print('\t', format_prog(prog), '\t', 'subsumed by two')
                                     # assert(False)
                                     add_spec = True
                                     break
-
-                    add_spec1 = add_spec
-                    add_spec2 = False
-
-                    # with settings.stats.duration('subsumed by two V2'):
-                    #     for comb in combinations_with_replacement(range(2, prog_size+2), 2):
-                    #         if sum(comb) > prog_size+1:
-                    #             continue
-                    #         if add_spec2:
-                    #             break
-                    #         # for size1 in comb:
-                    #         size1 = comb[0]
-                    #         size2 = comb[1]
-                    #         for pos_covered1 in success_sets_by_size[size1]:
-                    #             if add_spec2:
-                    #                 break
-                    #             if not pos_covered1.issubset(pos_covered):
-                    #                 continue
-                    #             for pos_covered2 in success_sets_by_size[size2]:
-                    #                 if add_spec2:
-                    #                     break
-                    #                 if not pos_covered2.issubset(pos_covered):
-                    #                     continue
-                    #                 if pos_covered.issubset(pos_covered1|pos_covered2):
-                    #                     add_spec2 = True
-                    #                     print(size1, size2)
-                    #                     break
-                    # if add_spec1 != add_spec2:
-                    #     print('add_spec1', add_spec1)
-                    #     print('add_spec2', add_spec2)
-                    #     assert(False)
-
-
-                    #     for comb in combinations_with_replacement(range(2, max_literals+1), 2):
-                    #         if sum(comb) > max_literals:
-                    #             continue
-                    #         print(max_literals, comb)
-
-
-                    #     for pos_covered2, size2 in success_sets.items():
-                    #         if size2 + 1 >= prog_size:
-                    #             continue
-                    #         if pos_covered2.issubset(pos_covered):
-                    #             something.add((pos_covered2, size2))
-
-                    #     for p1, s1 in something:
-                    #         if add_spec:
-                    #             break
-                    #         for p2, s2 in something:
-                    #             if add_spec:
-                    #                 break
-                    #             if s1+s2 > prog_size+1:
-                    #                 break
-                    #             union = p1|p2
-                    #             if pos_covered.issubset(union):
-                    #                 if settings.showcons:
-                    #                     print('\t', format_prog(prog), '\t', 'subsumed by two')
-                    #                 add_spec = True
-                    #                 break
 
                 if not add_spec and not pruned_more_general:
                     could_prune_later[prog_size][prog] = pos_covered
@@ -753,8 +693,137 @@ class Popper():
                 break
         assert(len(to_combine) == 0)
 
-    # @profile
     def check_covers_too_few(self, prog_size, pos_covered):
+        with self.settings.stats.duration('v0'):
+            self.check_covers_too_few1(prog_size, pos_covered)
+        with self.settings.stats.duration('v1'):
+            x = self.check_covers_too_few2(prog_size, pos_covered)
+        return x
+
+    def check_covers_too_few2(self, prog_size, pos_covered):
+        min_size = self.min_size
+        if not min_size:
+            return False
+
+        num_pos = self.num_pos
+        if len(pos_covered) == num_pos:
+            return False
+
+        max_literals = self.settings.max_literals
+
+
+        if ((prog_size + min_size) > max_literals):
+            if len(pos_covered) != num_pos:
+                return True
+        elif ((prog_size + (min_size*2)) > max_literals):
+            # xs = self.success_sets.items
+            pos_index = self.tester.pos_examples
+            search_depth = self.settings.search_depth
+
+            for i in range(min_size, self.settings.max_body+1):
+                if i+prog_size > max_literals:
+                    continue
+                if i >= search_depth:
+                    return False
+
+            missing = pos_index-pos_covered
+            for pos_covered2, size2 in self.success_sets.items():
+                if size2 + prog_size > max_literals:
+                    continue
+                if missing.issubset(pos_covered2):
+                    return False
+
+            return True
+        elif ((prog_size + (min_size*3)) > max_literals):
+            pos_index = self.tester.pos_examples
+            search_depth = self.settings.search_depth
+            max_body = self.settings.max_body
+
+            for i in range(min_size, max_body+1):
+                if i+prog_size > max_literals:
+                    continue
+                for j in range(min_size, max_body+1):
+                    if i+j+prog_size > max_literals:
+                        continue
+                    if i >= search_depth:
+                        return False
+                    if j >= search_depth:
+                        return False
+
+            success_sets = tuple(self.success_sets.items())
+            missing = pos_index-pos_covered
+            for i in range(len(success_sets)):
+                pos_covered2, size2 = success_sets[i]
+                size_ = size2 + prog_size
+                if size_ > max_literals:
+                    continue
+                missing2 = missing-pos_covered2
+                if len(missing2) == len(missing):
+                    continue
+                if len(missing2) == 0:
+                    return False
+                for j in range(i+1, len(success_sets)):
+                    pos_covered3, size3 = success_sets[j]
+                    if size_ + size3 > max_literals:
+                        continue
+                    if missing2.issubset(pos_covered3):
+                        return False
+            return True
+        elif prog_size + (min_size*4) > max_literals:
+            # success_sets = self.success_sets
+            pos_index = self.tester.pos_examples
+            search_depth = self.settings.search_depth
+            max_body = self.settings.max_body
+
+            for i in range(min_size, max_body+1):
+                if i+prog_size > max_literals:
+                    continue
+                for j in range(min_size, max_body+1):
+                    if i+j+prog_size > max_literals:
+                        continue
+                    for k in range(min_size, max_body+1):
+                        if i+j+k+prog_size > max_literals:
+                            continue
+                        if i >= search_depth:
+                            return False
+                        if j >= search_depth:
+                            return False
+                        if k >= search_depth:
+                            return False
+
+            success_sets = tuple(self.success_sets.items())
+            missing = pos_index-pos_covered
+            for i in range(len(success_sets)):
+                pos_covered2, size2 = success_sets[i]
+                comb_size = size2 + prog_size
+                if comb_size > max_literals:
+                    continue
+                missing2 = missing-pos_covered2
+                if len(missing2) == len(missing):
+                    continue
+                if len(missing2) == 0:
+                    return False
+                # for pos_covered3, size3 in success_sets.items():
+                for j in range(i+1, len(success_sets)):
+                    pos_covered3, size3 = success_sets[j]
+                    comb_size_ = comb_size+size3
+                    if comb_size_ > max_literals:
+                        continue
+                    missing3 = missing2-pos_covered3
+                    if len(missing3) == len(missing2):
+                        continue
+                    if len(missing3) == 0:
+                        return False
+                    for k in range(j+1, len(success_sets)):
+                        pos_covered4, size4 = success_sets[k]
+                        if comb_size_ + size4 > max_literals:
+                            continue
+                        if missing3.issubset(pos_covered4):
+                            return False
+            return True
+        return False
+
+    def check_covers_too_few1(self, prog_size, pos_covered):
         min_size = self.min_size
         if not min_size:
             return False
