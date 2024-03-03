@@ -144,6 +144,7 @@ class Popper():
 
         success_sets_by_size = self.success_sets_by_size = defaultdict(set)
         success_sets_noise = {}
+        paired_success_sets = self.paired_success_sets = defaultdict(set)
 
         # maintain a set of programs that we have not yet pruned
         could_prune_later = self.could_prune_later = [0]*(max_size+1)
@@ -478,30 +479,16 @@ class Popper():
 
                 # if not add_spec and not pruned_more_general and False:
                 if not settings.noisy and not add_spec and not pruned_more_general:
+                    with settings.stats.duration('subsumed_by_two'):
+                        x= self.subsumed_by_two(prog, pos_covered, prog_size)
+                            # add_spec = True
 
-                    with settings.stats.duration('subsumed by two'):
-                        something = set()
-                        for pos_covered2, size2 in success_sets.items():
-                            if size2 + 1 >= prog_size:
-                                continue
-                            if not pos_covered2.isdisjoint(pos_covered):
-                                something.add((pos_covered2, size2))
-
-                        for p1, s1 in something:
-                            if add_spec:
-                                break
-                            missing = pos_covered-p1
-                            for p2, s2 in something:
-                                if add_spec:
-                                    break
-                                if s1+s2 > prog_size+1:
-                                    break
-                                if missing.issubset(p2):
-                                    if settings.showcons or True:
-                                        print('\t', format_prog(prog), '\t', 'subsumed by two')
-                                    # assert(False)
-                                    add_spec = True
-                                    break
+                    with settings.stats.duration('subsumed_by_two NEW'):
+                        y=self.subsumed_by_two_new(prog, pos_covered, prog_size)
+                            # add_spec = True
+                    if x!=y:
+                        print(x, y)
+                        assert(False)
 
                 if not add_spec and not pruned_more_general:
                     could_prune_later[prog_size][prog] = pos_covered
@@ -515,8 +502,24 @@ class Popper():
                     # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
                     if not inconsistent and not subsumed and not add_gen and tp > 0 and not pruned_more_general:
                         add_to_combiner = True
+
+                        with settings.stats.duration('check_subsumes_old'):
+                            to_delete = []
+                            for a,b in success_sets.items():
+                                if a.issubset(pos_covered) and prog_size <= b:
+                                    to_delete.append(a)
+                                    print('MOOOO!!!', len(success_sets), a)
+                            for x in to_delete:
+                                # TODO: DELETE FROM COMBINER!!!!!!
+                                del success_sets[x]
+
                         success_sets[pos_covered] = prog_size
                         success_sets_by_size[prog_size].add(pos_covered)
+
+                        with settings.stats.duration('check_subsumes_add'):
+                            for p, s in success_sets.items():
+                                paired_success_sets[s+prog_size].add(p|pos_covered)
+
                         # print('good rule', prog_size)
                         if self.min_size is None:
                             self.min_size = prog_size
@@ -693,12 +696,47 @@ class Popper():
                 break
         assert(len(to_combine) == 0)
 
+    # @profile
+    def subsumed_by_two(self, prog, pos_covered, prog_size):
+        something = set()
+        for pos_covered2, size2 in self.success_sets.items():
+            if size2 + 1 >= prog_size:
+                continue
+            if not pos_covered2.isdisjoint(pos_covered):
+                something.add((pos_covered2, size2))
+
+        # checks = 0
+        something = tuple(something)
+        n = len(something)
+        for i in range(0, n):
+            p1, s1 = something[i]
+            missing = None
+            n = len(something)
+            for j in range(i+1, n):
+                p2, s2 = something[j]
+                if s1+s2 > prog_size+1:
+                    continue
+                if missing is None:
+                    missing = pos_covered-p1
+                if missing.issubset(p2):
+                    return True
+        return False
+
+    def subsumed_by_two_new(self, prog, pos_covered, prog_size):
+        paired_success_sets = self.paired_success_sets
+        for i in range(2, prog_size+1):
+            if pos_covered in paired_success_sets[i]:
+                return True
+        return False
+
+
     def check_covers_too_few(self, prog_size, pos_covered):
-        with self.settings.stats.duration('v0'):
-            self.check_covers_too_few1(prog_size, pos_covered)
-        with self.settings.stats.duration('v1'):
-            x = self.check_covers_too_few2(prog_size, pos_covered)
-        return x
+        return False
+        # with self.settings.stats.duration('v0'):
+            # self.check_covers_too_few1(prog_size, pos_covered)
+        # with self.settings.stats.duration('v1'):
+        return self.check_covers_too_few2(prog_size, pos_covered)
+        # return x
 
     def check_covers_too_few2(self, prog_size, pos_covered):
         min_size = self.min_size
@@ -710,7 +748,6 @@ class Popper():
             return False
 
         max_literals = self.settings.max_literals
-
 
         if ((prog_size + min_size) > max_literals):
             if len(pos_covered) != num_pos:
