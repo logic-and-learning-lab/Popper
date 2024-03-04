@@ -139,7 +139,6 @@ class Tester():
     def get_pos_covered(self, prog, ignore=True):
         k = prog_hash(prog)
         if k in self.cached_pos_covered:
-            # print('MATCH')
             return self.cached_pos_covered[k]
 
         if len(prog) == 1:
@@ -249,6 +248,7 @@ class Tester():
             return True
         return False
 
+    @cache
     def has_redundant_literal(self, prog):
         for rule in prog:
             head, body = rule
@@ -256,8 +256,11 @@ class Tester():
                 c = f"[{','.join(('not_'+ format_literal_janus(head),) + tuple(format_literal_janus(lit) for lit in body))}]"
             else:
                 c = f"[{','.join(tuple(format_literal_janus(lit) for lit in body))}]"
-            if query_once(f'redundant_literal({c})')['truth']:
+            q = f'redundant_literal({c})'
+            if query_once(q)['truth']:
+                # print(q, True)
                 return True
+            # print(q, False)
         return False
 
     # # WE ASSUME THAT THERE IS A REUNDANT RULE

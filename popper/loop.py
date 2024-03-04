@@ -145,7 +145,7 @@ class Popper():
         # track the success sets of tested hypotheses
         success_sets = self.success_sets = {}
 
-        success_sets_by_size = self.success_sets_by_size = defaultdict(set)
+        # success_sets_by_size = self.success_sets_by_size = defaultdict(set)
         success_sets_noise = {}
         paired_success_sets = self.paired_success_sets = defaultdict(set)
 
@@ -309,7 +309,7 @@ class Popper():
                             pruned_more_general = len(cons_) > 0
 
                 if not settings.noisy:
-                    if tp > 0:
+                    if tp > 0 and success_sets:
 
                         with settings.stats.duration('check subsumed'):
                             subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets)
@@ -339,12 +339,10 @@ class Popper():
                                 # If a program is subsumed or doesn't cover enough examples, we search for the most general subprogram that also is also subsumed or doesn't cover enough examples
                                 # only applies to non-recursive and non-PI programs
                                 subsumed_progs = []
-                                # if subsumed:
                                 with settings.stats.duration('find most general subsumed/covers_too_few'):
                                     subsumed_progs = self.subsumed_or_covers_too_few(prog, check_coverage=True, check_subsumed=True, check_subsumed_by_two=True, seen=set())
                                 pruned_more_general = len(subsumed_progs) > 0
-                                # if settings.non_datalog_flag:
-                                    # assert(not pruned_more_general)
+
                                 if settings.showcons and not pruned_more_general:
                                     if subsumed:
                                         print('\t', format_prog(prog), '\t', 'subsumed')
@@ -464,15 +462,6 @@ class Popper():
                 #             print('\t','r2',format_rule(order_rule(r2)))
                 #         new_cons.append((Constraint.GENERALISATION, [r1,r2], None, None))
 
-                # # if not add_spec and not pruned_more_general and False:
-                # if not settings.noisy and not add_spec and not pruned_more_general:
-
-                #     if NEW_IDEAS:
-                #         with settings.stats.duration('subsumed by two'):
-                #             # TODO: find most general subsumed?
-                #             if self.subsumed_by_two_new(pos_covered, prog_size):
-                #                 add_spec = True
-
                 if not add_spec and not pruned_more_general:
                     could_prune_later[prog_size][prog] = pos_covered
 
@@ -487,16 +476,16 @@ class Popper():
                         add_to_combiner = True
 
                         # with settings.stats.duration('backtrack remove subsumed'):
-                        #     to_delete = []
-                        #     for a,b in success_sets.items():
-                        #         if a.issubset(pos_covered) and prog_size <= b:
-                        #             to_delete.append(a)
-                        #     for x in to_delete:
-                        #         # TODO: DELETE FROM COMBINER!!!!!!
-                        #         del success_sets[x]
+                        to_delete = []
+                        for a,b in success_sets.items():
+                            if a.issubset(pos_covered) and prog_size <= b:
+                                to_delete.append(a)
+                        for x in to_delete:
+                            # TODO: DELETE FROM COMBINER!!!!!!
+                            del success_sets[x]
 
                         success_sets[pos_covered] = prog_size
-                        success_sets_by_size[prog_size].add(pos_covered)
+                        # success_sets_by_size[prog_size].add(pos_covered)
 
                         for e in pos_covered:
                             self.covered_by[e].add((prog, prog_size, pos_covered))
@@ -728,76 +717,67 @@ class Popper():
         # MAX RULES = 1
         if ((prog_size + min_size) > max_literals):
             if len(pos_covered) != num_pos:
-                # print('mr1')
                 return True
 
         # MAX RULES = 2
         elif ((prog_size + (min_size*2)) > max_literals):
-            pos_index = self.tester.pos_examples
-            search_depth = self.settings.search_depth
+            space_remaining = max_literals-prog_size
+            if space_remaining > self.settings.search_depth:
+                return False
 
-            for i in range(min_size, self.settings.max_body+1):
-                if i+prog_size > max_literals:
-                    continue
-                if i >= search_depth:
-                    return False
-
-            missing = pos_index-pos_covered
-            # print('MR2', len(missing))
-            # def old():
+            uncovered = self.tester.pos_examples-pos_covered
             for pos_covered2, size2 in self.success_sets.items():
-                if size2 + prog_size > max_literals:
+                if size2 > space_remaining:
                     continue
-                if missing.issubset(pos_covered2):
+                if uncovered.issubset(pos_covered2):
                     return False
-            # print('mr2')
             return True
-
-            # def new():
-            #     to_check = set()
-            #     seen = set()
-            #     for e in missing:
-            #         for prog_, size2, pos_covered2 in self.covered_by[e]:
-            #             if prog_size + size2 > max_literals:
-            #                 continue
-            #             if missing.issubset(pos_covered2):
-            #                 return False
-            #         return True
-            #     return True
-            # with self.settings.stats.duration('mr2 old'):
-            #     a = old()
-            # with self.settings.stats.duration('mr2 new'):
-            #     b = new()
-            # if a!=b:
-            #     print(a, b)
-            #     assert(a == b)
-            # return True
 
         # MAX RULES = 3
         elif ((prog_size + (min_size*3)) > max_literals):
-            pos_index = self.tester.pos_examples
-            search_depth = self.settings.search_depth
-            max_body = self.settings.max_body
+            space_remaining = max_literals-prog_size
+            space_remaining -= min_size
 
-            for i in range(min_size, max_body+1):
-                if i+prog_size > max_literals:
-                    continue
-                for j in range(min_size, max_body+1):
-                    if i+j+prog_size > max_literals:
-                        continue
-                    if i >= search_depth:
-                        return False
-                    if j >= search_depth:
-                        return False
+            if space_remaining > self.settings.search_depth:
+                return False
 
             success_sets = tuple(self.success_sets.items())
-            missing = pos_index-pos_covered
+            uncovered = self.tester.pos_examples-pos_covered-pos_covered
 
-            # def old():
             for i in range(len(success_sets)):
                 pos_covered2, size2 = success_sets[i]
                 size_ = size2 + prog_size
                 if size_ > max_literals:
+                    continue
+                uncovered2 = uncovered-pos_covered2
+                if len(uncovered2) == len(uncovered):
+                    continue
+                if len(uncovered2) == 0:
+                    return False
+                for j in range(i+1, len(success_sets)):
+                    pos_covered3, size3 = success_sets[j]
+                    if size_ + size3 > max_literals:
+                        continue
+                    if uncovered2.issubset(pos_covered3):
+                        return False
+            return True
+
+        elif prog_size + (min_size*4) > max_literals:
+            space_remaining = max_literals-prog_size
+            space_remaining -= (min_size*2)
+
+            if space_remaining > self.settings.search_depth:
+                return False
+
+            # print(f'MR4: prog_size:{prog_size} space_remaining:{space_remaining} search_depth:{self.settings.search_depth}')
+
+            success_sets = tuple(self.success_sets.items())
+            missing = self.tester.pos_examples-pos_covered-pos_covered
+
+            for i in range(len(success_sets)):
+                pos_covered2, size2 = success_sets[i]
+                comb_size = size2 + prog_size
+                if comb_size > max_literals:
                     continue
                 missing2 = missing-pos_covered2
                 if len(missing2) == len(missing):
@@ -806,140 +786,23 @@ class Popper():
                     return False
                 for j in range(i+1, len(success_sets)):
                     pos_covered3, size3 = success_sets[j]
-                    if size_ + size3 > max_literals:
+                    comb_size_ = comb_size+size3
+                    if comb_size_ > max_literals:
                         continue
-                    if missing2.issubset(pos_covered3):
+                    missing3 = missing2-pos_covered3
+                    if len(missing3) == len(missing2):
+                        continue
+                    if len(missing3) == 0:
                         return False
-
-            # print('mr3')
+                    for k in range(j+1, len(success_sets)):
+                        pos_covered4, size4 = success_sets[k]
+                        if comb_size_ + size4 > max_literals:
+                            continue
+                        if missing3.issubset(pos_covered4):
+                            return False
+            print('PRUNED MR4')
             return True
 
-            # def new2():
-            #     for i in range(len(success_sets)):
-            #         pos_covered2, size2 = success_sets[i]
-            #         size_ = size2 + prog_size
-            #         if size_ > max_literals:
-            #             continue
-            #         missing2 = missing-pos_covered2
-            #         if len(missing2) == 0:
-            #             return False
-            #         if len(missing2) == len(missing):
-            #             continue
-            #         for e in missing2:
-            #             for prog_, size3, pos_covered3 in self.covered_by[e]:
-            #                 if size_ + size3 > max_literals:
-            #                     continue
-            #                 if missing2.issubset(pos_covered3):
-            #                     return False
-            #             break
-            #     return True
-
-            # with self.settings.stats.duration('mr3 new'):
-            #     b = new2()
-            # with self.settings.stats.duration('mr3 old'):
-            #     a = old()
-            # # with self.settings.stats.duration('mr3 new'):
-            #     # b = new()
-
-            # if a != b:
-            #     print(a, b)
-            #     assert(False)
-            # return True
-            # return b
-        # elif prog_size + (min_size*4) > max_literals:
-        #     # success_sets = self.success_sets
-        #     pos_index = self.tester.pos_examples
-        #     search_depth = self.settings.search_depth
-        #     max_body = self.settings.max_body
-
-        #     for i in range(min_size, max_body+1):
-        #         if i+prog_size > max_literals:
-        #             continue
-        #         for j in range(min_size, max_body+1):
-        #             if i+j+prog_size > max_literals:
-        #                 continue
-        #             for k in range(min_size, max_body+1):
-        #                 if i+j+k+prog_size > max_literals:
-        #                     continue
-        #                 if i >= search_depth:
-        #                     return False
-        #                 if j >= search_depth:
-        #                     return False
-        #                 if k >= search_depth:
-        #                     return False
-
-        #     # print(f'max_literals:{max_literals} min_size:{min_size}
-
-        #     success_sets = tuple(self.success_sets.items())
-        #     missing = pos_index-pos_covered
-
-        #     def new():
-        #         for i in range(len(success_sets)):
-        #             pos_covered2, size2 = success_sets[i]
-        #             comb_size = size2 + prog_size
-        #             if comb_size > max_literals:
-        #                 continue
-        #             missing2 = missing-pos_covered2
-        #             if len(missing2) == len(missing):
-        #                 continue
-        #             if len(missing2) == 0:
-        #                 return False
-        #             for j in range(i+1, len(success_sets)):
-        #                 pos_covered3, size3 = success_sets[j]
-        #                 comb_size_ = comb_size+size3
-        #                 if comb_size_ > max_literals:
-        #                     continue
-        #                 missing3 = missing2-pos_covered3
-        #                 if len(missing3) == len(missing2):
-        #                     continue
-        #                 if len(missing3) == 0:
-        #                     return False
-        #                 for e in missing3:
-        #                     for prog_, size4, pos_covered4 in self.covered_by[e]:
-        #                         if comb_size_ + size4 > max_literals:
-        #                             continue
-        #                         if missing3.issubset(pos_covered4):
-        #                             return False
-        #                     break
-        #         return True
-
-        #     def old():
-        #         for i in range(len(success_sets)):
-        #             pos_covered2, size2 = success_sets[i]
-        #             comb_size = size2 + prog_size
-        #             if comb_size > max_literals:
-        #                 continue
-        #             missing2 = missing-pos_covered2
-        #             if len(missing2) == len(missing):
-        #                 continue
-        #             if len(missing2) == 0:
-        #                 return False
-        #             # for pos_covered3, size3 in success_sets.items():
-        #             for j in range(i+1, len(success_sets)):
-        #                 pos_covered3, size3 = success_sets[j]
-        #                 comb_size_ = comb_size+size3
-        #                 if comb_size_ > max_literals:
-        #                     continue
-        #                 missing3 = missing2-pos_covered3
-        #                 if len(missing3) == len(missing2):
-        #                     continue
-        #                 if len(missing3) == 0:
-        #                     return False
-        #                 for k in range(j+1, len(success_sets)):
-        #                     pos_covered4, size4 = success_sets[k]
-        #                     if comb_size_ + size4 > max_literals:
-        #                         continue
-        #                     if missing3.issubset(pos_covered4):
-        #                         return False
-        #         return True
-
-        #     with self.settings.stats.duration('mr4 new'):
-        #         b = new()
-        #     with self.settings.stats.duration('mr4 old'):
-        #         a = old()
-        #     if a!=b:
-        #         print(a, b)
-        #         assert(a == b)
         return False
 
 
@@ -968,11 +831,11 @@ class Popper():
                 continue
 
             if not (settings.recursion_enabled or settings.pi_enabled):
-                yield (Constraint.SPECIALISATION, [remap_variables(subprog[0])])
+                yield (Constraint.SPECIALISATION, [remap_variables(rule) for rule in subprog])
                 continue
 
             if len(subprog) == 1:
-                yield (Constraint.REDUNDANCY_CONSTRAINT1, [remap_variables(subprog[0])])
+                yield (Constraint.REDUNDANCY_CONSTRAINT1, [remap_variables(rule) for rule in subprog])
 
             yield (Constraint.REDUNDANCY_CONSTRAINT2, [remap_variables(rule) for rule in subprog])
 
@@ -1041,6 +904,7 @@ class Popper():
                 seen_hyp_gen[k].remove(to_del)
         return cons
 
+    # @profile
     def subsumed_or_covers_too_few(self, prog, check_coverage=False, check_subsumed=False, check_subsumed_by_two=False, seen=set()):
         tester, success_sets, settings = self.tester, self.success_sets, self.settings
         head, body = list(prog)[0]
@@ -1502,10 +1366,12 @@ class Popper():
         out = []
         for subprog in generalisations(prog, allow_headless=True, recursive=has_recursion):
 
-            prog_key = frozenset(subprog)
-            if prog_key in self.seen_prog:
+
+
+            subprog = frozenset(subprog)
+            if subprog in self.seen_prog:
                 continue
-            self.seen_prog.add(prog_key)
+            self.seen_prog.add(subprog)
 
             raw_prog = get_raw_prog(subprog)
             if raw_prog in self.seen_prog:
@@ -1532,7 +1398,7 @@ class Popper():
             if should_skip():
                 continue
 
-            if seen_more_general_unsat(prog_key, unsat2):
+            if seen_more_general_unsat(subprog, unsat2):
                 continue
 
             if seen_more_general_unsat(raw_prog, unsat):
@@ -1574,8 +1440,8 @@ class Popper():
             # print('\t\t\t UNSAT',format_prog(subprog))
 
             unsat.add(raw_prog)
-            unsat2.add(prog_key)
-            self.unsat.add(prog_key)
+            unsat2.add(subprog)
+            self.unsat.add(subprog)
             self.unsat.add(raw_prog)
 
             xs = self.explain_totally_incomplete_aux2(subprog, unsat, unsat2)
