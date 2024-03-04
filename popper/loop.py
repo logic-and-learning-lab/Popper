@@ -479,16 +479,15 @@ class Popper():
 
                 # if not add_spec and not pruned_more_general and False:
                 if not settings.noisy and not add_spec and not pruned_more_general:
-                    with settings.stats.duration('subsumed_by_two'):
-                        x= self.subsumed_by_two(prog, pos_covered, prog_size)
-                            # add_spec = True
-
+                    # with settings.stats.duration('subsumed_by_two'):
+                    #     x= self.subsumed_by_two(prog, pos_covered, prog_size)
+                    #         # add_spec = True
                     with settings.stats.duration('subsumed_by_two NEW'):
-                        y=self.subsumed_by_two_new(prog, pos_covered, prog_size)
-                            # add_spec = True
-                    if x!=y:
-                        print(x, y)
-                        assert(False)
+                        if self.subsumed_by_two_new(prog, pos_covered, prog_size):
+                            add_spec = True
+                    # if x!=y:
+                    #     print(x, y)
+                    #     assert(False)
 
                 if not add_spec and not pruned_more_general:
                     could_prune_later[prog_size][prog] = pos_covered
@@ -508,7 +507,7 @@ class Popper():
                             for a,b in success_sets.items():
                                 if a.issubset(pos_covered) and prog_size <= b:
                                     to_delete.append(a)
-                                    print('MOOOO!!!', len(success_sets), a)
+                                    print('MOOOO!!!', len(success_sets))
                             for x in to_delete:
                                 # TODO: DELETE FROM COMBINER!!!!!!
                                 del success_sets[x]
@@ -724,14 +723,15 @@ class Popper():
 
     def subsumed_by_two_new(self, prog, pos_covered, prog_size):
         paired_success_sets = self.paired_success_sets
-        for i in range(2, prog_size+1):
-            if pos_covered in paired_success_sets[i]:
-                return True
+        for i in range(2, prog_size+2):
+            for x in paired_success_sets[i]:
+                if pos_covered.issubset(x):
+                    return True
         return False
 
 
     def check_covers_too_few(self, prog_size, pos_covered):
-        return False
+        # return False
         # with self.settings.stats.duration('v0'):
             # self.check_covers_too_few1(prog_size, pos_covered)
         # with self.settings.stats.duration('v1'):
