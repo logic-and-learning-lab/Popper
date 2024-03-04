@@ -5,7 +5,7 @@ import time
 import pickle
 import itertools
 from . util import format_rule, calc_prog_size, reduce_prog, prog_is_recursive, prog_has_invention, \
-    rule_size, rule_is_recursive
+    calc_rule_size, rule_is_recursive, format_prog
 import collections
 
 import sys
@@ -27,19 +27,13 @@ class Combiner:
         self.neg_example_weight = 1
 
         self.vpool = IDPool()
-        self.programs_seen = 0
+
         self.rule_size_sum = 0
         self.hard_clauses = []
-        self.rule_var_softs = set()
         self.best_cost = None
 
-        self.build_example_encoding()
-        self.rulehash_to_id = {}
-        self.ruleid_to_rule = {}
-        self.ruleid_to_size = {}
-
-        self.saved_progs = collections.defaultdict(set)
-        self.rule_to_prog = collections.defaultdict(list)
+        self.saved_progs = []
+        self.added = []
 
         self.base_rules = []
         self.recursive_rules = []
@@ -48,37 +42,109 @@ class Combiner:
         # self.solution_found = False
         self.max_size = None
 
-    def update_deleted_progs(self, old_score, new_score):
-        pass # TODO
-        with self.settings.stats.duration('delete'):
-            to_delete_progs = set().union(*[self.saved_progs[k] for k in range(new_score, old_score+1)])
-            if to_delete_progs:
-                for prog in to_delete_progs:
-                    del self.prog_pos_covered[frozenset([self.ruleid_to_rule[r] for r in prog])]
-                    del self.prog_neg_covered[frozenset([self.ruleid_to_rule[r] for r in prog])]
-                    self.settings.stats.deleted_count += 1
-                to_delete_rules = set().union(*to_delete_progs)
+        self.rulehash_to_id = {}
+        self.ruleid_to_rule = {}
+        self.ruleid_to_size = {}
+        self.rule_var = {}
+    
+        self.build_example_encoding()
 
-                to_delete = set()
-                for rule in to_delete_rules:
-                    if all([prog in to_delete_progs for prog in self.rule_to_prog[rule]]):
-                        to_delete.add(rule)
+        self.programs_seen = 0
 
-                if to_delete:
-                    for rule in to_delete:
-                        self.rule_var[rule] = None
 
-                other = set()
-                for k in range(new_score, old_score + 1):
-                    del_k = []
-                    for ids in self.saved_progs[k]:
-                        if set(ids).issubset(to_delete):
-                            del_k.append(ids)
-                        elif set(ids).issubset(to_delete_rules):
-                            other.add(ids)
-                            self.hard_clauses.append([-self.rule_var[i] for i in ids])
-                    for ids in del_k:
-                        self.saved_progs[k].remove(ids)
+    def build_encoding(self):
+        # with self.settings.stats.duration('combine.add'):
+        encoding = []
+        
+        # if we deleted some programs, we must rebuild the encoding
+        if self.settings.noisy and self.deleted != 0:
+            self.rulehash_to_id = {}
+            self.ruleid_to_rule = {}
+            self.ruleid_to_size = {}
+            self.rule_var = {}
+        
+            self.build_example_encoding()
+
+            all_programs = self.saved_progs + self.added
+
+            self.programs_seen = 0
+        else:
+            for i in range(0, self.programs_seen):
+                for clause in self.program_clauses[i]:
+                    encoding.append(clause)
+
+            for clause in self.hard_clauses:
+                encoding.append(clause)
+
+            all_programs = self.added
+
+        for [prog, pos_covered, neg_covered] in all_programs:
+
+            for ex in pos_covered:
+                self.programs_covering_example[ex].append(self.programs_seen)
+
+            if self.settings.nonoise:
+                assert(len(self.prog_neg_covered[prog]) == 0)
+            else:
+                for ex in neg_covered:
+                    self.programs_covering_example[ex].append(self.programs_seen)
+
+            rule_vars = []
+            ids = []
+            for rule in prog:
+                rule_hash = get_rule_hash(rule)
+                if rule_hash not in self.rulehash_to_id:
+                    k = len(self.rulehash_to_id) + 1
+                    self.rulehash_to_id[rule_hash] = k
+                    self.ruleid_to_rule[k] = rule
+                    self.ruleid_to_size[k] = calc_rule_size(rule)
+                    ids.append(k)
+                else:
+                    ids.append(self.rulehash_to_id[rule_hash])
+            for rule in prog:
+                rule_id = self.rulehash_to_id[rule_hash]
+                rule_size = self.ruleid_to_size[rule_id]
+
+                if rule_id not in self.rule_var:
+                    self.rule_var[rule_id] = self.vpool.id("rule({0}))".format(rule_id))
+                    self.rule_size_sum += rule_size
+                rule_vars.append(self.rule_var[rule_id])
+                if self.settings.lex and self.settings.recursion_enabled:
+                    if rule_is_recursive(rule):
+                        self.recursive_rules.append(rule_id)
+                    else:
+                        self.base_rules.append(rule_id)
+
+            if len(rule_vars) == 1:
+                self.program_var[self.programs_seen] = rule_vars[0]
+                self.program_clauses[self.programs_seen] = []
+            else:
+                self.program_var[self.programs_seen] = self.vpool.id("program({0})".format(self.programs_seen))
+                pvar = self.program_var[self.programs_seen]
+
+                clause = [pvar] + [-var for var in rule_vars]
+                encoding.append(clause)
+                self.program_clauses[self.programs_seen] = [clause]
+                for var in rule_vars:
+                    clause = [-pvar, var]
+                    encoding.append(clause)
+                    self.program_clauses[self.programs_seen].append(clause) 
+
+            self.programs_seen += 1
+        if self.settings.lex and self.settings.recursion_enabled:
+            encoding.append([self.rule_var[rule_id] for rule_id in self.base_rules])
+
+        for ex in self.settings.pos_index:
+            encoding.append([-self.example_covered_var[ex]] + [self.program_var[p] for p in self.programs_covering_example[ex]])
+            #for p in self.programs_covering_example[ex]:
+            #    encoding.append([self.example_covered_var[ex], -self.program_var[p]])
+        if not self.settings.nonoise:
+            for ex in self.settings.neg_index:
+                #encoding.append([-self.example_covered_var[ex]] + [self.program_var[p] for p in self.programs_covering_example[ex]])
+                for p in self.programs_covering_example[ex]:
+                    encoding.append([self.example_covered_var[ex], -self.program_var[p]])
+
+        return encoding
 
     def build_example_encoding(self):
         self.example_covered_var = {}
@@ -94,24 +160,50 @@ class Combiner:
                 self.programs_covering_example[i] = []
         self.rule_var = {}
 
-    def update_prog_index(self, prog, pos_covered, neg_covered):
-        self.prog_pos_covered[prog] = pos_covered
-        self.prog_neg_covered[prog] = neg_covered
+    def update_prog_index(self, new_progs):
 
-        ids = []
-        for rule in prog:
-            rule_hash = get_rule_hash(rule)
-            if rule_hash not in self.rulehash_to_id:
-                k = len(self.rulehash_to_id) +1
-                self.rulehash_to_id[rule_hash] = k
-                self.ruleid_to_rule[k] = rule
-                self.ruleid_to_size[k] = rule_size(rule)
-                ids.append(k)
-            else:
-                ids.append(self.rulehash_to_id[rule_hash])
-        for rule in prog:
-            self.rule_to_prog[self.rulehash_to_id[get_rule_hash(rule)]].append(tuple(ids))
-        self.saved_progs[len(neg_covered)+calc_prog_size(prog)].add(tuple(ids))
+        if self.settings.noisy:
+            new_saved_progs = []
+            new_programs_to_add = []
+
+            # this variable checks whether any previously seen program has been deleted, in which case we rebuild the encoding
+            self.deleted = 0
+
+        # we can only delete programs from the combine stage with the mdl cost function
+        if self.settings.noisy:                
+            for [prog, pos_covered, neg_covered] in self.saved_progs+self.added:
+                if self.settings.noisy and len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl:
+                    self.deleted += 1
+                    continue
+
+                self.prog_pos_covered[prog] = pos_covered
+                self.prog_neg_covered[prog] = neg_covered
+                new_saved_progs.append([prog, pos_covered, neg_covered])
+
+            for [prog, pos_covered, neg_covered] in new_progs:
+                if self.settings.noisy and len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl:
+                    continue
+
+                self.prog_pos_covered[prog] = pos_covered
+                self.prog_neg_covered[prog] = neg_covered
+                new_programs_to_add.append([prog, pos_covered, neg_covered])
+
+        else:
+            for [prog, pos_covered, neg_covered] in new_progs:
+                self.prog_pos_covered[prog] = pos_covered
+                self.prog_neg_covered[prog] = neg_covered
+
+        if self.settings.noisy:
+            # we save already seen programs and new programs separately
+            # we will use both if we need to rebuild the encoding
+            # otherwise we only add self.added
+            # print(f"number of programs in the combine stage {len(new_saved_progs)} + {len(new_programs_to_add)} deleted {self.deleted}")
+            self.saved_progs = new_saved_progs
+            self.added = new_programs_to_add
+        else:
+            self.added = new_progs
+
+        return 
 
     def add_inconsistent(self, prog):
         should_add = True
@@ -253,97 +345,24 @@ class Combiner:
                 smaller = self.tester.reduce_inconsistent(model_prog)
                 ids = [self.rulehash_to_id[get_rule_hash(rule)] for rule in smaller]
                 clause = [-self.rule_var[k] for k in ids]
-                self.hard_clauses.append(clause)
                 encoding.append(clause)
 
         if self.settings.lex:
             return best_prog, (best_fn, best_fp, best_size)
         return best_prog, best_fn + best_fp + best_size
 
-    def build_encoding(self, new_progs):
-        # with self.settings.stats.duration('combine.add'):
-        encoding = []
-
-        for i in range(1, self.programs_seen+1):
-            for clause in self.program_clauses[i]:
-                encoding.append(clause)
-
-        for clause in self.hard_clauses:
-            encoding.append(clause)
-        all_rule_vars = []
-
-        for [new_prog, _, _] in new_progs:
-            self.programs_seen += 1
-
-            for ex in self.prog_pos_covered[new_prog]:
-                self.programs_covering_example[ex].append(self.programs_seen)
-
-            if self.settings.nonoise:
-                assert(len(self.prog_neg_covered[new_prog]) == 0)
-            for ex in self.prog_neg_covered[new_prog]:
-                self.programs_covering_example[ex].append(self.programs_seen)
-
-            prog_rules = set()
-            rule_vars = []
-            for rule in new_prog:
-                rule_hash = get_rule_hash(rule)
-                rule_id = self.rulehash_to_id[rule_hash]
-                rule_size = self.ruleid_to_size[rule_id]
-                prog_rules.add(rule_id)
-                if rule_id not in self.rule_var:
-                    self.rule_var[rule_id] = self.vpool.id("rule({0}))".format(rule_id))
-                    self.rule_var_softs.add((self.rule_var[rule_id], rule_size))
-                    self.rule_size_sum += rule_size
-                rule_vars.append(self.rule_var[rule_id])
-                if self.settings.lex and self.settings.recursion_enabled:
-                    if rule_is_recursive(rule):
-                        self.recursive_rules.append(rule_id)
-                    else:
-                        self.base_rules.append(rule_id)
-            all_rule_vars += rule_vars
-
-            if len(rule_vars) == 1:
-                self.program_var[self.programs_seen] = rule_vars[0]
-                self.program_clauses[self.programs_seen] = []
-            else:
-                self.program_var[self.programs_seen] = self.vpool.id("program({0})".format(self.programs_seen))
-                pvar = self.program_var[self.programs_seen]
-
-                clause = [pvar] + [-var for var in rule_vars]
-                encoding.append(clause)
-                self.program_clauses[self.programs_seen] = [clause]
-                for var in rule_vars:
-                    clause = [-pvar, var]
-                    encoding.append(clause)
-                    self.program_clauses[self.programs_seen].append(clause)
-
-        #encoding.append(all_rule_vars)
-        if self.settings.lex and self.settings.recursion_enabled:
-            encoding.append([self.rule_var[rule_id] for rule_id in self.base_rules])
-
-        for ex in self.settings.pos_index:
-            encoding.append([-self.example_covered_var[ex]] + [self.program_var[p] for p in self.programs_covering_example[ex]])
-            #for p in self.programs_covering_example[ex]:
-            #    encoding.append([self.example_covered_var[ex], -self.program_var[p]])
-        if not self.settings.nonoise:
-            for ex in self.settings.neg_index:
-                #encoding.append([-self.example_covered_var[ex]] + [self.program_var[p] for p in self.programs_covering_example[ex]])
-                for p in self.programs_covering_example[ex]:
-                    encoding.append([self.example_covered_var[ex], -self.program_var[p]])
-        return encoding
-
-    def select_solution(self, new_progs, timeout):
-        encoding = self.build_encoding(new_progs)
+    def select_solution(self, timeout):
+        encoding = self.build_encoding()
         model_rules, cost = self.find_combination(encoding, timeout)
         return [self.ruleid_to_rule[k] for k in model_rules], cost
 
     def update_best_prog(self, new_progs, timeout=None):
         if timeout is None:
             timeout = self.settings.maxsat_timeout
-        for [prog, pos_covered, neg_covered] in new_progs:
-            self.update_prog_index(prog, pos_covered, neg_covered)
 
-        new_solution, cost = self.select_solution(new_progs, timeout)
+        self.update_prog_index(new_progs)
+
+        new_solution, cost = self.select_solution(timeout)
 
         if len(new_solution) == 0:
             return None

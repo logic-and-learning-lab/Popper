@@ -2,7 +2,7 @@ import clingo
 import time
 import pickle
 import itertools
-from .util import format_rule, calc_prog_size, format_prog, flatten, reduce_prog, prog_is_recursive, rule_size, \
+from .util import format_rule, calc_prog_size, format_prog, flatten, reduce_prog, prog_is_recursive, calc_rule_size, \
     rule_is_recursive, order_rule, prog_is_recursive, prog_has_invention
 
 FIND_SUBSET_PROG3 = """
@@ -60,7 +60,7 @@ class Combiner:
                 k = len(self.rulehash_to_id) + 1
                 self.rulehash_to_id[rule_hash] = k
                 self.ruleid_to_rule[k] = rule
-                self.ruleid_to_size[k] = rule_size(rule)
+                self.ruleid_to_size[k] = calc_rule_size(rule)
 
     def add_inconsistent(self, prog):
         should_add = True
