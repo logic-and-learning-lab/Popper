@@ -539,6 +539,7 @@ class Popper():
                                 if NEW_IDEAS:
                                     with settings.stats.duration('prune backtrack covers too few'):
                                         subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
+                                        # print('prune_subsumed_backtrack_specialcase', len(subsumed_progs))
                                         for subsumed_prog_ in subsumed_progs:
                                             subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
                                             new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
@@ -587,6 +588,7 @@ class Popper():
                                 if NEW_IDEAS:
                                     with settings.stats.duration('prune backtrack covers too few'):
                                         subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
+                                        # print('prune_subsumed_backtrack_specialcase2', len(subsumed_progs))
                                         for subsumed_prog_ in subsumed_progs:
                                             subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
                                             new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
@@ -705,13 +707,12 @@ class Popper():
 
     # @profile
     def check_covers_too_few(self, prog_size, pos_covered):
-        min_size = self.min_size
-        if not min_size:
-            return False
-
         num_pos = self.num_pos
         if len(pos_covered) == num_pos:
             return False
+
+        min_size = self.min_size
+        assert(min_size)
 
         max_literals = self.settings.max_literals
 
