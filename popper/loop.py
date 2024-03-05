@@ -703,6 +703,7 @@ class Popper():
                     return True
         return False
 
+    # @profile
     def check_covers_too_few(self, prog_size, pos_covered):
         min_size = self.min_size
         if not min_size:
@@ -750,8 +751,10 @@ class Popper():
                     break
                 if uncovered.issubset(pos_covered2):
                     return False
-                uncovered2 = uncovered-pos_covered2
                 space_remaining_ = space_remaining-size2
+                if space_remaining_ < min_size:
+                    continue
+                uncovered2 = uncovered-pos_covered2
                 for j in range(i+1, n):
                     pos_covered3, size3 = success_sets[j]
                     if size3 > space_remaining_:
@@ -781,10 +784,10 @@ class Popper():
                     break
                 if missing.issubset(pos_covered2):
                     return False
-                missing2 = missing-pos_covered2
                 space_remaining_ = space_remaining-size2
                 if space_remaining_ < min_size:
                     continue
+                missing2 = missing-pos_covered2
                 for j in range(i+1, n):
                     pos_covered3, size3 = success_sets[j]
                     if size3 > space_remaining_:
@@ -793,10 +796,10 @@ class Popper():
                         continue
                     if missing2.issubset(pos_covered3):
                         return False
-                    missing3 = missing2-pos_covered3
                     space_remaining__ = space_remaining_-size3
                     if space_remaining__ < min_size:
                         continue
+                    missing3 = missing2-pos_covered3
                     for k in range(j+1, n):
                         pos_covered4, size4 = success_sets[k]
                         if size4 > space_remaining__:
