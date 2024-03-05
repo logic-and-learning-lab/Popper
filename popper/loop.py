@@ -462,7 +462,19 @@ class Popper():
                 #             print('\t','r2',format_rule(order_rule(r2)))
                 #         new_cons.append((Constraint.GENERALISATION, [r1,r2], None, None))
 
-                if not add_spec and not pruned_more_general:
+                # if not add_spec and not pruned_more_general:
+                #     to_delete = []
+                #     for i in range(2, prog_size+1):
+                #         for prog2 in could_prune_later[i]:
+                #             if could_prune_later[i][prog2].issubset(pos_covered):
+                #                 print("WTF???")
+                #                 print(could_prune_later[i][prog2])
+                #                 print(pos_covered)
+
+                    # for a,b in success_sets.items():
+                        # if a.issubset(pos_covered) and prog_size <= b:
+                            # to_delete.append(a)
+
                     could_prune_later[prog_size][prog] = pos_covered
 
                 add_to_combiner = False
@@ -669,32 +681,6 @@ class Popper():
                 break
         assert(len(to_combine) == 0)
 
-    # # @profile
-    # def subsumed_by_two(self, prog, pos_covered, prog_size):
-    #     something = set()
-    #     for pos_covered2, size2 in self.success_sets.items():
-    #         if size2 + 1 >= prog_size:
-    #             continue
-    #         if not pos_covered2.isdisjoint(pos_covered):
-    #             something.add((pos_covered2, size2))
-
-    #     # checks = 0
-    #     something = tuple(something)
-    #     n = len(something)
-    #     for i in range(0, n):
-    #         p1, s1 = something[i]
-    #         missing = None
-    #         n = len(something)
-    #         for j in range(i+1, n):
-    #             p2, s2 = something[j]
-    #             if s1+s2 > prog_size+1:
-    #                 continue
-    #             if missing is None:
-    #                 missing = pos_covered-p1
-    #             if missing.issubset(p2):
-    #                 return True
-    #     return False
-
     def subsumed_by_two_new(self, pos_covered, prog_size):
         paired_success_sets = self.paired_success_sets
         for i in range(2, prog_size+2):
@@ -703,6 +689,7 @@ class Popper():
                     return True
         return False
 
+    # @profile
     def check_covers_too_few(self, prog_size, pos_covered):
         min_size = self.min_size
         if not min_size:
@@ -736,32 +723,31 @@ class Popper():
         # MAX RULES = 3
         elif ((prog_size + (min_size*3)) > max_literals):
             space_remaining = max_literals-prog_size
-            space_remaining -= min_size
 
-            if space_remaining > self.settings.search_depth:
+            if space_remaining-min_size > self.settings.search_depth:
                 return False
 
-            success_sets = tuple(self.success_sets.items())
-            uncovered = self.tester.pos_examples-pos_covered-pos_covered
+            uncovered = self.tester.pos_examples-pos_covered
+            success_sets = sorted(((pos_covered_, size) for (pos_covered_, size) in self.success_sets.items() if not pos_covered_.isdisjoint(uncovered)), key=lambda x: x[1])
+            n = len(success_sets)
 
-            for i in range(len(success_sets)):
+            for i in range(n):
                 pos_covered2, size2 = success_sets[i]
-                size_ = size2 + prog_size
-                if size_ > max_literals:
-                    continue
-                uncovered2 = uncovered-pos_covered2
-                if len(uncovered2) == len(uncovered):
-                    continue
-                if len(uncovered2) == 0:
+                if size2 > space_remaining:
+                    break
+                if uncovered.issubset(pos_covered2):
                     return False
-                for j in range(i+1, len(success_sets)):
+                uncovered2 = uncovered-pos_covered2
+                space_remaining_ = space_remaining-size2
+                for j in range(i+1, n):
                     pos_covered3, size3 = success_sets[j]
-                    if size_ + size3 > max_literals:
-                        continue
+                    if size3 > space_remaining_:
+                        break
                     if uncovered2.issubset(pos_covered3):
                         return False
             return True
 
+        # MAX RULES = 4
         elif prog_size + (min_size*4) > max_literals:
             space_remaining = max_literals-prog_size
             space_remaining -= (min_size*2)
@@ -769,38 +755,41 @@ class Popper():
             if space_remaining > self.settings.search_depth:
                 return False
 
-            # print(f'MR4: prog_size:{prog_size} space_remaining:{space_remaining} search_depth:{self.settings.search_depth}')
+            missing = self.tester.pos_examples-pos_covered
 
-            success_sets = tuple(self.success_sets.items())
-            missing = self.tester.pos_examples-pos_covered-pos_covered
+            success_sets = sorted(((pos_covered_, size) for (pos_covered_, size) in self.success_sets.items() if not pos_covered_.isdisjoint(missing)), key=lambda x: x[1])
+            space_remaining = max_literals-prog_size
 
-            for i in range(len(success_sets)):
+            n = len(success_sets)
+
+            for i in range(n):
                 pos_covered2, size2 = success_sets[i]
-                comb_size = size2 + prog_size
-                if comb_size > max_literals:
-                    continue
-                missing2 = missing-pos_covered2
-                if len(missing2) == len(missing):
-                    continue
-                if len(missing2) == 0:
+                if size2 > space_remaining:
+                    break
+                if missing.issubset(pos_covered2):
                     return False
-                for j in range(i+1, len(success_sets)):
+                missing2 = missing-pos_covered2
+                space_remaining_ = space_remaining-size2
+                if space_remaining_ < min_size:
+                    continue
+                for j in range(i+1, n):
                     pos_covered3, size3 = success_sets[j]
-                    comb_size_ = comb_size+size3
-                    if comb_size_ > max_literals:
+                    if size3 > space_remaining_:
+                        break
+                    if pos_covered3.isdisjoint(missing2):
                         continue
-                    missing3 = missing2-pos_covered3
-                    if len(missing3) == len(missing2):
-                        continue
-                    if len(missing3) == 0:
+                    if missing2.issubset(pos_covered3):
                         return False
-                    for k in range(j+1, len(success_sets)):
+                    missing3 = missing2-pos_covered3
+                    space_remaining__ = space_remaining_-size3
+                    if space_remaining__ < min_size:
+                        continue
+                    for k in range(j+1, n):
                         pos_covered4, size4 = success_sets[k]
-                        if comb_size_ + size4 > max_literals:
-                            continue
+                        if size4 > space_remaining__:
+                            break
                         if missing3.issubset(pos_covered4):
                             return False
-            print('PRUNED MR4')
             return True
 
         return False
