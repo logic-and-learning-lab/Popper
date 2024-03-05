@@ -163,9 +163,9 @@ def format_rule(rule):
     return f'{head_str}:- {body_str}.'
 
 def calc_prog_size(prog):
-    return sum(rule_size(rule) for rule in prog)
+    return sum(calc_rule_size(rule) for rule in prog)
 
-def rule_size(rule):
+def calc_rule_size(rule):
     head, body = rule
     return 1 + len(body)
 

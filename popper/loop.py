@@ -250,10 +250,11 @@ class Popper():
 
                 # if non-separable program covers all examples, stop
                 if not skipped and not inconsistent and tp == num_pos: # and not settings.order_space:
-                    settings.solution = prog
-                    settings.best_prog_score = num_pos, 0, num_neg, 0, prog_size
-                    settings.best_mdl = prog_size
-                    return
+                    if not settings.functional_test or not tester.is_non_functional(prog):
+                        settings.solution = prog
+                        settings.best_prog_score = num_pos, 0, num_neg, 0, prog_size
+                        settings.best_mdl = prog_size
+                        return
 
                 if settings.noisy:
                     fp, tn = None, None
@@ -1164,6 +1165,17 @@ class Popper():
                     to_prune.add(prog2)
                 continue
 
+# <<<<<<< HEAD
+# =======
+            # print('HELLO')
+            # exit()
+
+            # should_prune = check_coverage and len(pos_covered2) == 1
+            # if settings.solution_found and not settings.noisy and len(settings.solution) == 2:
+                # print('RAH1!!')
+                # exit()
+            # should_prune = should_prune or (settings.solution_found and not settings.recursion_enabled and not settings.noisy and len(settings.solution) == 2 and len(pos_covered2) != self.num_pos)
+# >>>>>>> main
 
             prog2_size = calc_prog_size(prog2)
             subsumed = pos_covered2.issubset(pos_covered)

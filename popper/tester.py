@@ -4,7 +4,7 @@ import pkg_resources
 from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
-from . util import order_prog, prog_is_recursive, rule_is_recursive, rule_size, calc_prog_size, prog_hash, format_rule, format_literal
+from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal
 
 def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
@@ -202,7 +202,7 @@ class Tester():
                 new_head = f'pos_index(_ID, {format_literal_janus(head)})'
                 x = format_rule_janus((None, ordered_body))[2:-1]
                 q = f'succeeds_k_times({new_head},({x}),K)'
-                return query_once(q, {'K':rule_size(rule)})['truth']
+                return query_once(q, {'K':calc_rule_size(rule)})['truth']
             else:
                 head = f'pos_index(_,{format_literal_janus(head)})'
                 x = format_rule_janus((None, ordered_body))[2:-1]
