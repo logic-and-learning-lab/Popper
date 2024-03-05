@@ -1,10 +1,13 @@
 import time
 from collections import defaultdict
 from functools import cache
-from itertools import chain, combinations, permutations
+from itertools import chain, combinations, permutations, combinations_with_replacement
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog
 from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons
+
+NEW_IDEAS = False
+NEW_IDEAS = True
 
 def explain_none_functional(settings, tester, prog):
     new_cons = []
@@ -109,10 +112,8 @@ class Popper():
         self.unsat = set()
 
     def run(self):
-        settings = self.settings
-        tester = self.tester
+        settings, tester = self.settings, self.tester
         num_pos, num_neg = self.num_pos, self.num_neg = len(settings.pos_index), len(settings.neg_index)
-        # format_prog = settings.format_prog
         uncovered = set(settings.pos_index)
 
         if settings.noisy:
@@ -143,7 +144,12 @@ class Popper():
 
         # track the success sets of tested hypotheses
         success_sets = self.success_sets = {}
+
+        # success_sets_by_size = self.success_sets_by_size = defaultdict(set)
         success_sets_noise = {}
+        paired_success_sets = self.paired_success_sets = defaultdict(set)
+
+        self.covered_by = defaultdict(set)
 
         # maintain a set of programs that we have not yet pruned
         could_prune_later = self.could_prune_later = [0]*(max_size+1)
@@ -151,6 +157,8 @@ class Popper():
             could_prune_later[i] = dict()
 
         to_combine = []
+
+        self.min_size = None
 
         last_size = None
 
@@ -197,11 +205,8 @@ class Popper():
                 if last_size is None or prog_size != last_size:
                     size_change = True
                     last_size = prog_size
+                    settings.search_depth = prog_size
                     settings.logger.info(f'Generating programs of size: {prog_size}')
-
-                if last_size > settings.max_literals:
-                    print("last_size > settings.max_literals")
-                    assert(False)
 
                 # TODO: refactor out for readability
                 # test a program
@@ -229,7 +234,6 @@ class Popper():
                                 inconsistent = len(neg_covered) > 0
                             else:
                                 skipped = True
-
                     else:
                         if settings.recursion_enabled or settings.pi_enabled:
                             pos_covered, inconsistent = tester.test_prog(prog)
@@ -251,7 +255,6 @@ class Popper():
                         settings.best_prog_score = num_pos, 0, num_neg, 0, prog_size
                         settings.best_mdl = prog_size
                         return
-
 
                 if settings.noisy:
                     fp, tn = None, None
@@ -297,29 +300,29 @@ class Popper():
                 if tp == num_pos:
                     add_gen = True
 
+                # if the program does not cover any positive examples, check whether it is has an unsat core
                 if not has_invention:
                     self.seen_prog.add(get_raw_prog(prog))
                     if tp == 0 or (settings.noisy and tp <= prog_size):
-                        # if the program does not cover any positive examples, check whether it is has an unsat core
                         with settings.stats.duration('find mucs'):
                             cons_ = tuple(self.explain_incomplete(prog))
                             new_cons.extend(cons_)
                             pruned_more_general = len(cons_) > 0
 
                 if not settings.noisy:
-                    if tp > 0:
-                        subsumed = pos_covered in success_sets
-                        subsumed = subsumed or any(pos_covered.issubset(xs) for xs in success_sets)
+                    if tp > 0 and success_sets:
 
-                        if subsumed:
+                        with settings.stats.duration('check subsumed'):
+                            subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets)
+
+                        with settings.stats.duration('check subsumed by two'):
+                            subsumed_by_two = self.subsumed_by_two_new(pos_covered, prog_size)
+
+                        with settings.stats.duration('check covers too few'):
+                            covers_too_few = self.check_covers_too_few(prog_size, pos_covered)
+
+                        if subsumed or subsumed_by_two or covers_too_few:
                             add_spec = True
-
-                        if not add_spec and is_recursive:
-                            covers_too_few = settings.solution_found and tp == 1
-                            if covers_too_few:
-                                assert(False)
-
-                        assert(not pruned_more_general)
 
                         # TODO: FIND MOST GENERAL SUBSUMED RECURSIVE PROGRAM
                         # xs = self.subsumed_or_covers_too_few2(prog, check_coverage=False, check_subsumed=True)
@@ -333,30 +336,24 @@ class Popper():
                         #         new_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(rule) for rule in x]))
 
                         if not has_invention and not is_recursive:
-                            # we check whether a program does not cover enough examples to be useful
-                            # if the program only not cover enough examples, we prune it specialisations
-                            covers_too_few = settings.solution_found and tp == 1
-                            # covers_too_few = covers_too_few or (settings.solution_found and not settings.recursion_enabled and not settings.noisy and len(settings.solution) == 2 and tp != num_pos)
-                            if covers_too_few:
-                                add_spec = True
-
-                            if subsumed or covers_too_few:
+                            if subsumed or subsumed_by_two or covers_too_few:
                                 # If a program is subsumed or doesn't cover enough examples, we search for the most general subprogram that also is also subsumed or doesn't cover enough examples
                                 # only applies to non-recursive and non-PI programs
-                                with settings.stats.duration('self.subsumed_or_covers_too_few'):
-                                    subsumed_progs = self.subsumed_or_covers_too_few(prog, check_coverage=covers_too_few, check_subsumed=subsumed, seen=set())
+                                subsumed_progs = []
+                                with settings.stats.duration('find most general subsumed/covers_too_few'):
+                                    subsumed_progs = self.subsumed_or_covers_too_few(prog, check_coverage=True, check_subsumed=True, check_subsumed_by_two=True, seen=set())
                                 pruned_more_general = len(subsumed_progs) > 0
+
                                 if settings.showcons and not pruned_more_general:
                                     if subsumed:
                                         print('\t', format_prog(prog), '\t', 'subsumed')
-                                    else:
+                                    elif subsumed_by_two:
+                                        print('\t', format_prog(prog), '\t', 'subsumed by two')
+                                    elif covers_too_few:
                                         print('\t', format_prog(prog), '\t', 'covers_too_few')
-                                for subsumed_prog in subsumed_progs:
+                                for subsumed_prog, message in subsumed_progs:
                                     if settings.showcons:
-                                        if subsumed:
-                                            print('\t', format_prog(subsumed_prog), '\t', 'subsumed (generalisation)')
-                                        else:
-                                            print('\t', format_prog(subsumed_prog), '\t', 'covers_too_few (generalisation)', tp)
+                                        print('\t', format_prog(subsumed_prog), '\t', message)
 
                                     subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog)
                                     new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
@@ -466,48 +463,6 @@ class Popper():
                 #             print('\t','r2',format_rule(order_rule(r2)))
                 #         new_cons.append((Constraint.GENERALISATION, [r1,r2], None, None))
 
-                # if not add_spec and not pruned_more_general and False:
-                if not settings.noisy and not add_spec and not pruned_more_general:
-                    with settings.stats.duration('subsumed by two'):
-                        something = set()
-                        for pos_covered2, size2 in success_sets.items():
-                            if size2 + 1 >= prog_size:
-                                continue
-                            if pos_covered2.issubset(pos_covered):
-                                something.add((pos_covered2, size2))
-
-                        for p1, s1 in something:
-                            if add_spec:
-                                break
-                            for p2, s2 in something:
-                                if add_spec:
-                                    break
-                                if s1+s2 > prog_size+1:
-                                    break
-                                union = p1|p2
-                                if pos_covered.issubset(union):
-                                    if settings.showcons:
-                                        print('\t', format_prog(prog), '\t', 'subsumed by two')
-                                    # self.check_more_general_subsumed_by_two(prog)
-                                    add_spec = True
-                                    break
-                                # for p3, s3 in something:
-                                #     if add_spec:
-                                #         break
-                                #     if s1+s2+s3 > prog_size+1:
-                                #         continue
-                                #     print('check3')
-                                #     if pos_covered.issubset((union|p3)):
-                                #         # print(s1+s2+s3, prog_size)
-                                #         print("MAJOR WOOOO SHIT", format_prog(prog))
-                                #         add_spec = True
-                                #         break
-
-                # if not settings.noisy and not add_spec:
-                #     if settings.solution_found and len(settings.solution) == 2 and tp != num_pos:
-                #         print('classic hack')
-                #         add_spec = True
-
                 if not add_spec and not pruned_more_general:
                     could_prune_later[prog_size][prog] = pos_covered
 
@@ -520,14 +475,35 @@ class Popper():
                     # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
                     if not inconsistent and not subsumed and not add_gen and tp > 0 and not pruned_more_general:
                         add_to_combiner = True
+
+                        # with settings.stats.duration('backtrack remove subsumed'):
+                        to_delete = []
+                        for a,b in success_sets.items():
+                            if a.issubset(pos_covered) and prog_size <= b:
+                                to_delete.append(a)
+                        for x in to_delete:
+                            # TODO: DELETE FROM COMBINER!!!!!!
+                            del success_sets[x]
+
                         success_sets[pos_covered] = prog_size
+                        # success_sets_by_size[prog_size].add(pos_covered)
+
+                        for e in pos_covered:
+                            self.covered_by[e].add((prog, prog_size, pos_covered))
+
+                        for p, s in success_sets.items():
+                            paired_success_sets[s+prog_size].add(p|pos_covered)
+
+                        # print('good rule', prog_size)
+                        if self.min_size is None:
+                            self.min_size = prog_size
 
                 if add_to_combiner:
                     to_combine.append((prog, pos_covered, neg_covered))
 
                     if not settings.noisy and not has_invention:
-                        with settings.stats.duration('prune backtrack'):
-                            subsumed_progs = tuple(self.prune_subsumed_backtrack(pos_covered, prog_size, check_coverage=settings.solution_found))
+                        with settings.stats.duration('prune backtrack subsumed'):
+                            subsumed_progs = tuple(self.prune_subsumed_backtrack(pos_covered, prog_size))
                             for subsumed_prog_ in subsumed_progs:
                                 subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
                                 new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
@@ -560,12 +536,14 @@ class Popper():
                             for i in range(settings.max_literals+1, max_size+1):
                                 generator.prune_size(i)
 
-                            if not settings.noisy and len(settings.solution) == 2 and not settings.recursion_enabled:
-                                with settings.stats.duration('prune backtrack specialcase'):
-                                    subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
-                                    for subsumed_prog_ in subsumed_progs:
-                                        subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
-                                        new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
+                            if not settings.noisy and not settings.recursion_enabled:
+                                if NEW_IDEAS:
+                                    with settings.stats.duration('prune backtrack covers too few'):
+                                        subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
+                                        # print('prune_subsumed_backtrack_specialcase', len(subsumed_progs))
+                                        for subsumed_prog_ in subsumed_progs:
+                                            subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
+                                            new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
                         call_combine = len(uncovered) == 0
 
@@ -605,15 +583,16 @@ class Popper():
                         # print("HERE!!!", tp, fn, tn, fp)
                         if not settings.noisy and fp == 0 and fn == 0:
                             settings.solution_found = True
-
-                            if not settings.noisy and len(settings.solution) == 2:
-                                with settings.stats.duration('prune backtrack specialcase'):
-                                    subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
-                                    for subsumed_prog_ in subsumed_progs:
-                                        subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
-                                        new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
-
                             settings.max_literals = hypothesis_size-1
+
+                            if not settings.noisy and not settings.recursion_enabled:
+                                if NEW_IDEAS:
+                                    with settings.stats.duration('prune backtrack covers too few'):
+                                        subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
+                                        # print('prune_subsumed_backtrack_specialcase2', len(subsumed_progs))
+                                        for subsumed_prog_ in subsumed_progs:
+                                            subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
+                                            new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
                             # if size >= settings.max_literals and not settings.order_space:
                             if size >= settings.max_literals:
@@ -693,6 +672,145 @@ class Popper():
                 break
         assert(len(to_combine) == 0)
 
+    # # @profile
+    # def subsumed_by_two(self, prog, pos_covered, prog_size):
+    #     something = set()
+    #     for pos_covered2, size2 in self.success_sets.items():
+    #         if size2 + 1 >= prog_size:
+    #             continue
+    #         if not pos_covered2.isdisjoint(pos_covered):
+    #             something.add((pos_covered2, size2))
+
+    #     # checks = 0
+    #     something = tuple(something)
+    #     n = len(something)
+    #     for i in range(0, n):
+    #         p1, s1 = something[i]
+    #         missing = None
+    #         n = len(something)
+    #         for j in range(i+1, n):
+    #             p2, s2 = something[j]
+    #             if s1+s2 > prog_size+1:
+    #                 continue
+    #             if missing is None:
+    #                 missing = pos_covered-p1
+    #             if missing.issubset(p2):
+    #                 return True
+    #     return False
+
+    def subsumed_by_two_new(self, pos_covered, prog_size):
+        paired_success_sets = self.paired_success_sets
+        for i in range(2, prog_size+2):
+            for x in paired_success_sets[i]:
+                if pos_covered.issubset(x):
+                    return True
+        return False
+
+    # @profile
+    def check_covers_too_few(self, prog_size, pos_covered):
+        num_pos = self.num_pos
+        if len(pos_covered) == num_pos:
+            return False
+
+        min_size = self.min_size
+        assert(min_size)
+
+        max_literals = self.settings.max_literals
+
+        # MAX RULES = 1
+        if ((prog_size + min_size) > max_literals):
+            if len(pos_covered) != num_pos:
+                return True
+
+        # MAX RULES = 2
+        elif ((prog_size + (min_size*2)) > max_literals):
+            space_remaining = max_literals-prog_size
+            if space_remaining > self.settings.search_depth:
+                return False
+
+            uncovered = self.tester.pos_examples-pos_covered
+            for pos_covered2, size2 in self.success_sets.items():
+                if size2 > space_remaining:
+                    continue
+                if uncovered.issubset(pos_covered2):
+                    return False
+            return True
+
+        # MAX RULES = 3
+        elif ((prog_size + (min_size*3)) > max_literals):
+            space_remaining = max_literals-prog_size
+
+            if space_remaining-min_size > self.settings.search_depth:
+                return False
+
+            uncovered = self.tester.pos_examples-pos_covered
+            success_sets = sorted(((pos_covered_, size) for (pos_covered_, size) in self.success_sets.items() if not pos_covered_.isdisjoint(uncovered)), key=lambda x: x[1])
+            n = len(success_sets)
+
+            for i in range(n):
+                pos_covered2, size2 = success_sets[i]
+                if size2 > space_remaining:
+                    break
+                if uncovered.issubset(pos_covered2):
+                    return False
+                space_remaining_ = space_remaining-size2
+                if space_remaining_ < min_size:
+                    continue
+                uncovered2 = uncovered-pos_covered2
+                for j in range(i+1, n):
+                    pos_covered3, size3 = success_sets[j]
+                    if size3 > space_remaining_:
+                        break
+                    if uncovered2.issubset(pos_covered3):
+                        return False
+            return True
+
+        # MAX RULES = 4
+        elif prog_size + (min_size*4) > max_literals:
+            space_remaining = max_literals-prog_size
+            space_remaining -= (min_size*2)
+
+            if space_remaining > self.settings.search_depth:
+                return False
+
+            missing = self.tester.pos_examples-pos_covered
+
+            success_sets = sorted(((pos_covered_, size) for (pos_covered_, size) in self.success_sets.items() if not pos_covered_.isdisjoint(missing)), key=lambda x: x[1])
+            space_remaining = max_literals-prog_size
+
+            n = len(success_sets)
+
+            for i in range(n):
+                pos_covered2, size2 = success_sets[i]
+                if size2 > space_remaining:
+                    break
+                if missing.issubset(pos_covered2):
+                    return False
+                space_remaining_ = space_remaining-size2
+                if space_remaining_ < min_size:
+                    continue
+                missing2 = missing-pos_covered2
+                for j in range(i+1, n):
+                    pos_covered3, size3 = success_sets[j]
+                    if size3 > space_remaining_:
+                        break
+                    if pos_covered3.isdisjoint(missing2):
+                        continue
+                    if missing2.issubset(pos_covered3):
+                        return False
+                    space_remaining__ = space_remaining_-size3
+                    if space_remaining__ < min_size:
+                        continue
+                    missing3 = missing2-pos_covered3
+                    for k in range(j+1, n):
+                        pos_covered4, size4 = success_sets[k]
+                        if size4 > space_remaining__:
+                            break
+                        if missing3.issubset(pos_covered4):
+                            return False
+            return True
+
+        return False
     # find unsat cores
     def explain_incomplete(self, prog):
 
@@ -718,11 +836,11 @@ class Popper():
                 continue
 
             if not (settings.recursion_enabled or settings.pi_enabled):
-                yield (Constraint.SPECIALISATION, [remap_variables(subprog[0])])
+                yield (Constraint.SPECIALISATION, [remap_variables(rule) for rule in subprog])
                 continue
 
             if len(subprog) == 1:
-                yield (Constraint.REDUNDANCY_CONSTRAINT1, [remap_variables(subprog[0])])
+                yield (Constraint.REDUNDANCY_CONSTRAINT1, [remap_variables(rule) for rule in subprog])
 
             yield (Constraint.REDUNDANCY_CONSTRAINT2, [remap_variables(rule) for rule in subprog])
 
@@ -791,7 +909,8 @@ class Popper():
                 seen_hyp_gen[k].remove(to_del)
         return cons
 
-    def subsumed_or_covers_too_few(self, prog, check_coverage=False, check_subsumed=False, seen=set()):
+    # @profile
+    def subsumed_or_covers_too_few(self, prog, check_coverage=False, check_subsumed=False, check_subsumed_by_two=False, seen=set()):
         tester, success_sets, settings = self.tester, self.success_sets, self.settings
         head, body = list(prog)[0]
         body = list(body)
@@ -828,41 +947,31 @@ class Popper():
                 continue
 
             if not head_connected(new_rule):
-                xs = self.subsumed_or_covers_too_few(new_prog, check_coverage, check_subsumed, seen)
+                xs = self.subsumed_or_covers_too_few(new_prog, check_coverage, check_subsumed, check_subsumed_by_two, seen)
                 out.update(xs)
                 continue
 
             if not self.has_valid_directions(new_rule):
-                xs = self.subsumed_or_covers_too_few(new_prog, check_coverage, check_subsumed, seen)
+                xs = self.subsumed_or_covers_too_few(new_prog, check_coverage, check_subsumed, check_subsumed_by_two, seen)
                 out.update(xs)
                 continue
 
             if tester.has_redundant_literal(new_prog):
-                xs = self.subsumed_or_covers_too_few(new_prog, check_coverage, check_subsumed, seen)
+                xs = self.subsumed_or_covers_too_few(new_prog, check_coverage, check_subsumed, check_subsumed_by_two, seen)
                 out.update(xs)
                 continue
 
+            new_prog_size = calc_prog_size(new_prog)
             sub_prog_pos_covered = tester.get_pos_covered(new_prog, ignore=True)
 
-            subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
+            subsumed = check_subsumed and sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
+            subsumed_by_two = not subsumed and self.subsumed_by_two_new(sub_prog_pos_covered, new_prog_size)
+            covers_too_few = not subsumed and not subsumed_by_two and self.check_covers_too_few(new_prog_size, sub_prog_pos_covered)
 
-            if settings.non_datalog_flag and not any(x in head_vars for literal in new_body for x in literal.arguments) and subsumed:
-                print('CHEEKY BUGGER')
-
-            prune = check_subsumed and subsumed
-            prune = prune or (check_coverage and len(sub_prog_pos_covered) == 1)
-
-            prune = prune or (check_coverage and len(sub_prog_pos_covered) != self.num_pos)
-
-            if check_coverage and len(sub_prog_pos_covered) == 1 and not subsumed:
-                print("POOOOOOOOOO")
-                print(format_prog(new_prog))
-                assert(False)
-
-            if not prune:
+            if not (subsumed or subsumed_by_two or covers_too_few):
                 continue
 
-            xs = self.subsumed_or_covers_too_few(new_prog, check_coverage, check_subsumed, seen)
+            xs = self.subsumed_or_covers_too_few(new_prog, check_coverage, check_subsumed, check_subsumed_by_two, seen)
             if len(xs) > 0:
                 out.update(xs)
                 continue
@@ -872,10 +981,15 @@ class Popper():
             for x in self.find_variants(remap_variables(new_rule)):
                 self.pruned2.add(x)
 
-            out.add(new_prog)
+            if subsumed:
+                out.add((new_prog, ('subsumed (generalisation)')))
+            elif subsumed_by_two:
+                out.add((new_prog, ('subsumed by two (generalisation)')))
+            elif covers_too_few:
+                out.add((new_prog, ('covers too few (generalisation)')))
+            else:
+                assert(False)
         return out
-
-
 
     def check_more_general_subsumed_by_two(self, prog):
         tester, success_sets, settings = self.tester, self.success_sets, self.settings
@@ -979,55 +1093,55 @@ class Popper():
         return out
 
 
-    def subsumed_or_covers_too_few2(self, prog, check_coverage=False, check_subsumed=False, seen=set()):
-        tester, success_sets, settings = self.tester, self.success_sets, self.settings
+    # def subsumed_or_covers_too_few2(self, prog, check_coverage=False, check_subsumed=False, seen=set()):
+    #     tester, success_sets, settings = self.tester, self.success_sets, self.settings
 
-        out = []
-        for subprog in generalisations(prog, allow_headless=False, recursive=True):
+    #     out = []
+    #     for subprog in generalisations(prog, allow_headless=False, recursive=True):
 
 
-            if not self.prog_is_ok(subprog):
-                xs = self.subsumed_or_covers_too_few2(subprog, check_coverage, check_subsumed, seen)
-                out.extend(xs)
-                continue
+    #         if not self.prog_is_ok(subprog):
+    #             xs = self.subsumed_or_covers_too_few2(subprog, check_coverage, check_subsumed, seen)
+    #             out.extend(xs)
+    #             continue
 
-            if self.tester.has_redundant_literal(subprog):
-                xs = self.subsumed_or_covers_too_few2(subprog, check_coverage, check_subsumed, seen)
-                out.extend(xs)
-                continue
+    #         if self.tester.has_redundant_literal(subprog):
+    #             xs = self.subsumed_or_covers_too_few2(subprog, check_coverage, check_subsumed, seen)
+    #             out.extend(xs)
+    #             continue
 
-            test_prog = frozenset(self.build_test_prog(subprog))
+    #         test_prog = frozenset(self.build_test_prog(subprog))
 
-            sub_prog_pos_covered = tester.get_pos_covered(test_prog)
+    #         sub_prog_pos_covered = tester.get_pos_covered(test_prog)
 
-            # this check assumes that we search by increasing program size
-            subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
+    #         # this check assumes that we search by increasing program size
+    #         subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
 
-            prune = check_subsumed and subsumed
-            prune = prune or (check_coverage and len(sub_prog_pos_covered) == 1)
+    #         prune = check_subsumed and subsumed
+    #         prune = prune or (check_coverage and len(sub_prog_pos_covered) == 1)
 
-            if check_coverage and len(sub_prog_pos_covered) == 1 and not subsumed:
-                print("POOOOOOOOOO")
-                print(format_prog(new_prog))
-                assert(False)
+    #         if check_coverage and len(sub_prog_pos_covered) == 1 and not subsumed:
+    #             print("POOOOOOOOOO")
+    #             print(format_prog(new_prog))
+    #             assert(False)
 
-            if not prune:
-                continue
+    #         if not prune:
+    #             continue
 
-            xs = self.subsumed_or_covers_too_few2(subprog, check_coverage, check_subsumed, seen)
-            if len(xs) > 0:
-                out.extend(xs)
-                continue
+    #         xs = self.subsumed_or_covers_too_few2(subprog, check_coverage, check_subsumed, seen)
+    #         if len(xs) > 0:
+    #             out.extend(xs)
+    #             continue
 
-            # for each pruned program, add the variants to the list of pruned programs
-            # doing so reduces the number of pointless checks
-            # for x in self.find_variants(functional_rename_vars(new_rule)):
-                # self.pruned2.add(x)
+    #         # for each pruned program, add the variants to the list of pruned programs
+    #         # doing so reduces the number of pointless checks
+    #         # for x in self.find_variants(functional_rename_vars(new_rule)):
+    #             # self.pruned2.add(x)
 
-            out.append(subprog)
-        return out
+    #         out.append(subprog)
+    #     return out
 
-    def prune_subsumed_backtrack(self, pos_covered, prog_size, check_coverage):
+    def prune_subsumed_backtrack(self, pos_covered, prog_size):
         could_prune_later, tester, settings = self.could_prune_later, self.tester, self.settings
         to_prune = set()
         to_delete = set()
@@ -1041,9 +1155,9 @@ class Popper():
         for prog2, pos_covered2 in get_zs():
 
             if len(prog2) > 1:
-                should_prune = check_coverage and len(pos_covered2) == 1
+                # should_prune = check_coverage and len(pos_covered2) == 1
                 subsumed = pos_covered2.issubset(pos_covered)
-                if should_prune or subsumed:
+                if subsumed:
                     # print('PRUNE!!!')
                     # print(format_prog(prog2))
                     # TODO: FIND MOST GENERAL SUBSUMED PROGRAM
@@ -1051,18 +1165,23 @@ class Popper():
                     to_prune.add(prog2)
                 continue
 
+# <<<<<<< HEAD
+# =======
             # print('HELLO')
             # exit()
 
-            should_prune = check_coverage and len(pos_covered2) == 1
+            # should_prune = check_coverage and len(pos_covered2) == 1
             # if settings.solution_found and not settings.noisy and len(settings.solution) == 2:
                 # print('RAH1!!')
                 # exit()
-            should_prune = should_prune or (settings.solution_found and not settings.recursion_enabled and not settings.noisy and len(settings.solution) == 2 and len(pos_covered2) != self.num_pos)
+            # should_prune = should_prune or (settings.solution_found and not settings.recursion_enabled and not settings.noisy and len(settings.solution) == 2 and len(pos_covered2) != self.num_pos)
+# >>>>>>> main
 
+            prog2_size = calc_prog_size(prog2)
             subsumed = pos_covered2.issubset(pos_covered)
+            subsumed_by_two = not subsumed and self.subsumed_by_two_new(pos_covered, prog2_size)
 
-            if not (should_prune or subsumed):
+            if not (subsumed or subsumed_by_two):
                 continue
 
             head, body = tuple(prog2)[0]
@@ -1098,22 +1217,17 @@ class Popper():
 
                 sub_prog_pos_covered = tester.get_pos_covered(new_prog)
 
-                # prune if we have a solution and the subprogram only covers one example
-                sub_covers_too_few = check_coverage and len(sub_prog_pos_covered) == 1
-                # sub_covers_too_few = sub_covers_too_few or (settings.solution_found and not settings.recursion_enabled and not settings.noisy and len(settings.solution) == 2 and len(sub_prog_pos_covered) != num_pos)
-
                 sub_prog_subsumed = sub_prog_pos_covered == pos_covered2
 
-                if sub_prog_subsumed:
-                    if self.settings.showcons:
-                        print('\t', format_prog(new_prog), '\t', 'subsumed_backtrack (generalisation)')
+                sub_subsumed_by_two = not sub_prog_subsumed and self.subsumed_by_two_new(sub_prog_pos_covered, calc_prog_size(new_prog))
 
-                if not sub_prog_subsumed and sub_covers_too_few:
-                    if self.settings.showcons:
-                        print('\t', format_prog(new_prog), '\t', 'COVERS TOO FEW')
-                    assert(False)
+                if self.settings.showcons:
+                    if sub_prog_subsumed:
+                        print('\t', format_prog(new_prog), '\t', 'subsumed backtrack (generalisation)')
+                    elif sub_subsumed_by_two:
+                        print('\t', format_prog(new_prog), '\t', 'subsumed by two backtrack (generalisation)')
 
-                if sub_prog_subsumed or sub_covers_too_few:
+                if sub_prog_subsumed or sub_subsumed_by_two:
                     to_prune.add(new_prog)
                     pruned_subprog = True
                     for x in self.find_variants(remap_variables(new_rule)):
@@ -1129,7 +1243,7 @@ class Popper():
                 pruned2.add(x)
 
             if self.settings.showcons:
-                print('\t', format_prog(prog2), '\t', 'subsumed_backtrack')
+                print('\t', format_prog(prog2), '\t', 'subsumed backtrack')
             to_prune.add(prog2)
 
         for x in to_delete:
@@ -1156,11 +1270,10 @@ class Popper():
             if len(prog2) > 1:
                 continue
 
-            should_prune = len(pos_covered2) == 1
-            should_prune = should_prune or (settings.solution_found and not settings.noisy and len(settings.solution) == 2 and len(pos_covered2) != self.num_pos)
-
-            if not should_prune:
+            covers_too_few = self.check_covers_too_few(calc_prog_size(prog2), pos_covered2)
+            if not covers_too_few:
                 continue
+            # print('SUB_COVERS_TOO_FEW BACKTRACKING')
 
             head, body = tuple(prog2)[0]
 
@@ -1194,14 +1307,11 @@ class Popper():
                     continue
 
                 sub_prog_pos_covered = tester.get_pos_covered(new_prog)
-
-                # prune if we have a solution and the subprogram only covers one example
-                sub_covers_too_few = len(sub_prog_pos_covered) == 1
-                # sub_covers_too_few = sub_covers_too_few or (settings.solution_found and not settings.noisy and len(settings.solution) == 2 and len(sub_prog_pos_covered) != self.num_pos)
+                sub_covers_too_few = self.check_covers_too_few(calc_prog_size(new_prog), sub_prog_pos_covered)
 
                 if sub_covers_too_few:
                     if self.settings.showcons:
-                        print('\t', format_prog(new_prog), '\t', 'covers too few (generalisation) backtrack')
+                        print('\t', format_prog(new_prog), '\t', 'covers too few backtrack (generalisation)')
                     to_prune.add(new_prog)
                     pruned_subprog = True
                     for x in self.find_variants(remap_variables(new_rule)):
@@ -1217,7 +1327,8 @@ class Popper():
                 pruned2.add(x)
 
             if self.settings.showcons:
-                print('\t', format_prog(prog2), '\t', 'COVERS TOO FEW')
+
+                print('\t', format_prog(prog2), '\t', 'covers too few backtrack')
             to_prune.add(prog2)
 
         for x in to_delete:
@@ -1271,10 +1382,12 @@ class Popper():
         out = []
         for subprog in generalisations(prog, allow_headless=True, recursive=has_recursion):
 
-            prog_key = frozenset(subprog)
-            if prog_key in self.seen_prog:
+
+
+            subprog = frozenset(subprog)
+            if subprog in self.seen_prog:
                 continue
-            self.seen_prog.add(prog_key)
+            self.seen_prog.add(subprog)
 
             raw_prog = get_raw_prog(subprog)
             if raw_prog in self.seen_prog:
@@ -1301,7 +1414,7 @@ class Popper():
             if should_skip():
                 continue
 
-            if seen_more_general_unsat(prog_key, unsat2):
+            if seen_more_general_unsat(subprog, unsat2):
                 continue
 
             if seen_more_general_unsat(raw_prog, unsat):
@@ -1343,8 +1456,8 @@ class Popper():
             # print('\t\t\t UNSAT',format_prog(subprog))
 
             unsat.add(raw_prog)
-            unsat2.add(prog_key)
-            self.unsat.add(prog_key)
+            unsat2.add(subprog)
+            self.unsat.add(subprog)
             self.unsat.add(raw_prog)
 
             xs = self.explain_totally_incomplete_aux2(subprog, unsat, unsat2)
