@@ -462,19 +462,7 @@ class Popper():
                 #             print('\t','r2',format_rule(order_rule(r2)))
                 #         new_cons.append((Constraint.GENERALISATION, [r1,r2], None, None))
 
-                # if not add_spec and not pruned_more_general:
-                #     to_delete = []
-                #     for i in range(2, prog_size+1):
-                #         for prog2 in could_prune_later[i]:
-                #             if could_prune_later[i][prog2].issubset(pos_covered):
-                #                 print("WTF???")
-                #                 print(could_prune_later[i][prog2])
-                #                 print(pos_covered)
-
-                    # for a,b in success_sets.items():
-                        # if a.issubset(pos_covered) and prog_size <= b:
-                            # to_delete.append(a)
-
+                if not add_spec and not pruned_more_general:
                     could_prune_later[prog_size][prog] = pos_covered
 
                 add_to_combiner = False
@@ -681,6 +669,32 @@ class Popper():
                 break
         assert(len(to_combine) == 0)
 
+    # # @profile
+    # def subsumed_by_two(self, prog, pos_covered, prog_size):
+    #     something = set()
+    #     for pos_covered2, size2 in self.success_sets.items():
+    #         if size2 + 1 >= prog_size:
+    #             continue
+    #         if not pos_covered2.isdisjoint(pos_covered):
+    #             something.add((pos_covered2, size2))
+
+    #     # checks = 0
+    #     something = tuple(something)
+    #     n = len(something)
+    #     for i in range(0, n):
+    #         p1, s1 = something[i]
+    #         missing = None
+    #         n = len(something)
+    #         for j in range(i+1, n):
+    #             p2, s2 = something[j]
+    #             if s1+s2 > prog_size+1:
+    #                 continue
+    #             if missing is None:
+    #                 missing = pos_covered-p1
+    #             if missing.issubset(p2):
+    #                 return True
+    #     return False
+
     def subsumed_by_two_new(self, pos_covered, prog_size):
         paired_success_sets = self.paired_success_sets
         for i in range(2, prog_size+2):
@@ -689,7 +703,6 @@ class Popper():
                     return True
         return False
 
-    # @profile
     def check_covers_too_few(self, prog_size, pos_covered):
         min_size = self.min_size
         if not min_size:
@@ -793,8 +806,6 @@ class Popper():
             return True
 
         return False
-
-
     # find unsat cores
     def explain_incomplete(self, prog):
 
