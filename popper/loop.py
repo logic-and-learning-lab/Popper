@@ -1401,70 +1401,171 @@ class Popper():
         return frozenset(test_prog)
 
     def explain_totally_incomplete(self, prog):
-        return list(self.explain_totally_incomplete_aux2(prog, unsat=set(), unsat2=set()))
+        return list(self.explain_totally_incomplete_aux2(prog, set(), set()))
 
-    def explain_totally_incomplete_aux2(self, prog, unsat=set(), unsat2=set()):
+    # def explain_totally_incomplete_aux2_(self, prog, unsat=set(), unsat2=set()):
+    #     has_recursion = prog_is_recursive(prog)
+
+    #     # print('---')
+    #     # for rule in prog:
+    #     #     print('\t', 'A', format_rule(rule))
+    #     # for prog_ in unsat:
+    #     #     print('\t', 'unsat', prog_)
+
+    #     out = []
+    #     for subprog in generalisations(prog, allow_headless=True, recursive=has_recursion):
+
+
+
+    #         subprog = frozenset(subprog)
+    #         if subprog in self.seen_prog:
+    #             continue
+    #         self.seen_prog.add(subprog)
+
+    #         raw_prog = get_raw_prog(subprog)
+    #         if raw_prog in self.seen_prog:
+    #             continue
+    #         self.seen_prog.add(raw_prog)
+
+    #         def should_skip():
+    #             if len(subprog) > 0:
+    #                 return False
+    #             h_, b_ = list(subprog)[0]
+    #             for x in non_empty_powerset(b_):
+    #                 sub_ = [(None, x)]
+    #                 if frozenset(sub_) in self.unsat:
+    #                     return True
+    #                 if get_raw_prog(sub_) in self.unsat:
+    #                     return True
+    #                 sub_ = [(h_, x)]
+    #                 if frozenset(sub_) in self.unsat:
+    #                     return True
+    #                 if get_raw_prog(sub_) in self.unsat:
+    #                     return True
+    #             return False
+
+    #         if should_skip():
+    #             continue
+
+    #         if seen_more_general_unsat(subprog, unsat2):
+    #             continue
+
+    #         if seen_more_general_unsat(raw_prog, unsat):
+    #             continue
+
+    #         if not self.prog_is_ok(subprog):
+    #             xs = self.explain_totally_incomplete_aux2(subprog, unsat, unsat2)
+    #             out.extend(xs)
+    #             continue
+
+    #         # for rule in subprog:
+    #             # print('\t', 'D', format_rule(rule))
+
+    #         if self.tester.has_redundant_literal(subprog):
+    #             xs = self.explain_totally_incomplete_aux2(subprog, unsat, unsat2)
+    #             out.extend(xs)
+    #             continue
+
+    #         # if len(subprog) > 2 and self.tester.has_redundant_rule(subprog):
+    #         #     xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat, noisy)
+    #         #     out.extend(xs)
+    #         #     continue
+
+    #         test_prog = self.build_test_prog(subprog)
+
+    #         headless = is_headless(subprog)
+
+    #         # print('\t\t\t testing',format_prog(subprog))
+
+    #         if headless:
+    #             body = list(test_prog)[0][1]
+    #             if self.tester.is_body_sat(body):
+    #                 # print('\t\t\t SAT',format_prog(subprog))
+    #                 continue
+    #         else:
+    #             if self.tester.is_sat(test_prog):
+    #                 # print('\t\t\t SAT',format_prog(subprog))
+    #                 continue
+    #         # print('\t\t\t UNSAT',format_prog(subprog))
+
+    #         unsat.add(raw_prog)
+    #         unsat2.add(subprog)
+    #         self.unsat.add(subprog)
+    #         self.unsat.add(raw_prog)
+
+    #         xs = self.explain_totally_incomplete_aux2(subprog, unsat, unsat2)
+    #         if len(xs):
+    #             out.extend(xs)
+    #         else:
+    #             out.append((subprog, headless))
+    #     return out
+
+    def explain_totally_incomplete_aux2(self, prog, sat=set(), unsat=set()):
         has_recursion = prog_is_recursive(prog)
-
-        # print('---')
-        # for rule in prog:
-        #     print('\t', 'A', format_rule(rule))
-        # for prog_ in unsat:
-        #     print('\t', 'unsat', prog_)
 
         out = []
         for subprog in generalisations(prog, allow_headless=True, recursive=has_recursion):
 
+            # print('---')
+            # for rule in subprog:
+            #     print('\t', 'A', format_rule(rule))
 
+            # raw_prog2 = get_raw_prog2(subprog)
 
-            subprog = frozenset(subprog)
-            if subprog in self.seen_prog:
-                continue
-            self.seen_prog.add(subprog)
+            # if raw_prog2 in self.seen_prog:
+                # continue
 
             raw_prog = get_raw_prog(subprog)
             if raw_prog in self.seen_prog:
                 continue
+
             self.seen_prog.add(raw_prog)
+            # self.seen_prog.add(raw_prog2)
+
+
+            # for rule in subprog:
+                # print('\t', 'B', format_rule(rule))
 
             def should_skip():
                 if len(subprog) > 0:
                     return False
                 h_, b_ = list(subprog)[0]
                 for x in non_empty_powerset(b_):
-                    sub_ = [(None, x)]
-                    if frozenset(sub_) in self.unsat:
+                    if get_raw_prog([(None,x)]) in self.unsat:
                         return True
-                    if get_raw_prog(sub_) in self.unsat:
-                        return True
-                    sub_ = [(h_, x)]
-                    if frozenset(sub_) in self.unsat:
-                        return True
-                    if get_raw_prog(sub_) in self.unsat:
+                    if get_raw_prog([(h_,x)]) in self.unsat:
                         return True
                 return False
 
             if should_skip():
                 continue
-
-            if seen_more_general_unsat(subprog, unsat2):
-                continue
+                # pass
 
             if seen_more_general_unsat(raw_prog, unsat):
                 continue
+                # pass
+
+            # if seen_more_general_unsat(raw_prog2, unsat):
+                # continue
+                # pass
+
+            # for rule in subprog:
+                # print('\t', 'C', format_rule(rule))
+
 
             if not self.prog_is_ok(subprog):
-                xs = self.explain_totally_incomplete_aux2(subprog, unsat, unsat2)
+                xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
                 out.extend(xs)
                 continue
 
             # for rule in subprog:
                 # print('\t', 'D', format_rule(rule))
 
-            if self.tester.has_redundant_literal(subprog):
-                xs = self.explain_totally_incomplete_aux2(subprog, unsat, unsat2)
+            if self.tester.has_redundant_literal(frozenset(subprog)):
+                xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
                 out.extend(xs)
                 continue
+
 
             # if len(subprog) > 2 and self.tester.has_redundant_rule(subprog):
             #     xs = self.explain_totally_incomplete_aux2(subprog, directions, sat, unsat, noisy)
@@ -1480,25 +1581,27 @@ class Popper():
             if headless:
                 body = list(test_prog)[0][1]
                 if self.tester.is_body_sat(body):
-                    # print('\t\t\t SAT',format_prog(subprog))
+                    sat.add(raw_prog)
                     continue
             else:
                 if self.tester.is_sat(test_prog):
                     # print('\t\t\t SAT',format_prog(subprog))
+                    sat.add(raw_prog)
                     continue
-            # print('\t\t\t UNSAT',format_prog(subprog))
+                # print('\t\t\t UNSAT',format_prog(subprog))
 
             unsat.add(raw_prog)
-            unsat2.add(subprog)
-            self.unsat.add(subprog)
+            # unsat.add(raw_prog2)
             self.unsat.add(raw_prog)
+            # self.unsat.add(raw_prog2)
 
-            xs = self.explain_totally_incomplete_aux2(subprog, unsat, unsat2)
+            xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
             if len(xs):
                 out.extend(xs)
             else:
                 out.append((subprog, headless))
         return out
+
 
     @cache
     def has_valid_directions(self, rule):
@@ -1653,19 +1756,26 @@ def learn_solution(settings):
     bkcons = []
 
     pointless = settings.pointless = set()
-    settings.logger.debug(f'Loading recalls')
-    with suppress_stdout_stderr():
+    if settings.debug:
         try:
             pointless = settings.pointless = find_pointless_relations(settings)
             settings.datalog = True
         except:
             settings.datalog = False
+    else:
+        with suppress_stdout_stderr():
+            try:
+                pointless = settings.pointless = find_pointless_relations(settings)
+                settings.datalog = True
+            except:
+                settings.datalog = False
 
     for p,a in pointless:
         if settings.showcons:
             print('remove pointless relation', p, a)
         settings.body_preds.remove((p,a))
 
+    settings.logger.debug(f'Loading recalls')
     if settings.datalog:
         with settings.stats.duration('recalls'):
             recalls = tuple(deduce_recalls(settings))
@@ -1714,21 +1824,17 @@ def generalisations(prog, allow_headless=True, recursive=False):
         head, body = rule
 
         if allow_headless:
-            if head and len(body) > 1:
+            if head and len(body) > 0:
                 new_rule = (None, body)
                 new_prog = [new_rule]
                 yield new_prog
 
-        if (recursive and len(body) > 2 and head) or (not recursive and head and len(body) > 1) or (not recursive and not head and len(body) > 2):
+        if (recursive and len(body) > 2 and head) or (not recursive and len(body) > 1):
             body = list(body)
-
             for i in range(len(body)):
                 # do not remove recursive literals
-                pred, args = body[i]
-                if recursive:
-                    head_pred, head_args = head
-                    if pred == head_pred:
-                        continue
+                if recursive and body[i].predicate == head.predicate:
+                    continue
                 new_body = body[:i] + body[i+1:]
                 new_rule = (head, frozenset(new_body))
                 new_prog = [new_rule]
@@ -1742,6 +1848,42 @@ def generalisations(prog, allow_headless=True, recursive=False):
             for new_subrule in generalisations([subrule], allow_headless=False, recursive=recursive):
                 new_prog = prog[:i] + new_subrule + prog[i+1:]
                 yield new_prog
+
+# def generalisations(prog, allow_headless=True, recursive=False):
+
+#     if len(prog) == 1:
+#         rule = list(prog)[0]
+#         head, body = rule
+
+#         if allow_headless:
+#             if head and len(body) > 1:
+#                 new_rule = (None, body)
+#                 new_prog = [new_rule]
+#                 yield new_prog
+
+#         if (recursive and len(body) > 2 and head) or (not recursive and head and len(body) > 1) or (not recursive and not head and len(body) > 2):
+#             body = list(body)
+
+#             for i in range(len(body)):
+#                 # do not remove recursive literals
+#                 pred, args = body[i]
+#                 if recursive:
+#                     head_pred, head_args = head
+#                     if pred == head_pred:
+#                         continue
+#                 new_body = body[:i] + body[i+1:]
+#                 new_rule = (head, frozenset(new_body))
+#                 new_prog = [new_rule]
+#                 yield new_prog
+
+#     else:
+#         prog = list(prog)
+#         for i in range(len(prog)):
+#             subrule = prog[i]
+#             recursive = rule_is_recursive(subrule)
+#             for new_subrule in generalisations([subrule], allow_headless=False, recursive=recursive):
+#                 new_prog = prog[:i] + new_subrule + prog[i+1:]
+#                 yield new_prog
 
 def tmp(prog):
     for rule in prog:
@@ -1840,7 +1982,7 @@ def find_pointless_relations(settings):
             if pa != qa:
                 continue
 
-            if settings.body_types[p] != settings.body_types[q]:
+            if settings.body_types and settings.body_types[p] != settings.body_types[q]:
                 continue
 
             arg_str = ','.join(f'V{i}' for i in range(pa))

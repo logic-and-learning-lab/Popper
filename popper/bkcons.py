@@ -633,7 +633,8 @@ def deduce_bk_cons(settings, tester):
     lookup2 = {k: f'({v})' for k,v in tmp_map.items()}
     lookup1 = {k:v for k,v in lookup2.items()}
     lookup1[1] = '(V0,)'
-    head_pred, head_arity = settings.head_literal
+    head_pred, head_args = settings.head_literal
+    head_arity = len(head_args)
 
     # for pred, arity in :
 
@@ -699,12 +700,13 @@ def deduce_bk_cons(settings, tester):
         if head_arity == 1:
             types = '(t,)'
         else:
+            print('head_arity', head_arity)
             types = tuple(['t'] * head_arity)
         encoding.append(f'type({head_pred},{types}).')
 
     if len(settings.body_types) == 0:
         # exit()
-        for p, a in body_preds:
+        for p, a in settings.body_preds:
             if a == 1:
                 types = '(t,)'
             else:

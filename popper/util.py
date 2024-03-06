@@ -259,7 +259,8 @@ class Settings:
             pass
         elif debug:
             log_level = logging.DEBUG
-            logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
+            # logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
+            logging.basicConfig(format='%(message)s', level=log_level, datefmt='%H:%M:%S')
         elif info:
             log_level = logging.INFO
             logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
