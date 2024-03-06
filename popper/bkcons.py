@@ -715,8 +715,8 @@ def deduce_bk_cons(settings, tester):
 
     encoding = '\n'.join(encoding)
     # print(encoding)
-    with open('bkcons-encoding.pl', 'w') as f:
-        f.write(encoding)
+    # with open('bkcons-encoding.pl', 'w') as f:
+        # f.write(encoding)
     # exit()
     solver = clingo.Control(['-Wnone'])
     solver.add('base', [], encoding)
