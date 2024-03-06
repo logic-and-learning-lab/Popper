@@ -1702,7 +1702,7 @@ def learn_solution(settings):
         if settings.showcons:
             for x in xs:
                 print('bkcon', x)
-        # bkcons.extend(xs)
+        bkcons.extend(xs)
     time_so_far = time.time()-t1
     timeout(settings, popper, (settings, tester, bkcons), timeout_duration=int(settings.timeout-time_so_far),)
     return settings.solution, settings.best_prog_score, settings.stats
