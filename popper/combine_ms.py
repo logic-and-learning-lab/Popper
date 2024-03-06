@@ -102,6 +102,7 @@ class Combiner:
                 else:
                     ids.append(self.rulehash_to_id[rule_hash])
             for rule in prog:
+                rule_hash = get_rule_hash(rule)
                 rule_id = self.rulehash_to_id[rule_hash]
                 rule_size = self.ruleid_to_size[rule_id]
 
