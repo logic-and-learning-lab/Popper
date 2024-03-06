@@ -204,6 +204,7 @@ class Popper():
                     settings.logger.debug(f'Program {settings.stats.total_programs}:')
                     settings.logger.debug(format_prog(prog))
 
+
                 if last_size is None or prog_size != last_size:
                     size_change = True
                     last_size = prog_size
@@ -249,6 +250,9 @@ class Popper():
 
                 tp = len(pos_covered)
                 fn = num_pos-tp
+
+                # pos_covered, neg_covered = tester.test_prog_all(prog)
+                # settings.logger.debug(f'P:{num_pos} TP:{tp} FN:{fn} N:{num_neg} FP:{len(neg_covered)}')
 
                 # if non-separable program covers all examples, stop
                 if not skipped and not inconsistent and tp == num_pos: # and not settings.order_space:
@@ -314,12 +318,10 @@ class Popper():
                 if not settings.noisy:
                     if tp > 0 and success_sets:
 
-                        with settings.stats.duration('check subsumed'):
+                        with settings.stats.duration('check subsumed and covers_too_few'):
                             subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets)
                             subsumed_by_two = not subsumed and self.subsumed_by_two_new(pos_covered, prog_size)
-
-                        with settings.stats.duration('check covers too few'):
-                            covers_too_few = self.check_covers_too_few(prog_size, pos_covered)
+                            covers_too_few = not subsumed and not subsumed_by_two and self.check_covers_too_few(prog_size, pos_covered)
 
                         if subsumed or subsumed_by_two or covers_too_few:
                             add_spec = True
@@ -345,14 +347,14 @@ class Popper():
 
                             if settings.showcons and not pruned_more_general:
                                 if subsumed:
-                                    print('\t', format_prog(prog), '\t', 'subsumed')
+                                    print('\t', 'SUBSUMED:', '\t', format_prog(prog))
                                 elif subsumed_by_two:
-                                    print('\t', format_prog(prog), '\t', 'subsumed by two')
+                                    print('\t', 'SUBSUMED BY TWO:', '\t', format_prog(prog))
                                 elif covers_too_few:
-                                    print('\t', format_prog(prog), '\t', 'covers too few')
+                                    print('\t', 'COVERS TOO FEW:', '\t', format_prog(prog))
                             for subsumed_prog, message in subsumed_progs:
                                 if settings.showcons:
-                                    print('\t', format_prog(subsumed_prog), '\t', message)
+                                    print('\t', message, '\t', format_prog(prog))
 
                                 subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog)
                                 new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
@@ -858,7 +860,7 @@ class Popper():
                     print('\n')
                 for i, rule in enumerate(subprog):
                     # print('\t', format_rule(rule), '\t', f'unsat')
-                    print('\t', f'UNSAT:', '\t', format_rule(rule), )
+                    print('\t', f'UNSAT:', '\t', format_rule(rule))
 
             if unsat_body:
                 _, body = list(subprog)[0]
@@ -1011,11 +1013,11 @@ class Popper():
                 self.pruned2.add(x)
 
             if subsumed:
-                out.add((new_prog, ('subsumed (generalisation)')))
+                out.add((new_prog, ('SUBSUMED (GENERALISATION)')))
             elif subsumed_by_two:
-                out.add((new_prog, ('subsumed by two (generalisation)')))
+                out.add((new_prog, ('SUBSUMED BY TWO (GENERALISATION)')))
             elif covers_too_few:
-                out.add((new_prog, ('covers too few (generalisation)')))
+                out.add((new_prog, ('COVERS TOO FEW (GENERALISATION)')))
             else:
                 assert(False)
         return out
@@ -1090,7 +1092,9 @@ class Popper():
                     # TODO: FIND MOST GENERAL SUBSUMED PROGRAM
                     to_delete.add(prog2)
                     to_prune.add(prog2)
-                # elif self.subsumed_by_two_new(pos_covered, prog2_size)
+                # elif self.subsumed_by_two_new(pos_covered2, calc_prog_size(prog2)):
+                    # print('PRUNE!!!')
+                    # print(format_prog(prog2))
                 continue
 
 
@@ -1140,9 +1144,9 @@ class Popper():
 
                 if self.settings.showcons:
                     if sub_prog_subsumed:
-                        print('\t', format_prog(new_prog), '\t', 'subsumed backtrack (generalisation)')
+                        print('\t', 'SUBSUMED BACKTRACK (GENERALISATION):', '\t', format_prog(new_prog))
                     elif sub_subsumed_by_two:
-                        print('\t', format_prog(new_prog), '\t', 'subsumed by two backtrack (generalisation)')
+                        print('\t', 'SUBSUMED BY TWO BACKTRACK (GENERALISATION):', '\t', format_prog(new_prog))
 
                 if sub_prog_subsumed or sub_subsumed_by_two:
                     to_prune.add(new_prog)
@@ -1160,7 +1164,10 @@ class Popper():
                 pruned2.add(x)
 
             if self.settings.showcons:
-                print('\t', format_prog(prog2), '\t', 'subsumed backtrack')
+                if subsumed:
+                    print('\t', 'SUBSUMED BACKTRACK:', '\t', format_prog(prog2))
+                elif subsumed_by_two:
+                    print('\t', 'SUBSUMED BY TWO BACKTRACK:', '\t', format_prog(prog2))
             to_prune.add(prog2)
 
         for x in to_delete:
@@ -1228,7 +1235,7 @@ class Popper():
 
                 if sub_covers_too_few:
                     if self.settings.showcons:
-                        print('\t', format_prog(new_prog), '\t', 'covers too few backtrack (generalisation)')
+                        print('\t', 'COVERS TOO FEW BACKTRACK (GENERALISATION)', '\t', format_prog(new_prog))
                     to_prune.add(new_prog)
                     pruned_subprog = True
                     for x in self.find_variants(remap_variables(new_rule)):
@@ -1244,8 +1251,7 @@ class Popper():
                 pruned2.add(x)
 
             if self.settings.showcons:
-
-                print('\t', format_prog(prog2), '\t', 'covers too few backtrack')
+                print('\t', 'COVERS TOO FEW BACKTRACK', '\t', format_prog(prog2))
             to_prune.add(prog2)
 
         for x in to_delete:
