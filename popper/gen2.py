@@ -132,6 +132,7 @@ class Generator:
 
         return self.parse_model_single_rule(atoms)
 
+
     def parse_model_single_rule(self, model):
         settings = self.settings
         head = settings.head_literal
@@ -153,6 +154,7 @@ class Generator:
         size_con = [(atom_to_symbol("size", (size,)), True)]
         self.model.context.add_nogood(size_con)
 
+
     def constrain(self, tmp_new_cons):
         new_ground_cons = set()
 
@@ -164,29 +166,30 @@ class Generator:
                 con_size = None
                 if self.settings.noisy and len(xs)>2:
                     con_size = xs[2]
-                ground_rules2 = self.build_generalisation_constraint3(con_prog, con_size)
+                ground_rules2 = tuple(self.build_generalisation_constraint3(con_prog, con_size))
                 new_ground_cons.update(ground_rules2)
             elif con_type == Constraint.SPECIALISATION:
                 con_size = None
                 if self.settings.noisy and len(xs)>2:
                     con_size = xs[2]
-                ground_rules2 = self.build_specialisation_constraint3(con_prog, con_size)
+                ground_rules2 = tuple(self.build_specialisation_constraint3(con_prog, con_size))
                 new_ground_cons.update(ground_rules2)
             elif con_type == Constraint.UNSAT:
                 cons_ = self.unsat_constraint2(con_prog)
                 new_ground_cons.update(cons_)
 
         tmp = self.model.context.add_nogood
+        cached_clingo_atoms = self.cached_clingo_atoms
 
         for ground_body in new_ground_cons:
             nogood = []
             for sign, pred, args in ground_body:
                 k = hash((sign, pred, args))
                 try:
-                    x = self.cached_clingo_atoms[k]
+                    x = cached_clingo_atoms[k]
                 except KeyError:
                     x = (atom_to_symbol(pred, args), sign)
-                    self.cached_clingo_atoms[k] = x
+                    cached_clingo_atoms[k] = x
                 nogood.append(x)
             tmp(nogood)
 

@@ -443,7 +443,7 @@ class Popper():
                     for rule in prog:
                         if rule_is_recursive(rule) and settings.max_rules == 2:
                             continue
-                        if tester.has_redundant_literal([rule]):
+                        if tester.has_redundant_literal(frozenset([rule])):
                             add_gen = True
                             new_cons.append((Constraint.GENERALISATION, [rule]))
                             if settings.showcons:
@@ -477,13 +477,15 @@ class Popper():
                         add_to_combiner = True
 
                         # with settings.stats.duration('backtrack remove subsumed'):
-                        to_delete = []
-                        for a,b in success_sets.items():
-                            if a.issubset(pos_covered) and prog_size <= b:
-                                to_delete.append(a)
-                        for x in to_delete:
-                            # TODO: DELETE FROM COMBINER!!!!!!
-                            del success_sets[x]
+
+                        if not settings.recursion_enabled:
+                            to_delete = []
+                            for a,b in success_sets.items():
+                                if a.issubset(pos_covered) and prog_size <= b:
+                                    to_delete.append(a)
+                            for x in to_delete:
+                                # TODO: DELETE FROM COMBINER!!!!!!
+                                del success_sets[x]
 
                         success_sets[pos_covered] = prog_size
                         # success_sets_by_size[prog_size].add(pos_covered)
@@ -672,7 +674,7 @@ class Popper():
                 break
         assert(len(to_combine) == 0)
 
-    # # @profile
+    # #
     # def subsumed_by_two(self, prog, pos_covered, prog_size):
     #     something = set()
     #     for pos_covered2, size2 in self.success_sets.items():
@@ -706,7 +708,7 @@ class Popper():
                     return True
         return False
 
-    # @profile
+    #
     def check_covers_too_few(self, prog_size, pos_covered):
         num_pos = self.num_pos
         if len(pos_covered) == num_pos:
@@ -909,7 +911,7 @@ class Popper():
                 seen_hyp_gen[k].remove(to_del)
         return cons
 
-    # @profile
+    #
     def subsumed_or_covers_too_few(self, prog, check_coverage=False, check_subsumed=False, check_subsumed_by_two=False, seen=set()):
         tester, success_sets, settings = self.tester, self.success_sets, self.settings
         head, body = list(prog)[0]
@@ -1619,7 +1621,6 @@ def learn_solution(settings):
 
     bkcons = []
 
-
     pointless = settings.pointless = set()
     settings.logger.debug(f'Loading recalls')
     with suppress_stdout_stderr():
@@ -1657,16 +1658,20 @@ def learn_solution(settings):
             raise TimeoutError()
 
         settings.logger.debug(f'Loading bkcons')
+        xs = []
         with settings.stats.duration('bkcons'):
             signal.signal(signal.SIGALRM, handler)
             signal.alarm(settings.bkcons_timeout)
             try:
-                bkcons.extend(deduce_bk_cons(settings, tester))
-                # exit()
+                xs = deduce_bk_cons(settings, tester)
             except TimeoutError as _exc:
                 settings.logger.debug(f'Loading bkcons FAILURE')
             finally:
                 signal.alarm(0)
+        if settings.showcons:
+            for x in xs:
+                print('bkcon', x)
+        # bkcons.extend(xs)
     time_so_far = time.time()-t1
     timeout(settings, popper, (settings, tester, bkcons), timeout_duration=int(settings.timeout-time_so_far),)
     return settings.solution, settings.best_prog_score, settings.stats

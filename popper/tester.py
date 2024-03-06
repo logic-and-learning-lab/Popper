@@ -59,6 +59,7 @@ class Tester():
         if self.settings.recursion_enabled:
             query_once(f'assert(timeout({self.settings.eval_timeout})), fail')
 
+    # AC: THIS METHOD IS VERY EXPENSIVE, ESPECIALLY THE ORDER_RULE CALL
     @cache
     def parse_single_rule(self, prog):
         rule = list(prog)[0]

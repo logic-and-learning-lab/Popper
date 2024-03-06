@@ -644,15 +644,42 @@ def deduce_bk_cons(settings, tester):
         arg_str2 = lookup2[a]
         rule = f'holds({p},{arg_str}):- {p}{arg_str2}.'
         prog.append(rule)
-    prog = '\n'.join(prog)
+        prog.append(f'body_pred({p},{a}).')
 
-    with open(settings.bias_file) as f:
-        bias = f.read()
-        for p,a in settings.pointless:
-            bias = re.sub(rf'body_pred\({p},{a}\).','', bias)
+
+    # with open(settings.bias_file) as f:
+    #     bias = f.read()
+    #     for p,a in settings.pointless:
+    #         bias = re.sub(rf'body_pred\({p},{a}\).','', bias)
+
+
+    # encoding = []
+    # ADD VARS, DIRECTIONS, AND TYPES
+    # head_arity = len(settings.head_literal.arguments)
+    # encoding.append(f'head_vars({head_arity}, {tuple(range(head_arity))}).')
+    # arities = set(a for p, a in self.settings.body_preds)
+    # arities.add(head_arity)
+    # for arity in arities:
+    #     for xs in permutations(range(settings.max_vars), arity):
+    #         encoding.append(f'vars({arity}, {tuple(xs)}).')
+    #         for i, x in enumerate(xs):
+    #             encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
+
+    # type_encoding = set()
+    if settings.head_types:
+        types = tuple(settings.head_types)
+        prog.append(f'type({settings.head_literal[0]},{types}).')
+
+        for pred, types in settings.body_types.items():
+            types = tuple(types)
+            prog.append(f'type({pred},{types}).')
+        # encoding.extend(type_encoding)
+
+    prog = '\n'.join(prog)
 
     with open(settings.bk_file) as f:
         bk = f.read()
+
 
     cons = pkg_resources.resource_string(__name__, "lp/cons.pl").decode()
     bk = bk.replace('\+','not')
@@ -666,7 +693,7 @@ def deduce_bk_cons(settings, tester):
     # print('\n'.join(new_cons))
 
     new_props = '\n'.join(new_props)
-    encoding = [cons, prog, bias, bk, TIDY_OUTPUT, new_props]
+    encoding = [cons, prog, bk, TIDY_OUTPUT, new_props]
 
     if settings.head_types == None:
         if head_arity == 1:
@@ -682,13 +709,14 @@ def deduce_bk_cons(settings, tester):
                 types = '(t,)'
             else:
                 types = tuple(['t'] * a)
+
             encoding.append(f'type({p},{types}).')
 
 
     encoding = '\n'.join(encoding)
     # print(encoding)
-    # with open('bkcons-encoding.pl', 'w') as f:
-        # f.write(encoding)
+    with open('bkcons-encoding.pl', 'w') as f:
+        f.write(encoding)
     # exit()
     solver = clingo.Control(['-Wnone'])
     solver.add('base', [], encoding)
