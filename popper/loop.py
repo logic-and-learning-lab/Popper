@@ -342,7 +342,7 @@ class Popper():
                             # only applies to non-recursive and non-PI programs
                             subsumed_progs = []
                             with settings.stats.duration('find most general subsumed/covers_too_few'):
-                                subsumed_progs = self.subsumed_or_covers_too_few(prog, check_coverage=True, check_subsumed=True, check_subsumed_by_two=True, seen=set())
+                                subsumed_progs = self.subsumed_or_covers_too_few(prog, seen=set())
                             pruned_more_general = len(subsumed_progs) > 0
 
                             if settings.showcons and not pruned_more_general:
@@ -712,6 +712,8 @@ class Popper():
     def subsumed_by_two_new(self, pos_covered, prog_size):
         paired_success_sets = self.paired_success_sets
         for i in range(2, prog_size+2):
+            if pos_covered in paired_success_sets[i]:
+                return True
             for x in paired_success_sets[i]:
                 if pos_covered.issubset(x):
                     return True
@@ -840,6 +842,8 @@ class Popper():
                         if missing3.issubset(pos_covered4):
                             return False
             return True
+        # elif ((prog_size + (min_size*5)) > max_literals):
+            # print('MAX RULES IS 5!')
 
         return False
     # find unsat cores
@@ -941,7 +945,7 @@ class Popper():
                 seen_hyp_gen[k].remove(to_del)
         return cons
 
-    def subsumed_or_covers_too_few(self, prog, check_coverage=False, check_subsumed=False, check_subsumed_by_two=False, seen=set()):
+    def subsumed_or_covers_too_few(self, prog, seen=set()):
         tester, success_sets, settings = self.tester, self.success_sets, self.settings
         head, body = list(prog)[0]
         body = list(body)
@@ -978,31 +982,31 @@ class Popper():
                 continue
 
             if not head_connected(new_rule):
-                xs = self.subsumed_or_covers_too_few(new_prog, check_coverage, check_subsumed, check_subsumed_by_two, seen)
+                xs = self.subsumed_or_covers_too_few(new_prog, seen)
                 out.update(xs)
                 continue
 
             if not self.has_valid_directions(new_rule):
-                xs = self.subsumed_or_covers_too_few(new_prog, check_coverage, check_subsumed, check_subsumed_by_two, seen)
+                xs = self.subsumed_or_covers_too_few(new_prog, seen)
                 out.update(xs)
                 continue
 
             if tester.has_redundant_literal(new_prog):
-                xs = self.subsumed_or_covers_too_few(new_prog, check_coverage, check_subsumed, check_subsumed_by_two, seen)
+                xs = self.subsumed_or_covers_too_few(new_prog, seen)
                 out.update(xs)
                 continue
 
             new_prog_size = calc_prog_size(new_prog)
             sub_prog_pos_covered = tester.get_pos_covered(new_prog, ignore=True)
 
-            subsumed = check_subsumed and sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
+            subsumed = sub_prog_pos_covered in success_sets or any(sub_prog_pos_covered.issubset(xs) for xs in success_sets)
             subsumed_by_two = not subsumed and self.subsumed_by_two_new(sub_prog_pos_covered, new_prog_size)
             covers_too_few = not subsumed and not subsumed_by_two and self.check_covers_too_few(new_prog_size, sub_prog_pos_covered)
 
             if not (subsumed or subsumed_by_two or covers_too_few):
                 continue
 
-            xs = self.subsumed_or_covers_too_few(new_prog, check_coverage, check_subsumed, check_subsumed_by_two, seen)
+            xs = self.subsumed_or_covers_too_few(new_prog, seen)
             if len(xs) > 0:
                 out.update(xs)
                 continue

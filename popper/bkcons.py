@@ -700,7 +700,7 @@ def deduce_bk_cons(settings, tester):
         if head_arity == 1:
             types = '(t,)'
         else:
-            print('head_arity', head_arity)
+            # print('head_arity', head_arity)
             types = tuple(['t'] * head_arity)
         encoding.append(f'type({head_pred},{types}).')
 
