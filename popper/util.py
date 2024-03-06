@@ -475,7 +475,7 @@ class Settings:
           print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
         # print(self.format_prog(order_prog(prog)))
         for rule in order_prog(prog):
-            self.logger.info(format_rule(self.order_rule(rule)))
+            print(format_rule(self.order_rule(rule)))
         # print(self.format_prog(order_prog(prog)))
         print('*'*30)
 
