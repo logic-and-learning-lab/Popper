@@ -442,6 +442,18 @@ class Settings:
 
         self.head_types, self.body_types = load_types(self)
 
+
+        if len(self.body_types) > 0 or not self.head_types is None:
+            if self.head_types is None:
+                print('WARNING: MISSING HEAD TYPE')
+                # exit()
+            for p,a in self.body_preds:
+                if p not in self.body_types:
+                    print(f'WARNING: MISSING BODY TYPE FOR {p}')
+                    # exit()
+
+
+
         self.single_solve = not (self.recursion_enabled or self.pi_enabled)
 
         self.logger.debug(f'Max rules: {self.max_rules}')

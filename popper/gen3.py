@@ -641,7 +641,7 @@ class Generator:
         body_types = self.settings.body_types
 
         # if no types, find all permutations of variables
-        if len(body_types) == 0:
+        if len(body_types) == 0 or head_types is None:
             num_vars = len({var for atom in body for var in atom.arguments})
             for xs in permutations(range(self.settings.max_vars), num_vars):
                 x = {i:xs[i] for i in range(num_vars)}
@@ -651,22 +651,25 @@ class Generator:
         # if there are types, only find type-safe permutations
         var_type_lookup = {i:head_type for i, head_type in enumerate(head_types)}
 
-        head_arity = len(self.settings.head_literal.arguments)
-        head_vars = set(range(head_arity))
+        head_vars = set(range(len(self.settings.head_literal.arguments)))
         body_vars = set()
 
-        for atom in body:
-            pred = atom.predicate
-            for i, x in enumerate(atom.arguments):
+        for pred, args in body:
+            for i, x in enumerate(args):
                 body_vars.add(x)
                 if x in head_vars:
                     continue
-                var_type_lookup[x] = body_types[pred][i]
+                if pred in body_types:
+                    var_type_lookup[x] = body_types[pred][i]
 
         # prohibit bad type matchings
         bad_type_matching = set()
         for x in body_vars:
+            if x not in var_type_lookup:
+                continue
             for y in head_vars:
+                if y not in var_type_lookup:
+                    continue
                 if var_type_lookup[x] == var_type_lookup[y]:
                     continue
                 k = (x, y)
