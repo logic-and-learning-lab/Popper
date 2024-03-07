@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="popper-ilp",
-    version="2.0.0",                        # Update this for every new version
+    version="4.1.2",                        # Update this for every new version
     author="Andrew Cropper",
     author_email="andrew.cropper@cs.ox.ac.uk",
     description="Popper",
