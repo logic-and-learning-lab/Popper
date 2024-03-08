@@ -308,7 +308,7 @@ class Popper():
 
                 # if the program does not cover any positive examples, check whether it is has an unsat core
                 if not has_invention:
-                    self.seen_prog.add(get_raw_prog(prog))
+                    # self.seen_prog.add(get_raw_prog(prog))
                     if tp == 0 or (settings.noisy and tp <= prog_size):
                         with settings.stats.duration('find mucs'):
                             cons_ = tuple(self.explain_incomplete(prog))
@@ -1394,7 +1394,7 @@ class Popper():
     #             out.append((subprog, headless))
     #     return out
 
-    def explain_totally_incomplete_aux2(self, prog, sat=set(), unsat=set()):
+    def explain_totally_incomplete_aux2(self, prog, unsat2=set(), unsat=set()):
         has_recursion = prog_is_recursive(prog)
 
         out = []
@@ -1409,10 +1409,14 @@ class Popper():
             # if raw_prog2 in self.seen_prog:
                 # continue
 
+            subprog = frozenset(subprog)
+            if subprog in self.seen_prog:
+                continue
             raw_prog = get_raw_prog(subprog)
             if raw_prog in self.seen_prog:
                 continue
 
+            self.seen_prog.add(subprog)
             self.seen_prog.add(raw_prog)
             # self.seen_prog.add(raw_prog2)
 
@@ -1425,30 +1429,43 @@ class Popper():
                     return False
                 h_, b_ = list(subprog)[0]
                 for x in non_empty_powerset(b_):
-                    if get_raw_prog([(None,x)]) in self.unsat:
+                    sub_ = [(None, x)]
+                    if frozenset(sub_) in self.unsat:
                         return True
-                    if get_raw_prog([(h_,x)]) in self.unsat:
+                    if get_raw_prog(sub_) in self.unsat:
+                        return True
+                    sub_ = [(h_, x)]
+                    if frozenset(sub_) in self.unsat:
+                        return True
+                    if get_raw_prog(sub_) in self.unsat:
                         return True
                 return False
 
             if should_skip():
                 continue
-                # pass
 
             if seen_more_general_unsat(raw_prog, unsat):
                 continue
+
+            if seen_more_general_unsat(subprog, unsat2):
+                continue
                 # pass
 
-            # if seen_more_general_unsat(raw_prog2, unsat):
-                # continue
-                # pass
+            # if seen_more_general_unsat(subprog, unsat):
+            #     print('wtf?2')
+            #     continue
+
+            # if seen_more_general_unsat(raw_prog, unsat2):
+            #     print('wtf?3')
+            #     continue
+            #     # pass
 
             # for rule in subprog:
                 # print('\t', 'C', format_rule(rule))
 
 
             if not self.prog_is_ok(subprog):
-                xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
+                xs = self.explain_totally_incomplete_aux2(subprog, unsat2, unsat)
                 out.extend(xs)
                 continue
 
@@ -1456,7 +1473,7 @@ class Popper():
                 # print('\t', 'D', format_rule(rule))
 
             if self.tester.has_redundant_literal(frozenset(subprog)):
-                xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
+                xs = self.explain_totally_incomplete_aux2(subprog, unsat2, unsat)
                 out.extend(xs)
                 continue
 
@@ -1475,21 +1492,21 @@ class Popper():
             if headless:
                 body = list(test_prog)[0][1]
                 if self.tester.is_body_sat(body):
-                    sat.add(raw_prog)
+                    # sat.add(raw_prog)
                     continue
             else:
                 if self.tester.is_sat(test_prog):
                     # print('\t\t\t SAT',format_prog(subprog))
-                    sat.add(raw_prog)
+                    # sat.add(raw_prog)
                     continue
                 # print('\t\t\t UNSAT',format_prog(subprog))
 
             unsat.add(raw_prog)
-            # unsat.add(raw_prog2)
+            unsat2.add(subprog)
             self.unsat.add(raw_prog)
-            # self.unsat.add(raw_prog2)
+            self.unsat.add(subprog)
 
-            xs = self.explain_totally_incomplete_aux2(subprog, sat, unsat)
+            xs = self.explain_totally_incomplete_aux2(subprog, unsat2, unsat)
             if len(xs):
                 out.extend(xs)
             else:
