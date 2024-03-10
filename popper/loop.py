@@ -154,9 +154,12 @@ class Popper():
         # self.covered_by = defaultdict(set)
 
         # maintain a set of programs that we have not yet pruned
-        could_prune_later = self.could_prune_later = [0]*(max_size+1)
-        for i in range(max_size+1):
-            could_prune_later[i] = dict()
+        # could_prune_later = self.could_prune_later = [0]*(max_size+1)
+        # for i in range(max_size+1):
+        #     could_prune_later[i] = dict()
+
+        could_prune_later = self.could_prune_later = {}
+        could_prune_later_rec = self.could_prune_later_rec = {}
 
         to_combine = []
 
@@ -464,7 +467,10 @@ class Popper():
                 #         new_cons.append((Constraint.GENERALISATION, [r1,r2], None, None))
 
                 if not add_spec and not pruned_more_general:
-                    could_prune_later[prog_size][prog] = pos_covered
+                    if is_recursive:
+                        could_prune_later_rec[prog] = pos_covered, prog_size
+                    else:
+                        could_prune_later[prog] = pos_covered, prog_size
 
                 add_to_combiner = False
                 if settings.noisy:
@@ -739,7 +745,6 @@ class Popper():
         tmp[k2] = v
         return v
 
-    # @profile
     def check_covers_too_few_(self, prog_size, pos_covered):
         num_pos = self.num_pos
         if len(pos_covered) == num_pos:
@@ -1075,24 +1080,17 @@ class Popper():
     #     return out
 
     def prune_subsumed_backtrack(self, pos_covered, prog_size):
-        could_prune_later, tester, settings = self.could_prune_later, self.tester, self.settings
+        could_prune_later, could_prune_later_rec, tester, settings = self.could_prune_later, self.could_prune_later_rec, self.tester, self.settings
         to_prune = set()
         to_delete = set()
         seen = set()
         pruned2 = self.pruned2
 
-        def get_zs():
-            for x in could_prune_later:
-                yield from x.items()
-
-        recursion_enabled = settings.recursion_enabled
-
-        for prog2, pos_covered2 in get_zs():
-
+        for prog2, (pos_covered2, prog2_size) in could_prune_later_rec.items():
+            # AC: TODO: separate this check
             if recursion_enabled and len(prog2) > 1:
                 # should_prune = check_coverage and len(pos_covered2) == 1
-                subsumed = pos_covered2.issubset(pos_covered)
-                if subsumed:
+                if pos_covered2.issubset(pos_covered):
                     # print('PRUNE!!!')
                     # print(format_prog(prog2))
                     # TODO: FIND MOST GENERAL SUBSUMED PROGRAM
@@ -1103,11 +1101,11 @@ class Popper():
                     # print(format_prog(prog2))
                 continue
 
+        for prog2, (pos_covered2, prog2_size) in could_prune_later.items():
+
             subsumed = pos_covered2.issubset(pos_covered)
             subsumed_by_two = False
             if not subsumed and not pos_covered2.isdisjoint(pos_covered):
-                # TODO: calc prog size above
-                prog2_size = calc_prog_size(prog2)
                 subsumed_by_two = self.subsumed_by_two_new(pos_covered2, prog2_size)
 
             if not (subsumed or subsumed_by_two):
@@ -1179,7 +1177,7 @@ class Popper():
             to_prune.add(prog2)
 
         for x in to_delete:
-            del could_prune_later[calc_prog_size(x)][x]
+            del could_prune_later[x]
 
         return to_prune
 
@@ -1193,14 +1191,11 @@ class Popper():
         if not settings.solution_found:
             return
 
-        def get_zs():
-            for x in could_prune_later:
-                yield from x.items()
-
-        for prog2, pos_covered2 in get_zs():
+        for prog2, (pos_covered2, prog2_size) in could_prune_later.items():
 
             if len(prog2) > 1:
-                continue
+                assert(False)
+                # continue
 
             covers_too_few = self.check_covers_too_few(calc_prog_size(prog2), pos_covered2)
             if not covers_too_few:
@@ -1263,7 +1258,7 @@ class Popper():
             to_prune.add(prog2)
 
         for x in to_delete:
-            del could_prune_later[calc_prog_size(x)][x]
+            del could_prune_later[x]
 
         return to_prune
 
