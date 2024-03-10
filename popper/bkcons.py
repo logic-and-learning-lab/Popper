@@ -734,10 +734,6 @@ def deduce_bk_cons(settings, tester):
                 if atom.name == 'prop':
                     out.add(str(atom))
     xs = [x + '.' for x in out]
-
-    if settings.showcons:
-        for x in sorted(xs):
-            print(x)
     return xs + new_cons
 
 
