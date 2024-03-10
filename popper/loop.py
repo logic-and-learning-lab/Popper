@@ -1085,9 +1085,11 @@ class Popper():
             for x in could_prune_later:
                 yield from x.items()
 
+        recursion_enabled = settings.recursion_enabled
+
         for prog2, pos_covered2 in get_zs():
 
-            if len(prog2) > 1:
+            if recursion_enabled and len(prog2) > 1:
                 # should_prune = check_coverage and len(pos_covered2) == 1
                 subsumed = pos_covered2.issubset(pos_covered)
                 if subsumed:
@@ -1101,10 +1103,12 @@ class Popper():
                     # print(format_prog(prog2))
                 continue
 
-
-            prog2_size = calc_prog_size(prog2)
             subsumed = pos_covered2.issubset(pos_covered)
-            subsumed_by_two = not subsumed and self.subsumed_by_two_new(pos_covered, prog2_size)
+            subsumed_by_two = False
+            if not subsumed and not pos_covered2.isdisjoint(pos_covered):
+                # TODO: calc prog size above
+                prog2_size = calc_prog_size(prog2)
+                subsumed_by_two = self.subsumed_by_two_new(pos_covered2, prog2_size)
 
             if not (subsumed or subsumed_by_two):
                 continue
@@ -1721,8 +1725,8 @@ def learn_solution(settings):
             finally:
                 signal.alarm(0)
         if settings.showcons:
-            for x in xs:
-                print('bkcon', x)
+            for x in sorted(xs):
+                print('BKCON', x)
         bkcons.extend(xs)
     time_so_far = time.time()-t1
     timeout(settings, popper, (settings, tester, bkcons), timeout_duration=int(settings.timeout-time_so_far),)
