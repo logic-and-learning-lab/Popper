@@ -199,13 +199,69 @@ safe_bvar(Rule,Var):-
 %% IDEAS FROM THE PAPER:
 %% Learning logic programs by discovering where not to search. A. Cropper and C. Hocquette. AAAI23.
 
-:- prop(ab_ba,(P,P)), body_literal(_,P,_,(A,B)), A>B.
-:- prop(abc_acb,(P,P)), body_literal(_,P,_,(A,B,C)), B>C.
-:- prop(abc_bac,P), body_literal(_,P,_,(A,B,C)), A>B.
-:- prop(abc_cba,P), body_literal(_,P,_,(A,B,C)), A>B.
-:- prop(abcd_acbd,P), body_literal(_,P,_,(A,B,C,D)), C>B.
-:- prop(abcd_adcb,P), body_literal(_,P,_,(A,B,C,D)), D>B.
+%% :- prop(ab_ba,(P,P)), body_literal(_,P,_,(A,B)), A>B.
+%% :- prop(abc_acb,(P,P)), body_literal(_,P,_,(A,B,C)), B>C.
+%% :- prop(abc_bac,(P,P)), body_literal(_,P,_,(A,B,C)), A>B.
+%% :- prop(abc_cba,P), body_literal(_,P,_,(A,B,C)), A>B.
+%% :- prop(abcd_acbd,P), body_literal(_,P,_,(A,B,C,D)), C>B.
+%% :- prop(abcd_adcb,P), body_literal(_,P,_,(A,B,C,D)), D>B.
 
+
+:- prop(ab_ba,(P,P)), body_literal(Rule,P,_,(A,B)), A>B.
+:- prop(abc_acb,(P,P)), body_literal(Rule,P,_,(A,B,C)), B>C.
+:- prop(abc_bac,(P,P)), body_literal(Rule,P,_,(A,B,C)), A>B.
+:- prop(abc_cba,(P,P)), body_literal(Rule,P,_,(A,B,C)), A>C.
+:- prop(abcd_abdc,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), C>D.
+:- prop(abcd_acbd,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), B>C.
+:- prop(abcd_adcb,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), B>D.
+:- prop(abcd_bacd,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), A>B.
+:- prop(abcd_badc,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), A>B.
+:- prop(abcd_cbad,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), A>C.
+:- prop(abcd_cdab,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), A>C.
+:- prop(abcd_dbca,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), A>D.
+:- prop(abcd_dcba,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), B>C.
+:- prop(abcde_abced,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), D>E.
+:- prop(abcde_abdce,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), C>D.
+:- prop(abcde_abedc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), C>E.
+:- prop(abcde_acbde,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>C.
+:- prop(abcde_acbed,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>C.
+:- prop(abcde_adcbe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>D.
+:- prop(abcde_adebc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>D.
+:- prop(abcde_aecdb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>E.
+:- prop(abcde_aedcb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), C>D.
+:- prop(abcde_bacde,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>B.
+:- prop(abcde_baced,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>B.
+:- prop(abcde_badce,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>B.
+:- prop(abcde_badec,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>B.
+:- prop(abcde_baedc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>B.
+:- prop(abcde_bcaed,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), D>E.
+:- prop(abcde_bdeac,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), C>E.
+:- prop(abcde_bedca,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), C>D.
+:- prop(abcde_cbade,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>C.
+:- prop(abcde_cbaed,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>C.
+:- prop(abcde_cdabe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>C.
+:- prop(abcde_cdaeb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>C.
+:- prop(abcde_cdeba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>D.
+:- prop(abcde_ceadb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>C.
+:- prop(abcde_cedab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>E.
+:- prop(abcde_dbcae,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>D.
+:- prop(abcde_dbeac,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>D.
+:- prop(abcde_dcbae,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>C.
+:- prop(abcde_dcbea,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>C.
+:- prop(abcde_dceab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>D.
+:- prop(abcde_decab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>D.
+:- prop(abcde_ebcda,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>E.
+:- prop(abcde_ebdca,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), C>D.
+:- prop(abcde_ecbda,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>C.
+:- prop(abcde_ecdba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>E.
+:- prop(abcde_edcba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>D.
+%% abcd_adcb
+%% abcd_badc
+%% abcd_bcda
+%% abcd_cbad
+%% abcd_cdab
+%% abcd_dabc
+%% abcd_dcba
 
 %% prop(abcde_acbed,(input_move,input_move)).
 %% prop(abcde_acdeb,(input_move,input_move)).
