@@ -1088,18 +1088,17 @@ class Popper():
 
         for prog2, (pos_covered2, prog2_size) in could_prune_later_rec.items():
             # AC: TODO: separate this check
-            if recursion_enabled and len(prog2) > 1:
-                # should_prune = check_coverage and len(pos_covered2) == 1
-                if pos_covered2.issubset(pos_covered):
-                    # print('PRUNE!!!')
-                    # print(format_prog(prog2))
-                    # TODO: FIND MOST GENERAL SUBSUMED PROGRAM
-                    to_delete.add(prog2)
-                    to_prune.add(prog2)
-                # elif self.subsumed_by_two_new(pos_covered2, calc_prog_size(prog2)):
-                    # print('PRUNE!!!')
-                    # print(format_prog(prog2))
-                continue
+            # should_prune = check_coverage and len(pos_covered2) == 1
+            if pos_covered2.issubset(pos_covered):
+                # print('PRUNE!!!')
+                # print(format_prog(prog2))
+                # TODO: FIND MOST GENERAL SUBSUMED PROGRAM
+                to_delete.add(prog2)
+                to_prune.add(prog2)
+            # elif self.subsumed_by_two_new(pos_covered2, calc_prog_size(prog2)):
+                # print('PRUNE!!!')
+                # print(format_prog(prog2))
+
 
         for prog2, (pos_covered2, prog2_size) in could_prune_later.items():
 
