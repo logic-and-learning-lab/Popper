@@ -1083,6 +1083,7 @@ class Popper():
         could_prune_later, could_prune_later_rec, tester, settings = self.could_prune_later, self.could_prune_later_rec, self.tester, self.settings
         to_prune = set()
         to_delete = set()
+        to_delete_rec = set()
         seen = set()
         pruned2 = self.pruned2
 
@@ -1093,7 +1094,7 @@ class Popper():
                 # print('PRUNE!!!')
                 # print(format_prog(prog2))
                 # TODO: FIND MOST GENERAL SUBSUMED PROGRAM
-                to_delete.add(prog2)
+                to_delete_rec.add(prog2)
                 to_prune.add(prog2)
             # elif self.subsumed_by_two_new(pos_covered2, calc_prog_size(prog2)):
                 # print('PRUNE!!!')
@@ -1175,6 +1176,8 @@ class Popper():
                     print('\t', 'SUBSUMED BY TWO BACKTRACK:', '\t', format_prog(prog2))
             to_prune.add(prog2)
 
+        for x in to_delete_rec:
+            del could_prune_later_rec[x]
         for x in to_delete:
             del could_prune_later[x]
 
