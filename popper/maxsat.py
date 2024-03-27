@@ -36,7 +36,7 @@ def new_wcnf_to_file(hard_clauses, soft_clauses, weights, file):
     file.flush()
 
 def exact_maxsat_solve(hard_clauses, soft_clauses, weights, settings):
-    # print("Calling exact MaxSAT solver!")
+    print("Calling exact MaxSAT solver!")
     settings.stats.maxsat_calls += 1
     if settings.exact_maxsat_solver == "rc2":
         rc2 = RC2(WCNF())
