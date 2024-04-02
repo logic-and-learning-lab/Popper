@@ -12,7 +12,6 @@ import sys
 from . import maxsat
 from pysat.formula import IDPool
 
-
 NEW_IDEAS = False
 NEW_IDEAS = True
 

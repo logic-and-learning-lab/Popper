@@ -6,9 +6,6 @@ from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, p
 from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons
 
-NEW_IDEAS = False
-NEW_IDEAS = True
-
 def explain_none_functional(settings, tester, prog):
     new_cons = []
 
@@ -114,7 +111,6 @@ class Popper():
         self.tmp = {}
         self.savings = 0
 
-    # @profile
     def run(self):
         settings, tester = self.settings, self.tester
         num_pos, num_neg = self.num_pos, self.num_neg = len(settings.pos_index), len(settings.neg_index)
@@ -152,6 +148,11 @@ class Popper():
         # success_sets_by_size = self.success_sets_by_size = defaultdict(set)
         success_sets_noise = {}
         paired_success_sets = self.paired_success_sets = defaultdict(set)
+
+        covered_by = defaultdict(set)
+        coverage_pos = {}
+        coverage_neg = {}
+        scores = {}
 
         # self.covered_by = defaultdict(set)
 
@@ -476,96 +477,82 @@ class Popper():
                 add_to_combiner = False
                 if settings.noisy and not skipped and not skip_early_neg and not is_recursive and not has_invention and tp > prog_size+fp and fp+prog_size < settings.best_mdl and not noisy_subsumed:
 
-                    if not NEW_IDEAS:
+                    local_delete = set()
+                    ignore_this_prog = (pos_covered, neg_covered) in success_sets_noise
+
+                    if not ignore_this_prog:
+                        # pos_covered is a subset of every prog in s_pos
+                        s_pos = set.intersection(*(covered_by[ex] for ex in pos_covered))
+                        # if pos_covered(new) ⊆ pos_covered(old)
+                        for prog1 in s_pos:
+                            n1 = coverage_neg[prog1]
+                            # if neg_covered(old) ⊆ new_covered(new) then ignore new
+                            if n1.issubset(neg_covered):
+                                ignore_this_prog = True
+                                break
+                            # if new_covered(new) ⊆ neg_covered(old) then check whether the extra TN are worth it according to the MDL score
+                            if neg_covered.issubset(n1):
+                                size1, tp1, fp1 = scores[prog1]
+                                if (tp-fp-prog_size) <= (tp1-fp1-size1):
+                                    ignore_this_prog = True
+                                    break
+
+                    if not ignore_this_prog and neg_covered:
+                        # neg_covered is a subset of all programs in s_neg
+                        s_neg = set.intersection(*(covered_by[ex] for ex in neg_covered))
+                        # if neg_covered(new) ⊆ neg_covered(old)
+                        for prog1 in s_neg:
+                            # if pos_covered(old) ⊆ pos_covered(new)
+                            if coverage_pos[prog1].issubset(pos_covered):
+                                size1, tp1, fp1 = scores[prog1]
+                                if size1 == prog_size:
+                                    # ignore OLD
+                                    local_delete.add(prog1)
+                                    combiner.delete_it(prog1)
+                                    continue
+
+                                if fp == fp1 and (tp-prog_size) < (tp1-size1):
+                                    # NEW tp:50 fp:1 size:6 memberofdomainregion(V0,V1):- synsetdomaintopicof(V2,V3),synsetdomaintopicof(V1,V3),hypernym(V2,V4),membermeronym(V0,V5),synsetdomaintopicof(V2,V4).
+                                    # OLD tp:49 fp:1 size:4 memberofdomainregion(V0,V1):- synsetdomaintopicof(V1,V3),instancehypernym(V2,V3),membermeronym(V0,V4).
+                                    ignore_this_prog = True
+                                    break
+
+                                if tp == tp1 and (fp+prog_size) >= (fp1+size1):
+                                    # NEW tp:10 fp:1 mdl:350 less_toxic(V0,V1):- ring_subst_3(V1,V4),ring_substitutions(V1,V3),alk_groups(V0,V3),x_subst(V0,V2,V5).
+                                    # OLD tp:10 fp:2 mdl:350 less_toxic(V0,V1):- ring_substitutions(V0,V4),x_subst(V0,V3,V2),ring_subst_3(V1,V5).
+                                    ignore_this_prog = True
+                                    break
+
+                                if (tp-fp-prog_size) <= (tp1-fp1-size1):
+                                    # NEW tp:12 fp:3 size:7 less_toxic(V0,V1):- gt(V2,V5),gt(V2,V3),ring_subst_2(V1,V4),ring_substitutions(V0,V3),alk_groups(V0,V2),ring_substitutions(V1,V5).
+                                    # OLD tp:11 fp:4 size:3 less_toxic(V0,V1):- ring_subst_2(V1,V3),r_subst_3(V0,V2).
+                                    ignore_this_prog = True
+                                    break
+
+                    # delete old progs
+                    for k in local_delete:
+                        k_pos, k_neg = coverage_pos[k], coverage_neg[k]
+                        del success_sets_noise[(k_pos, k_neg)]
+                        for ex in k_pos | k_neg:
+                            covered_by[ex].remove(k)
+                        del coverage_pos[k]
+                        del coverage_neg[k]
+                        del scores[k]
+
+                    if not ignore_this_prog:
                         success_sets_noise[(pos_covered, neg_covered)] = prog, prog_size, fn, fp, tp
                         add_to_combiner = True
-                    else:
-                        with settings.stats.duration('new_combine_idea'):
+                        k = hash(prog)
+                        for ex in pos_covered|neg_covered:
+                            covered_by[ex].add(k)
+                        coverage_pos[k] = pos_covered
+                        coverage_neg[k] = neg_covered
+                        scores[k] = prog_size, tp, fp
 
-                            local_delete = set()
-                            pruned_something_else = False
-                            ignore_this_prog = (pos_covered, neg_covered) in success_sets_noise
-
-                            if not ignore_this_prog:
-
-                                # enumerate all previous programs that are 'combinable'
-                                for (p1, n1), (prog1, size1, fn1, fp1, tp1) in success_sets_noise.items():
-                                    if ignore_this_prog:
-                                        break
-
-                                    # IF OLD PROGRAM SUBSUMES NEW, SKIP NEW
-                                    if pos_covered.issubset(p1) and n1.issubset(neg_covered):
-                                        # if prog_size >= size1: by default a new program is at least as big as an old one
-                                        ignore_this_prog = True
-                                        break
-
-                                    # IF NEW PROGRAM SUBSUMES OLD, SKIP OLD
-                                    elif p1.issubset(pos_covered) and neg_covered.issubset(n1):
-
-                                        if size1 >= prog_size:
-                                            pruned_something_else = True
-                                            local_delete.add((p1, n1))
-                                            combiner.delete_it(prog1)
-                                            continue
-
-                                        if tp > tp1 and (fp+prog_size) <= (fp1 + size1):
-                                            # NEW tp:32 fp:4 mdl:251 great_ne(V0,V1):- ring_subst_2(V0,V3),x_subst(V1,V5,V4),ring_substitutions(V0,V2),alk_groups(V0,V2).
-                                            # OLD tp:16 fp:8 mdl:270 great_ne(V0,V1):- ring_subst_2(V0,V4),r_subst_2(V1,V5),x_subst(V1,V2,V3).
-                                            # UNSOUND AS THE EXTRA TP and FP MIGHT BE COVERED BY SOMETHING ELSE
-                                            continue
-
-                                        if fp == fp1 and (tp-prog_size) >= (tp1-size1):
-                                            # NEW tp:19 fp:5 mdl:520 great(V0,V1):- alk_groups(V1,V2),gt(V2,V4),n_val(V0,V3).
-                                            # OLD tp:18 fp:5 mdl:520 great(V0,V1):- n_val(V0,V3),r_subst_2(V1,V2).
-                                            # UNSOUND AS THE EXTRA TP MIGHT BE COVERED BY SOMETHING ELSE
-                                            continue
-
-                                        if fp == fp1 and (tp-prog_size) < (tp1-size1):
-                                            # NEW tp:50 fp:1 size:6 memberofdomainregion(V0,V1):- synsetdomaintopicof(V2,V3),synsetdomaintopicof(V1,V3),hypernym(V2,V4),membermeronym(V0,V5),synsetdomaintopicof(V2,V4).
-                                            # OLD tp:49 fp:1 size:4 memberofdomainregion(V0,V1):- synsetdomaintopicof(V1,V3),instancehypernym(V2,V3),membermeronym(V0,V4).
-                                            ignore_this_prog = True
-                                            break
-
-                                        if tp == tp1 and (fp+prog_size) < (fp1+size1):
-                                            # NEW tp:48 fp:27 mdl:514 great(V0,V1):- ring_substitutions(V0,V3),ring_substitutions(V1,V3),alk_groups(V0,V3),ring_subst_3(V1,V2).
-                                            # OLD tp:48 fp:35 mdl:521 great(V0,V1):- ring_substitutions(V0,V3),ring_substitutions(V1,V3),ring_subst_3(V1,V2).
-                                            # UNSOUND AS THE EXTRA FP MIGHT BE COVERED BY SOMETHING ELSE
-                                            continue
-
-                                        if tp == tp1 and (fp+prog_size) >= (fp1+size1):
-                                            # NEW tp:10 fp:1 mdl:350 less_toxic(V0,V1):- ring_subst_3(V1,V4),ring_substitutions(V1,V3),alk_groups(V0,V3),x_subst(V0,V2,V5).
-                                            # OLD tp:10 fp:2 mdl:350 less_toxic(V0,V1):- ring_substitutions(V0,V4),x_subst(V0,V3,V2),ring_subst_3(V1,V5).
-                                            ignore_this_prog = True
-                                            break
-
-                                        if (tp-fp-prog_size) > (tp1-fp1-size1):
-                                            # NEW tp:12 fp:4 mdl:352 less_toxic(V0,V1):- alk_groups(V0,V2),gt(V2,V5),ring_substitutions(V0,V4),gt(V5,V4),ring_subst_2(V1,V3).
-                                            # OLD tp:11 fp:4 mdl:350 less_toxic(V0,V1):- r_subst_3(V0,V3),ring_subst_2(V1,V2).
-                                            # UNSOUND AS THE EXTRA TP MIGHT BE COVERED BY SOMETHING ELSE
-                                            continue
-
-                                        if (tp-fp-prog_size) <= (tp1-fp1-size1):
-                                            # print(f'X NEW tp:{len(pos_covered)} fp:{fp} size:{prog_size} {format_prog(prog)}')
-                                            # print(f'X OLD tp:{len(p1)} fp:{fp1} size:{size1} {format_prog(prog1)}')
-                                            # NEW tp:12 fp:3 size:7 less_toxic(V0,V1):- gt(V2,V5),gt(V2,V3),ring_subst_2(V1,V4),ring_substitutions(V0,V3),alk_groups(V0,V2),ring_substitutions(V1,V5).
-                                            # OLD tp:11 fp:4 size:3 less_toxic(V0,V1):- ring_subst_2(V1,V3),r_subst_3(V0,V2).
-                                            ignore_this_prog = True
-                                            break
-
-                                for x in local_delete:
-                                    del success_sets_noise[x]
-
-                                if fp == 0:
-                                    success_sets[pos_covered] = prog_size
-                                    for p, s in success_sets.items():
-                                        paired_success_sets[s+prog_size].add(p|pos_covered)
-
-                                # print(time.time()-t1)
-
-                            if not ignore_this_prog:
-                                success_sets_noise[(pos_covered, neg_covered)] = prog, prog_size, fn, fp, tp
-                                add_to_combiner = True
-
+                        if fp == 0:
+                            success_sets[pos_covered] = prog_size
+                            for p, s in success_sets.items():
+                                paired_success_sets[s+prog_size].add(p|pos_covered)
 
                 elif not settings.noisy:
                     # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
