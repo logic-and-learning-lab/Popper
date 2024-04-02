@@ -491,16 +491,16 @@ class Popper():
                                 ignore_this_prog = True
                                 break
 
-                            # # if new_covered(new) ⊆ neg_covered(old) then check whether the extra TN are worth it according to the MDL score
-                            if neg_covered.issubset(n1):
-                                size1, tp1, fp1 = scores[prog1]
-                                p1 = coverage_pos[prog1]
-                                prog1, prog_size_, fn_, fp_, tp_ = success_sets_noise[(p1, n1)]
+                            # # # if new_covered(new) ⊆ neg_covered(old) then check whether the extra TN are worth it according to the MDL score
+                            # if neg_covered.issubset(n1):
+                            #     size1, tp1, fp1 = scores[prog1]
+                            #     p1 = coverage_pos[prog1]
+                            #     prog1, prog_size_, fn_, fp_, tp_ = success_sets_noise[(p1, n1)]
 
-                                # if (tp-fp-prog_size) <= (tp1-fp1-size1):
-                                print(f'new tp:{tp} fp:{fp} size:{prog_size} score:{(tp-fp-prog_size)} prog:{format_prog(prog)}')
-                                print(f'old tp:{tp1} fp:{fp1} size:{size1} score:{(tp1-fp1-size1)} prog:{format_prog(prog1)}')
-                                print('')
+                            #     # if (tp-fp-prog_size) <= (tp1-fp1-size1):
+                            #     print(f'new tp:{tp} fp:{fp} size:{prog_size} score:{(tp-fp-prog_size)} prog:{format_prog(prog)}')
+                            #     print(f'old tp:{tp1} fp:{fp1} size:{size1} score:{(tp1-fp1-size1)} prog:{format_prog(prog1)}')
+                            #     print('')
                                     # ignore_this_prog = True
                                     # pass
                                     # break
