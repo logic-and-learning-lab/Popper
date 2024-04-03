@@ -228,7 +228,6 @@ class Combiner:
         if self.settings.noisy:                
             for [prog, pos_covered, neg_covered] in self.saved_progs+self.added:
                 if len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl:
-                    # print('delete', format_prog(prog))
                     # AC: PUSH THIS CHECK TO THE MAIN LOOP SO WE CAN REMOVE ITEMS FROM SUCCESS_SETS_NOISE
                     self.deleted += 1
                     continue
@@ -238,6 +237,7 @@ class Combiner:
                     continue
 
                 if len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl-min_size:
+                    # AC: PUSH THIS CHECK TO THE MAIN LOOP SO WE CAN REMOVE ITEMS FROM SUCCESS_SETS_NOISE
                     self.deleted += 1
                     continue
 
@@ -247,6 +247,7 @@ class Combiner:
 
             for [prog, pos_covered, neg_covered] in new_progs:
                 if self.settings.noisy and len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl:
+                    # AC: PUSH THIS CHECK TO THE MAIN LOOP SO WE CAN REMOVE ITEMS FROM SUCCESS_SETS_NOISE
                     continue
 
                 if prog in self.to_delete:
@@ -254,6 +255,7 @@ class Combiner:
                     continue
 
                 if min_size and len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl-min_size:
+                    # AC: PUSH THIS CHECK TO THE MAIN LOOP SO WE CAN REMOVE ITEMS FROM SUCCESS_SETS_NOISE
                     self.deleted += 1
                     continue
 
