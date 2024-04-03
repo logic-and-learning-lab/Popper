@@ -4,8 +4,7 @@ import clingo
 import time
 import pickle
 import itertools
-from . util import format_rule, calc_prog_size, reduce_prog, prog_is_recursive, prog_has_invention, \
-    calc_rule_size, rule_is_recursive, format_prog
+from . util import format_rule, calc_prog_size, reduce_prog, prog_is_recursive, prog_has_invention, calc_rule_size, rule_is_recursive, format_prog
 import collections
 
 import sys
@@ -87,82 +86,40 @@ class Combiner:
             all_programs = self.added
 
 
-
         bads = set()
 
-        if NEW_IDEAS:
-            # print('self.settings.best_mdl', self.settings.best_mdl)
-            for i in range(len(all_programs)):
-                bad = True
-                prog, pos_covered, neg_covered = all_programs[i]
-                size1 = calc_prog_size(prog)
-                space_remaining = self.settings.best_mdl - calc_prog_size(prog) - 1
-                # print(f'i:{i} tp:{len(pos_covered)}, fp:{len(neg_covered)}, size:{size1}')
-
-                for j in range(i, len(all_programs)):
-                    if i==j:
-                        continue
-                    prog2, pos_covered2, neg_covered2 = all_programs[j]
-                    size2 = calc_prog_size(prog2)
-                    fp = len(neg_covered|neg_covered2)
-                    if fp + size2 + size1 < self.settings.best_mdl:
-                        if len(pos_covered|pos_covered2) > len(pos_covered):
-                            bad = False
-                            break
-                        # print('skip')
-                        # continue
-
-                    # fn = self.tester.num_pos - tp
-                    # print(f'\t j:{j} tp:{len(pos_covered2)}, fp:{len(neg_covered2)}, size:{size2}')
-                    # print(f'\t tp:{tp} fn:{fn} fp:{fp} size:{size1 + size2} mdl: {fn + fp + size2 + size1}')
-                    # if fn + fp + size2 + size1 < self.settings.best_mdl:
-                    #     bad = False
-                    #     break
-
-                if bad:
-                    bads.add(prog)
-                    # print('SHIT PROG', format_prog(prog))
-
-            # if self.deleted == 0:
-            #     xs = self.saved_progs + self.added
-            #     for i in range(len(xs)):
-            #         bad = True
-            #         prog, pos_covered, neg_covered = xs[i]
-            #         if prog in bads:
-            #             continue
-            #         size1 = calc_prog_size(prog)
-            #         space_remaining = self.settings.best_mdl - calc_prog_size(prog) - 1
-            #         # print(f'i:{i} tp:{len(pos_covered)}, fp:{len(neg_covered)}, size:{size1}')
-
-            #         for j in range(i, len(xs)):
-            #             if i==j:
-            #                 continue
-            #             prog2, pos_covered2, neg_covered2 = xs[j]
-            #             size2 = calc_prog_size(prog2)
-            #             fp = len(neg_covered|neg_covered2)
-            #             if fp + size2 + size1 < self.settings.best_mdl:
-            #                 if len(pos_covered|pos_covered2) > len(pos_covered):
-            #                     bad = False
-            #                     break
-            #                 # print('skip')
-            #                 # continue
-
-            #             # fn = self.tester.num_pos - tp
-            #             # print(f'\t j:{j} tp:{len(pos_covered2)}, fp:{len(neg_covered2)}, size:{size2}')
-            #             # print(f'\t tp:{tp} fn:{fn} fp:{fp} size:{size1 + size2} mdl: {fn + fp + size2 + size1}')
-            #             # if fn + fp + size2 + size1 < self.settings.best_mdl:
-            #             #     bad = False
-            #             #     break
-
-            #         if bad:
-            #             bads.add(prog)
-            #             print('SHIT PROG MISSSSEEDDD AAAAAAAAAAHHHH', format_prog(prog))
+        if NEW_IDEAS and self.settings.noisy:
+            with self.settings.stats.duration('space idea'):
+                # Space remaining idea
+                # Assume a best MDL score O, a new program P, where mdl_score(P) > O
+                # Then for P to be in a solution with MDL score < O there must be another program Q s.t. fp(P | Q) + size(P) + size(Q) < O
+                xs = self.saved_progs + self.added
+                for i in range(len(xs)):
+                    bad = True
+                    prog, pos_covered, neg_covered = xs[i]
+                    size1 = calc_prog_size(prog)
+                    space_remaining = self.settings.best_mdl - calc_prog_size(prog) - 1
+                    for j in range(i, len(xs)):
+                        if i==j:
+                            continue
+                        prog2, pos_covered2, neg_covered2 = xs[j]
+                        if prog2 in bads:
+                            continue
+                        size2 = calc_prog_size(prog2)
+                        fp = len(neg_covered|neg_covered2)
+                        if fp + size2 + size1 < self.settings.best_mdl:
+                            if len(pos_covered|pos_covered2) > len(pos_covered):
+                                bad = False
+                                break
+                    if bad:
+                        bads.add(prog)
 
         if NEW_IDEAS:
             all_programs = [(prog, pos_covered, neg_covered) for (prog, pos_covered, neg_covered) in all_programs if prog not in bads]
 
-        for [prog, pos_covered, neg_covered] in all_programs:
+        all_programs = all_programs[:100]
 
+        for [prog, pos_covered, neg_covered] in all_programs:
 
 
             # UNCOMMENT TO SHOW PROGRAMS ADDED TO THE SOLVER
@@ -176,9 +133,9 @@ class Combiner:
             for ex in pos_covered:
                 self.programs_covering_example[ex].append(self.programs_seen)
 
-            if self.settings.nonoise:
-                assert(len(self.prog_neg_covered[prog]) == 0)
-            else:
+            # if self.settings.nonoise:
+                # assert(len(self.prog_neg_covered[prog]) == 0)
+            if self.settings.noisy:
                 for ex in neg_covered:
                     self.programs_covering_example[ex].append(self.programs_seen)
 
@@ -276,16 +233,13 @@ class Combiner:
                     self.deleted += 1
                     continue
 
-                if NEW_IDEAS:
-                    if prog in self.to_delete:
-                        self.deleted += 1
-                        # print('skip1')
-                        continue
+                if prog in self.to_delete:
+                    self.deleted += 1
+                    continue
 
-                    if len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl-min_size:
-                        self.deleted += 1
-                        # print('skip2')
-                        continue
+                if len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl-min_size:
+                    self.deleted += 1
+                    continue
 
                 self.prog_pos_covered[prog] = pos_covered
                 self.prog_neg_covered[prog] = neg_covered
@@ -295,16 +249,13 @@ class Combiner:
                 if self.settings.noisy and len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl:
                     continue
 
-                if NEW_IDEAS:
-                    if prog in self.to_delete:
-                        # print('skip3')
-                        self.deleted += 1
-                        continue
+                if prog in self.to_delete:
+                    self.deleted += 1
+                    continue
 
-                    if min_size and len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl-min_size:
-                        self.deleted += 1
-                        # print('skip4')
-                        continue
+                if min_size and len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl-min_size:
+                    self.deleted += 1
+                    continue
 
                 self.prog_pos_covered[prog] = pos_covered
                 self.prog_neg_covered[prog] = neg_covered
@@ -483,7 +434,6 @@ class Combiner:
             timeout = self.settings.maxsat_timeout
 
         self.update_prog_index(new_progs)
-
         new_solution, cost = self.select_solution(timeout)
 
         if len(new_solution) == 0:
