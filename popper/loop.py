@@ -6,9 +6,6 @@ from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, p
 from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons
 
-NEW_IDEAS = False
-NEW_IDEAS = True
-
 def explain_none_functional(settings, tester, prog):
     new_cons = []
 
@@ -112,6 +109,7 @@ class Popper():
         self.unsat = set()
 
         self.tmp = {}
+        self.savings = 0
 
     def run(self):
         settings, tester = self.settings, self.tester
@@ -151,6 +149,11 @@ class Popper():
         success_sets_noise = {}
         paired_success_sets = self.paired_success_sets = defaultdict(set)
 
+        covered_by = defaultdict(set)
+        coverage_pos = {}
+        coverage_neg = {}
+        scores = {}
+
         # self.covered_by = defaultdict(set)
 
         # maintain a set of programs that we have not yet pruned
@@ -175,18 +178,14 @@ class Popper():
                 generator.update_solver(size)
 
             while True:
-                pruned_sub_inconsistent = False
-                pruned_more_general = False
-                add_spec = False
-                add_gen = False
-                add_redund1 = False
-                add_redund2 = False
-                subsumed = False
-                spec_size = None
-                gen_size = None
+                pruned_sub_inconsistent = pruned_more_general = False
+                add_spec = add_gen = add_redund1 = add_redund2 = False
+                subsumed = subsumed_by_two = covers_too_few = noisy_subsumed = False
+                spec_size = gen_size = None
                 size_change = False
                 neg_covered = None
                 inconsistent = None
+
 
                 # new cons to add to the solver
                 new_cons = []
@@ -318,49 +317,52 @@ class Popper():
                             new_cons.extend(cons_)
                             pruned_more_general = len(cons_) > 0
 
-                if not settings.noisy:
-                    if tp > 0 and success_sets:
+                if tp > 0 and success_sets and (not settings.noisy or (settings.noisy and fp==0)):
 
-                        with settings.stats.duration('check subsumed and covers_too_few'):
-                            subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets)
-                            subsumed_by_two = not subsumed and self.subsumed_by_two_new(pos_covered, prog_size)
-                            covers_too_few = not subsumed and not subsumed_by_two and self.check_covers_too_few(prog_size, pos_covered)
+                    with settings.stats.duration('check subsumed and covers_too_few'):
+                        subsumed = pos_covered in success_sets or any(pos_covered.issubset(xs) for xs in success_sets)
+                        subsumed_by_two = not subsumed and self.subsumed_by_two_new(pos_covered, prog_size)
+                        # AC: DISABLE WHEN THERE IS NOISE
+                        covers_too_few = not subsumed and not subsumed_by_two and not settings.noisy and self.check_covers_too_few(prog_size, pos_covered)
 
-                        if subsumed or subsumed_by_two or covers_too_few:
-                            add_spec = True
+                    if subsumed or subsumed_by_two or covers_too_few:
+                        add_spec = True
+                        noisy_subsumed = True
 
-                        # TODO: FIND MOST GENERAL SUBSUMED RECURSIVE PROGRAM
-                        # xs = self.subsumed_or_covers_too_few2(prog, check_coverage=False, check_subsumed=True)
-                        # if xs:
-                        # pruned_more_general
-                        #     for x in xs:
-                        #         print('')
-                        #         for rule in x:
-                        #             # print(rule)
-                        #             print('\t', 'moo', format_rule(rule))
-                        #         new_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(rule) for rule in x]))
+                if not settings.noisy and not has_invention and not is_recursive and (subsumed or subsumed_by_two or covers_too_few):
 
-                        if not has_invention and not is_recursive and (subsumed or subsumed_by_two or covers_too_few):
-                            # If a program is subsumed or dioesn't cover enough examples, we search for the most general subprogram that also is also subsumed or doesn't cover enough examples
-                            # only applies to non-recursive and non-PI programs
-                            subsumed_progs = []
-                            with settings.stats.duration('find most general subsumed/covers_too_few'):
-                                subsumed_progs = self.subsumed_or_covers_too_few(prog, seen=set())
-                            pruned_more_general = len(subsumed_progs) > 0
+                    # TODO: FIND MOST GENERAL SUBSUMED RECURSIVE PROGRAM
+                    # xs = self.subsumed_or_covers_too_few2(prog, check_coverage=False, check_subsumed=True)
+                    # if xs:
+                    # pruned_more_general
+                    #     for x in xs:
+                    #         print('')
+                    #         for rule in x:
+                    #             # print(rule)
+                    #             print('\t', 'moo', format_rule(rule))
+                    #         new_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(rule) for rule in x]))
 
-                            if settings.showcons and not pruned_more_general:
-                                if subsumed:
-                                    print('\t', 'SUBSUMED:', '\t', format_prog(prog))
-                                elif subsumed_by_two:
-                                    print('\t', 'SUBSUMED BY TWO:', '\t', format_prog(prog))
-                                elif covers_too_few:
-                                    print('\t', 'COVERS TOO FEW:', '\t', format_prog(prog))
-                            for subsumed_prog, message in subsumed_progs:
-                                if settings.showcons:
-                                    print('\t', message, '\t', format_prog(prog))
 
-                                subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog)
-                                new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
+                    # If a program is subsumed or dioesn't cover enough examples, we search for the most general subprogram that also is also subsumed or doesn't cover enough examples
+                    # only applies to non-recursive and non-PI programs
+                    subsumed_progs = []
+                    with settings.stats.duration('find most general subsumed/covers_too_few'):
+                        subsumed_progs = self.subsumed_or_covers_too_few(prog, seen=set())
+                    pruned_more_general = len(subsumed_progs) > 0
+
+                    if settings.showcons and not pruned_more_general:
+                        if subsumed:
+                            print('\t', 'SUBSUMED:', '\t', format_prog(prog))
+                        elif subsumed_by_two:
+                            print('\t', 'SUBSUMED BY TWO:', '\t', format_prog(prog))
+                        elif covers_too_few:
+                            print('\t', 'COVERS TOO FEW:', '\t', format_prog(prog))
+                    for subsumed_prog, message in subsumed_progs:
+                        if settings.showcons:
+                            print('\t', message, '\t', format_prog(prog))
+
+                        subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog)
+                        new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
                     if inconsistent:
                         # if inconsistent, prune generalisations
@@ -473,11 +475,94 @@ class Popper():
                         could_prune_later[prog] = pos_covered, prog_size
 
                 add_to_combiner = False
-                if settings.noisy:
-                    if not skipped and not skip_early_neg and not is_recursive and not has_invention and tp >= prog_size+fp and tp >= prog_size and fp+prog_size < settings.best_mdl:
-                        success_sets_noise[(pos_covered, neg_covered)] = prog
+                if settings.noisy and not skipped and not skip_early_neg and not is_recursive and not has_invention and tp > prog_size+fp and fp+prog_size < settings.best_mdl and not noisy_subsumed:
+
+                    local_delete = set()
+                    ignore_this_prog = (pos_covered, neg_covered) in success_sets_noise
+
+                    if not ignore_this_prog:
+                        # pos_covered is a subset of every prog in s_pos
+                        s_pos = set.intersection(*(covered_by[ex] for ex in pos_covered))
+                        # if pos_covered(new) ⊆ pos_covered(old)
+                        for prog1 in s_pos:
+                            n1 = coverage_neg[prog1]
+                            # if neg_covered(old) ⊆ new_covered(new) then ignore new
+                            if n1.issubset(neg_covered):
+                                ignore_this_prog = True
+                                break
+
+                            # # # if new_covered(new) ⊆ neg_covered(old) then check whether the extra TN are worth it according to the MDL score
+                            # if neg_covered.issubset(n1):
+                            #     size1, tp1, fp1 = scores[prog1]
+                            #     p1 = coverage_pos[prog1]
+                            #     prog1, prog_size_, fn_, fp_, tp_ = success_sets_noise[(p1, n1)]
+
+                            #     # if (tp-fp-prog_size) <= (tp1-fp1-size1):
+                            #     print(f'new tp:{tp} fp:{fp} size:{prog_size} score:{(tp-fp-prog_size)} prog:{format_prog(prog)}')
+                            #     print(f'old tp:{tp1} fp:{fp1} size:{size1} score:{(tp1-fp1-size1)} prog:{format_prog(prog1)}')
+                            #     print('')
+                                    # ignore_this_prog = True
+                                    # pass
+                                    # break
+
+                    if not ignore_this_prog and neg_covered:
+                        # neg_covered is a subset of all programs in s_neg
+                        s_neg = set.intersection(*(covered_by[ex] for ex in neg_covered))
+                        # if neg_covered(new) ⊆ neg_covered(old)
+                        for prog1 in s_neg:
+                            # if pos_covered(old) ⊆ pos_covered(new)
+                            if coverage_pos[prog1].issubset(pos_covered):
+                                size1, tp1, fp1 = scores[prog1]
+                                if size1 == prog_size:
+                                    # ignore OLD
+                                    local_delete.add(prog1)
+                                    combiner.delete_it(prog1)
+                                    continue
+
+                                if fp == fp1 and (tp-prog_size) < (tp1-size1):
+                                    # NEW tp:50 fp:1 size:6 memberofdomainregion(V0,V1):- synsetdomaintopicof(V2,V3),synsetdomaintopicof(V1,V3),hypernym(V2,V4),membermeronym(V0,V5),synsetdomaintopicof(V2,V4).
+                                    # OLD tp:49 fp:1 size:4 memberofdomainregion(V0,V1):- synsetdomaintopicof(V1,V3),instancehypernym(V2,V3),membermeronym(V0,V4).
+                                    ignore_this_prog = True
+                                    break
+
+                                if tp == tp1 and (fp+prog_size) >= (fp1+size1):
+                                    # NEW tp:10 fp:1 mdl:350 less_toxic(V0,V1):- ring_subst_3(V1,V4),ring_substitutions(V1,V3),alk_groups(V0,V3),x_subst(V0,V2,V5).
+                                    # OLD tp:10 fp:2 mdl:350 less_toxic(V0,V1):- ring_substitutions(V0,V4),x_subst(V0,V3,V2),ring_subst_3(V1,V5).
+                                    ignore_this_prog = True
+                                    break
+
+                                if (tp-fp-prog_size) <= (tp1-fp1-size1):
+                                    # NEW tp:12 fp:3 size:7 less_toxic(V0,V1):- gt(V2,V5),gt(V2,V3),ring_subst_2(V1,V4),ring_substitutions(V0,V3),alk_groups(V0,V2),ring_substitutions(V1,V5).
+                                    # OLD tp:11 fp:4 size:3 less_toxic(V0,V1):- ring_subst_2(V1,V3),r_subst_3(V0,V2).
+                                    ignore_this_prog = True
+                                    break
+
+                    # delete old progs
+                    for k in local_delete:
+                        k_pos, k_neg = coverage_pos[k], coverage_neg[k]
+                        del success_sets_noise[(k_pos, k_neg)]
+                        for ex in k_pos | k_neg:
+                            covered_by[ex].remove(k)
+                        del coverage_pos[k]
+                        del coverage_neg[k]
+                        del scores[k]
+
+                    if not ignore_this_prog:
+                        success_sets_noise[(pos_covered, neg_covered)] = prog, prog_size, fn, fp, tp
                         add_to_combiner = True
-                else:
+                        k = hash(prog)
+                        for ex in pos_covered|neg_covered:
+                            covered_by[ex].add(k)
+                        coverage_pos[k] = pos_covered
+                        coverage_neg[k] = neg_covered
+                        scores[k] = prog_size, tp, fp
+
+                        if fp == 0:
+                            success_sets[pos_covered] = prog_size
+                            for p, s in success_sets.items():
+                                paired_success_sets[s+prog_size].add(p|pos_covered)
+
+                elif not settings.noisy:
                     # if consistent, covers at least one example, is not subsumed, and has no redundancy, try to find a solution
                     if not inconsistent and not subsumed and not add_gen and tp > 0 and not pruned_more_general:
                         add_to_combiner = True
@@ -541,12 +626,11 @@ class Popper():
                                 generator.prune_size(i)
 
                             if not settings.noisy:
-                                if NEW_IDEAS:
-                                    with settings.stats.duration('prune backtrack covers too few'):
-                                        subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
-                                        for subsumed_prog_ in subsumed_progs:
-                                            subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
-                                            new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
+                                with settings.stats.duration('prune backtrack covers too few'):
+                                    subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
+                                    for subsumed_prog_ in subsumed_progs:
+                                        subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
+                                        new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
                         call_combine = len(uncovered) == 0
 
@@ -589,13 +673,12 @@ class Popper():
                             settings.max_literals = hypothesis_size-1
 
                             if not settings.noisy:
-                                if NEW_IDEAS:
-                                    with settings.stats.duration('prune backtrack covers too few'):
-                                        subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
-                                        # print('prune_subsumed_backtrack_specialcase2', len(subsumed_progs))
-                                        for subsumed_prog_ in subsumed_progs:
-                                            subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
-                                            new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
+                                with settings.stats.duration('prune backtrack covers too few'):
+                                    subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
+                                    # print('prune_subsumed_backtrack_specialcase2', len(subsumed_progs))
+                                    for subsumed_prog_ in subsumed_progs:
+                                        subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
+                                        new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
                             # if size >= settings.max_literals and not settings.order_space:
                             if size >= settings.max_literals:

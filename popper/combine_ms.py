@@ -4,13 +4,15 @@ import clingo
 import time
 import pickle
 import itertools
-from . util import format_rule, calc_prog_size, reduce_prog, prog_is_recursive, prog_has_invention, \
-    calc_rule_size, rule_is_recursive, format_prog
+from . util import format_rule, calc_prog_size, reduce_prog, prog_is_recursive, prog_has_invention, calc_rule_size, rule_is_recursive, format_prog
 import collections
 
 import sys
 from . import maxsat
 from pysat.formula import IDPool
+
+NEW_IDEAS = False
+NEW_IDEAS = True
 
 def get_rule_hash(rule):
     head, body = rule
@@ -51,11 +53,16 @@ class Combiner:
 
         self.programs_seen = 0
 
+        self.to_delete = set()
+
+    def delete_it(self, prog):
+        self.to_delete.add(prog)
 
     def build_encoding(self):
+
         # with self.settings.stats.duration('combine.add'):
         encoding = []
-        
+
         # if we deleted some programs, we must rebuild the encoding
         if self.settings.noisy and self.deleted != 0:
             self.rulehash_to_id = {}
@@ -78,14 +85,57 @@ class Combiner:
 
             all_programs = self.added
 
+
+        bads = set()
+
+        if NEW_IDEAS and self.settings.noisy:
+            with self.settings.stats.duration('space idea'):
+                # Space remaining idea
+                # Assume a best MDL score O, a new program P, where mdl_score(P) > O
+                # Then for P to be in a solution with MDL score < O there must be another program Q s.t. fp(P | Q) + size(P) + size(Q) < O
+                xs = self.saved_progs + self.added
+                for i in range(len(xs)):
+                    bad = True
+                    prog, pos_covered, neg_covered = xs[i]
+                    size1 = calc_prog_size(prog)
+                    space_remaining = self.settings.best_mdl - calc_prog_size(prog) - 1
+                    for j in range(i, len(xs)):
+                        if i==j:
+                            continue
+                        prog2, pos_covered2, neg_covered2 = xs[j]
+                        if prog2 in bads:
+                            continue
+                        size2 = calc_prog_size(prog2)
+                        fp = len(neg_covered|neg_covered2)
+                        if fp + size2 + size1 < self.settings.best_mdl:
+                            if len(pos_covered|pos_covered2) > len(pos_covered):
+                                bad = False
+                                break
+                    if bad:
+                        bads.add(prog)
+
+        if NEW_IDEAS:
+            all_programs = [(prog, pos_covered, neg_covered) for (prog, pos_covered, neg_covered) in all_programs if prog not in bads]
+
+        all_programs = all_programs[:100]
+
         for [prog, pos_covered, neg_covered] in all_programs:
+
+
+            # UNCOMMENT TO SHOW PROGRAMS ADDED TO THE SOLVER
+            # tp = len(pos_covered)
+            # fp = len(neg_covered)
+            # size = calc_prog_size(prog)
+            # fn = self.tester.num_pos - tp
+            # print(f'size: {size} fp:{fp} tp:{tp} mdl:{size + fp + fn} {format_prog(prog)}')
+            # print(sorted(pos_covered))
 
             for ex in pos_covered:
                 self.programs_covering_example[ex].append(self.programs_seen)
 
-            if self.settings.nonoise:
-                assert(len(self.prog_neg_covered[prog]) == 0)
-            else:
+            # if self.settings.nonoise:
+                # assert(len(self.prog_neg_covered[prog]) == 0)
+            if self.settings.noisy:
                 for ex in neg_covered:
                     self.programs_covering_example[ex].append(self.programs_seen)
 
@@ -170,10 +220,24 @@ class Combiner:
             # this variable checks whether any previously seen program has been deleted, in which case we rebuild the encoding
             self.deleted = 0
 
+            min_size = None
+            if len(self.saved_progs+self.added) > 0:
+                min_size = min(calc_prog_size(prog) for (prog, pos_covered, neg_covered) in self.saved_progs+self.added)
+
         # we can only delete programs from the combine stage with the mdl cost function
         if self.settings.noisy:                
             for [prog, pos_covered, neg_covered] in self.saved_progs+self.added:
-                if self.settings.noisy and len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl:
+                if len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl:
+                    # AC: PUSH THIS CHECK TO THE MAIN LOOP SO WE CAN REMOVE ITEMS FROM SUCCESS_SETS_NOISE
+                    self.deleted += 1
+                    continue
+
+                if prog in self.to_delete:
+                    self.deleted += 1
+                    continue
+
+                if len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl-min_size:
+                    # AC: PUSH THIS CHECK TO THE MAIN LOOP SO WE CAN REMOVE ITEMS FROM SUCCESS_SETS_NOISE
                     self.deleted += 1
                     continue
 
@@ -183,6 +247,16 @@ class Combiner:
 
             for [prog, pos_covered, neg_covered] in new_progs:
                 if self.settings.noisy and len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl:
+                    # AC: PUSH THIS CHECK TO THE MAIN LOOP SO WE CAN REMOVE ITEMS FROM SUCCESS_SETS_NOISE
+                    continue
+
+                if prog in self.to_delete:
+                    self.deleted += 1
+                    continue
+
+                if min_size and len(neg_covered)+calc_prog_size(prog) >= self.settings.best_mdl-min_size:
+                    # AC: PUSH THIS CHECK TO THE MAIN LOOP SO WE CAN REMOVE ITEMS FROM SUCCESS_SETS_NOISE
+                    self.deleted += 1
                     continue
 
                 self.prog_pos_covered[prog] = pos_covered
@@ -362,7 +436,6 @@ class Combiner:
             timeout = self.settings.maxsat_timeout
 
         self.update_prog_index(new_progs)
-
         new_solution, cost = self.select_solution(timeout)
 
         if len(new_solution) == 0:
