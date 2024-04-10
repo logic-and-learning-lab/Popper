@@ -5,6 +5,7 @@ from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
 from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal
+from bitarray import bitarray, frozenbitarray
 
 def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
@@ -47,6 +48,9 @@ class Tester():
 
         self.num_pos = len(self.pos_index)
         self.num_neg = len(self.neg_index)
+
+        self.pos_examples_ = bitarray(self.num_pos)
+        self.pos_examples_.setall(1)
 
         self.cached_pos_covered = {}
         self.cached_inconsistent = {}
@@ -110,10 +114,16 @@ class Tester():
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
-            return frozenset(query_once(q)['S'])
+            pos_covered = frozenset(query_once(q)['S'])
 
-        with self.using(prog):
-            return frozenset(query_once('pos_covered(S)')['S'])
+        else:
+            with self.using(prog):
+                pos_covered = frozenset(query_once('pos_covered(S)')['S'])
+
+        pos_covered_bits = bitarray(self.num_pos)
+        for x in pos_covered:
+            pos_covered_bits[x-1] = 1
+        return pos_covered, frozenbitarray(pos_covered_bits)
 
     def test_prog_inconsistent(self, prog):
         if len(self.neg_index) == 0:
@@ -149,8 +159,13 @@ class Tester():
         else:
             with self.using(prog):
                 pos_covered = frozenset(query_once('pos_covered(S)')['S'])
-        self.cached_pos_covered[k] = pos_covered
-        return pos_covered
+
+        pos_covered_bits = bitarray(self.num_pos)
+        for x in pos_covered:
+            pos_covered_bits[x-1] = 1
+
+        self.cached_pos_covered[k] = pos_covered, frozenbitarray(pos_covered_bits)
+        return pos_covered, frozenbitarray(pos_covered_bits)
 
     @contextmanager
     def using(self, prog):
