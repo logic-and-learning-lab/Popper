@@ -5,8 +5,20 @@ from itertools import chain, combinations, permutations, combinations_with_repla
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog
 from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons
+from . combine import Combiner
+
+# from pympler import asizeof, summary, muppy
+# suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+# def humansize(nbytes):
+#     i = 0
+#     while nbytes >= 1024 and i < len(suffixes)-1:
+#         nbytes /= 1024.
+#         i += 1
+#     f = ('%.2f' % nbytes).rstrip('0').rstrip('.')
+#     return '%s %s' % (f, suffixes[i])
 
 def explain_none_functional(settings, tester, prog):
+
     new_cons = []
 
     if len(prog) == 1:
@@ -45,36 +57,31 @@ def load_solver(settings, tester):
     if settings.debug:
         settings.logger.debug(f'Load exact solver: {settings.solver}')
 
-    if settings.solver == "clingo":
-        if settings.noisy:
-            from . combine_mdl import Combiner
-        else:
-            from . combine import Combiner
-    elif settings.solver in ['rc2', 'uwr', 'wmaxcdcl']:
-        from . combine_ms import Combiner
-        settings.maxsat_timeout = None
-        settings.stats.maxsat_calls = 0
-        if settings.solver == 'rc2':
-            settings.exact_maxsat_solver = 'rc2'
-            settings.old_format = False
-        elif settings.solver == 'uwr':
-            settings.exact_maxsat_solver='uwrmaxsat'
-            settings.exact_maxsat_solver_params="-v0 -no-sat -no-bin -m -bm"
-            settings.old_format = False
-        else:
-            settings.exact_maxsat_solver='wmaxcdcl'
-            settings.exact_maxsat_solver_params=""
-            settings.old_format = True
-
-        if settings.noisy:
-            settings.lex = False
-        else:
-            settings.lex = True
-            settings.best_mdl = False
-            settings.lex_via_weights = False
-    else:
+    if settings.solver not in ['rc2', 'uwr', 'wmaxcdcl']:
         print('INVALID SOLVER')
         exit()
+
+    settings.maxsat_timeout = None
+    settings.stats.maxsat_calls = 0
+
+    if settings.solver == 'rc2':
+        settings.exact_maxsat_solver = 'rc2'
+        settings.old_format = False
+    elif settings.solver == 'uwr':
+        settings.exact_maxsat_solver='uwrmaxsat'
+        settings.exact_maxsat_solver_params="-v0 -no-sat -no-bin -m -bm"
+        settings.old_format = False
+    else:
+        settings.exact_maxsat_solver='wmaxcdcl'
+        settings.exact_maxsat_solver_params=""
+        settings.old_format = True
+
+    if settings.noisy:
+        settings.lex = False
+    else:
+        settings.lex = True
+        settings.best_mdl = False
+        settings.lex_via_weights = False
 
     if settings.debug:
         settings.logger.debug(f'Load anytime solver:{settings.anytime_solver}')
@@ -152,7 +159,14 @@ class Popper():
         covered_by = defaultdict(set)
         coverage_pos = {}
         coverage_neg = {}
-        scores = {}
+        cached_prog_size = self.cached_prog_size = {}
+        prog_lookup = {}
+
+        combiner.coverage_pos = coverage_pos
+        combiner.coverage_neg = coverage_neg
+        combiner.prog_size = cached_prog_size
+
+        scores = self.scores = {}
 
         # self.covered_by = defaultdict(set)
 
@@ -164,7 +178,7 @@ class Popper():
         could_prune_later = self.could_prune_later = {}
         could_prune_later_rec = self.could_prune_later_rec = {}
 
-        to_combine = []
+        to_combine = set()
 
         self.min_size = None
 
@@ -186,7 +200,6 @@ class Popper():
                 neg_covered = None
                 inconsistent = None
 
-
                 # new cons to add to the solver
                 new_cons = []
 
@@ -202,10 +215,13 @@ class Popper():
 
                 settings.stats.total_programs += 1
 
+                # if settings.stats.total_programs % 1000 == 0:
+                #     print('')
+                #     print('saved_progs', humansize(asizeof.asizeof(combiner.saved_progs)))
+
                 if settings.debug:
                     settings.logger.debug(f'Program {settings.stats.total_programs}:')
                     settings.logger.debug(format_prog(prog))
-
 
                 if last_size is None or prog_size != last_size:
                     size_change = True
@@ -280,8 +296,6 @@ class Popper():
                         if mdl < settings.best_mdl:
                             if skip_early_neg:
                                 assert False
-                            # if settings.delete_combine:
-                                # combiner.update_deleted_progs(settings.best_mdl-min_score, mdl-min_score)
                             # HORRIBLE
                             combiner.best_cost = mdl
                             settings.best_prog_score = score
@@ -364,6 +378,7 @@ class Popper():
                         subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog)
                         new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
+                if not settings.noisy and not pruned_more_general:
                     if inconsistent:
                         # if inconsistent, prune generalisations
                         add_gen = True
@@ -423,26 +438,6 @@ class Popper():
                         if gen_size_ < settings.max_literals:
                             gen_size = gen_size_
 
-                    # if not add_spec and False:
-                    #     with settings.stats.duration('spec_subset'):
-                    #         # print(type(prog))
-                    #         for i in range(len(prog)):
-                    #             (head, body) = list(prog)[i]
-                    #             for subbody in chain.from_iterable(combinations(body, k) for k in range(1, len(body))):
-                    #                 subprog = list(prog)[:i] + [(head, subbody)] + list(prog)[i + 1:]
-                    #                 subprog = frozenset(subprog)
-                    #                 # print('\t'*3,format_prog(subprog))
-                    #                 if subprog in saved_scores:
-                    #                     # print('\t'*3,format_prog(subprog))
-                    #                     # assert(False)
-                    #                     [old_fp, old_fn, old_size] = saved_scores[subprog]
-                    #                     if rule_vars((head, subbody)) == rule_vars(list(prog)[i]) and old_fp + old_fn + old_size <= fn + fp + size:
-                    #                         settings.stats.pruned_count += 1
-                    #                         print('MOOOO')
-                    #                         assert(False)
-                    #                         add_spec = True
-                    #                         break
-
                 # remove generalisations of programs with redundant literals
                 if is_recursive:
                     for rule in prog:
@@ -491,20 +486,6 @@ class Popper():
                                 ignore_this_prog = True
                                 break
 
-                            # # # if new_covered(new) ⊆ neg_covered(old) then check whether the extra TN are worth it according to the MDL score
-                            # if neg_covered.issubset(n1):
-                            #     size1, tp1, fp1 = scores[prog1]
-                            #     p1 = coverage_pos[prog1]
-                            #     prog1, prog_size_, fn_, fp_, tp_ = success_sets_noise[(p1, n1)]
-
-                            #     # if (tp-fp-prog_size) <= (tp1-fp1-size1):
-                            #     print(f'new tp:{tp} fp:{fp} size:{prog_size} score:{(tp-fp-prog_size)} prog:{format_prog(prog)}')
-                            #     print(f'old tp:{tp1} fp:{fp1} size:{size1} score:{(tp1-fp1-size1)} prog:{format_prog(prog1)}')
-                            #     print('')
-                                    # ignore_this_prog = True
-                                    # pass
-                                    # break
-
                     if not ignore_this_prog and neg_covered:
                         # neg_covered is a subset of all programs in s_neg
                         s_neg = set.intersection(*(covered_by[ex] for ex in neg_covered))
@@ -516,7 +497,6 @@ class Popper():
                                 if size1 == prog_size:
                                     # ignore OLD
                                     local_delete.add(prog1)
-                                    combiner.delete_it(prog1)
                                     continue
 
                                 if fp == fp1 and (tp-prog_size) < (tp1-size1):
@@ -537,8 +517,14 @@ class Popper():
                                     ignore_this_prog = True
                                     break
 
-                    # delete old progs
                     for k in local_delete:
+                        del_prog = prog_lookup[k]
+                        assert(del_prog in combiner.saved_progs|to_combine)
+                        if del_prog in combiner.saved_progs:
+                            combiner.saved_progs.remove(del_prog)
+                        elif del_prog in to_combine:
+                            to_combine.remove(del_prog)
+
                         k_pos, k_neg = coverage_pos[k], coverage_neg[k]
                         del success_sets_noise[(k_pos, k_neg)]
                         for ex in k_pos | k_neg:
@@ -546,6 +532,8 @@ class Popper():
                         del coverage_pos[k]
                         del coverage_neg[k]
                         del scores[k]
+                        del cached_prog_size[k]
+                        del prog_lookup[k]
 
                     if not ignore_this_prog:
                         success_sets_noise[(pos_covered, neg_covered)] = prog, prog_size, fn, fp, tp
@@ -553,9 +541,12 @@ class Popper():
                         k = hash(prog)
                         for ex in pos_covered|neg_covered:
                             covered_by[ex].add(k)
+                        # print('A', format_prog(prog), hash(prog))
                         coverage_pos[k] = pos_covered
                         coverage_neg[k] = neg_covered
+                        cached_prog_size[k] = prog_size
                         scores[k] = prog_size, tp, fp
+                        prog_lookup[k] = prog
 
                         if fp == 0:
                             success_sets[pos_covered] = prog_size
@@ -567,8 +558,6 @@ class Popper():
                     if not inconsistent and not subsumed and not add_gen and tp > 0 and not pruned_more_general:
                         add_to_combiner = True
 
-                        # with settings.stats.duration('backtrack remove subsumed'):
-
                         if not settings.recursion_enabled:
                             to_delete = []
                             for a,b in success_sets.items():
@@ -578,17 +567,19 @@ class Popper():
                                 # TODO: DELETE FROM COMBINER!!!!!!
                                 del success_sets[x]
 
+                        k = hash(prog)
                         success_sets[pos_covered] = prog_size
+                        coverage_pos[k] = pos_covered
+                        coverage_neg[k] = neg_covered
 
                         for p, s in success_sets.items():
                             paired_success_sets[s+prog_size].add(p|pos_covered)
 
-                        # print('good rule', prog_size)
                         if self.min_size is None:
                             self.min_size = prog_size
 
                 if add_to_combiner:
-                    to_combine.append((prog, pos_covered, neg_covered))
+                    to_combine.add(prog)
 
                     if not settings.noisy and not has_invention:
                         with settings.stats.duration('prune backtrack subsumed'):
@@ -635,12 +626,14 @@ class Popper():
                         call_combine = len(uncovered) == 0
 
                 if call_combine:
+                    if settings.noisy:
+                        self.filter_combine_programs(combiner, to_combine)
 
                     # COMBINE
                     with settings.stats.duration('combine'):
                         is_new_solution_found = combiner.update_best_prog(to_combine)
 
-                    to_combine=[]
+                    to_combine=set()
 
                     new_hypothesis_found = is_new_solution_found != None
 
@@ -747,7 +740,7 @@ class Popper():
                 # COMBINE
                 with settings.stats.duration('combine'):
                     is_new_solution_found = combiner.update_best_prog(to_combine)
-                to_combine=[]
+                to_combine=set()
 
                 new_hypothesis_found = is_new_solution_found != None
 
@@ -797,6 +790,27 @@ class Popper():
     #             if missing.issubset(p2):
     #                 return True
     #     return False
+
+    def filter_combine_programs(self, combiner, to_combine):
+
+        xs = combiner.saved_progs | to_combine
+        min_size = min(self.cached_prog_size[hash(prog)] for prog in xs)
+        must_beat = self.settings.best_mdl-min_size
+
+        to_delete = set()
+        # FILTER COMBINE PROGRAMS
+        for prog in xs:
+            k = hash(prog)
+            size, tp, fp = self.scores[k]
+            if fp + size >= must_beat:
+                to_delete.add(prog)
+
+        for prog in to_delete:
+            # AC: DELETE FROM SUCCESS_SETS_NOISE
+            if prog in combiner.saved_progs:
+                combiner.saved_progs.remove(prog)
+            else:
+                to_combine.remove(prog)
 
     def subsumed_by_two_new(self, pos_covered, prog_size):
         paired_success_sets = self.paired_success_sets
