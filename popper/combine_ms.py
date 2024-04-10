@@ -117,7 +117,7 @@ class Combiner:
         if NEW_IDEAS:
             all_programs = [(prog, pos_covered, neg_covered) for (prog, pos_covered, neg_covered) in all_programs if prog not in bads]
 
-        all_programs = all_programs[:100]
+        # all_programs = all_programs[:100]
 
         for [prog, pos_covered, neg_covered] in all_programs:
 
