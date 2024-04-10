@@ -30,29 +30,28 @@ class Combiner:
         base_rules = []
         recursive_rules = []
 
-        programs_covering_example = defaultdict(list)
+        programs_covering_pos_example = defaultdict(list)
+        programs_covering_neg_example = defaultdict(list)
         program_var = {}
         program_clauses = {}
         vpool = IDPool()
-        example_covered_var = {}
 
-        for i in self.settings.pos_index:
-            example_covered_var[i] = vpool.id("example_covered({0})".format(i))
+        pos_example_covered_var = {}
+        neg_example_covered_var = {}
+
+        pos_index = list(range(self.tester.num_pos))
+        neg_index = list(range(self.tester.num_neg))
+
+        for i in pos_index:
+            pos_example_covered_var[i] = vpool.id("pos_example_covered({0})".format(i))
 
         if not self.settings.nonoise:
-            for i in self.settings.neg_index:
-                example_covered_var[i] = vpool.id("example_covered({0})".format(i))
-
-        # print('moo', t2-t1)
-        # print('starting to build')
-        # t1 = time.time()
+            for i in neg_index:
+                neg_example_covered_var[i] = vpool.id("neg_example_covered({0})".format(i))
 
         rule_var = {}
 
         for program_count, prog in enumerate(self.saved_progs):
-
-            # print('B', format_prog(prog), hash(prog))
-
             # UNCOMMENT TO SHOW PROGRAMS ADDED TO THE SOLVER
             # tp = len(pos_covered)
             # fp = len(neg_covered)
@@ -61,21 +60,20 @@ class Combiner:
             # print(f'size: {size} fp:{fp} tp:{tp} mdl:{size + fp + fn} {format_prog(prog)}')
             # print(sorted(pos_covered))
 
-
             prog_hash = hash(prog)
-
-            # if prog_hash in self.to_delete:
-                # continue
 
             pos_covered = self.coverage_pos[prog_hash]
             neg_covered = self.coverage_neg[prog_hash]
 
-            for ex in pos_covered:
-                programs_covering_example[ex].append(program_count)
+            for ex, x in enumerate(pos_covered):
+                if x == 1:
+                    # AC: REALLY REALLY HACKY
+                    # WE NEED TO +1 BECAUSE OF POS_INDEX BELOW
+                    programs_covering_pos_example[ex].append(program_count)
 
-            if self.settings.noisy:
-                for ex in neg_covered:
-                    programs_covering_example[ex].append(program_count)
+            # if self.settings.noisy:
+            #     for ex in neg_covered:
+            #         programs_covering_example[ex].append(program_count)
 
             rule_vars = []
             ids = []
@@ -89,6 +87,7 @@ class Combiner:
                     ids.append(k)
                 else:
                     ids.append(rulehash_to_id[rule_hash])
+
             for rule in prog:
                 rule_hash = hash(rule)
                 rule_id = rulehash_to_id[rule_hash]
@@ -122,12 +121,14 @@ class Combiner:
         if self.settings.lex and self.settings.recursion_enabled:
             encoding.append([rule_var[rule_id] for rule_id in base_rules])
 
-        for ex in self.settings.pos_index:
-            encoding.append([-example_covered_var[ex]] + [program_var[p] for p in programs_covering_example[ex]])
+        for ex in pos_index:
+            # print('pos_ex', ex)
+            encoding.append([-pos_example_covered_var[ex]] + [program_var[p] for p in programs_covering_pos_example[ex]])
+
         if not self.settings.nonoise:
-            for ex in self.settings.neg_index:
-                for p in programs_covering_example[ex]:
-                    encoding.append([example_covered_var[ex], -program_var[p]])
+            for ex in neg_index:
+                for p in programs_covering_neg_example[ex]:
+                    encoding.append([neg_example_covered_var[ex], -program_var[p]])
 
         soft_clauses = []
         weights = []
@@ -145,37 +146,37 @@ class Combiner:
                     weights.append(ruleid_to_size[rule_id])
             if self.settings.best_prog_score:
                 if fn_ == 0:
-                    for i in self.settings.pos_index:
-                        encoding.append([example_covered_var[i]])
+                    for i in pos_index:
+                        encoding.append([pos_example_covered_var[i]])
                     if fp_ == 0:
                         if not self.settings.nonoise:
-                            for i in self.settings.neg_index:
-                                encoding.append([-example_covered_var[i]])
+                            for i in neg_index:
+                                encoding.append([-neg_example_covered_var[i]])
                         soft_lit_groups = [[lit for lit in rule_soft_lits]]
                     else:
-                        soft_lit_groups = [[-example_covered_var[i] for i in self.settings.neg_index]]
+                        soft_lit_groups = [[-neg_example_covered_var[i] for i in neg_index]]
                         soft_lit_groups.append([lit for lit in rule_soft_lits])
                 else:
-                    soft_lit_groups = [[example_covered_var[i] for i in self.settings.pos_index]]
+                    soft_lit_groups = [[pos_example_covered_var[i] for i in pos_index]]
                     if not self.settings.nonoise:
-                        soft_lit_groups.append([-example_covered_var[i] for i in self.settings.neg_index])
+                        soft_lit_groups.append([-neg_example_covered_var[i] for i in neg_index])
                     soft_lit_groups.append([lit for lit in rule_soft_lits])
             else:
-                soft_lit_groups = [[example_covered_var[i] for i in self.settings.pos_index]]
+                soft_lit_groups = [[pos_example_covered_var[i] for i in pos_index]]
                 if not self.settings.nonoise:
-                    soft_lit_groups.append([-example_covered_var[i] for i in self.settings.neg_index])
+                    soft_lit_groups.append([-neg_example_covered_var[i] for i in neg_index])
                 soft_lit_groups.append([lit for lit in rule_soft_lits])
         else:
             for rule_id in rule_var:
                 if rule_var[rule_id] is not None:
                     soft_clauses.append([-rule_var[rule_id]])
                     weights.append(ruleid_to_size[rule_id])
-            for i in self.settings.pos_index:
-                soft_clauses.append([example_covered_var[i]])
+            for i in pos_index:
+                soft_clauses.append([pos_example_covered_var[i]])
                 weights.append(POS_EXAMPLE_WEIGHT)
             if not self.settings.nonoise:
-                for i in self.settings.neg_index:
-                    soft_clauses.append([-example_covered_var[i]])
+                for i in neg_index:
+                    soft_clauses.append([-neg_example_covered_var[i]])
                     weights.append(NEG_EXAMPLE_WEIGHT)
 
         # PRUNE INCONSISTENT
@@ -234,10 +235,10 @@ class Combiner:
                 print("WARNING: No solution found, exit combiner.")
                 break
 
-            fn = sum(1 for i in self.settings.pos_index if model[example_covered_var[i]-1] < 0)
+            fn = sum(1 for i in pos_index if model[pos_example_covered_var[i]-1] < 0)
             fp = 0
             if not self.settings.nonoise:
-                fp = sum(1 for i in self.settings.neg_index if model[example_covered_var[i]-1] > 0)
+                fp = sum(1 for i in neg_index if model[neg_example_covered_var[i]-1] > 0)
             size = sum([ruleid_to_size[rule_id] for rule_id in ruleid_to_size if model[rule_var[rule_id]-1] > 0])
 
             if self.settings.lex:

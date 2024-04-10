@@ -12,13 +12,13 @@ get_pos(S):-
 load_pos:-
     current_predicate(pos/1),!,
     findall(X, pos(X), Pos),
-    assert_pos_aux(Pos,1).
+    assert_pos_aux(Pos,0).
 load_pos.
 
 load_neg:-
     current_predicate(neg/1),!,
     findall(X, neg(X), Neg),
-    assert_neg_aux(Neg,-1).
+    assert_neg_aux(Neg,0).
 load_neg.
 
 assert_pos_aux([],_).
