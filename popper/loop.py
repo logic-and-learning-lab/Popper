@@ -5,7 +5,7 @@ from itertools import chain, combinations, permutations, combinations_with_repla
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog
 from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons
-from . combine_ms import Combiner
+from . combine import Combiner
 
 from pympler import asizeof, summary, muppy
 suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
@@ -57,36 +57,31 @@ def load_solver(settings, tester):
     if settings.debug:
         settings.logger.debug(f'Load exact solver: {settings.solver}')
 
-    # if settings.solver == "clingo":
-    #     if settings.noisy:
-    #         from . combine_mdl import Combiner
-    #     else:
-    #         from . combine import Combiner
-    if settings.solver in ['rc2', 'uwr', 'wmaxcdcl']:
-
-        settings.maxsat_timeout = None
-        settings.stats.maxsat_calls = 0
-        if settings.solver == 'rc2':
-            settings.exact_maxsat_solver = 'rc2'
-            settings.old_format = False
-        elif settings.solver == 'uwr':
-            settings.exact_maxsat_solver='uwrmaxsat'
-            settings.exact_maxsat_solver_params="-v0 -no-sat -no-bin -m -bm"
-            settings.old_format = False
-        else:
-            settings.exact_maxsat_solver='wmaxcdcl'
-            settings.exact_maxsat_solver_params=""
-            settings.old_format = True
-
-        if settings.noisy:
-            settings.lex = False
-        else:
-            settings.lex = True
-            settings.best_mdl = False
-            settings.lex_via_weights = False
-    else:
+    if settings.solver not in ['rc2', 'uwr', 'wmaxcdcl']:
         print('INVALID SOLVER')
         exit()
+
+    settings.maxsat_timeout = None
+    settings.stats.maxsat_calls = 0
+
+    if settings.solver == 'rc2':
+        settings.exact_maxsat_solver = 'rc2'
+        settings.old_format = False
+    elif settings.solver == 'uwr':
+        settings.exact_maxsat_solver='uwrmaxsat'
+        settings.exact_maxsat_solver_params="-v0 -no-sat -no-bin -m -bm"
+        settings.old_format = False
+    else:
+        settings.exact_maxsat_solver='wmaxcdcl'
+        settings.exact_maxsat_solver_params=""
+        settings.old_format = True
+
+    if settings.noisy:
+        settings.lex = False
+    else:
+        settings.lex = True
+        settings.best_mdl = False
+        settings.lex_via_weights = False
 
     if settings.debug:
         settings.logger.debug(f'Load anytime solver:{settings.anytime_solver}')
