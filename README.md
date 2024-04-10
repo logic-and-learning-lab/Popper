@@ -148,7 +148,7 @@ To enable PI, add the setting `enable_pi.` to the bias file. However, predicate 
 
 
 #### Solvers
-Popper uses various MaxSAT solvers. By default, Popper uses the [RC2](https://alexeyignatiev.github.io/assets/pdf/imms-jsat19-preprint.pdf) exact solver provided by PySAT. However, we have found that other solvers work *much* better. Popper supports these solvers:
+Popper uses various MaxSAT solvers. By default, Popper uses the [RC2](https://alexeyignatiev.github.io/assets/pdf/imms-jsat19-preprint.pdf) exact solver provided by PySAT. **However, we have found that other solvers work *much* better.** Popper supports these solvers:
 
 - UWrMaxSat (exact)
 - WMaxCDCL (exact)
