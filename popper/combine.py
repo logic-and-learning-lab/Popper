@@ -30,7 +30,6 @@ class Combiner:
         base_rules = []
         recursive_rules = []
 
-
         programs_covering_example = defaultdict(list)
         program_var = {}
         program_clauses = {}
@@ -45,8 +44,8 @@ class Combiner:
                 example_covered_var[i] = vpool.id("example_covered({0})".format(i))
 
         # print('moo', t2-t1)
-        print('starting to build')
-        t1 = time.time()
+        # print('starting to build')
+        # t1 = time.time()
 
         rule_var = {}
 
@@ -86,7 +85,6 @@ class Combiner:
                     k = len(rulehash_to_id) + 1
                     rulehash_to_id[rule_hash] = k
                     ruleid_to_rule[k] = rule
-                    # REFACTOR
                     ruleid_to_size[k] = calc_rule_size(rule)
                     ids.append(k)
                 else:
@@ -197,8 +195,8 @@ class Combiner:
             clause = [-rule_var[k] for k in ids]
             encoding.append(clause)
 
-        t2 = time.time()
-        print('building time', t2-t1)
+        # t2 = time.time()
+        # print('building time', t2-t1)
 
         best_prog = []
         best_fp = False
@@ -214,8 +212,8 @@ class Combiner:
 
 
 
-            print('solving')
-            t1 = time.time()
+            # print('solving')
+            # t1 = time.time()
 
 
             if not self.settings.lex:
@@ -229,8 +227,8 @@ class Combiner:
                 else:
                     cost, model = maxsat.anytime_lex_solve(encoding, soft_lit_groups, weights, self.settings, timeout)
 
-            t2 = time.time()
-            print('solving time', t2-t1)
+            # t2 = time.time()
+            # print('solving time', t2-t1)
 
             if model is None:
                 print("WARNING: No solution found, exit combiner.")

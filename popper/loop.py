@@ -7,15 +7,15 @@ from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons
 from . combine import Combiner
 
-from pympler import asizeof, summary, muppy
-suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
-def humansize(nbytes):
-    i = 0
-    while nbytes >= 1024 and i < len(suffixes)-1:
-        nbytes /= 1024.
-        i += 1
-    f = ('%.2f' % nbytes).rstrip('0').rstrip('.')
-    return '%s %s' % (f, suffixes[i])
+# from pympler import asizeof, summary, muppy
+# suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+# def humansize(nbytes):
+#     i = 0
+#     while nbytes >= 1024 and i < len(suffixes)-1:
+#         nbytes /= 1024.
+#         i += 1
+#     f = ('%.2f' % nbytes).rstrip('0').rstrip('.')
+#     return '%s %s' % (f, suffixes[i])
 
 def explain_none_functional(settings, tester, prog):
 
@@ -215,9 +215,9 @@ class Popper():
 
                 settings.stats.total_programs += 1
 
-                if settings.stats.total_programs % 1000 == 0:
-                    print('')
-                    print('saved_progs', humansize(asizeof.asizeof(combiner.saved_progs)))
+                # if settings.stats.total_programs % 1000 == 0:
+                #     print('')
+                #     print('saved_progs', humansize(asizeof.asizeof(combiner.saved_progs)))
 
                 if settings.debug:
                     settings.logger.debug(f'Program {settings.stats.total_programs}:')
