@@ -44,7 +44,7 @@ class Combiner:
             for i in self.settings.neg_index:
                 example_covered_var[i] = vpool.id("example_covered({0})".format(i))
 
-        print('moo', t2-t1)
+        # print('moo', t2-t1)
         print('starting to build')
         t1 = time.time()
 

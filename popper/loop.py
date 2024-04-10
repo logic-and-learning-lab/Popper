@@ -200,7 +200,6 @@ class Popper():
                 neg_covered = None
                 inconsistent = None
 
-
                 # new cons to add to the solver
                 new_cons = []
 
@@ -223,7 +222,6 @@ class Popper():
                 if settings.debug:
                     settings.logger.debug(f'Program {settings.stats.total_programs}:')
                     settings.logger.debug(format_prog(prog))
-
 
                 if last_size is None or prog_size != last_size:
                     size_change = True
@@ -298,8 +296,6 @@ class Popper():
                         if mdl < settings.best_mdl:
                             if skip_early_neg:
                                 assert False
-                            # if settings.delete_combine:
-                                # combiner.update_deleted_progs(settings.best_mdl-min_score, mdl-min_score)
                             # HORRIBLE
                             combiner.best_cost = mdl
                             settings.best_prog_score = score
@@ -382,7 +378,7 @@ class Popper():
                         subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog)
                         new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
-                if not settings.noisy and not has_invention and not pruned_more_general:
+                if not settings.noisy and not pruned_more_general:
                     if inconsistent:
                         # if inconsistent, prune generalisations
                         add_gen = True
@@ -441,26 +437,6 @@ class Popper():
                             add_gen = True
                         if gen_size_ < settings.max_literals:
                             gen_size = gen_size_
-
-                    # if not add_spec and False:
-                    #     with settings.stats.duration('spec_subset'):
-                    #         # print(type(prog))
-                    #         for i in range(len(prog)):
-                    #             (head, body) = list(prog)[i]
-                    #             for subbody in chain.from_iterable(combinations(body, k) for k in range(1, len(body))):
-                    #                 subprog = list(prog)[:i] + [(head, subbody)] + list(prog)[i + 1:]
-                    #                 subprog = frozenset(subprog)
-                    #                 # print('\t'*3,format_prog(subprog))
-                    #                 if subprog in saved_scores:
-                    #                     # print('\t'*3,format_prog(subprog))
-                    #                     # assert(False)
-                    #                     [old_fp, old_fn, old_size] = saved_scores[subprog]
-                    #                     if rule_vars((head, subbody)) == rule_vars(list(prog)[i]) and old_fp + old_fn + old_size <= fn + fp + size:
-                    #                         settings.stats.pruned_count += 1
-                    #                         print('MOOOO')
-                    #                         assert(False)
-                    #                         add_spec = True
-                    #                         break
 
                 # remove generalisations of programs with redundant literals
                 if is_recursive:
@@ -582,8 +558,6 @@ class Popper():
                     if not inconsistent and not subsumed and not add_gen and tp > 0 and not pruned_more_general:
                         add_to_combiner = True
 
-                        # with settings.stats.duration('backtrack remove subsumed'):
-
                         if not settings.recursion_enabled:
                             to_delete = []
                             for a,b in success_sets.items():
@@ -601,7 +575,6 @@ class Popper():
                         for p, s in success_sets.items():
                             paired_success_sets[s+prog_size].add(p|pos_covered)
 
-                        # print('good rule', prog_size)
                         if self.min_size is None:
                             self.min_size = prog_size
 
@@ -653,8 +626,8 @@ class Popper():
                         call_combine = len(uncovered) == 0
 
                 if call_combine:
-                    self.filter_combine_programs(combiner, to_combine)
-
+                    if settings.noisy:
+                        self.filter_combine_programs(combiner, to_combine)
 
                     # COMBINE
                     with settings.stats.duration('combine'):

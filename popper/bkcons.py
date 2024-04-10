@@ -682,7 +682,7 @@ def deduce_bk_cons(settings, tester):
         bk = f.read()
 
 
-    cons = pkg_resources.resource_string(__name__, "lp/cons.pl").decode()
+    # cons = pkg_resources.resource_string(__name__, "lp/cons.pl").decode()
     bk = bk.replace('\+','not')
 
     new_props1, new_cons1 = build_props(settings, arities, tester)
@@ -694,7 +694,7 @@ def deduce_bk_cons(settings, tester):
     # print('\n'.join(new_cons))
 
     new_props = '\n'.join(new_props)
-    encoding = [cons, prog, bk, TIDY_OUTPUT, new_props]
+    encoding = [prog, bk, TIDY_OUTPUT, new_props]
 
     if settings.head_types == None:
         if head_arity == 1:
