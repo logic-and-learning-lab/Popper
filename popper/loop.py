@@ -110,7 +110,6 @@ class Popper():
     def __init__(self, settings, tester):
         self.settings = settings
         self.tester = tester
-        # self.bkcons = bkcons
         self.pruned2 = set()
         self.seen_prog = set()
         self.unsat = set()
@@ -123,7 +122,6 @@ class Popper():
         num_pos, num_neg = self.num_pos, self.num_neg = tester.num_pos, tester.num_neg
 
         uncovered = ones(self.num_pos)
-        # uncovered.setall(1)
 
         if settings.noisy:
             min_score = None
@@ -230,7 +228,7 @@ class Popper():
                     if settings.noisy:
                         if settings.recursion_enabled or settings.pi_enabled:
                             pos_covered, neg_covered = tester.test_prog_all(prog)
-                            inconsistent = len(neg_covered) > 0
+                            inconsistent = neg_covered.any()
                         else:
                             # AC: we could push all this reasoning to Prolog to only need a single call
                             pos_covered = tester.test_prog_pos(prog)
@@ -243,10 +241,10 @@ class Popper():
                                 test_at_most_k_neg2 = min([settings.best_mdl - prog_size, tp-prog_size])
                                 test_at_most_k_neg = max([test_at_most_k_neg1, test_at_most_k_neg2])
                                 neg_covered = tester.test_single_rule_neg_at_most_k(prog, test_at_most_k_neg)
-                                if len(neg_covered) == test_at_most_k_neg:
+                                if neg_covered.count(1) == test_at_most_k_neg:
                                     skip_early_neg = True
 
-                                inconsistent = len(neg_covered) > 0
+                                inconsistent = neg_covered.any()
                             else:
                                 skipped = True
                     else:
@@ -276,7 +274,7 @@ class Popper():
                 if settings.noisy:
                     fp, tn = None, None
                     if not skipped:
-                        fp = len(neg_covered)
+                        fp = neg_covered.count(1)
                         tn = num_neg-fp
                         score = tp, fn, tn, fp, prog_size
                         mdl = mdl_score(fn, fp, prog_size)
@@ -467,7 +465,8 @@ class Popper():
                     local_delete = set()
                     ignore_this_prog = (pos_covered, neg_covered) in success_sets_noise
 
-                    if not ignore_this_prog:
+                    # TMP!!!!
+                    if not ignore_this_prog and False:
                         # pos_covered is a subset of every prog in s_pos
                         s_pos = set.intersection(*(covered_by[ex] for ex in pos_covered))
                         # if pos_covered(new) ⊆ pos_covered(old)
@@ -478,7 +477,8 @@ class Popper():
                                 ignore_this_prog = True
                                 break
 
-                    if not ignore_this_prog and neg_covered:
+                    # TMP!!!!
+                    if not ignore_this_prog and neg_covered and False:
                         # neg_covered is a subset of all programs in s_neg
                         s_neg = set.intersection(*(covered_by[ex] for ex in neg_covered))
                         # if neg_covered(new) ⊆ neg_covered(old)
@@ -531,8 +531,9 @@ class Popper():
                         success_sets_noise[(pos_covered, neg_covered)] = prog, prog_size, fn, fp, tp
                         add_to_combiner = True
                         k = hash(prog)
-                        for ex in pos_covered|neg_covered:
-                            covered_by[ex].add(k)
+                        # TMP!!!!
+                        # for ex in pos_covered|neg_covered:
+                            # covered_by[ex].add(k)
                         # print('A', format_prog(prog), hash(prog))
                         coverage_pos[k] = pos_covered
                         coverage_neg[k] = neg_covered
@@ -543,6 +544,9 @@ class Popper():
                         if fp == 0:
                             success_sets[pos_covered] = prog_size
                             for p, s in success_sets.items():
+                                if p == pos_covered:
+                                    continue
+                                # print(p, pos_covered, p|pos_covered)
                                 paired_success_sets[s+prog_size].add(p|pos_covered)
 
                 elif not settings.noisy:
@@ -600,6 +604,7 @@ class Popper():
                         fp = 0
                         hypothesis_size = calc_prog_size(settings.solution)
                         settings.best_prog_score = tp, fn, tn, fp, hypothesis_size
+                        print('HERE1', tp, fn, tn, fp)
                         settings.print_incomplete_solution2(settings.solution, tp, fn, tn, fp, hypothesis_size)
 
                         if not uncovered.any():
@@ -644,6 +649,7 @@ class Popper():
                         # if settings.noisy:
                             # print('new_hypothesis_found', settings.best_mdl, best_score)
                         # print('here???')
+
                         settings.print_incomplete_solution2(new_hypothesis, tp, fn, tn, fp, hypothesis_size)
 
                         if settings.noisy and best_score < settings.best_mdl:
@@ -746,6 +752,7 @@ class Popper():
                     settings.best_prog_score = conf_matrix
                     settings.solution = new_hypothesis
                     best_score = mdl_score(fn, fp, hypothesis_size)
+                    print('HERE2', tp, fn, tn, fp)
                     settings.print_incomplete_solution2(new_hypothesis, tp, fn, tn, fp, hypothesis_size)
 
                     if not settings.noisy and fp == 0 and fn == 0:

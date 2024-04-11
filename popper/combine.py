@@ -65,6 +65,9 @@ class Combiner:
             pos_covered = self.coverage_pos[prog_hash]
             neg_covered = self.coverage_neg[prog_hash]
 
+            print(pos_covered)
+            print(neg_covered)
+
             for ex, x in enumerate(pos_covered):
                 if x == 1:
                     # AC: REALLY REALLY HACKY
@@ -145,6 +148,7 @@ class Combiner:
                     rule_soft_lits.append(-rule_var[rule_id])
                     weights.append(ruleid_to_size[rule_id])
             if self.settings.best_prog_score:
+                print('A', fn_)
                 if fn_ == 0:
                     for i in pos_index:
                         encoding.append([pos_example_covered_var[i]])
@@ -154,6 +158,8 @@ class Combiner:
                                 encoding.append([-neg_example_covered_var[i]])
                         soft_lit_groups = [[lit for lit in rule_soft_lits]]
                     else:
+                        # assert(not self.settings.noisy)
+                        # print(self.settings.noisy)
                         soft_lit_groups = [[-neg_example_covered_var[i] for i in neg_index]]
                         soft_lit_groups.append([lit for lit in rule_soft_lits])
                 else:
@@ -306,8 +312,8 @@ class Combiner:
 
         new_solution = reduce_prog(new_solution)
         pos_covered, neg_covered = self.tester.test_prog_all(new_solution)
-        tp = len(pos_covered)
-        fp = len(neg_covered)
+        tp = pos_covered.count(1)
+        fp = neg_covered.count(1)
         tn = self.tester.num_neg - fp
         fn = self.tester.num_pos - tp
         size = calc_prog_size(new_solution)

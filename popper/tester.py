@@ -40,19 +40,14 @@ class Tester():
             consult(x)
 
         query_once('load_examples')
-
-        # AC: TODO - replace with a simple length
         self.num_pos = query_once('findall(_K, pos_index(_K, _Atom), _S), length(_S, N)')['N']
         self.num_neg = query_once('findall(_K, neg_index(_K, _Atom), _S), length(_S, N)')['N']
-        print(self.num_pos)
 
         self.pos_examples_ = bitarray(self.num_pos)
         self.pos_examples_.setall(1)
 
         self.cached_pos_covered = {}
         self.cached_inconsistent = {}
-
-        self.savings = 0
 
         if self.settings.recursion_enabled:
             query_once(f'assert(timeout({self.settings.eval_timeout})), fail')
@@ -71,21 +66,20 @@ class Tester():
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'findall(_ID, (pos_index(_ID, {atom_str}), ({body_str} ->  true)), S)'
-            pos_covered = frozenset(query_once(q)['S'])
+            pos_covered = query_once(q)['S']
             inconsistent = False
-            if len(self.neg_index) > 0:
+            if self.num_neg > 0:
                 q = f'neg_index(_ID, {atom_str}), {body_str}'
                 inconsistent = bool_query(q)
         else:
             with self.using(prog):
-                pos_covered = frozenset(query_once('pos_covered(S)')['S'])
+                pos_covered = query_once('pos_covered(S)')['S']
                 inconsistent = False
-                if len(self.neg_index) > 0:
+                if self.num_neg > 0:
                     inconsistent = bool_query("inconsistent")
 
         pos_covered_bits = bitarray(self.num_pos)
-        for x in pos_covered:
-            pos_covered_bits[x-1] = 1
+        pos_covered_bits[pos_covered] = 1
         return frozenbitarray(pos_covered_bits), inconsistent
 
     def test_prog_all(self, prog):
@@ -93,20 +87,25 @@ class Tester():
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'findall(_ID, (pos_index(_ID, {atom_str}), ({body_str}->  true)), S)'
-            pos_covered = frozenset(query_once(q)['S'])
-            neg_covered = frozenset()
-            if len(self.neg_index) > 0:
+            pos_covered = query_once(q)['S']
+            neg_covered = []
+            if self.num_neg > 0:
                 q = f'findall(_ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
-                neg_covered = frozenset(query_once(q)['S'])
+                neg_covered = query_once(q)['S']
         else:
             with self.using(prog):
                 res = query_once(f'pos_covered(S1), neg_covered(S2)')
-            pos_covered = frozenset(res['S1'])
-            neg_covered = frozenset(res['S2'])
+            pos_covered = res['S1']
+            neg_covered = res['S2']
 
-        return pos_covered, neg_covered
+        pos_covered_bits = bitarray(self.num_pos)
+        pos_covered_bits[pos_covered] = 1
 
-    # @profile
+        neg_covered_bits = bitarray(self.num_neg)
+        neg_covered_bits[neg_covered] = 1
+
+        return frozenbitarray(pos_covered_bits), frozenbitarray(neg_covered_bits)
+
     def test_prog_pos(self, prog):
 
         if len(prog) == 1:
@@ -135,12 +134,15 @@ class Tester():
 
     def test_single_rule_neg_at_most_k(self, prog, k):
 
-        neg_covered = frozenset()
-        if len(self.neg_index) > 0:
+        neg_covered = []
+        if self.num_neg > 0:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'findfirstn(K, _ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
-            neg_covered = frozenset(query_once(q, {'K':k})['S'])
-        return neg_covered
+            neg_covered = query_once(q, {'K':k})['S']
+
+        neg_covered_bits = bitarray(self.num_neg)
+        neg_covered_bits[neg_covered] = 1
+        return frozenbitarray(neg_covered_bits)
 
     # why twice???
     def get_pos_covered(self, prog, ignore=True):
@@ -151,17 +153,17 @@ class Tester():
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
-            pos_covered = frozenset(query_once(q)['S'])
+            pos_covered = query_once(q)['S']
         else:
             with self.using(prog):
-                pos_covered = frozenset(query_once('pos_covered(S)')['S'])
+                pos_covered = query_once('pos_covered(S)')['S']
 
         pos_covered_bits = bitarray(self.num_pos)
-        for x in pos_covered:
-            pos_covered_bits[x-1] = 1
+        pos_covered_bits[pos_covered] = 1
+        pos_covered_bits = frozenbitarray(pos_covered_bits)
 
-        self.cached_pos_covered[k] = frozenbitarray(pos_covered_bits)
-        return frozenbitarray(pos_covered_bits)
+        self.cached_pos_covered[k] = pos_covered_bits
+        return pos_covered_bits
 
     @contextmanager
     def using(self, prog):
