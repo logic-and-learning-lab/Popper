@@ -1,4 +1,7 @@
 import time
+import tracemalloc
+
+
 from collections import defaultdict
 from bitarray.util import subset, any_and, ones
 from functools import cache
@@ -118,6 +121,8 @@ class Popper():
         self.savings = 0
 
     def run(self, bkcons):
+        tracemalloc.start()
+
         settings, tester = self.settings, self.tester
         num_pos, num_neg = self.num_pos, self.num_neg = tester.num_pos, tester.num_neg
 
@@ -231,6 +236,13 @@ class Popper():
                     m, j = tester.tmp()
                     print('prolog', humansize(m))
                     print('prolog.janus', humansize(j))
+
+                    snapshot = tracemalloc.take_snapshot()
+                    top_stats = snapshot.statistics('lineno')
+
+                    print("[ Top 10 ]")
+                    for stat in top_stats[:10]:
+                        print(stat)
 
                     # self.pruned2 = set()
                     # self.seen_prog = set()
@@ -1639,14 +1651,7 @@ class Popper():
 def popper(settings, tester, bkcons):
     Popper(settings, tester).run(bkcons)
 
-def learn_solution(settings):
-    t1 = time.time()
-    settings.nonoise = not settings.noisy
-    settings.solution_found = False
-
-    with settings.stats.duration('load data'):
-        tester = Tester(settings)
-
+def get_bk_cons(settings, tester):
     bkcons = []
 
     pointless = settings.pointless = set()
@@ -1707,6 +1712,17 @@ def learn_solution(settings):
             for x in sorted(xs):
                 print('BKCON', x)
         bkcons.extend(xs)
+    return bkcons
+
+def learn_solution(settings):
+    t1 = time.time()
+    settings.nonoise = not settings.noisy
+    settings.solution_found = False
+
+    with settings.stats.duration('load data'):
+        tester = Tester(settings)
+
+    bkcons = get_bk_cons(settings, tester)
     time_so_far = time.time()-t1
     timeout(settings, popper, (settings, tester, bkcons), timeout_duration=int(settings.timeout-time_so_far),)
     return settings.solution, settings.best_prog_score, settings.stats
