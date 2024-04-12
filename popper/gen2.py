@@ -34,11 +34,8 @@ class Generator:
     def __init__(self, settings, bkcons=[]):
         self.savings = 0
         self.settings = settings
-        self.assigned = {}
         self.cached_clingo_atoms = {}
         self.handle = None
-        self.cached4 = {}
-
         self.pruned_sizes = set()
 
         encoding = []
@@ -53,7 +50,6 @@ class Generator:
 
         for p,a in settings.pointless:
             bias_text = re.sub(rf'body_pred\({p},{a}\).','', bias_text)
-
 
         encoding.append(bias_text)
         encoding.append(f'max_clauses({settings.max_rules}).')
@@ -154,7 +150,6 @@ class Generator:
         size_con = [(atom_to_symbol("size", (size,)), True)]
         self.model.context.add_nogood(size_con)
 
-
     def constrain(self, tmp_new_cons):
         new_ground_cons = set()
 
@@ -200,7 +195,6 @@ class Generator:
 
         assignments = self.find_deep_bindings4(body)
         for assignment in assignments:
-            # print(assignment)
             rule = []
             for pred, args in body:
                 args2 = tuple(assignment[x] for x in args)

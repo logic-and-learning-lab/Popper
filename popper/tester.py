@@ -24,6 +24,12 @@ def bool_query(query):
 
 class Tester():
 
+
+    def tmp(self):
+        n = mem = query_once('findall(_B, (current_module(_M), module_property(_M, size(_B))), _S), sumlist(_S, N)')['N']
+        b = query_once('_M=janus, current_module(_M), module_property(_M, size(Bytes))')['Bytes']
+        return n, b
+
     def __init__(self, settings):
         self.settings = settings
 
@@ -80,7 +86,8 @@ class Tester():
 
         pos_covered_bits = bitarray(self.num_pos)
         pos_covered_bits[pos_covered] = 1
-        return frozenbitarray(pos_covered_bits), inconsistent
+        pos_covered = frozenbitarray(pos_covered_bits)
+        return pos_covered, inconsistent
 
     def test_prog_all(self, prog):
 
@@ -100,11 +107,13 @@ class Tester():
 
         pos_covered_bits = bitarray(self.num_pos)
         pos_covered_bits[pos_covered] = 1
+        pos_covered = frozenbitarray(pos_covered_bits)
 
         neg_covered_bits = bitarray(self.num_neg)
         neg_covered_bits[neg_covered] = 1
+        neg_covered = frozenbitarray(neg_covered_bits)
 
-        return frozenbitarray(pos_covered_bits), frozenbitarray(neg_covered_bits)
+        return pos_covered, neg_covered
 
     def test_prog_pos(self, prog):
 
@@ -116,9 +125,19 @@ class Tester():
             with self.using(prog):
                 pos_covered = query_once('pos_covered(S)')['S']
 
+
+        # order_by([desc(Bytes)], (current_module(M), module_property(M, size(Bytes)))).
+        # query_once('findall(_B, (current_module(_M), module_property(_M, size(_B))), S), sumlist(S,N), writeln(N)')
+
+        # query_once('forall((current_module(_M), module_property(_M, size(_B))), writeln(_M-_B)')
+        # print('-----')
+        # query_once('M=janus, current_module(M), module_property(M, size(Bytes)), writeln(M-Bytes), fail.')
+        # query_once('listing(janus)')
+
         pos_covered_bits = bitarray(self.num_pos)
         pos_covered_bits[pos_covered] = 1
-        return frozenbitarray(pos_covered_bits)
+        pos_covered = frozenbitarray(pos_covered_bits)
+        return pos_covered
 
     def test_prog_inconsistent(self, prog):
         if self.num_neg == 0:
@@ -142,7 +161,8 @@ class Tester():
 
         neg_covered_bits = bitarray(self.num_neg)
         neg_covered_bits[neg_covered] = 1
-        return frozenbitarray(neg_covered_bits)
+        neg_covered = frozenbitarray(neg_covered_bits)
+        return neg_covered
 
     # why twice???
     def get_pos_covered(self, prog, ignore=True):
@@ -160,10 +180,10 @@ class Tester():
 
         pos_covered_bits = bitarray(self.num_pos)
         pos_covered_bits[pos_covered] = 1
-        pos_covered_bits = frozenbitarray(pos_covered_bits)
+        pos_covered = frozenbitarray(pos_covered_bits)
 
-        self.cached_pos_covered[k] = pos_covered_bits
-        return pos_covered_bits
+        self.cached_pos_covered[k] = pos_covered
+        return pos_covered
 
     @contextmanager
     def using(self, prog):

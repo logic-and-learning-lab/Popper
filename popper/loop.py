@@ -8,15 +8,15 @@ from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons
 from . combine import Combiner
 
-# from pympler import asizeof, summary, muppy
-# suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
-# def humansize(nbytes):
-#     i = 0
-#     while nbytes >= 1024 and i < len(suffixes)-1:
-#         nbytes /= 1024.
-#         i += 1
-#     f = ('%.2f' % nbytes).rstrip('0').rstrip('.')
-#     return '%s %s' % (f, suffixes[i])
+from pympler import asizeof, summary, muppy
+suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+def humansize(nbytes):
+    i = 0
+    while nbytes >= 1024 and i < len(suffixes)-1:
+        nbytes /= 1024.
+        i += 1
+    f = ('%.2f' % nbytes).rstrip('0').rstrip('.')
+    return '%s %s' % (f, suffixes[i])
 
 def explain_none_functional(settings, tester, prog):
     new_cons = []
@@ -206,9 +206,54 @@ class Popper():
 
                 settings.stats.total_programs += 1
 
-                # if settings.stats.total_programs % 1000 == 0:
-                #     print('')
-                #     print('saved_progs', humansize(asizeof.asizeof(combiner.saved_progs)))
+                if settings.stats.total_programs % 5000 == 0:
+                    print('')
+                    print('settings.stats.total_programs', settings.stats.total_programs)
+                    print('saved_progs', humansize(asizeof.asizeof(combiner.saved_progs)))
+                    print('self.pruned2', humansize(asizeof.asizeof(self.pruned2)))
+                    print('self.seen_prog', humansize(asizeof.asizeof(self.seen_prog)))
+                    print('self.unsat', humansize(asizeof.asizeof(self.unsat)))
+                    print('self.tmp', humansize(asizeof.asizeof(self.tmp)))
+                    print('success_sets', humansize(asizeof.asizeof(success_sets)))
+                    print('success_sets_noise', humansize(asizeof.asizeof(success_sets_noise)))
+                    print('paired_success_sets', humansize(asizeof.asizeof(paired_success_sets)))
+                    print('covered_by', humansize(asizeof.asizeof(covered_by)))
+                    print('coverage_pos', humansize(asizeof.asizeof(coverage_pos)))
+                    print('coverage_neg', humansize(asizeof.asizeof(coverage_neg)))
+                    print('prog_lookup', humansize(asizeof.asizeof(prog_lookup)))
+                    print('cached_prog_size', humansize(asizeof.asizeof(cached_prog_size)))
+                    print('combiner', humansize(asizeof.asizeof(combiner)))
+                    print('tester', humansize(asizeof.asizeof(tester)))
+                    print('generator', humansize(asizeof.asizeof(generator)))
+                    print('self', humansize(asizeof.asizeof(self)))
+                    print('could_prune_later', humansize(asizeof.asizeof(could_prune_later)))
+                    print('settings', humansize(asizeof.asizeof(settings)))
+                    m, j = tester.tmp()
+                    print('prolog', humansize(m))
+                    print('prolog.janus', humansize(j))
+
+                    # self.pruned2 = set()
+                    # self.seen_prog = set()
+                    # self.unsat = set()
+                    # self.tmp = {}
+                    # success_sets = self.success_sets = {}
+                    # success_sets_noise = {}
+                    # paired_success_sets = self.paired_success_sets = defaultdict(set)
+
+                    # covered_by = defaultdict(set)
+                    # coverage_pos = {}
+                    # coverage_neg = {}
+                    # cached_prog_size = self.cached_prog_size = {}
+                    # prog_lookup = {}
+
+                    # combiner.coverage_pos = coverage_pos
+                    # combiner.coverage_neg = coverage_neg
+                    # combiner.prog_size = cached_prog_size
+
+                    # scores = self.scores = {}
+
+                    # could_prune_later = self.could_prune_later = []
+                    # could_prune_later_rec = self.could_prune_later_rec = []
 
                 if settings.debug:
                     settings.logger.debug(f'Program {settings.stats.total_programs}:')
@@ -560,6 +605,7 @@ class Popper():
                                 if subset(a, pos_covered) and prog_size <= b:
                                     to_delete.append(a)
                             for x in to_delete:
+                                print('!!!DEEL!!!!')
                                 # TODO: DELETE FROM COMBINER!!!!!!
                                 del success_sets[x]
 
@@ -569,6 +615,8 @@ class Popper():
                         coverage_neg[k] = neg_covered
 
                         for p, s in success_sets.items():
+                            if p == pos_covered:
+                                    continue
                             paired_success_sets[s+prog_size].add(p|pos_covered)
 
                         if self.min_size is None:
@@ -752,7 +800,6 @@ class Popper():
                     settings.best_prog_score = conf_matrix
                     settings.solution = new_hypothesis
                     best_score = mdl_score(fn, fp, hypothesis_size)
-                    print('HERE2', tp, fn, tn, fp)
                     settings.print_incomplete_solution2(new_hypothesis, tp, fn, tn, fp, hypothesis_size)
 
                     if not settings.noisy and fp == 0 and fn == 0:
