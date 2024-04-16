@@ -210,7 +210,7 @@ class Generator:
 
     def build_generalisation_constraint3(self, prog, size=None):
         rule = tuple(prog)[0]
-        for body in self.find_variants(rule):
+        for body in self.find_variants(rule, max_rule_vars=True):
             body = list(body)
             body.append((True, 'body_size', (0, len(body))))
             if size:
@@ -228,10 +228,13 @@ class Generator:
             body.append((True, 'program_size_at_least', (size,)))
             yield frozenset(body)
 
-    def find_variants(self, rule):
+    def find_variants(self, rule, max_rule_vars=False):
         head, body = rule
         body_vars = frozenset(x for literal in body for x in literal.arguments if x >= len(head.arguments))
-        subset = range(len(head.arguments), self.settings.max_vars)
+        if max_rule_vars:
+            subset = range(len(head.arguments), len(body_vars)+1)
+        else:
+            subset = range(len(head.arguments), self.settings.max_vars)
         for xs in permutations(subset, len(body_vars)):
             xs = head.arguments + xs
             new_body = []
