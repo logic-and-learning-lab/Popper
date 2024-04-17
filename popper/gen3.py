@@ -431,7 +431,7 @@ class Generator:
                 return
 
             self.new_seen_rules.update(self.build_seen_rule2(rule, False))
-            for variant in self.find_variants3(rule, max_rule_vars=True):
+            for variant in self.find_variants3(rule):
                 con = []
                 con.extend(variant)
                 con.append((True, 'body_size', (0, len(body))))
@@ -452,7 +452,7 @@ class Generator:
             bases.append(frozenset(con))
         else:
             self.new_seen_rules.update(self.build_seen_rule2(base, False))
-            for variant in self.find_variants3(base, ruleid=0, max_rule_vars=True):
+            for variant in self.find_variants3(base, ruleid=0):
                 con = []
                 con.extend(variant)
                 con.append((True, 'body_size', (0, len(base_body))))
@@ -469,7 +469,7 @@ class Generator:
             bases.append(frozenset(con))
         else:
             self.new_seen_rules.update(self.build_seen_rule2(rec, True))
-            for variant in self.find_variants3(rec, ruleid=1, max_rule_vars=True):
+            for variant in self.find_variants3(rec, ruleid=1):
                 con = []
                 con.extend(variant)
                 con.append((True, 'body_size', (1, len(rec_body))))
@@ -501,7 +501,7 @@ class Generator:
 
             self.new_seen_rules.update(self.build_seen_rule2(rule, False))
 
-            for variant in self.find_variants3(rule, max_rule_vars=True):
+            for variant in self.find_variants3(rule):
                 con = []
                 con.extend(variant)
                 con.append((True, 'body_size', (0, len(body))))
@@ -521,7 +521,7 @@ class Generator:
             bases.append(frozenset(con))
         else:
             self.new_seen_rules.update(self.build_seen_rule2(base, False))
-            for variant in self.find_variants3(base, ruleid=0, max_rule_vars=True):
+            for variant in self.find_variants3(base, ruleid=0):
                 con = []
                 con.extend(variant)
                 con.append((True, 'body_size', (0, len(base_body))))
@@ -538,7 +538,7 @@ class Generator:
             bases.append(frozenset(con))
         else:
             self.new_seen_rules.update(self.build_seen_rule2(rec, True))
-            for variant in self.find_variants3(rec, ruleid=1, max_rule_vars=True):
+            for variant in self.find_variants3(rec, ruleid=1):
                 con = []
                 con.extend(variant)
                 con.append((True, 'body_size', (1, len(rec_body))))
@@ -548,7 +548,7 @@ class Generator:
             for r2 in recs:
                 yield r1 | r2
 
-    def find_variants3(self, rule, ruleid=0, max_rule_vars=False):
+    def find_variants3(self, rule, ruleid=0):
         head, body = rule
         head_arity = len(self.settings.head_literal.arguments)
         body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head_arity)
