@@ -552,6 +552,10 @@ class Generator:
         head, body = rule
         head_arity = len(self.settings.head_literal.arguments)
         body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head_arity)
+        if max_rule_vars:
+            subset = range(len(head.arguments), len(body_vars | set(head.arguments)))
+        else:
+            subset = range(len(head.arguments), self.settings.max_vars)
         subset = range(head_arity, self.settings.max_vars)
         for xs in permutations(subset, len(body_vars)):
             xs = head.arguments + xs
