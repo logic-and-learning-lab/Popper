@@ -43,12 +43,3 @@ direction(even,(in,)).
 direction(odd,(in,)).
 direction(one,(out,)).
 direction(zero,(out,)).
-
-
-literal(C,P,A,Vars):-
-    head_literal(C,P,A,Vars).
-literal(C,P,A,Vars):-
-    body_literal(C,P,A,Vars).
-:-
-    clause_var(C, Var),
-    #count{P,Vars : literal(C,P,A,Vars), var_member(Var,Vars)} < 2.

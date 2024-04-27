@@ -9,7 +9,7 @@ POS_EXAMPLE_WEIGHT = 1
 NEG_EXAMPLE_WEIGHT = 1
 
 class Combiner:
-    def __init__(self, settings, tester, coverage_pos, coverage_neg):
+    def __init__(self, settings, tester, coverage_pos, coverage_neg, prog_lookup):
         self.settings = settings
         self.tester = tester
         self.best_cost = None
@@ -17,9 +17,10 @@ class Combiner:
         self.inconsistent = set()
         self.coverage_pos = coverage_pos
         self.coverage_neg = coverage_neg
+        self.prog_lookup = prog_lookup
 
-    def add_inconsistent(self, prog):
-        self.inconsistent.add(prog)
+    def add_inconsistent(self, prog_hash):
+        self.inconsistent.add(prog_hash)
 
     def find_combination(self, timeout):
         encoding = []
@@ -55,7 +56,7 @@ class Combiner:
 
         rule_var = {}
 
-        for program_count, prog in enumerate(self.saved_progs):
+        for program_count, prog_hash in enumerate(self.saved_progs):
             # UNCOMMENT TO SHOW PROGRAMS ADDED TO THE SOLVER
             # tp = len(pos_covered)
             # fp = len(neg_covered)
@@ -64,7 +65,7 @@ class Combiner:
             # print(f'size: {size} fp:{fp} tp:{tp} mdl:{size + fp + fn} {format_prog(prog)}')
             # print(sorted(pos_covered))
 
-            prog_hash = hash(prog)
+            prog = self.prog_lookup[prog_hash]
 
             pos_covered = self.coverage_pos[prog_hash]
             neg_covered = self.coverage_neg[prog_hash]
@@ -129,7 +130,6 @@ class Combiner:
         for ex in pos_index:
             encoding.append([-pos_example_covered_var[ex]] + [program_var[p] for p in programs_covering_pos_example[ex]])
 
-
         if self.settings.noisy:
             for ex in neg_index:
                 for p in programs_covering_neg_example[ex]:
@@ -140,7 +140,6 @@ class Combiner:
 
         if self.settings.best_prog_score:
             tp_, fn_, tn_, fp_, size_ = self.settings.best_prog_score
-
 
         if self.settings.lex:
             soft_lit_groups = []
@@ -185,7 +184,8 @@ class Combiner:
                     weights.append(NEG_EXAMPLE_WEIGHT)
 
         # PRUNE INCONSISTENT
-        for prog in self.inconsistent:
+        for prog_hash in self.inconsistent:
+            prog = self.prog_lookup[prog_hash]
             should_add = True
             ids = []
             for rule in prog:

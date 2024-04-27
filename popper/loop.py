@@ -53,7 +53,7 @@ def explain_none_functional(settings, tester, prog):
 
     return new_cons
 
-def load_solver(settings, tester, coverage_pos, coverage_neg):
+def load_solver(settings, tester, coverage_pos, coverage_neg, prog_lookup):
     if settings.debug:
         settings.logger.debug(f'Load exact solver: {settings.solver}')
 
@@ -104,13 +104,15 @@ def load_solver(settings, tester, coverage_pos, coverage_neg):
     # TODO: temporary config, need to be modified
     settings.last_combine_stage = False
 
-    return Combiner(settings, tester, coverage_pos, coverage_neg)
+    return Combiner(settings, tester, coverage_pos, coverage_neg, prog_lookup)
 
 class Popper():
     def __init__(self, settings, tester):
         self.settings = settings
         self.tester = tester
         self.pruned2 = set()
+
+        # AC: SELF.SEEN_PROG CAN GROW VERY BIG
         self.seen_prog = set()
         self.unsat = set()
         self.tmp = {}
@@ -148,19 +150,30 @@ class Popper():
             generator = self.generator = Generator(settings, bkcons)
 
         # track the success sets of tested hypotheses
+
+        # pos_covered_bit_array -> prog_size
+        # it only maintains success sets for programs where fp = 0
         success_sets = self.success_sets = {}
+
+        # (pos_covered_bit_array, neg_covered_bitarray) -> prog_size
         success_sets_noise = {}
+
+        # pos_covered_bit_array -> prog_size+prog_size2
+        # it only maintains success sets for pairs of programs where fp = 0
         paired_success_sets = self.paired_success_sets = defaultdict(set)
 
-        covered_by = defaultdict(set)
-        # program_hash -> coverage (bit array)
-        coverage_pos, coverage_neg = {}, {}
+        covered_by_pos = defaultdict(set)
+        covered_by_neg = defaultdict(set)
+
+        # program_hash -> coverage (bit_arrary)
+        coverage_pos = {}
+        coverage_neg = {}
 
         cached_prog_size = self.cached_prog_size = {}
 
         prog_lookup = {}
 
-        combiner = load_solver(settings, tester, coverage_pos, coverage_neg)
+        combiner = load_solver(settings, tester, coverage_pos, coverage_neg, prog_lookup)
 
         scores = self.scores = {}
 
@@ -204,23 +217,24 @@ class Popper():
 
                 settings.stats.total_programs += 1
 
-                if settings.stats.total_programs % 5000 == 0:
-                    print('')
-                    print('settings.stats.total_programs', settings.stats.total_programs)
-                    print('saved_progs', humansize(asizeof.asizeof(combiner.saved_progs)))
-                    print('self.pruned2', humansize(asizeof.asizeof(self.pruned2)))
-                    print('self.seen_prog', humansize(asizeof.asizeof(self.seen_prog)))
-                    print('self.unsat', humansize(asizeof.asizeof(self.unsat)))
-                    print('self.tmp', humansize(asizeof.asizeof(self.tmp)))
-                    print('success_sets', humansize(asizeof.asizeof(success_sets)))
-                    print('success_sets_noise', humansize(asizeof.asizeof(success_sets_noise)))
-                    print('paired_success_sets', humansize(asizeof.asizeof(paired_success_sets)))
-                    print('covered_by', humansize(asizeof.asizeof(covered_by)))
-                    print('coverage_pos', humansize(asizeof.asizeof(coverage_pos)))
-                    print('coverage_neg', humansize(asizeof.asizeof(coverage_neg)))
-                    print('prog_lookup', humansize(asizeof.asizeof(prog_lookup)))
-                    print('cached_prog_size', humansize(asizeof.asizeof(cached_prog_size)))
-                    print('could_prune_later', humansize(asizeof.asizeof(could_prune_later)))
+                # if settings.stats.total_programs % 5000 == 0:
+                #     print('')
+                #     print('settings.stats.total_programs', settings.stats.total_programs)
+                #     print('saved_progs', humansize(asizeof.asizeof(combiner.saved_progs)))
+                #     print('self.pruned2', humansize(asizeof.asizeof(self.pruned2)))
+                #     print('self.seen_prog', humansize(asizeof.asizeof(self.seen_prog)))
+                #     print('self.unsat', humansize(asizeof.asizeof(self.unsat)))
+                #     print('self.tmp', humansize(asizeof.asizeof(self.tmp)))
+                #     print('success_sets', humansize(asizeof.asizeof(success_sets)))
+                #     print('success_sets_noise', humansize(asizeof.asizeof(success_sets_noise)))
+                #     print('paired_success_sets', humansize(asizeof.asizeof(paired_success_sets)))
+                #     print('covered_by_pos', humansize(asizeof.asizeof(covered_by_pos)))
+                #     print('covered_by_neg', humansize(asizeof.asizeof(covered_by_neg)))
+                #     print('coverage_pos', humansize(asizeof.asizeof(coverage_pos)))
+                #     print('coverage_neg', humansize(asizeof.asizeof(coverage_neg)))
+                #     print('prog_lookup', humansize(asizeof.asizeof(prog_lookup)))
+                #     print('cached_prog_size', humansize(asizeof.asizeof(cached_prog_size)))
+                #     print('could_prune_later', humansize(asizeof.asizeof(could_prune_later)))
 
                 if settings.debug:
                     settings.logger.debug(f'Program {settings.stats.total_programs}:')
@@ -266,14 +280,17 @@ class Popper():
                             pos_covered = tester.test_prog_pos(prog)
                             inconsistent = True
                             # if no positive example covered, no need to check negative examples
-                            if pos_covered.any() and not settings.solution_found:
+                            if pos_covered.any():
                                 inconsistent = tester.test_prog_inconsistent(prog)
 
                 tp = pos_covered.count(1)
                 fn = num_pos-tp
 
+                # print(format_prog(prog2))
                 # pos_covered, neg_covered = tester.test_prog_all(prog)
-                # settings.logger.debug(f'P:{num_pos} TP:{tp} FN:{fn} N:{num_neg} FP:{len(neg_covered)}')
+                # if not inconsistent:
+                # print(format_prog(prog), tp, inconsistent)
+                    # settings.logger.debug(f'P:{num_pos} TP:{tp} FN:{fn} N:{num_neg} FP:{len(neg_covered)}')
 
                 # if non-separable program covers all examples, stop
                 if not skipped and not inconsistent and tp == num_pos: # and not settings.order_space:
@@ -385,7 +402,7 @@ class Popper():
                         # if inconsistent, prune generalisations
                         add_gen = True
                         if is_recursive:
-                            combiner.add_inconsistent(prog)
+                            combiner.add_inconsistent(hash(prog))
                             cons_ = frozenset(self.explain_inconsistent(prog))
                             new_cons.extend(cons_)
                             pruned_sub_inconsistent = len(cons_) > 0
@@ -477,62 +494,77 @@ class Popper():
                     local_delete = set()
                     ignore_this_prog = (pos_covered, neg_covered) in success_sets_noise
 
-                    # TMP!!!!
-                    if not ignore_this_prog and False:
-                        # pos_covered is a subset of every prog in s_pos
-                        s_pos = set.intersection(*(covered_by[ex] for ex in pos_covered))
-                        # if pos_covered(new) ⊆ pos_covered(old)
+
+                    # if pos_covered is a subset and neg_covered is a superset of a previously seen program (which must be of equal size or smaller) then we can ignore this program
+                    if not ignore_this_prog:
+                        # find all progs where pos_covered is a subset of pos_covered_ of the other prog
+                        # s_pos_ = set.intersection(*(covered_by_pos[ex] for ex in pos_covered))
+                        s_pos = set.intersection(*(covered_by_pos[ex] for ex, ex_covered_ in enumerate(pos_covered) if ex_covered_ == 1))
+                        # now check whether neg_covered is a superset of the other program
                         for prog1 in s_pos:
                             n1 = coverage_neg[prog1]
                             # if neg_covered(old) ⊆ new_covered(new) then ignore new
-                            if n1.issubset(neg_covered):
+                            if subset(n1, neg_covered):
                                 ignore_this_prog = True
+                                # print('skip1')
                                 break
 
-                    # TMP!!!!
-                    if not ignore_this_prog and neg_covered and False:
+                    # if inconsistent != fp>0:
+                    #     print('inconsistent', inconsistent)
+                    #     print('fp>0', fp>0)
+                    #     print('inconsistent == fp>0', inconsistent == fp>0)
+                    #     assert(inconsistent == fp>0)
+
+                    if not ignore_this_prog and (inconsistent or fp>0):
                         # neg_covered is a subset of all programs in s_neg
-                        s_neg = set.intersection(*(covered_by[ex] for ex in neg_covered))
+                        s_neg = set.intersection(*(covered_by_neg[ex] for ex, ex_covered_ in enumerate(neg_covered) if ex_covered_ == 1))
                         # if neg_covered(new) ⊆ neg_covered(old)
                         for prog1 in s_neg:
                             # if pos_covered(old) ⊆ pos_covered(new)
-                            if coverage_pos[prog1].issubset(pos_covered):
+                            if subset(coverage_pos[prog1], pos_covered):
                                 size1, tp1, fp1 = scores[prog1]
                                 if size1 == prog_size:
                                     # ignore OLD
+                                    # print('ignore old')
                                     local_delete.add(prog1)
                                     continue
 
                                 if fp == fp1 and (tp-prog_size) < (tp1-size1):
                                     # NEW tp:50 fp:1 size:6 memberofdomainregion(V0,V1):- synsetdomaintopicof(V2,V3),synsetdomaintopicof(V1,V3),hypernym(V2,V4),membermeronym(V0,V5),synsetdomaintopicof(V2,V4).
                                     # OLD tp:49 fp:1 size:4 memberofdomainregion(V0,V1):- synsetdomaintopicof(V1,V3),instancehypernym(V2,V3),membermeronym(V0,V4).
+                                    # print('skip2')
                                     ignore_this_prog = True
                                     break
 
                                 if tp == tp1 and (fp+prog_size) >= (fp1+size1):
                                     # NEW tp:10 fp:1 mdl:350 less_toxic(V0,V1):- ring_subst_3(V1,V4),ring_substitutions(V1,V3),alk_groups(V0,V3),x_subst(V0,V2,V5).
                                     # OLD tp:10 fp:2 mdl:350 less_toxic(V0,V1):- ring_substitutions(V0,V4),x_subst(V0,V3,V2),ring_subst_3(V1,V5).
+                                    # print('skip3')
                                     ignore_this_prog = True
                                     break
 
                                 if (tp-fp-prog_size) <= (tp1-fp1-size1):
                                     # NEW tp:12 fp:3 size:7 less_toxic(V0,V1):- gt(V2,V5),gt(V2,V3),ring_subst_2(V1,V4),ring_substitutions(V0,V3),alk_groups(V0,V2),ring_substitutions(V1,V5).
                                     # OLD tp:11 fp:4 size:3 less_toxic(V0,V1):- ring_subst_2(V1,V3),r_subst_3(V0,V2).
+                                    # print('skip4')
                                     ignore_this_prog = True
                                     break
 
                     for k in local_delete:
-                        del_prog = prog_lookup[k]
-                        assert(del_prog in combiner.saved_progs|to_combine)
-                        if del_prog in combiner.saved_progs:
-                            combiner.saved_progs.remove(del_prog)
-                        elif del_prog in to_combine:
-                            to_combine.remove(del_prog)
+                        assert(k in combiner.saved_progs|to_combine)
+                        if k in combiner.saved_progs:
+                            combiner.saved_progs.remove(k)
+                        elif k in to_combine:
+                            to_combine.remove(k)
 
                         k_pos, k_neg = coverage_pos[k], coverage_neg[k]
                         del success_sets_noise[(k_pos, k_neg)]
-                        for ex in k_pos | k_neg:
-                            covered_by[ex].remove(k)
+                        for ex, ex_covered_ in enumerate(k_pos):
+                            if ex_covered_ == 1:
+                                covered_by_pos[ex].remove(k)
+                        for ex, ex_covered_ in enumerate(k_neg):
+                            if ex_covered_ == 1:
+                                covered_by_neg[ex].remove(k)
                         del coverage_pos[k]
                         del coverage_neg[k]
                         del scores[k]
@@ -543,10 +575,14 @@ class Popper():
                         success_sets_noise[(pos_covered, neg_covered)] = prog, prog_size, fn, fp, tp
                         add_to_combiner = True
                         k = hash(prog)
-                        # TMP!!!!
-                        # for ex in pos_covered|neg_covered:
-                            # covered_by[ex].add(k)
-                        # print('A', format_prog(prog), hash(prog))
+
+                        for ex, x in enumerate(pos_covered):
+                            if x == 1:
+                                covered_by_pos[ex].add(k)
+                        for ex, x in enumerate(neg_covered):
+                            if x == 1:
+                                covered_by_neg[ex].add(k)
+
                         coverage_pos[k] = pos_covered
                         coverage_neg[k] = neg_covered
                         cached_prog_size[k] = prog_size
@@ -566,31 +602,39 @@ class Popper():
                     if not inconsistent and not subsumed and not add_gen and tp > 0 and not pruned_more_general:
                         add_to_combiner = True
 
-                        if not settings.recursion_enabled:
+                        # TMP!!!!!!!!
+
+                        if not settings.recursion_enabled and False:
                             to_delete = []
                             for a,b in success_sets.items():
                                 if subset(a, pos_covered) and prog_size <= b:
                                     to_delete.append(a)
                             for x in to_delete:
-                                print('!!!DEEL!!!!')
-                                # TODO: DELETE FROM COMBINER!!!!!!
+                                print('DELETED')
+                                combiner.saved_progs.remove(k)
                                 del success_sets[x]
+                                del coverage_pos[x]
+                                del coverage_neg[x]
+                                del prog_lookup[x]
+                                # AC: somehow delete from paired_success_sets
 
                         k = hash(prog)
                         success_sets[pos_covered] = prog_size
                         coverage_pos[k] = pos_covered
                         coverage_neg[k] = neg_covered
+                        prog_lookup[k] = prog
 
                         for p, s in success_sets.items():
                             if p == pos_covered:
-                                    continue
+                                continue
                             paired_success_sets[s+prog_size].add(p|pos_covered)
 
                         if self.min_size is None:
                             self.min_size = prog_size
 
                 if add_to_combiner:
-                    to_combine.add(prog)
+                    to_combine.add(hash(prog))
+                    # print('combine', format_prog(prog))
 
                     if not settings.noisy and not has_invention:
                         with settings.stats.duration('prune backtrack subsumed'):
@@ -619,7 +663,6 @@ class Popper():
                         fp = 0
                         hypothesis_size = calc_prog_size(settings.solution)
                         settings.best_prog_score = tp, fn, tn, fp, hypothesis_size
-                        print('HERE1', tp, fn, tn, fp)
                         settings.print_incomplete_solution2(settings.solution, tp, fn, tn, fp, hypothesis_size)
 
                         if not uncovered.any():
@@ -644,6 +687,7 @@ class Popper():
                         self.filter_combine_programs(combiner, to_combine)
 
                     # COMBINE
+                    # print('call combiner')
                     with settings.stats.duration('combine'):
                         is_new_solution_found = combiner.update_best_prog(to_combine)
 
@@ -706,7 +750,7 @@ class Popper():
                     print(tp)
                     print(pos_covered)
                     print(inconsistent)
-                    assert(False)
+                    # assert(False)
 
                 # if not add_spec and not pruned_more_general and settings.solution_found and tp < 2:
                 #     print(format_prog(prog))
@@ -745,6 +789,8 @@ class Popper():
 
                 # CONSTRAIN
                 with settings.stats.duration('constrain'):
+                    pass
+                    # print(new_cons)
                     generator.constrain(new_cons)
 
             # if not pi_or_rec:
@@ -782,24 +828,26 @@ class Popper():
 
     def filter_combine_programs(self, combiner, to_combine):
 
+        # assert(False)
         xs = combiner.saved_progs | to_combine
-        min_size = min(self.cached_prog_size[hash(prog)] for prog in xs)
+        min_size = min(self.cached_prog_size[prog] for prog in xs)
         must_beat = self.settings.best_mdl-min_size
 
         to_delete = set()
         # FILTER COMBINE PROGRAMS
-        for prog in xs:
-            k = hash(prog)
-            size, tp, fp = self.scores[k]
+        for prog_hash in xs:
+            size, tp, fp = self.scores[prog_hash]
             if fp + size >= must_beat:
-                to_delete.add(prog)
+                to_delete.add(prog_hash)
 
-        for prog in to_delete:
+        for prog_hash in to_delete:
             # AC: DELETE FROM SUCCESS_SETS_NOISE
-            if prog in combiner.saved_progs:
-                combiner.saved_progs.remove(prog)
+            if prog_hash in combiner.saved_progs:
+                print('del1', prog_hash)
+                combiner.saved_progs.remove(prog_hash)
             else:
-                to_combine.remove(prog)
+                print('del2', prog_hash)
+                to_combine.remove(prog_hash)
 
     def subsumed_by_two_new(self, pos_covered, prog_size):
         paired_success_sets = self.paired_success_sets

@@ -132,6 +132,7 @@ class Tester():
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'neg_index(_ID, {atom_str}), {body_str}'
+            # print('tester', q)
             return bool_query(q)
 
         with self.using(prog):
