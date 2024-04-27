@@ -5,6 +5,7 @@ from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
 from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal
+from bitarray import bitarray, frozenbitarray
 
 def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
@@ -40,21 +41,14 @@ class Tester():
 
         query_once('load_examples')
 
-        self.pos_index = query_once('findall(_K, pos_index(_K, _Atom), S)')['S']
-        self.neg_index = query_once('findall(_K, neg_index(_K, _Atom), S)')['S']
+        self.num_pos = query_once('findall(_K, pos_index(_K, _Atom), _S), length(_S, N)')['N']
+        self.num_neg = query_once('findall(_K, neg_index(_K, _Atom), _S), length(_S, N)')['N']
 
-        self.pos_examples = set(self.pos_index)
-
-        self.num_pos = len(self.pos_index)
-        self.num_neg = len(self.neg_index)
+        self.pos_examples_ = bitarray(self.num_pos)
+        self.pos_examples_.setall(1)
 
         self.cached_pos_covered = {}
         self.cached_inconsistent = {}
-
-        self.settings.pos_index = self.pos_index
-        self.settings.neg_index = self.neg_index
-
-        self.savings = 0
 
         if self.settings.recursion_enabled:
             query_once(f'assert(timeout({self.settings.eval_timeout})), fail')
@@ -73,18 +67,21 @@ class Tester():
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'findall(_ID, (pos_index(_ID, {atom_str}), ({body_str} ->  true)), S)'
-            pos_covered = frozenset(query_once(q)['S'])
+            pos_covered = query_once(q)['S']
             inconsistent = False
-            if len(self.neg_index) > 0:
+            if self.num_neg > 0:
                 q = f'neg_index(_ID, {atom_str}), {body_str}'
                 inconsistent = bool_query(q)
-            return pos_covered, inconsistent
+        else:
+            with self.using(prog):
+                pos_covered = query_once('pos_covered(S)')['S']
+                inconsistent = False
+                if self.num_neg > 0:
+                    inconsistent = bool_query("inconsistent")
 
-        with self.using(prog):
-            pos_covered = frozenset(query_once('pos_covered(S)')['S'])
-            inconsistent = False
-            if len(self.neg_index) > 0:
-                inconsistent = bool_query("inconsistent")
+        pos_covered_bits = bitarray(self.num_pos)
+        pos_covered_bits[pos_covered] = 1
+        pos_covered = frozenbitarray(pos_covered_bits)
         return pos_covered, inconsistent
 
     def test_prog_all(self, prog):
@@ -92,17 +89,25 @@ class Tester():
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'findall(_ID, (pos_index(_ID, {atom_str}), ({body_str}->  true)), S)'
-            pos_covered = frozenset(query_once(q)['S'])
-            neg_covered = frozenset()
-            if len(self.neg_index) > 0:
+            pos_covered = query_once(q)['S']
+            neg_covered = []
+            if self.num_neg > 0:
                 q = f'findall(_ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
-                neg_covered = frozenset(query_once(q)['S'])
-            return pos_covered, neg_covered
+                neg_covered = query_once(q)['S']
+        else:
+            with self.using(prog):
+                res = query_once(f'pos_covered(S1), neg_covered(S2)')
+            pos_covered = res['S1']
+            neg_covered = res['S2']
 
-        with self.using(prog):
-            res = query_once(f'pos_covered(S1), neg_covered(S2)')
-        pos_covered = frozenset(res['S1'])
-        neg_covered = frozenset(res['S2'])
+        pos_covered_bits = bitarray(self.num_pos)
+        pos_covered_bits[pos_covered] = 1
+        pos_covered = frozenbitarray(pos_covered_bits)
+
+        neg_covered_bits = bitarray(self.num_neg)
+        neg_covered_bits[neg_covered] = 1
+        neg_covered = frozenbitarray(neg_covered_bits)
+
         return pos_covered, neg_covered
 
     def test_prog_pos(self, prog):
@@ -110,18 +115,24 @@ class Tester():
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
-            return frozenset(query_once(q)['S'])
+            pos_covered = query_once(q)['S']
+        else:
+            with self.using(prog):
+                pos_covered = query_once('pos_covered(S)')['S']
 
-        with self.using(prog):
-            return frozenset(query_once('pos_covered(S)')['S'])
+        pos_covered_bits = bitarray(self.num_pos)
+        pos_covered_bits[pos_covered] = 1
+        pos_covered = frozenbitarray(pos_covered_bits)
+        return pos_covered
 
     def test_prog_inconsistent(self, prog):
-        if len(self.neg_index) == 0:
+        if self.num_neg == 0:
             return False
 
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'neg_index(_ID, {atom_str}), {body_str}'
+            # print('tester', q)
             return bool_query(q)
 
         with self.using(prog):
@@ -129,11 +140,15 @@ class Tester():
 
     def test_single_rule_neg_at_most_k(self, prog, k):
 
-        neg_covered = frozenset()
-        if len(self.neg_index) > 0:
+        neg_covered = []
+        if self.num_neg > 0:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'findfirstn(K, _ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
-            neg_covered = frozenset(query_once(q, {'K':k})['S'])
+            neg_covered = query_once(q, {'K':k})['S']
+
+        neg_covered_bits = bitarray(self.num_neg)
+        neg_covered_bits[neg_covered] = 1
+        neg_covered = frozenbitarray(neg_covered_bits)
         return neg_covered
 
     # why twice???
@@ -145,10 +160,15 @@ class Tester():
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
-            pos_covered = frozenset(query_once(q)['S'])
+            pos_covered = query_once(q)['S']
         else:
             with self.using(prog):
-                pos_covered = frozenset(query_once('pos_covered(S)')['S'])
+                pos_covered = query_once('pos_covered(S)')['S']
+
+        pos_covered_bits = bitarray(self.num_pos)
+        pos_covered_bits[pos_covered] = 1
+        pos_covered = frozenbitarray(pos_covered_bits)
+
         self.cached_pos_covered[k] = pos_covered
         return pos_covered
 
@@ -221,33 +241,33 @@ class Tester():
         query = ','.join(format_literal(literal) for literal in ordered_body)
         return bool_query(query)
 
-    def has_redundant_rule_(self, prog):
-        assert(False)
-        prog_ = []
-        for head, body in prog:
-            c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-            prog_.append(c)
-        prog_ = f"[{','.join(prog_)}]"
-        prog_ = janus_format_rule(prog_)
-        q = f'redundant_clause({prog_})'
-        return bool_query(q)
+    # def has_redundant_rule_(self, prog):
+    #     assert(False)
+    #     prog_ = []
+    #     for head, body in prog:
+    #         c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+    #         prog_.append(c)
+    #     prog_ = f"[{','.join(prog_)}]"
+    #     prog_ = janus_format_rule(prog_)
+    #     q = f'redundant_clause({prog_})'
+    #     return bool_query(q)
 
-    def has_redundant_rule(self, prog):
-        assert(False)
-        # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
+    # def has_redundant_rule(self, prog):
+    #     assert(False)
+    #     # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
 
-        base = []
-        step = []
-        for rule in prog:
-            if rule_is_recursive(rule):
-                step.append(rule)
-            else:
-                base.append(rule)
-        if len(base) > 1 and self.has_redundant_rule_(base):
-            return True
-        if len(step) > 1 and self.has_redundant_rule_(step):
-            return True
-        return False
+    #     base = []
+    #     step = []
+    #     for rule in prog:
+    #         if rule_is_recursive(rule):
+    #             step.append(rule)
+    #         else:
+    #             base.append(rule)
+    #     if len(base) > 1 and self.has_redundant_rule_(base):
+    #         return True
+    #     if len(step) > 1 and self.has_redundant_rule_(step):
+    #         return True
+    #     return False
 
     @cache
     def has_redundant_literal(self, prog):

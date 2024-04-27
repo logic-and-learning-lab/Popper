@@ -9,15 +9,18 @@ POS_EXAMPLE_WEIGHT = 1
 NEG_EXAMPLE_WEIGHT = 1
 
 class Combiner:
-    def __init__(self, settings, tester):
+    def __init__(self, settings, tester, coverage_pos, coverage_neg, prog_lookup):
         self.settings = settings
         self.tester = tester
         self.best_cost = None
         self.saved_progs = set()
         self.inconsistent = set()
+        self.coverage_pos = coverage_pos
+        self.coverage_neg = coverage_neg
+        self.prog_lookup = prog_lookup
 
-    def add_inconsistent(self, prog):
-        self.inconsistent.add(prog)
+    def add_inconsistent(self, prog_hash):
+        self.inconsistent.add(prog_hash)
 
     def find_combination(self, timeout):
         encoding = []
@@ -30,29 +33,30 @@ class Combiner:
         base_rules = []
         recursive_rules = []
 
-        programs_covering_example = defaultdict(list)
+        programs_covering_pos_example = {}
+        programs_covering_neg_example = {}
         program_var = {}
         program_clauses = {}
         vpool = IDPool()
-        example_covered_var = {}
 
-        for i in self.settings.pos_index:
-            example_covered_var[i] = vpool.id("example_covered({0})".format(i))
+        pos_example_covered_var = {}
+        neg_example_covered_var = {}
 
-        if not self.settings.nonoise:
-            for i in self.settings.neg_index:
-                example_covered_var[i] = vpool.id("example_covered({0})".format(i))
+        pos_index = list(range(self.tester.num_pos))
+        neg_index = list(range(self.tester.num_neg))
 
-        # print('moo', t2-t1)
-        # print('starting to build')
-        # t1 = time.time()
+        for i in pos_index:
+            pos_example_covered_var[i] = vpool.id("pos_example_covered({0})".format(i))
+            programs_covering_pos_example[i] = []
+
+        if self.settings.noisy:
+            for i in neg_index:
+                neg_example_covered_var[i] = vpool.id("neg_example_covered({0})".format(i))
+                programs_covering_neg_example[i] = []
 
         rule_var = {}
 
-        for program_count, prog in enumerate(self.saved_progs):
-
-            # print('B', format_prog(prog), hash(prog))
-
+        for program_count, prog_hash in enumerate(self.saved_progs):
             # UNCOMMENT TO SHOW PROGRAMS ADDED TO THE SOLVER
             # tp = len(pos_covered)
             # fp = len(neg_covered)
@@ -61,21 +65,21 @@ class Combiner:
             # print(f'size: {size} fp:{fp} tp:{tp} mdl:{size + fp + fn} {format_prog(prog)}')
             # print(sorted(pos_covered))
 
-
-            prog_hash = hash(prog)
-
-            # if prog_hash in self.to_delete:
-                # continue
+            prog = self.prog_lookup[prog_hash]
 
             pos_covered = self.coverage_pos[prog_hash]
             neg_covered = self.coverage_neg[prog_hash]
 
-            for ex in pos_covered:
-                programs_covering_example[ex].append(program_count)
+            for ex, x in enumerate(pos_covered):
+                if x == 1:
+                    # AC: REALLY REALLY HACKY
+                    # WE NEED TO +1 BECAUSE OF POS_INDEX BELOW
+                    programs_covering_pos_example[ex].append(program_count)
 
             if self.settings.noisy:
-                for ex in neg_covered:
-                    programs_covering_example[ex].append(program_count)
+                for ex, x in enumerate(neg_covered):
+                    if x == 1:
+                        programs_covering_neg_example[ex].append(program_count)
 
             rule_vars = []
             ids = []
@@ -89,6 +93,7 @@ class Combiner:
                     ids.append(k)
                 else:
                     ids.append(rulehash_to_id[rule_hash])
+
             for rule in prog:
                 rule_hash = hash(rule)
                 rule_id = rulehash_to_id[rule_hash]
@@ -122,12 +127,13 @@ class Combiner:
         if self.settings.lex and self.settings.recursion_enabled:
             encoding.append([rule_var[rule_id] for rule_id in base_rules])
 
-        for ex in self.settings.pos_index:
-            encoding.append([-example_covered_var[ex]] + [program_var[p] for p in programs_covering_example[ex]])
-        if not self.settings.nonoise:
-            for ex in self.settings.neg_index:
-                for p in programs_covering_example[ex]:
-                    encoding.append([example_covered_var[ex], -program_var[p]])
+        for ex in pos_index:
+            encoding.append([-pos_example_covered_var[ex]] + [program_var[p] for p in programs_covering_pos_example[ex]])
+
+        if self.settings.noisy:
+            for ex in neg_index:
+                for p in programs_covering_neg_example[ex]:
+                    encoding.append([neg_example_covered_var[ex], -program_var[p]])
 
         soft_clauses = []
         weights = []
@@ -135,7 +141,6 @@ class Combiner:
         if self.settings.best_prog_score:
             tp_, fn_, tn_, fp_, size_ = self.settings.best_prog_score
 
-        # with self.settings.stats.duration('combine.add'):
         if self.settings.lex:
             soft_lit_groups = []
             rule_soft_lits = []
@@ -145,37 +150,37 @@ class Combiner:
                     weights.append(ruleid_to_size[rule_id])
             if self.settings.best_prog_score:
                 if fn_ == 0:
-                    for i in self.settings.pos_index:
-                        encoding.append([example_covered_var[i]])
+                    for i in pos_index:
+                        encoding.append([pos_example_covered_var[i]])
                     if fp_ == 0:
                         if not self.settings.nonoise:
-                            for i in self.settings.neg_index:
-                                encoding.append([-example_covered_var[i]])
+                            for i in neg_index:
+                                encoding.append([-neg_example_covered_var[i]])
                         soft_lit_groups = [[lit for lit in rule_soft_lits]]
                     else:
-                        soft_lit_groups = [[-example_covered_var[i] for i in self.settings.neg_index]]
+                        soft_lit_groups = [[-neg_example_covered_var[i] for i in neg_index]]
                         soft_lit_groups.append([lit for lit in rule_soft_lits])
                 else:
-                    soft_lit_groups = [[example_covered_var[i] for i in self.settings.pos_index]]
+                    soft_lit_groups = [[pos_example_covered_var[i] for i in pos_index]]
                     if not self.settings.nonoise:
-                        soft_lit_groups.append([-example_covered_var[i] for i in self.settings.neg_index])
+                        soft_lit_groups.append([-neg_example_covered_var[i] for i in neg_index])
                     soft_lit_groups.append([lit for lit in rule_soft_lits])
             else:
-                soft_lit_groups = [[example_covered_var[i] for i in self.settings.pos_index]]
+                soft_lit_groups = [[pos_example_covered_var[i] for i in pos_index]]
                 if not self.settings.nonoise:
-                    soft_lit_groups.append([-example_covered_var[i] for i in self.settings.neg_index])
+                    soft_lit_groups.append([-neg_example_covered_var[i] for i in neg_index])
                 soft_lit_groups.append([lit for lit in rule_soft_lits])
         else:
             for rule_id in rule_var:
                 if rule_var[rule_id] is not None:
                     soft_clauses.append([-rule_var[rule_id]])
                     weights.append(ruleid_to_size[rule_id])
-            for i in self.settings.pos_index:
-                soft_clauses.append([example_covered_var[i]])
+            for i in pos_index:
+                soft_clauses.append([pos_example_covered_var[i]])
                 weights.append(POS_EXAMPLE_WEIGHT)
             if not self.settings.nonoise:
-                for i in self.settings.neg_index:
-                    soft_clauses.append([-example_covered_var[i]])
+                for i in neg_index:
+                    soft_clauses.append([-neg_example_covered_var[i]])
                     weights.append(NEG_EXAMPLE_WEIGHT)
 
         # PRUNE INCONSISTENT
@@ -190,13 +195,9 @@ class Combiner:
                 ids.append(k)
             if not should_add:
                 continue
-            # print('MOO')
             ids = [rulehash_to_id[k] for k in ids]
             clause = [-rule_var[k] for k in ids]
             encoding.append(clause)
-
-        # t2 = time.time()
-        # print('building time', t2-t1)
 
         best_prog = []
         best_fp = False
@@ -210,12 +211,6 @@ class Combiner:
             model_found = False
             model_inconsistent = False
 
-
-
-            # print('solving')
-            # t1 = time.time()
-
-
             if not self.settings.lex:
                 if timeout is None or self.settings.last_combine_stage:
                     cost, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights, self.settings)
@@ -227,17 +222,14 @@ class Combiner:
                 else:
                     cost, model = maxsat.anytime_lex_solve(encoding, soft_lit_groups, weights, self.settings, timeout)
 
-            # t2 = time.time()
-            # print('solving time', t2-t1)
-
             if model is None:
                 print("WARNING: No solution found, exit combiner.")
                 break
 
-            fn = sum(1 for i in self.settings.pos_index if model[example_covered_var[i]-1] < 0)
+            fn = sum(1 for i in pos_index if model[pos_example_covered_var[i]-1] < 0)
             fp = 0
             if not self.settings.nonoise:
-                fp = sum(1 for i in self.settings.neg_index if model[example_covered_var[i]-1] > 0)
+                fp = sum(1 for i in neg_index if model[neg_example_covered_var[i]-1] > 0)
             size = sum([ruleid_to_size[rule_id] for rule_id in ruleid_to_size if model[rule_var[rule_id]-1] > 0])
 
             if self.settings.lex:
@@ -305,8 +297,8 @@ class Combiner:
 
         new_solution = reduce_prog(new_solution)
         pos_covered, neg_covered = self.tester.test_prog_all(new_solution)
-        tp = len(pos_covered)
-        fp = len(neg_covered)
+        tp = pos_covered.count(1)
+        fp = neg_covered.count(1)
         tn = self.tester.num_neg - fp
         fn = self.tester.num_pos - tp
         size = calc_prog_size(new_solution)
