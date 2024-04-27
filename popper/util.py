@@ -17,7 +17,7 @@ class Literal(NamedTuple):
 
 clingo.script.enable_python()
 
-TIMEOUT=600
+TIMEOUT=1200
 EVAL_TIMEOUT=0.001
 MAX_LITERALS=40
 MAX_SOLUTIONS=1

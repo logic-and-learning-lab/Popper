@@ -7,6 +7,7 @@ Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf)
 - [Clingo](https://potassco.org/clingo/) (5.6.2 or above)
 - [Janus-swi](https://github.com/SWI-Prolog/packages-swipy)
 - [pysat](https://pysathq.github.io)
+- [bitarray](https://github.com/ilanschnell/bitarray)
 
 #### Installation
 Install Popper with the command ```pip install git+https://github.com/logic-and-learning-lab/Popper@main```
