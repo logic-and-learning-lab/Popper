@@ -9,12 +9,14 @@ POS_EXAMPLE_WEIGHT = 1
 NEG_EXAMPLE_WEIGHT = 1
 
 class Combiner:
-    def __init__(self, settings, tester):
+    def __init__(self, settings, tester, coverage_pos, coverage_neg):
         self.settings = settings
         self.tester = tester
         self.best_cost = None
         self.saved_progs = set()
         self.inconsistent = set()
+        self.coverage_pos = coverage_pos
+        self.coverage_neg = coverage_neg
 
     def add_inconsistent(self, prog):
         self.inconsistent.add(prog)
@@ -51,8 +53,6 @@ class Combiner:
                 neg_example_covered_var[i] = vpool.id("neg_example_covered({0})".format(i))
                 programs_covering_neg_example[i] = []
 
-        # print(pos_example_covered_var.items())
-        # print(neg_example_covered_var.items())
         rule_var = {}
 
         for program_count, prog in enumerate(self.saved_progs):
@@ -68,10 +68,6 @@ class Combiner:
 
             pos_covered = self.coverage_pos[prog_hash]
             neg_covered = self.coverage_neg[prog_hash]
-
-            # print('program_count')
-            # print(pos_covered)
-            # print(neg_covered)
 
             for ex, x in enumerate(pos_covered):
                 if x == 1:
@@ -127,35 +123,25 @@ class Combiner:
                     encoding.append(clause)
                     program_clauses[program_count].append(clause)
 
-        # print('B', encoding)
         if self.settings.lex and self.settings.recursion_enabled:
             encoding.append([rule_var[rule_id] for rule_id in base_rules])
 
-        # print('C', encoding)
-        # for k, v in programs_covering_pos_example.items():
-        #     print(k, v)
-        # for k, v in programs_covering_neg_example.items():
-        #     print(k, v)
         for ex in pos_index:
-            # print('pos_ex', ex)
             encoding.append([-pos_example_covered_var[ex]] + [program_var[p] for p in programs_covering_pos_example[ex]])
 
-        # for ex in self.settings.pos_index:
-        #     encoding.append([-self.example_covered_var[ex]] + [self.program_var[p] for p in self.programs_covering_example[ex]])
 
-        # print('D', encoding)
         if self.settings.noisy:
             for ex in neg_index:
                 for p in programs_covering_neg_example[ex]:
                     encoding.append([neg_example_covered_var[ex], -program_var[p]])
-        # print('E', encoding)
+
         soft_clauses = []
         weights = []
 
         if self.settings.best_prog_score:
             tp_, fn_, tn_, fp_, size_ = self.settings.best_prog_score
 
-        # with self.settings.stats.duration('combine.add'):
+
         if self.settings.lex:
             soft_lit_groups = []
             rule_soft_lits = []
@@ -164,7 +150,6 @@ class Combiner:
                     rule_soft_lits.append(-rule_var[rule_id])
                     weights.append(ruleid_to_size[rule_id])
             if self.settings.best_prog_score:
-                # print('A', fn_)
                 if fn_ == 0:
                     for i in pos_index:
                         encoding.append([pos_example_covered_var[i]])
@@ -174,8 +159,6 @@ class Combiner:
                                 encoding.append([-neg_example_covered_var[i]])
                         soft_lit_groups = [[lit for lit in rule_soft_lits]]
                     else:
-                        # assert(not self.settings.noisy)
-                        # print(self.settings.noisy)
                         soft_lit_groups = [[-neg_example_covered_var[i] for i in neg_index]]
                         soft_lit_groups.append([lit for lit in rule_soft_lits])
                 else:
@@ -201,9 +184,6 @@ class Combiner:
                     soft_clauses.append([-neg_example_covered_var[i]])
                     weights.append(NEG_EXAMPLE_WEIGHT)
 
-        # print('soft_clauses', len(soft_clauses), soft_clauses)
-        # print('weights', len(weights), sum(weights), weights)
-
         # PRUNE INCONSISTENT
         for prog in self.inconsistent:
             should_add = True
@@ -216,13 +196,9 @@ class Combiner:
                 ids.append(k)
             if not should_add:
                 continue
-            # print('MOO')
             ids = [rulehash_to_id[k] for k in ids]
             clause = [-rule_var[k] for k in ids]
             encoding.append(clause)
-
-        # t2 = time.time()
-        # print('building time', t2-t1)
 
         best_prog = []
         best_fp = False
@@ -236,10 +212,6 @@ class Combiner:
             model_found = False
             model_inconsistent = False
 
-            # print('encoding', encoding)
-            # print('soft_clauses', soft_clauses)
-
-
             if not self.settings.lex:
                 if timeout is None or self.settings.last_combine_stage:
                     cost, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights, self.settings)
@@ -251,22 +223,15 @@ class Combiner:
                 else:
                     cost, model = maxsat.anytime_lex_solve(encoding, soft_lit_groups, weights, self.settings, timeout)
 
-            # t2 = time.time()
-            # print('solving time', t2-t1)
-
             if model is None:
                 print("WARNING: No solution found, exit combiner.")
                 break
-
-            # print('COST', cost)
 
             fn = sum(1 for i in pos_index if model[pos_example_covered_var[i]-1] < 0)
             fp = 0
             if not self.settings.nonoise:
                 fp = sum(1 for i in neg_index if model[neg_example_covered_var[i]-1] > 0)
             size = sum([ruleid_to_size[rule_id] for rule_id in ruleid_to_size if model[rule_var[rule_id]-1] > 0])
-
-            # print('MODEL', 'fn:', fn, 'fp:', fp, 'size:',size)
 
             if self.settings.lex:
                 if self.settings.best_prog_score:
@@ -282,8 +247,6 @@ class Combiner:
 
             rules = [rule_id for rule_id in ruleid_to_rule if model[rule_var[rule_id]-1] > 0]
             model_prog = [ruleid_to_rule[k] for k in rules]
-
-            # print(format_prog(model_prog))
 
             if not prog_is_recursive(model_prog) and not prog_has_invention(model_prog):
                 best_prog = rules
@@ -322,7 +285,6 @@ class Combiner:
         self.saved_progs.update(new_progs)
 
         new_solution, cost = self.find_combination(timeout)
-        # print('ASDA0!!!', self.best_cost, cost)
 
         if len(new_solution) == 0:
             return None
@@ -331,8 +293,6 @@ class Combiner:
             self.best_cost = cost
         elif cost >= self.best_cost:
             return None
-
-        # print('ASDA!!!', self.best_cost, cost)
 
         self.best_cost = cost
 

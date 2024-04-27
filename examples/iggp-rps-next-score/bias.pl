@@ -24,3 +24,11 @@ type(different,(player,player)).
 :-
     clause(C),
     #count{V : var_type(C,V,ex)} != 1.
+
+literal(C,P,A,Vars):-
+    head_literal(C,P,A,Vars).
+literal(C,P,A,Vars):-
+    body_literal(C,P,A,Vars).
+:-
+    clause_var(C, Var),
+    #count{P,Vars : literal(C,P,A,Vars), var_member(Var,Vars)} < 2.

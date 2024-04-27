@@ -24,12 +24,6 @@ def bool_query(query):
 
 class Tester():
 
-
-    def tmp(self):
-        n = mem = query_once('findall(_B, (current_module(_M), module_property(_M, size(_B))), _S), sumlist(_S, N)')['N']
-        b = query_once('_M=janus, current_module(_M), module_property(_M, size(Bytes))')['Bytes']
-        return n, b
-
     def __init__(self, settings):
         self.settings = settings
 
@@ -46,6 +40,7 @@ class Tester():
             consult(x)
 
         query_once('load_examples')
+
         self.num_pos = query_once('findall(_K, pos_index(_K, _Atom), _S), length(_S, N)')['N']
         self.num_neg = query_once('findall(_K, neg_index(_K, _Atom), _S), length(_S, N)')['N']
 
@@ -124,15 +119,6 @@ class Tester():
         else:
             with self.using(prog):
                 pos_covered = query_once('pos_covered(S)')['S']
-
-
-        # order_by([desc(Bytes)], (current_module(M), module_property(M, size(Bytes)))).
-        # query_once('findall(_B, (current_module(_M), module_property(_M, size(_B))), S), sumlist(S,N), writeln(N)')
-
-        # query_once('forall((current_module(_M), module_property(_M, size(_B))), writeln(_M-_B)')
-        # print('-----')
-        # query_once('M=janus, current_module(M), module_property(M, size(Bytes)), writeln(M-Bytes), fail.')
-        # query_once('listing(janus)')
 
         pos_covered_bits = bitarray(self.num_pos)
         pos_covered_bits[pos_covered] = 1

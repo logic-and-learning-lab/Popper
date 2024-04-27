@@ -1,7 +1,4 @@
 import time
-import tracemalloc
-
-
 from collections import defaultdict
 from bitarray.util import subset, any_and, ones
 from functools import cache
@@ -56,7 +53,7 @@ def explain_none_functional(settings, tester, prog):
 
     return new_cons
 
-def load_solver(settings, tester):
+def load_solver(settings, tester, coverage_pos, coverage_neg):
     if settings.debug:
         settings.logger.debug(f'Load exact solver: {settings.solver}')
 
@@ -107,7 +104,7 @@ def load_solver(settings, tester):
     # TODO: temporary config, need to be modified
     settings.last_combine_stage = False
 
-    return Combiner(settings, tester)
+    return Combiner(settings, tester, coverage_pos, coverage_neg)
 
 class Popper():
     def __init__(self, settings, tester):
@@ -116,12 +113,9 @@ class Popper():
         self.pruned2 = set()
         self.seen_prog = set()
         self.unsat = set()
-
         self.tmp = {}
-        self.savings = 0
 
     def run(self, bkcons):
-        tracemalloc.start()
 
         settings, tester = self.settings, self.tester
         num_pos, num_neg = self.num_pos, self.num_neg = tester.num_pos, tester.num_neg
@@ -142,9 +136,8 @@ class Popper():
 
         settings.max_size = max_size
 
-        combiner = load_solver(settings, tester)
-
         # generator that builds programs
+        # AC: all very hacky until the refactoring is complete
         with settings.stats.duration('init'):
             if settings.single_solve:
                 from . gen2 import Generator
@@ -160,14 +153,14 @@ class Popper():
         paired_success_sets = self.paired_success_sets = defaultdict(set)
 
         covered_by = defaultdict(set)
-        coverage_pos = {}
-        coverage_neg = {}
+        # program_hash -> coverage (bit array)
+        coverage_pos, coverage_neg = {}, {}
+
         cached_prog_size = self.cached_prog_size = {}
+
         prog_lookup = {}
 
-        combiner.coverage_pos = coverage_pos
-        combiner.coverage_neg = coverage_neg
-        combiner.prog_size = cached_prog_size
+        combiner = load_solver(settings, tester, coverage_pos, coverage_neg)
 
         scores = self.scores = {}
 
@@ -227,45 +220,7 @@ class Popper():
                     print('coverage_neg', humansize(asizeof.asizeof(coverage_neg)))
                     print('prog_lookup', humansize(asizeof.asizeof(prog_lookup)))
                     print('cached_prog_size', humansize(asizeof.asizeof(cached_prog_size)))
-                    print('combiner', humansize(asizeof.asizeof(combiner)))
-                    print('tester', humansize(asizeof.asizeof(tester)))
-                    print('generator', humansize(asizeof.asizeof(generator)))
-                    print('self', humansize(asizeof.asizeof(self)))
                     print('could_prune_later', humansize(asizeof.asizeof(could_prune_later)))
-                    print('settings', humansize(asizeof.asizeof(settings)))
-                    m, j = tester.tmp()
-                    print('prolog', humansize(m))
-                    print('prolog.janus', humansize(j))
-
-                    snapshot = tracemalloc.take_snapshot()
-                    top_stats = snapshot.statistics('lineno')
-
-                    print("[ Top 10 ]")
-                    for stat in top_stats[:10]:
-                        print(stat)
-
-                    # self.pruned2 = set()
-                    # self.seen_prog = set()
-                    # self.unsat = set()
-                    # self.tmp = {}
-                    # success_sets = self.success_sets = {}
-                    # success_sets_noise = {}
-                    # paired_success_sets = self.paired_success_sets = defaultdict(set)
-
-                    # covered_by = defaultdict(set)
-                    # coverage_pos = {}
-                    # coverage_neg = {}
-                    # cached_prog_size = self.cached_prog_size = {}
-                    # prog_lookup = {}
-
-                    # combiner.coverage_pos = coverage_pos
-                    # combiner.coverage_neg = coverage_neg
-                    # combiner.prog_size = cached_prog_size
-
-                    # scores = self.scores = {}
-
-                    # could_prune_later = self.could_prune_later = []
-                    # could_prune_later_rec = self.could_prune_later_rec = []
 
                 if settings.debug:
                     settings.logger.debug(f'Program {settings.stats.total_programs}:')
