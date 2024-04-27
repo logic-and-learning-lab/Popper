@@ -402,7 +402,7 @@ class Popper():
                         # if inconsistent, prune generalisations
                         add_gen = True
                         if is_recursive:
-                            combiner.add_inconsistent(hash(prog))
+                            combiner.add_inconsistent(prog)
                             cons_ = frozenset(self.explain_inconsistent(prog))
                             new_cons.extend(cons_)
                             pruned_sub_inconsistent = len(cons_) > 0
@@ -843,10 +843,8 @@ class Popper():
         for prog_hash in to_delete:
             # AC: DELETE FROM SUCCESS_SETS_NOISE
             if prog_hash in combiner.saved_progs:
-                print('del1', prog_hash)
                 combiner.saved_progs.remove(prog_hash)
             else:
-                print('del2', prog_hash)
                 to_combine.remove(prog_hash)
 
     def subsumed_by_two_new(self, pos_covered, prog_size):

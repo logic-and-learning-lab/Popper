@@ -184,8 +184,7 @@ class Combiner:
                     weights.append(NEG_EXAMPLE_WEIGHT)
 
         # PRUNE INCONSISTENT
-        for prog_hash in self.inconsistent:
-            prog = self.prog_lookup[prog_hash]
+        for prog in self.inconsistent:
             should_add = True
             ids = []
             for rule in prog:
