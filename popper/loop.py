@@ -603,20 +603,21 @@ class Popper():
                         add_to_combiner = True
 
                         # TMP!!!!!!!!
-
+                        # AC: DO THIS!!!
                         if not settings.recursion_enabled and False:
                             to_delete = []
-                            for a,b in success_sets.items():
+                            for a, b in success_sets.items():
                                 if subset(a, pos_covered) and prog_size <= b:
                                     to_delete.append(a)
                             for x in to_delete:
                                 print('DELETED')
+                                # MOOOOOOOO!!!
                                 combiner.saved_progs.remove(k)
-                                del success_sets[x]
-                                del coverage_pos[x]
-                                del coverage_neg[x]
-                                del prog_lookup[x]
-                                # AC: somehow delete from paired_success_sets
+                                # del success_sets[x]
+                                # del coverage_pos[x]
+                                # del coverage_neg[x]
+                                # del prog_lookup[x]
+                                # AC: SOMEHOW DELETE FROM PAIRED_SUCCESS_SETS
 
                         k = hash(prog)
                         success_sets[pos_covered] = prog_size
