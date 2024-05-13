@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="popper-ilp",
-    version="4.1.2",                        # Update this for every new version
+    version="4.2.0",                        # Update this for every new version
     author="Andrew Cropper",
     author_email="andrew.cropper@cs.ox.ac.uk",
     description="Popper",
@@ -17,7 +17,9 @@ setuptools.setup(
     py_modules=['popper'],
     install_requires=[
         'clingo',
-        'pyswip'
+        'bitarray',
+        'janus_swi',
+        'python-sat'
     ],
     url="https://github.com/logic-and-learning-lab/Popper",
     scripts=['bin/popper-ilp'],
