@@ -2,21 +2,11 @@ import time
 from collections import defaultdict
 from bitarray.util import subset, any_and, ones
 from functools import cache
-from itertools import chain, combinations, permutations, combinations_with_replacement
+from itertools import chain, combinations, permutations
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog
 from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons
 from . combine import Combiner
-
-from pympler import asizeof, summary, muppy
-suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
-def humansize(nbytes):
-    i = 0
-    while nbytes >= 1024 and i < len(suffixes)-1:
-        nbytes /= 1024.
-        i += 1
-    f = ('%.2f' % nbytes).rstrip('0').rstrip('.')
-    return '%s %s' % (f, suffixes[i])
 
 def explain_none_functional(settings, tester, prog):
     new_cons = []
@@ -216,25 +206,6 @@ class Popper():
                 has_invention = settings.pi_enabled and prog_has_invention(prog)
 
                 settings.stats.total_programs += 1
-
-                # if settings.stats.total_programs % 5000 == 0:
-                #     print('')
-                #     print('settings.stats.total_programs', settings.stats.total_programs)
-                #     print('saved_progs', humansize(asizeof.asizeof(combiner.saved_progs)))
-                #     print('self.pruned2', humansize(asizeof.asizeof(self.pruned2)))
-                #     print('self.seen_prog', humansize(asizeof.asizeof(self.seen_prog)))
-                #     print('self.unsat', humansize(asizeof.asizeof(self.unsat)))
-                #     print('self.tmp', humansize(asizeof.asizeof(self.tmp)))
-                #     print('success_sets', humansize(asizeof.asizeof(success_sets)))
-                #     print('success_sets_noise', humansize(asizeof.asizeof(success_sets_noise)))
-                #     print('paired_success_sets', humansize(asizeof.asizeof(paired_success_sets)))
-                #     print('covered_by_pos', humansize(asizeof.asizeof(covered_by_pos)))
-                #     print('covered_by_neg', humansize(asizeof.asizeof(covered_by_neg)))
-                #     print('coverage_pos', humansize(asizeof.asizeof(coverage_pos)))
-                #     print('coverage_neg', humansize(asizeof.asizeof(coverage_neg)))
-                #     print('prog_lookup', humansize(asizeof.asizeof(prog_lookup)))
-                #     print('cached_prog_size', humansize(asizeof.asizeof(cached_prog_size)))
-                #     print('could_prune_later', humansize(asizeof.asizeof(could_prune_later)))
 
                 if settings.debug:
                     settings.logger.debug(f'Program {settings.stats.total_programs}:')
