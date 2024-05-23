@@ -15,21 +15,9 @@ Install Popper with the command ```pip install git+https://github.com/logic-and-
 #### Command line usage
 Run Popper with the command `python popper.py <input dir>`. For instance, `python popper.py examples/zendo1` produces:
 ```prolog
-11:11:14 Generating programs of size: 3
-11:11:14 Generating programs of size: 4
-11:11:14 Generating programs of size: 5
-11:11:14 Generating programs of size: 6
-11:11:14 ********************
-11:11:14 New best hypothesis:
-11:11:14 tp:19 fn:1 tn:20 fp:0 size:20
-11:11:14 zendo(A):- piece(A,B),red(B),coord1(B,C),size(B,C).
-11:11:14 zendo(A):- piece(A,C),contact(C,B),blue(B),rhs(C).
-11:11:14 zendo(A):- piece(A,C),contact(C,B),red(B),upright(B).
-11:11:14 zendo(A):- piece(A,C),contact(C,B),red(B),lhs(B).
-11:11:14 ********************
 ********** SOLUTION **********
 Precision:1.00 Recall:1.00 TP:20 FN:0 TN:20 FP:0 Size:6
-zendo(A):- piece(A,D),red(D),contact(D,B),size(B,C),small(C).
+zendo(V0):- small(V2),piece(V0,V1),red(V1),contact(V1,V3),size(V3,V2).
 ******************************
 ```
 
@@ -126,7 +114,7 @@ These settings greatly influence performance. If the values are too high, Popper
 
 #### Predicate invention
 
-Popper supports [automatic predicate invention](https://arxiv.org/pdf/2104.14426.pdf) (PI). With PI enabled, Popper (`python popper.py examples/kinship-pi`) learns the following program:
+Popper supports [automatic predicate invention](https://arxiv.org/pdf/2104.14426.pdf) (PI). With PI enabled, Popper (`python popper.py examples/kinship-pi`) learns the program:
 
 ```prolog
 grandparent(A,B):-inv1(C,B),inv1(A,C).
@@ -141,7 +129,7 @@ To enable PI, add the setting `enable_pi.` to the bias file. However, predicate 
  - `--stats` (default: false) shows runtime statistics
  - `--debug` (default: false) runs in debug mode
  - `--quiet` (default: False)  runs in quiet mode
- - `--timeout` (default: 600 seconds) sets a maximum learning time
+ - `--timeout` (default: 1200 seconds) sets a maximum learning time
  - `--eval-timeout` (default: 0.001 seconds) sets a maximum example testing time. This flag only applies when learning recursive programs.
  - `--solver {clingo,rc2,uwr,wmaxcdcl}`(default: `rc2`) which exact solver to use
  - `--anytime-solver {wmaxcdcl,nuwls}`(default: `None`) which anytime solver to use
@@ -149,13 +137,14 @@ To enable PI, add the setting `enable_pi.` to the bias file. However, predicate 
 
 
 #### Solvers
-Popper uses various MaxSAT solvers. By default, Popper uses the [RC2](https://alexeyignatiev.github.io/assets/pdf/imms-jsat19-preprint.pdf) exact solver provided by PySAT. **However, we have found that other solvers work *much* better.** Popper supports these solvers:
+Popper uses various MaxSAT solvers. By default, Popper uses the [RC2](https://alexeyignatiev.github.io/assets/pdf/imms-jsat19-preprint.pdf) exact solver provided by PySAT. Popper also supports these solvers:
 
 - UWrMaxSat (exact)
 - WMaxCDCL (exact)
 - NuWLS (anytime)
 
-You can download and compile these solvers from the [MaxSAT 2023 evaluation](https://maxsat-evaluations.github.io/2023/descriptions.html) website. **We strongly recommend using these solvers, especially NuWLS** To use them, ensure that the solver is available on your path.  See the [install solvers](solvers.md) file for help.
+You can download and compile these solvers from the [MaxSAT 2023 evaluation](https://maxsat-evaluations.github.io/2023/descriptions.html) website.
+**We strongly recommend using the anytime NuWLS** solver as it greatly improves the performance of Popper. To use them, ensure that the solver is available on your path.  See the [install solvers](solvers.md) file for help.
 
 #### Performance tips
 - Transform your BK to Datalog, which allows Popper to perform preprocessing on the BK
