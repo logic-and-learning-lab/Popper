@@ -776,6 +776,8 @@ def deduce_recalls(settings):
                 t = arg.type
                 if t == clingo.SymbolType.Number:
                     x = arg.number
+                elif t == clingo.SymbolType.String:
+                    x = arg.string
                 else:
                     x = arg.name
                 args.append(x)
@@ -885,6 +887,8 @@ def deduce_type_cons(settings):
                 t = arg.type
                 if t == clingo.SymbolType.Number:
                     x = arg.number
+                elif t == clingo.SymbolType.String:
+                    x = arg.string
                 else:
                     x = arg.name
 
