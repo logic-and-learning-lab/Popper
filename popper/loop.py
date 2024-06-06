@@ -521,6 +521,19 @@ class Popper():
                                     ignore_this_prog = True
                                     break
 
+                    # backtrack prune for consistent programs
+                    if not inconsistent:
+                        # new is consistent
+                        # if pos_covered(old) ⊆ pos_covered(new) and size(old) >= size(new) then ignore old
+                        not_covered = tester.pos_examples_ ^ pos_covered
+                        progs_not_subsumed = set.union(*(covered_by_pos[ex] for ex, ex_covered_ in enumerate(not_covered) if ex_covered_ == 1))
+                        all_progs = set.union(*(covered_by_pos[ex] for ex, ex_covered_ in enumerate(tester.pos_examples_) if ex_covered_ == 1))
+                        s_pos = all_progs.difference(progs_not_subsumed)
+                        for prog1 in s_pos:
+                            size1, tp1, fp1 = scores[prog1]
+                            if size1 >= prog_size:
+                                local_delete.add(prog1)
+
                     for k in local_delete:
                         assert(k in combiner.saved_progs|to_combine)
                         if k in combiner.saved_progs:

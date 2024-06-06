@@ -4,6 +4,7 @@ from collections import defaultdict
 from . import maxsat
 from pysat.formula import IDPool
 import time
+import bitarray
 
 POS_EXAMPLE_WEIGHT = 1
 NEG_EXAMPLE_WEIGHT = 1
@@ -57,6 +58,12 @@ class Combiner:
         rule_var = {}
 
         for program_count, prog_hash in enumerate(self.saved_progs):
+
+            prog = self.prog_lookup[prog_hash]
+
+            pos_covered = self.coverage_pos[prog_hash]
+            neg_covered = self.coverage_neg[prog_hash]
+
             # UNCOMMENT TO SHOW PROGRAMS ADDED TO THE SOLVER
             # tp = len(pos_covered)
             # fp = len(neg_covered)
@@ -64,11 +71,6 @@ class Combiner:
             # fn = self.tester.num_pos - tp
             # print(f'size: {size} fp:{fp} tp:{tp} mdl:{size + fp + fn} {format_prog(prog)}')
             # print(sorted(pos_covered))
-
-            prog = self.prog_lookup[prog_hash]
-
-            pos_covered = self.coverage_pos[prog_hash]
-            neg_covered = self.coverage_neg[prog_hash]
 
             for ex, x in enumerate(pos_covered):
                 if x == 1:
