@@ -30,8 +30,11 @@ head_literal(0,P,A,Vars):-
     head_pred(P,A),
     head_vars(A,Vars).
 
-1 {body_literal(0,P,A,Vars): body_pred(P,A), vars(A,Vars), not type_mismatch(P,Vars)} M :-
-    max_body(M).
+{body_literal(0,P,A,Vars)}:-
+    body_pred(P,A),
+    vars(A,Vars),
+    not bad_body(P,Vars),
+    not type_mismatch(P,Vars).
 
 type_mismatch(P,Vars):-
     var_pos(Var,Vars,Pos),
