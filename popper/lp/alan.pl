@@ -202,239 +202,232 @@ safe_bvar(Rule,Var):-
 %% IDEAS FROM THE PAPER:
 %% Learning logic programs by discovering where not to search. A. Cropper and C. Hocquette. AAAI23.
 
-%% :- prop(ab_ba,(P,P)), body_literal(_,P,_,(A,B)), A>B.
-%% :- prop(abc_acb,(P,P)), body_literal(_,P,_,(A,B,C)), B>C.
-%% :- prop(abc_bac,(P,P)), body_literal(_,P,_,(A,B,C)), A>B.
-%% :- prop(abc_cba,P), body_literal(_,P,_,(A,B,C)), A>B.
-%% :- prop(abcd_acbd,P), body_literal(_,P,_,(A,B,C,D)), C>B.
-%% :- prop(abcd_adcb,P), body_literal(_,P,_,(A,B,C,D)), D>B.
-
-
-:- prop(ab_ba,(P,P)), body_literal(Rule,P,_,(A,B)), A>B.
-:- prop(abc_acb,(P,P)), body_literal(Rule,P,_,(A,B,C)), B>C.
-:- prop(abc_bac,(P,P)), body_literal(Rule,P,_,(A,B,C)), A>B.
-:- prop(abc_cba,(P,P)), body_literal(Rule,P,_,(A,B,C)), A>C.
-:- prop(abcd_abdc,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), C>D.
-:- prop(abcd_acbd,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), B>C.
-:- prop(abcd_adcb,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), B>D.
-:- prop(abcd_bacd,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), A>B.
-:- prop(abcd_badc,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), A>B.
-:- prop(abcd_cbad,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), A>C.
-:- prop(abcd_cdab,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), A>C.
-:- prop(abcd_dbca,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), A>D.
-:- prop(abcd_dcba,(P,P)), body_literal(Rule,P,_,(A,B,C,D)), B>C.
-:- prop(abcde_abced,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), D>E.
-:- prop(abcde_abdce,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), C>D.
-:- prop(abcde_abedc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), C>E.
-:- prop(abcde_acbde,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>C.
-:- prop(abcde_acbed,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>C.
-:- prop(abcde_adcbe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>D.
-:- prop(abcde_adebc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>D.
-:- prop(abcde_aecdb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>E.
-:- prop(abcde_aedcb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), C>D.
-:- prop(abcde_bacde,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>B.
-:- prop(abcde_baced,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>B.
-:- prop(abcde_badce,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>B.
-:- prop(abcde_badec,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>B.
-:- prop(abcde_baedc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>B.
-:- prop(abcde_bcaed,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), D>E.
-:- prop(abcde_bdeac,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), C>E.
-:- prop(abcde_bedca,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), C>D.
-:- prop(abcde_cbade,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>C.
-:- prop(abcde_cbaed,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>C.
-:- prop(abcde_cdabe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>C.
-:- prop(abcde_cdaeb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>C.
-:- prop(abcde_cdeba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>D.
-:- prop(abcde_ceadb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>C.
-:- prop(abcde_cedab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>E.
-:- prop(abcde_dbcae,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>D.
-:- prop(abcde_dbeac,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>D.
-:- prop(abcde_dcbae,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>C.
-:- prop(abcde_dcbea,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>C.
-:- prop(abcde_dceab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>D.
-:- prop(abcde_decab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>D.
-:- prop(abcde_ebcda,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>E.
-:- prop(abcde_ebdca,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), C>D.
-:- prop(abcde_ecbda,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>C.
-:- prop(abcde_ecdba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), A>E.
-:- prop(abcde_edcba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E)), B>D.
-:- prop(abcdef_abcdfe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), E>F.
-:- prop(abcdef_abcedf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>E.
-:- prop(abcdef_abcfed,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>F.
-:- prop(abcdef_abdcef,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
-:- prop(abcdef_abdcfe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
-:- prop(abcdef_abedcf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>E.
-:- prop(abcdef_abefcd,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>E.
-:- prop(abcdef_abfdec,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>F.
-:- prop(abcdef_abfedc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>E.
-:- prop(abcdef_acbdef,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_acbdfe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_acbedf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_acbefd,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_acbfed,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_acdbfe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), E>F.
-:- prop(abcdef_acefbd,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>F.
-:- prop(abcdef_acfedb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>E.
-:- prop(abcdef_adcbef,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_adcbfe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_adebcf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_adebfc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_adefcb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>E.
-:- prop(abcdef_adfbec,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_adfebc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>F.
-:- prop(abcdef_aecdbf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>E.
-:- prop(abcdef_aecfbd,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>E.
-:- prop(abcdef_aedcbf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
-:- prop(abcdef_aedcfb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
-:- prop(abcdef_aedfbc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>E.
-:- prop(abcdef_aefdbc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>E.
-:- prop(abcdef_afcdeb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>F.
-:- prop(abcdef_afcedb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>E.
-:- prop(abcdef_afdceb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
-:- prop(abcdef_afdecb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>F.
-:- prop(abcdef_afedcb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>E.
-:- prop(abcdef_bacdef,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_bacdfe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_bacedf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_bacefd,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_bacfed,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_badcef,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_badcfe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_badecf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_badefc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_badfce,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_badfec,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_baedcf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_baedfc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_baefcd,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_baefdc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_bafdec,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_bafedc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>B.
-:- prop(abcdef_bcadfe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), E>F.
-:- prop(abcdef_bcaedf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>E.
-:- prop(abcdef_bcafed,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>F.
-:- prop(abcdef_bcdafe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), E>F.
-:- prop(abcdef_bcefad,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>F.
-:- prop(abcdef_bcfeda,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>E.
-:- prop(abcdef_bdacfe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), E>F.
-:- prop(abcdef_bdcafe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), E>F.
-:- prop(abcdef_bdeacf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>E.
-:- prop(abcdef_bdefca,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>E.
-:- prop(abcdef_bdfaec,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>F.
-:- prop(abcdef_bdfeac,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>F.
-:- prop(abcdef_beafcd,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>F.
-:- prop(abcdef_becfad,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>F.
-:- prop(abcdef_bedcaf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
-:- prop(abcdef_bedcfa,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
-:- prop(abcdef_befadc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>F.
-:- prop(abcdef_befdac,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>F.
-:- prop(abcdef_bfaedc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>E.
-:- prop(abcdef_bfceda,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>E.
-:- prop(abcdef_bfdcae,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
-:- prop(abcdef_bfdcea,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
-:- prop(abcdef_bfeacd,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>E.
-:- prop(abcdef_bfedca,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>E.
-:- prop(abcdef_cbadef,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_cbadfe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_cbaedf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_cbaefd,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_cbafed,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_cbdafe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), E>F.
-:- prop(abcdef_cbefad,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>F.
-:- prop(abcdef_cbfeda,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>E.
-:- prop(abcdef_cdabef,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_cdabfe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_cdaebf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_cdaefb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_cdafbe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_cdafeb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_cdbafe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), E>F.
-:- prop(abcdef_cdebaf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_cdebfa,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_cdfbae,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_cdfbea,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_ceadbf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_ceadfb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_ceafbd,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_ceafdb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_cebfad,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>F.
-:- prop(abcdef_cedabf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>E.
-:- prop(abcdef_cedfba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>E.
-:- prop(abcdef_cefabd,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>E.
-:- prop(abcdef_cefdba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>E.
-:- prop(abcdef_cfadeb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_cfaedb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>C.
-:- prop(abcdef_cfbeda,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>E.
-:- prop(abcdef_cfdaeb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>F.
-:- prop(abcdef_cfdeab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>F.
-:- prop(abcdef_cfeadb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>F.
-:- prop(abcdef_cfedab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>F.
-:- prop(abcdef_dbcaef,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_dbcafe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_dbeacf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_dbeafc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_dbefca,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>E.
-:- prop(abcdef_dbfaec,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_dbfeac,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>F.
-:- prop(abcdef_dcbaef,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_dcbafe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_dcbeaf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_dcbefa,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_dcbfae,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_dcbfea,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_dceabf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_dceafb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_dcfabe,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_dcfaeb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_decabf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_decafb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_decfba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>E.
-:- prop(abcdef_defabc,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_defacb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_defbac,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>F.
-:- prop(abcdef_defcba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>E.
-:- prop(abcdef_dfcaeb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_dfceab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>F.
-:- prop(abcdef_dfeacb,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>D.
-:- prop(abcdef_dfebca,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>E.
-:- prop(abcdef_dfecab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>F.
-:- prop(abcdef_ebcdaf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>E.
-:- prop(abcdef_ebcfad,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>E.
-:- prop(abcdef_ebdcaf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
-:- prop(abcdef_ebdcfa,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
-:- prop(abcdef_ebdfac,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>E.
-:- prop(abcdef_ebfdac,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>E.
-:- prop(abcdef_ecbdaf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_ecbdfa,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_ecbfad,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_ecbfda,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_ecdbaf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>E.
-:- prop(abcdef_ecdfab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>E.
-:- prop(abcdef_ecfbad,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>E.
-:- prop(abcdef_ecfdab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>E.
-:- prop(abcdef_edcbaf,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_edcbfa,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_edcfab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>E.
-:- prop(abcdef_edfbac,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_edfbca,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_edfcab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>E.
-:- prop(abcdef_efcdab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>E.
-:- prop(abcdef_efdcab,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
-:- prop(abcdef_efdcba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
-:- prop(abcdef_fbcdea,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>F.
-:- prop(abcdef_fbceda,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), D>E.
-:- prop(abcdef_fbdcea,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
-:- prop(abcdef_fbdeca,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>F.
-:- prop(abcdef_fbedca,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>E.
-:- prop(abcdef_fcbdea,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_fcbeda,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>C.
-:- prop(abcdef_fcdbea,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>F.
-:- prop(abcdef_fcdeba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>F.
-:- prop(abcdef_fcebda,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>F.
-:- prop(abcdef_fcedba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>F.
-:- prop(abcdef_fdcbea,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_fdceba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>F.
-:- prop(abcdef_fdebca,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>D.
-:- prop(abcdef_fdecba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), A>F.
-:- prop(abcdef_fecdba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), B>E.
-:- prop(abcdef_fedcba,(P,P)), body_literal(Rule,P,_,(A,B,C,D,E,F)), C>D.
+bad_body(P, Vars):- prop(ab_ba,(P,P)), vars(_, Vars), Vars=(A,B), A>B.
+bad_body(P, Vars):- prop(ab_ba,(P,P)), vars(_, Vars), Vars=(A,B), A>B.
+bad_body(P, Vars):- prop(abc_acb,(P,P)), vars(_, Vars), Vars=(A,B,C), B>C.
+bad_body(P, Vars):- prop(abc_bac,(P,P)), vars(_, Vars), Vars=(A,B,C), A>B.
+bad_body(P, Vars):- prop(abc_cba,(P,P)), vars(_, Vars), Vars=(A,B,C), A>C.
+bad_body(P, Vars):- prop(abcd_abdc,(P,P)), vars(_, Vars), Vars=(A,B,C,D), C>D.
+bad_body(P, Vars):- prop(abcd_acbd,(P,P)), vars(_, Vars), Vars=(A,B,C,D), B>C.
+bad_body(P, Vars):- prop(abcd_adcb,(P,P)), vars(_, Vars), Vars=(A,B,C,D), B>D.
+bad_body(P, Vars):- prop(abcd_bacd,(P,P)), vars(_, Vars), Vars=(A,B,C,D), A>B.
+bad_body(P, Vars):- prop(abcd_badc,(P,P)), vars(_, Vars), Vars=(A,B,C,D), A>B.
+bad_body(P, Vars):- prop(abcd_cbad,(P,P)), vars(_, Vars), Vars=(A,B,C,D), A>C.
+bad_body(P, Vars):- prop(abcd_cdab,(P,P)), vars(_, Vars), Vars=(A,B,C,D), A>C.
+bad_body(P, Vars):- prop(abcd_dbca,(P,P)), vars(_, Vars), Vars=(A,B,C,D), A>D.
+bad_body(P, Vars):- prop(abcd_dcba,(P,P)), vars(_, Vars), Vars=(A,B,C,D), B>C.
+bad_body(P, Vars):- prop(abcde_abced,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), D>E.
+bad_body(P, Vars):- prop(abcde_abdce,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), C>D.
+bad_body(P, Vars):- prop(abcde_abedc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), C>E.
+bad_body(P, Vars):- prop(abcde_acbde,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>C.
+bad_body(P, Vars):- prop(abcde_acbed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>C.
+bad_body(P, Vars):- prop(abcde_adcbe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>D.
+bad_body(P, Vars):- prop(abcde_adebc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>D.
+bad_body(P, Vars):- prop(abcde_aecdb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>E.
+bad_body(P, Vars):- prop(abcde_aedcb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), C>D.
+bad_body(P, Vars):- prop(abcde_bacde,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>B.
+bad_body(P, Vars):- prop(abcde_baced,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>B.
+bad_body(P, Vars):- prop(abcde_badce,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>B.
+bad_body(P, Vars):- prop(abcde_badec,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>B.
+bad_body(P, Vars):- prop(abcde_baedc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>B.
+bad_body(P, Vars):- prop(abcde_bcaed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), D>E.
+bad_body(P, Vars):- prop(abcde_bdeac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), C>E.
+bad_body(P, Vars):- prop(abcde_bedca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), C>D.
+bad_body(P, Vars):- prop(abcde_cbade,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>C.
+bad_body(P, Vars):- prop(abcde_cbaed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>C.
+bad_body(P, Vars):- prop(abcde_cdabe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>C.
+bad_body(P, Vars):- prop(abcde_cdaeb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>C.
+bad_body(P, Vars):- prop(abcde_cdeba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>D.
+bad_body(P, Vars):- prop(abcde_ceadb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>C.
+bad_body(P, Vars):- prop(abcde_cedab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>E.
+bad_body(P, Vars):- prop(abcde_dbcae,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>D.
+bad_body(P, Vars):- prop(abcde_dbeac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>D.
+bad_body(P, Vars):- prop(abcde_dcbae,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>C.
+bad_body(P, Vars):- prop(abcde_dcbea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>C.
+bad_body(P, Vars):- prop(abcde_dceab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>D.
+bad_body(P, Vars):- prop(abcde_decab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>D.
+bad_body(P, Vars):- prop(abcde_ebcda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>E.
+bad_body(P, Vars):- prop(abcde_ebdca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), C>D.
+bad_body(P, Vars):- prop(abcde_ecbda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>C.
+bad_body(P, Vars):- prop(abcde_ecdba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>E.
+bad_body(P, Vars):- prop(abcde_edcba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>D.
+bad_body(P, Vars):- prop(abcdef_abcdfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_abcedf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_abcfed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_abdcef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_abdcfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_abedcf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_abefcd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_abfdec,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_abfedc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_acbdef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_acbdfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_acbedf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_acbefd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_acbfed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_acdbfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_acefbd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_acfedb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_adcbef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_adcbfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_adebcf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_adebfc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_adefcb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_adfbec,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_adfebc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_aecdbf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_aecfbd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_aedcbf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_aedcfb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_aedfbc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_aefdbc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_afcdeb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_afcedb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_afdceb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_afdecb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_afedcb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_bacdef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_bacdfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_bacedf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_bacefd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_bacfed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_badcef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_badcfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_badecf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_badefc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_badfce,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_badfec,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_baedcf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_baedfc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_baefcd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_baefdc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_bafdec,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_bafedc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_bcadfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_bcaedf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_bcafed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_bcdafe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_bcefad,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_bcfeda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_bdacfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_bdcafe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_bdeacf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_bdefca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_bdfaec,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_bdfeac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_beafcd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_becfad,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_bedcaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_bedcfa,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_befadc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_befdac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_bfaedc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_bfceda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_bfdcae,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_bfdcea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_bfeacd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_bfedca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_cbadef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cbadfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cbaedf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cbaefd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cbafed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cbdafe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_cbefad,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_cbfeda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_cdabef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cdabfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cdaebf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cdaefb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cdafbe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cdafeb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cdbafe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_cdebaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_cdebfa,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_cdfbae,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_cdfbea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_ceadbf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_ceadfb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_ceafbd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_ceafdb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cebfad,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_cedabf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_cedfba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_cefabd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_cefdba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_cfadeb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cfaedb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cfbeda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_cfdaeb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_cfdeab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_cfeadb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_cfedab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_dbcaef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dbcafe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dbeacf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dbeafc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dbefca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_dbfaec,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dbfeac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_dcbaef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_dcbafe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_dcbeaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_dcbefa,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_dcbfae,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_dcbfea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_dceabf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dceafb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dcfabe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dcfaeb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_decabf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_decafb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_decfba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_defabc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_defacb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_defbac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_defcba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_dfcaeb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dfceab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_dfeacb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dfebca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_dfecab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_ebcdaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_ebcfad,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_ebdcaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_ebdcfa,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_ebdfac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_ebfdac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_ecbdaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_ecbdfa,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_ecbfad,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_ecbfda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_ecdbaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_ecdfab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_ecfbad,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_ecfdab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_edcbaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_edcbfa,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_edcfab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_edfbac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_edfbca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_edfcab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_efcdab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_efdcab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_efdcba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_fbcdea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fbceda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_fbdcea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_fbdeca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fbedca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_fcbdea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_fcbeda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_fcdbea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fcdeba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fcebda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fcedba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fdcbea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_fdceba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fdebca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_fdecba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fecdba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_fedcba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
