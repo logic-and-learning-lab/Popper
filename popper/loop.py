@@ -207,6 +207,9 @@ class Popper():
 
                 settings.stats.total_programs += 1
 
+                if settings.stats.total_programs % 10000 == 0:
+                    tester.janus_clear_cache()
+
                 if settings.debug:
                     settings.logger.debug(f'Program {settings.stats.total_programs}:')
                     settings.logger.debug(format_prog(prog))

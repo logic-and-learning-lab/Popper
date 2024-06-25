@@ -53,6 +53,9 @@ class Tester():
         if self.settings.recursion_enabled:
             query_once(f'assert(timeout({self.settings.eval_timeout})), fail')
 
+    def janus_clear_cache(self):
+        return query_once('retractall(janus:py_call_cache(_String,_Input,_TV,_M,_Goal,_Dict,_Truth,_OutVars))')
+
     # AC: THIS METHOD IS VERY EXPENSIVE, ESPECIALLY THE ORDER_RULE CALL
     @cache
     def parse_single_rule(self, prog):
