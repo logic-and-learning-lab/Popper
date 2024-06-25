@@ -139,16 +139,16 @@ To enable PI, add the setting `enable_pi.` to the bias file. However, predicate 
 #### Solvers
 Popper uses various MaxSAT solvers. By default, Popper uses the [RC2](https://alexeyignatiev.github.io/assets/pdf/imms-jsat19-preprint.pdf) exact solver provided by PySAT. Popper also supports these solvers:
 
-- UWrMaxSat (exact)
+- [UWrMaxSat](https://github.com/marekpiotrow/UWrMaxSat) (exact)
 - WMaxCDCL (exact)
-- NuWLS (anytime)
+- [NuWLS](https://ojs.aaai.org/index.php/AAAI/article/view/25505) (anytime)
 
 You can download and compile these solvers from the [MaxSAT 2023 evaluation](https://maxsat-evaluations.github.io/2023/descriptions.html) website.
 **We strongly recommend using the anytime NuWLS** solver as it greatly improves the performance of Popper. To use them, ensure that the solver is available on your path.  See the [install solvers](solvers.md) file for help.
 
 #### Performance tips
 - Transform your BK to Datalog, which allows Popper to perform preprocessing on the BK
-- Use one of the MaxSAT solvers, above, especially the NuWLS anytime solver.
+- Try the NuWLS anytime solver.
 - Use 6 variables or fewer
 - Avoid recursion and predicate invention
 
