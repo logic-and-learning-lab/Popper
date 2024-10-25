@@ -2,24 +2,16 @@
 %% THIS FILE CONTAINS THE ASP PROGRAM GENERATOR, CALLED ALAN
 %% ##################################################
 
-#defined direction/2.
+#defined direction_/3.
 #defined type/2.
-#defined invented/2.
-#defined lower/2.
-
-#defined enable_pi/0.
-#defined enable_recursion/0.
 #defined non_datalog/0.
-#defined allow_singletons/0.
-#defined custom_max_size/1.
 
 #show body_literal/4.
-#show before/2.
 
+
+%% max_size(K):-
+%%     custom_max_size(K).
 max_size(K):-
-    custom_max_size(K).
-max_size(K):-
-    not custom_max_size(_),
     max_body(M),
     max_clauses(N),
     K = (M+1)*N.
@@ -27,112 +19,22 @@ size(N):-
     max_size(MaxSize),
     N = 2..MaxSize,
     #sum{K+1,Rule : body_size(Rule,K)} == N.
+
+%% THIS DOES NOT WORK!!!???
+%% size(N+1):-
+%%     body_size(0,N).
 :- not size(_).
-
-pi_or_rec:-
-    recursive.
-pi_or_rec:-
-    pi.
-pi_or_rec_enabled:-
-    enable_pi.
-pi_or_rec_enabled:-
-    enable_recursion.
-
-%% prohibit multi-clause programs when no recursion or PI
-:-
-    clause(1),
-    not pi_or_rec.
-
-%% AC: @DC, this constraint might mess up the work on negation
-:-
-    enable_recursion,
-    not pi,
-    clause(Rule),
-    Rule > 0,
-    not recursive_clause(Rule,_,_).
-
-%% head pred symbol if given by user or invented
-head_aux(P,A):-
-    head_pred(P,A).
-head_aux(P,A):-
-    invented(P,A).
-
-%% body pred symbol if given by user or invented
-body_aux(P,A):-
-    body_pred(P,A).
-body_aux(P,A):-
-    invented(P,A).
-body_aux(P,A):-
-    head_aux(P,A),
-    enable_recursion.
 
 %% ********** BASE CASE (RULE 0) **********
 head_literal(0,P,A,Vars):-
     head_pred(P,A),
     head_vars(A,Vars).
 
-1 {body_literal(0,P,A,Vars): body_aux(P,A), vars(A,Vars), not head_pred(P,A), not type_mismatch(P,Vars), not bad_body(P,A,Vars)} M :-
-    max_body(M).
-
-%% {body_literal(0,P,A,Vars)}:-
-%%     body_aux(P,A), vars(A,Vars), not head_pred(P,A), not type_mismatch(P,Vars), not bad_body(P,A,Vars).
-%%     %% max_body(M).
-%% ********** RECURSIVE CASE (RULE > 0) **********
-%% THE SYMBOL INV_K CANNOT APPEAR IN THE HEAD OF CLAUSE C < K
-0 {head_literal(Rule,P,A,Vars): head_vars(A,Vars), head_aux(P,A), index(P,I), Rule >= I} 1:-
-    Rule = 1..N-1,
-    max_clauses(N),
-    pi_or_rec_enabled.
-
-1 {body_literal(Rule,P,A,Vars): body_aux(P,A), vars(A,Vars), not bad_body(P,A,Vars), not type_mismatch(P,Vars)} M :-
-    clause(Rule),
-    Rule > 0,
-    max_body(M),
-    enable_recursion,
-    not enable_pi.
-
-
-%% 0 {body_literal(Rule,P,A,Vars): body_aux(P,A), vars(A,Vars), not bad_body(P,A,Vars), not type_mismatch(P,Vars)} M :-
-%%     %% clause(Rule),
-%%     %% Rule > 0,
-%%     Rule = 1..N-1,
-%%     max_clauses(N),
-%%     max_body(M),
-%%     enable_recursion,
-%%     not enable_pi.
-
-%% :-
-%%     clause(Rule),
-%%     not body_literal(Rule,_,_,_).
-
-%% :-
-%%     body_literal(Rule,_,_,_),
-%%     not clause rule()
-
-%% ********** INVENTED RULES **********
-1 {body_literal(Rule,P,A,Vars): body_aux(P,A), vars(A,Vars), not bad_body(P,A,Vars)} M :-
-    clause(Rule),
-    Rule > 0,
-    max_body(M),
-    enable_pi.
-
-bad_body(P,A,Vars):-
-    head_pred(P,A),
+{body_literal(0,P,A,Vars)}:-
+    body_pred(P,A),
     vars(A,Vars),
-    not good_vars(A,Vars).
-good_vars(A,Vars1):-
-    head_vars(A,Vars2),
-    var_member(V,Vars1),
-    not var_member(V,Vars2).
-bad_body(P,A,Vars2):-
-    num_in_args(P,1),
-    head_pred(P,A),
-    head_vars(A,Vars1),
-    vars(A,Vars2),
-    var_pos(Var,Vars1,Pos1),
-    var_pos(Var,Vars2,Pos2),
-    direction_(P,Pos1,in),
-    direction_(P,Pos2,in).
+    not bad_body(P,Vars),
+    not type_mismatch(P,Vars).
 
 type_mismatch(P,Vars):-
     var_pos(Var,Vars,Pos),
@@ -140,17 +42,6 @@ type_mismatch(P,Vars):-
     pred_arg_type(P,Pos,T1),
     fixed_var_type(Var,T2),
     T1 != T2.
-
-calls_invented(Rule):-
-    invented(P,A),
-    body_literal(Rule,P,A,_).
-:-
-    pi,
-    not recursive,
-    head_literal(Rule,P,A,_),
-    head_pred(P,A),
-    not calls_invented(Rule).
-
 
 %% THERE IS A CLAUSE IF THERE IS A HEAD LITERAL
 clause(C):-
@@ -166,44 +57,12 @@ body_size(Rule,N):-
     N <= MaxN,
     #count{P,Vars : body_literal(Rule,P,_,Vars)} == N.
 
-%% USE CLAUSES IN ORDER
-:-
-    clause(C1),
-    C1 > 1,
-    C2 = 0..C1-1,
-    not clause(C2).
-
-%% USE VARS IN ORDER IN A CLAUSE
-%% :-
-%%     clause_var(C,Var1),
-%%     Var1 > 1,
-%%     Var2 = Var1-1,
-%%     %% Var2 = 1..Var1-1,
-%%     not clause_var(C,Var2).
-
 %% USE VARS IN ORDER IN A CLAUSE
 :-
     clause_var(C,Var1),
     Var1 > 1,
     Var2 = 1..Var1-1,
     not clause_var(C,Var2).
-
-%% ##################################################
-%% VARS ABOUT VARS - META4LIFE
-%% ##################################################
-#script (python)
-from itertools import permutations
-from clingo.symbol import Tuple_, Number
-def mk_tuple(xs):
-    return Tuple_([Number(x) for x in xs])
-def pyhead_vars(arity):
-    return mk_tuple(range(arity.number))
-def pyvars(arity, max_vars):
-    for x in permutations(range(max_vars.number),arity.number):
-        yield mk_tuple(x)
-def pyvar_pos(pos, vars):
-    return vars.arguments[pos.number]
-#end.
 
 %% POSSIBLE VAR
 var(0..N-1):-
@@ -212,6 +71,7 @@ var(0..N-1):-
 %% CLAUSE VAR
 clause_var(C,Var):-
     head_var(C,Var).
+
 clause_var(C,Var):-
     body_var(C,Var).
 
@@ -219,6 +79,7 @@ clause_var(C,Var):-
 head_var(C,Var):-
     head_literal(C,_,_,Vars),
     var_member(Var,Vars).
+
 %% BODY VAR
 body_var(C,Var):-
     body_literal(C,_,_,Vars),
@@ -227,115 +88,6 @@ body_var(C,Var):-
 %% VAR IN A TUPLE OF VARS
 var_member(Var,Vars):-
     var_pos(Var,Vars,_).
-
-%% VAR IN A LITERAL
-var_in_literal(C,P,Vars,Var):-
-    head_literal(C,P,_,Vars),
-    var_member(Var,Vars).
-var_in_literal(C,P,Vars,Var):-
-    body_literal(C,P,_,Vars),
-    var_member(Var,Vars).
-
-%% HEAD VARS ARE ALWAYS 0,1,...,A-1
-head_vars(A,@pyhead_vars(A)):-
-    head_pred(_,A).
-head_vars(A,@pyhead_vars(A)):-
-    invented(_,A).
-
-%% NEED TO KNOW LITERAL ARITIES
-seen_arity(A):-
-    head_pred(_,A).
-seen_arity(A):-
-    body_pred(_,A).
-max_arity(K):-
-    #max{A : seen_arity(A)} == K.
-
-%% POSSIBLE VARIABLE PERMUTATIONS FROM 1..MAX_ARITY
-vars(A,@pyvars(A,MaxVars)):-
-    max_vars(MaxVars),
-    max_arity(K),
-    A=1..K.
-
-%% POSITION OF VAR IN TUPLE
-var_pos(@pyvar_pos(Pos,Vars),Vars,Pos):-
-    vars(A,Vars),
-    Pos = 0..A-1.
-
-%% %% ##################################################
-%% %% REDUCE CONSTRAINT GROUNDING BY ORDERING CLAUSES
-%% %% ##################################################
-before(C1,C2):-
-    C1 < C2,
-    head_literal(C1,P,_,_),
-    head_literal(C2,Q,_,_),
-    lower(P,Q).
-
-before(C1,C2):-
-    C1 < C2,
-    head_literal(C1,P,_,_),
-    head_literal(C2,P,_,_),
-    not recursive_clause(C1,P,A),
-    recursive_clause(C2,P,A).
-
-before(C1,C2):-
-    C1 < C2,
-    head_literal(C1,P,A,_),
-    head_literal(C2,P,A,_),
-    not recursive_clause(C1,P,A),
-    not recursive_clause(C2,P,A),
-    body_size(C1,K1),
-    body_size(C2,K2),
-    K1 < K2.
-
-before(C1,C2):-
-    C1 < C2,
-    head_literal(C1,P,_,_),
-    head_literal(C2,P,_,_),
-    recursive_clause(C1,P,A),
-    recursive_clause(C2,P,A),
-    body_size(C1,K1),
-    body_size(C2,K2),
-    K1 < K2.
-
-%% count_lower(P,N):-
-%%     head_literal(_,P,_,_),
-%%     #count{Q : lower(Q,P)} == N.
-
-%% min_clause(C,N+1):-
-%%     recursive_clause(C,P,A),
-%%     count_lower(P,N).
-
-%% min_clause(C,N):-
-%%     head_literal(C,P,A,_),
-%%     not recursive_clause(C,P,A),
-%%     count_lower(P,N).
-
-%% lower(R1,R2):-
-%%     rule(R1),
-%%     rule(R2),
-%%     R1 != R2,
-%%     not recursive(R1),
-%%     not recursive(R2),
-%%     size(R1,K1),
-%%     size(R2,K2),
-%%     K1 < K2.
-
-%% lower(R1,R2):-
-%%     rule(R1),
-%%     rule(R2),
-%%     R1 != R2,
-%%     not recursive(R1),
-%%     recursive(R2).
-
-%% lower(R1,R2):-
-%%     rule(R1),
-%%     rule(R2),
-%%     R1 != R2,
-%%     recursive(R1),
-%%     recursive(R2),
-%%     size(R1,K1),
-%%     size(R2,K2),
-%%     K1 < K2.
 
 %% ##################################################
 %% BIAS CONSTRAINTS
@@ -346,43 +98,27 @@ before(C1,C2):-
     head_var(Rule,Var),
     not body_var(Rule,Var).
 
-%% ELIMINATE SINGLETONS
-:-
-    not allow_singletons,
-    clause_var(C,Var),
-    #count{P,Vars : var_in_literal(C,P,Vars,Var)} == 1.
-
-%% OLD
-%% valid_var(Rule,Var):-
-%%     not allow_singletons,
-%%     clause_var(Rule,Var),
-%%     #count{P,Vars : var_in_literal(Rule,P,Vars,Var)} > 2.
-
-%% NEW
+%% if non_datalog is true, all vars are valid
+%% constraints used by bk cons
 valid_var(Rule,Var):-
-    obeys_singleton_check(Rule,Var),
-    obeys_datalog_check(Rule,Var).
-
-obeys_datalog_check(Rule,Var):-
     non_datalog,
-    clause_var(Rule,Var).
+    Rule=0..MaxRules-1,
+    max_clauses(MaxRules),
+    var(Var).
 
-obeys_datalog_check(Rule,Var):-
-    clause_var(Rule,Var),
-    not head_var(Rule,Var).
+%% if datalog, a body only variable is valid
+valid_var(Rule,Var):-
+    not non_datalog,
+    Rule=0..MaxRules-1,
+    max_clauses(MaxRules),
+    var(Var),
+    not head_var(Rule, Var).
 
-obeys_datalog_check(Rule,Var):-
+%% if datalog, a head var must also appear in the body
+valid_var(Rule,Var):-
+    not non_datalog,
     head_var(Rule,Var),
-    #count{P,Vars : body_literal(Rule,P,_,Vars),var_member(Var,Vars)} > 1.
-
-obeys_singleton_check(Rule,Var):-
-    allow_singletons,
-    clause_var(Rule,Var).
-
-obeys_singleton_check(Rule,Var):-
-    not allow_singletons,
-    clause_var(Rule,Var),
-    #count{P,Vars : var_in_literal(Rule,P,Vars,Var)} > 2.
+    body_var(Rule,Var).
 
 %% MUST BE CONNECTED
 head_connected(C,Var):-
@@ -401,219 +137,37 @@ head_connected(C,Var1):-
     body_var(C,Var),
     not head_connected(C,Var).
 
+fixed_var_type(Var, Type):-
+    head_literal(_, P, _A, Vars),
+    var_pos(Var, Vars, Pos),
+    type(P, Types),
+    %% head_vars(A, Vars),
+    type_pos(Types, Pos, Type).
 
-%% %% %% ##################################################
-%% %% %% ROLF MOREL'S ORDERING CONSTRAINT
-%% %% %% IT REDUCES THE NUMBER OF MODELS BUT DRASTICALLY INCREASES GROUNDING AND SOLVING TIME
-%% %% %% ##################################################
-%% bfr(C,(P,PArgs),(Q,QArgs)) :- head_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs).
-%% bfr(C,(P,PArgs),(Q,QArgs)) :- body_literal(C,P,_,PArgs),body_literal(C,Q,_,QArgs),P<Q.
-%% bfr(C,(P,PArgs1),(P,PArgs2)) :- body_literal(C,P,PA,PArgs1),body_literal(C,P,PA,PArgs2),PArgs1<PArgs2.
+pred_arg_type(P, Pos, Type):-
+    type(P, Types),
+    type_pos(Types, Pos, Type).
 
-%% not_var_first_lit(C,V,(P,PArgs)) :- bfr(C,(Q,QArgs),(P,PArgs)),var_member(V,QArgs),var_member(V,PArgs).
-%% var_first_lit(C,V,(P,PArgs)) :- body_literal(C,P,_,PArgs),var_member(V,PArgs),not not_var_first_lit(C,V,(P,PArgs)).
-%% :-var_first_lit(C,V,(P,PArgs)),var_first_lit(C,W,(Q,QArgs)),bfr(C,(P,PArgs),(Q,QArgs)),W<V.
-%% %% :-pruned.
-
-
-%% ##################################################
-%% SUBSUMPTION
-%% ##################################################
-same_head(C1,C2):-
-    C1 > 0,
-    C1 < C2,
-    head_literal(C1,P,A,Vars),
-    head_literal(C2,P,A,Vars).
-
-not_body_subset(C1,C2):-
-    C1 > 0,
-    clause(C2),
-    C1 < C2,
-    body_literal(C1,P,A,Vars),
-    not body_literal(C2,P,A,Vars).
-
-body_subset(C1,C2):-
-    C1 > 0,
-    clause(C2),
-    C1 < C2,
-    not not_body_subset(C1,C2),
-    body_literal(C1,P,A,Vars),
-    body_literal(C2,P,A,Vars).
-:-
-    C1 > 0,
-    C1 < C2,
-    same_head(C1,C2),
-    body_subset(C1,C2).
-
-%% ##################################################
-%% SIMPLE TYPE MATCHING
-%% ##################################################
-#script (python)
-def pytype(pos, types):
-    return types.arguments[pos.number]
-#end.
-
-fixed_var_type(Var,@pytype(Pos,Types)):-
-    head_literal(_,P,A,Vars),
+var_type(C, Var, Type):-
+    body_literal(C,P,_,Vars),
     var_pos(Var,Vars,Pos),
     type(P,Types),
-    head_vars(A,Vars).
+    type_pos(Types, Pos, Type).
 
-pred_arg_type(P,Pos,@pytype(Pos,Types)):-
-    Pos = 0..A-1,
-    body_pred(P,A),
-    type(P,Types).
-
-var_type(C,Var,@pytype(Pos,Types)):-
-    var_in_literal(C,P,Vars,Var),
+var_type(C, Var, Type):-
+    head_literal(C,P,_,Vars),
     var_pos(Var,Vars,Pos),
-    vars(A,Vars),
-    type(P,Types).
+    type(P,Types),
+    type_pos(Types, Pos, Type).
 :-
     clause_var(C,Var),
     #count{Type : var_type(C,Var,Type)} > 1.
 
-%% ##################################################
-%% CLAUSE ORDERING
-%% ##################################################
-%% AC: WHY DID I ADD THIS? ORDER SHOULD NOT MATTER
-%% ORDER BY CLAUSE SIZE
-%% p(A)<-q(A),r(A). (C1)
-%% p(A)<-s(A). (C2)
-bigger(C1,C2):-
-    max_clauses(K),
-    K > 2,
-    body_size(C1,N1),
-    body_size(C2,N2),
-    C1 < C2,
-    N1 > N2.
-
-%% TWO NON-RECURSIVE CLAUSES
-:-
-    C1 < C2,
-    not recursive_clause(C1,_,_),
-    not recursive_clause(C2,_,_),
-    same_head(C1,C2),
-    bigger(C1,C2).
-
-%% TWO NON-RECURSIVE CLAUSES
-:-
-    C1 > 0,
-    C1 < C2,
-    recursive_clause(C1,_,_),
-    recursive_clause(C2,_,_),
-    same_head(C1,C2),
-    bigger(C1,C2).
-
-%% ########################################
-%% RECURSION
-%% ########################################
-num_recursive(P,N):-
-    head_literal(_,P,_,_),
-    #count{C : recursive_clause(C,P,_)} == N.
-
-recursive:-
-    recursive_clause(_,_,_).
-
-recursive_clause(C,P,A):-
-    head_literal(C,P,A,_),
-    body_literal(C,P,A,_).
-
-base_clause(C,P,A):-
-    head_literal(C,P,A,_),
-    not body_literal(C,P,A,_).
-
-%% A RECURSIVE CLAUSE MUST HAVE MORE THAN ONE BODY LITERAL
-:-
-    C > 0,
-    recursive_clause(C,_,_),
-    body_size(C,1).
-
-%% STOP RECURSION BEFORE BASE CASES
-:-
-    C1 > 0,
-    C1 < C2,
-    recursive_clause(C1,_,_),
-    base_clause(C2,_,_),
-    same_head(C1,C2).
-
-%% CANNOT HAVE RECURSION WITHOUT A BASECASE
-:-
-    recursive_clause(_,P,A),
-    not base_clause(_,P,A).
-
-%% DISALLOW TWO RECURSIVE CALLS
-%% WHY DID WE ADD THIS??
-:-
-    C > 0,
-    recursive_clause(C,P,A),
-    #count{Vars : body_literal(C,P,A,Vars)} > 1.
-
-%% PREVENT LEFT RECURSION
-%% TODO: GENERALISE FOR ARITY > 3
-:-
-    C > 0,
-    num_in_args(P,1),
-    head_literal(C,P,A,Vars1),
-    body_literal(C,P,A,Vars2),
-    var_pos(Var,Vars1,Pos1),
-    var_pos(Var,Vars2,Pos2),
-    direction_(P,Pos1,in),
-    direction_(P,Pos2,in).
-
-%% TODO: Dangerous rules, can cause failure commenting out for now
-:-
- Rule > 0,
- head_literal(Rule,P,_,(A,_)),
- body_literal(Rule,P,_,(_,A)).
-
-:-
- Rule > 0,
- head_literal(Rule,P,_,(_,A)),
- body_literal(Rule,P,_,(A,_)).
-
-%% PREVENT LEFT RECURSION FOR ARITY 3
-:-
-    C > 0,
-    num_in_args(P,2),
-    head_literal(C,P,A,Vars1),
-    body_literal(C,P,A,Vars2),
-    Var1 != Var2,
-    var_pos(Var1,Vars1,V1Pos1),
-    var_pos(Var1,Vars2,V1Pos2),
-    direction_(P,V1Pos1,in),
-    direction_(P,V1Pos2,in),
-    var_pos(Var2,Vars1,V2Pos1),
-    var_pos(Var2,Vars2,V2Pos2),
-    direction_(P,V2Pos1,in),
-    direction_(P,V2Pos2,in).
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% ENSURES INPUT VARS ARE GROUND
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#script (python)
-def pydirection(pos, directions):
-    return directions.arguments[pos.number]
-def pylen(directions):
-    return Number(len(directions.arguments))
-#end.
-
-arity(P,A):-
-    head_aux(P,A).
-arity(P,A):-
-    body_aux(P,A).
-
-direction_aux(P, @pylen(Directions), Directions):-
-    direction(P,Directions).
-
-direction_(P,Pos,@pydirection(Pos,Directions)):-
-    arity(P,A),
-    Pos=0..A-1,
-    direction_aux(P,A,Directions).
-
-num_in_args(P,N):-
-    direction_(P,_,_),
-    #count{Pos : direction_(P,Pos,in)} == N.
+deffo_safe(Rule, Var):-
+    head_literal(Rule,P,_,Vars),
+    var_pos(Var,Vars,Pos),
+    direction_(P,Pos,in),
+    Rule = 0.
 
 %% VAR SAFE IF HEAD INPUT VAR
 safe_bvar(Rule,Var):-
@@ -623,265 +177,24 @@ safe_bvar(Rule,Var):-
 
 %% VAR SAFE IF A OUTPUT VAR
 safe_bvar(Rule,Var):-
+    direction_(_,_,_),
+    not deffo_safe(Rule, Var),
     body_literal(Rule,P,_,Vars),
-    num_in_args(P,0),
+    #count{Pos : direction_(P,Pos,in)} == 0,
     var_member(Var,Vars).
 
 %% VAR SAFE IF ALL INPUT VARS ARE SAFE
 safe_bvar(Rule,Var):-
-    body_literal(Rule,P,_,Vars),
-    var_member(Var,Vars),
-    num_in_args(P,N),
-    N > 0,
-    #count{Pos : var_pos(Var2,Vars,Pos), direction_(P,Pos,in), safe_bvar(Rule,Var2)} == N.
+    not deffo_safe(Rule, Var),
+    body_literal(Rule, P, _, Vars),
+    var_member(Var, Vars),
+    #count{Pos : direction_(P,Pos,in)} > 0,
+    safe_bvar(Rule,Var2) : var_pos(Var2,Vars,Pos), direction_(P,Pos,in).
 
 :-
     direction_(_,_,_),
     body_var(Rule,Var),
     not safe_bvar(Rule,Var).
-
-%% ########################################
-%% CLAUSES SPECIFIC TO PREDICATE INVENTION
-%% ########################################
-%% IDEAS FROM THE PAPER:
-%% Predicate invention by learning from failures. A. Cropper and R. Morel
-
-#script (python)
-from itertools import permutations
-from clingo.symbol import Tuple_, Number, Function
-def mk_tuple(xs):
-    return Tuple_([Number(x) for x in xs])
-def py_gen_invsym(i):
-    return Function(f'inv{i}')
-#end.
-
-pi:-
-    invented(_,_).
-
-%% P IS DEFNED BY AT LEAST TWO CLAUSES
-num_clauses(P,N):-
-    head_literal(_,P,_,_),
-    #count{C : head_literal(C,P,_,_)} == N.
-
-multiclause(P,A):-
-    head_literal(_,P,A,_),
-    not num_clauses(P,1).
-
-%% INDEX FOR INVENTED SYMBOLS
-index(P,0):-
-    head_pred(P,_).
-index(@py_gen_invsym(I),I):-
-    enable_pi,
-    I=1..N-1,
-    max_clauses(N).
-
-inv_symbol(P):-
-    index(P,I),
-    I>0.
-
-{invented(P,A)}:-
-    enable_pi,
-    inv_symbol(P),
-    max_arity(MaxA),
-    A = 1..MaxA.
-
-%% CANNOT INVENT A PREDICATE WITH MULTIPLE ARITIES
-:-
-    invented(P,_),
-    #count{A : invented(P,A)} != 1.
-
-inv_lower(P,Q):-
-    enable_pi,
-    inv_symbol(P),
-    inv_symbol(Q),
-    I < J,
-    index(P,I),
-    index(Q,J).
-lower(P,Q):-
-    head_pred(P,_),
-    invented(Q,_).
-lower(P,Q):-
-    inv_lower(P,Q).
-lower(P,Q):-
-    lower(P,R),
-    lower(R,Q).
-
-%% NO RECURSIVE INVENTED CLAUSE UNLESS RECURSION IS ENABLED
-:-
-    not enable_recursion,
-    invented(P,A),
-    recursive_clause(_,P,A).
-
-%% MUST LEARN PROGRAMS WITH ORDERED CLAUSES
-:-
-    C1 < C2,
-    head_literal(C1,P,_,_),
-    head_literal(C2,Q,_,_),
-    lower(Q,P).
-
-%% AN INVENTED SYMBOL MUST APPEAR IN THE HEAD OF A CLAUSE
-:-
-    invented(P,A),
-    not head_literal(_,P,A,_).
-
-%% AN INVENTED SYMBOL MUST APPEAR IN THE BODY OF A CLAUSE DEFINED BEFORE THE INVENTED ONE
-appears_before(P,A):-
-    invented(P,A),
-    lower(Q,P),
-    head_literal(C,Q,_,_),
-    body_literal(C,P,_,_).
-
-%% AN INVENTED SYMBOL MUST APPEAR IN THE BODY OF A CLAUSE
-:-
-    invented(P,A),
-    not appears_before(P,A).
-
-%% MUST INVENT IN ORDER
-:-
-    invented(P,_),
-    inv_lower(Q,P),
-    not invented(Q,_).
-
-%% FORCE ORDERING
-%% inv2(A):- inv1(A)
-:-
-    head_literal(C,P,_,_),
-    body_literal(C,Q,_,_),
-    lower(Q,P).
-
-%% USE INVENTED SYMBOLS IN ORDER
-%% f(A):- inv2(A)
-%% inv2(A):- q(A)
-%% TODO: ENFORCE ONLY ON ONE DIRECTLY BELOW
-%% :-
-    %% invented(P,_),
-    %% head_literal(_,P,_,_),
-    %% inv_lower(Q,P),
-    %% not head_literal(_,Q,_,_).
-
-%% PREVENT DUPLICATE INVENTED CLAUSES
-%% f(A,B):-inv1(A,C),inv2(C,B).
-:-
-    C1 > 0,
-    C2 > 0,
-    C1 < C2,
-    lower(P,Q),
-    head_literal(C1,P,_,_),
-    head_literal(C2,Q,_,_),
-    invented(P,_),
-    invented(Q,_),
-    body_subset(C1,C2).
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% TYPES
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-%% INHERIT TYPE FROM CALLING PREDICATE
-%% p(A,B):-inv1(A,B). (C2)
-%% inv1(X,Y):-q(X,Y). (C1)
-%% X and Y should inherit the types of A and B respectively
-var_type(C1,Var1,Type):-
-    invented(P,A),
-    C1 > C2,
-    head_literal(C1,P,A,Vars1),
-    body_literal(C2,P,A,Vars2),
-    var_pos(Var1,Vars1,Pos),
-    var_pos(Var2,Vars2,Pos),
-    var_type(C2,Var2,Type).
-
-%% INHERIT TYPE FROM CALLED PREDICATE
-%% p(A,B):-inv1(A,B). (C2)
-%% inv1(X,Y):-q(X,Y). (C1)
-%% A and B should inherit the types of X and Y respectively
-var_type(C2,Var2,Type):-
-    invented(P,A),
-    C1 > C2,
-    head_literal(C1,P,A,Vars1),
-    body_literal(C2,P,A,Vars2),
-    var_pos(Var1,Vars1,Pos),
-    var_pos(Var2,Vars2,Pos),
-    var_type(C1,Var1,Type).
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% DIRECTIONS
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% INHERIT SAFETY FROM CALLING PREDICATE
-%% p(A,B):-inv1(A,B). (C2)
-%% inv1(X,Y):-q(X,Y). (C1)
-%% if A is safe then X is safe
-%% safe_var(C1,Var1):-
-%%     C1 > 0,
-%%     invented(P,A),
-%%     C1 != C2,
-%%     head_literal(C1,P,A,Vars1),
-%%     body_literal(C2,P,A,Vars2),
-%%     var_pos(Var1,Vars1,Pos),
-%%     var_pos(Var2,Vars2,Pos),
-%%     safe_var(C2,Var2).
-
-%% INHERIT SAFETY FROM CALLED PREDICATE
-%% p(A,B):-inv1(A,B). (C2)
-%% inv1(X,Y):-q(X,Y). (C1)
-%% if Y is safe then B is safe
-%% safe_var(C2,Var2):-
-%%     C1 > 0,
-%%     invented(P,A),
-%%     C1 != C2,
-%%     head_literal(C1,P,A,Vars1),
-%%     body_literal(C2,P,A,Vars2),
-%%     var_pos(Var1,Vars1,Pos),
-%%     var_pos(Var2,Vars2,Pos),
-%%     safe_var(C1,Var1).
-
-%% INHERIT DIRECTION FROM BODY LITERALS
-%% TODO: IMPROVE HORRIBLE HACK
-%% direction(P1,Pos1,in):-
-%%     invented(P1,A1),
-%%     head_literal(Clause,P1,A1,Vars1),
-%%     var_pos(Var,Vars1,Pos1),
-%%     body_literal(Clause,P2,_,Vars2),
-%%     var_pos(Var,Vars2,Pos2),
-%%     direction(P2,Pos2,in),
-%%     #count{P3,Vars3: body_literal(Clause,P3,_,Vars3),var_pos(Var,Vars3,Pos3),direction(P3,Pos2,out)} == 0.
-
-
-%% PRUNES SINGLE CLAUSE/LITERAL INVENTIONS
-%% inv(A,B):-right(A,B).
-:-
-    invented(P,A),
-    head_literal(C,P,A,_),
-    body_size(C,1),
-    not multiclause(P,A).
-
-%% PREVENTS SINGLE CLAUSE/LITERAL CALLS
-%% f(A,B):-inv(A,B)
-:-
-    head_literal(C,P,Pa,_),
-    invented(Q,Qa),
-    body_literal(C,Q,Qa,_),
-    body_size(C,1),
-    not multiclause(P,Pa).
-
-only_once(P,A):-
-    invented(P,A),
-    head_literal(_,P,A,_),
-    #count{C,Vars : body_literal(C,P,A,Vars)} == 1.
-
-:-
-    invented(P,_),
-    #count{A : invented(P,A)} != 1.
-
-:-
-    invented(P,A),
-    head_literal(C1,P,A,_),
-    not multiclause(P,A),
-    only_once(P,A),
-    C2 < C1,
-    body_literal(C2,P,A,_),
-    body_size(C1,N1),
-    body_size(C2,N2),
-    max_body(MaxN),
-    N1 + N2 - 1 <= MaxN.
 
 %% %% ==========================================================================================
 %% %% BK BIAS CONSTRAINTS
@@ -889,7 +202,232 @@ only_once(P,A):-
 %% IDEAS FROM THE PAPER:
 %% Learning logic programs by discovering where not to search. A. Cropper and C. Hocquette. AAAI23.
 
-:- prop(ab_ba,(P,P)), body_literal(Rule,P,_,(A,B)), A>B.
-:- prop(abc_acb,(P,P)), body_literal(Rule,P,_,(A,B,C)), B>C.
-:- prop(abc_bac,P), body_literal(Rule,P,_,(A,B,C)), A>B.
-:- prop(abc_cba,P), body_literal(Rule,P,_,(A,B,C)), A>B.
+bad_body(P, Vars):- prop(ab_ba,(P,P)), vars(_, Vars), Vars=(A,B), A>B.
+bad_body(P, Vars):- prop(ab_ba,(P,P)), vars(_, Vars), Vars=(A,B), A>B.
+bad_body(P, Vars):- prop(abc_acb,(P,P)), vars(_, Vars), Vars=(A,B,C), B>C.
+bad_body(P, Vars):- prop(abc_bac,(P,P)), vars(_, Vars), Vars=(A,B,C), A>B.
+bad_body(P, Vars):- prop(abc_cba,(P,P)), vars(_, Vars), Vars=(A,B,C), A>C.
+bad_body(P, Vars):- prop(abcd_abdc,(P,P)), vars(_, Vars), Vars=(A,B,C,D), C>D.
+bad_body(P, Vars):- prop(abcd_acbd,(P,P)), vars(_, Vars), Vars=(A,B,C,D), B>C.
+bad_body(P, Vars):- prop(abcd_adcb,(P,P)), vars(_, Vars), Vars=(A,B,C,D), B>D.
+bad_body(P, Vars):- prop(abcd_bacd,(P,P)), vars(_, Vars), Vars=(A,B,C,D), A>B.
+bad_body(P, Vars):- prop(abcd_badc,(P,P)), vars(_, Vars), Vars=(A,B,C,D), A>B.
+bad_body(P, Vars):- prop(abcd_cbad,(P,P)), vars(_, Vars), Vars=(A,B,C,D), A>C.
+bad_body(P, Vars):- prop(abcd_cdab,(P,P)), vars(_, Vars), Vars=(A,B,C,D), A>C.
+bad_body(P, Vars):- prop(abcd_dbca,(P,P)), vars(_, Vars), Vars=(A,B,C,D), A>D.
+bad_body(P, Vars):- prop(abcd_dcba,(P,P)), vars(_, Vars), Vars=(A,B,C,D), B>C.
+bad_body(P, Vars):- prop(abcde_abced,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), D>E.
+bad_body(P, Vars):- prop(abcde_abdce,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), C>D.
+bad_body(P, Vars):- prop(abcde_abedc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), C>E.
+bad_body(P, Vars):- prop(abcde_acbde,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>C.
+bad_body(P, Vars):- prop(abcde_acbed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>C.
+bad_body(P, Vars):- prop(abcde_adcbe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>D.
+bad_body(P, Vars):- prop(abcde_adebc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>D.
+bad_body(P, Vars):- prop(abcde_aecdb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>E.
+bad_body(P, Vars):- prop(abcde_aedcb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), C>D.
+bad_body(P, Vars):- prop(abcde_bacde,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>B.
+bad_body(P, Vars):- prop(abcde_baced,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>B.
+bad_body(P, Vars):- prop(abcde_badce,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>B.
+bad_body(P, Vars):- prop(abcde_badec,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>B.
+bad_body(P, Vars):- prop(abcde_baedc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>B.
+bad_body(P, Vars):- prop(abcde_bcaed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), D>E.
+bad_body(P, Vars):- prop(abcde_bdeac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), C>E.
+bad_body(P, Vars):- prop(abcde_bedca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), C>D.
+bad_body(P, Vars):- prop(abcde_cbade,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>C.
+bad_body(P, Vars):- prop(abcde_cbaed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>C.
+bad_body(P, Vars):- prop(abcde_cdabe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>C.
+bad_body(P, Vars):- prop(abcde_cdaeb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>C.
+bad_body(P, Vars):- prop(abcde_cdeba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>D.
+bad_body(P, Vars):- prop(abcde_ceadb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>C.
+bad_body(P, Vars):- prop(abcde_cedab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>E.
+bad_body(P, Vars):- prop(abcde_dbcae,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>D.
+bad_body(P, Vars):- prop(abcde_dbeac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>D.
+bad_body(P, Vars):- prop(abcde_dcbae,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>C.
+bad_body(P, Vars):- prop(abcde_dcbea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>C.
+bad_body(P, Vars):- prop(abcde_dceab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>D.
+bad_body(P, Vars):- prop(abcde_decab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>D.
+bad_body(P, Vars):- prop(abcde_ebcda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>E.
+bad_body(P, Vars):- prop(abcde_ebdca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), C>D.
+bad_body(P, Vars):- prop(abcde_ecbda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>C.
+bad_body(P, Vars):- prop(abcde_ecdba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), A>E.
+bad_body(P, Vars):- prop(abcde_edcba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E), B>D.
+bad_body(P, Vars):- prop(abcdef_abcdfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_abcedf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_abcfed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_abdcef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_abdcfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_abedcf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_abefcd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_abfdec,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_abfedc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_acbdef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_acbdfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_acbedf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_acbefd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_acbfed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_acdbfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_acefbd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_acfedb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_adcbef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_adcbfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_adebcf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_adebfc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_adefcb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_adfbec,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_adfebc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_aecdbf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_aecfbd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_aedcbf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_aedcfb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_aedfbc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_aefdbc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_afcdeb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_afcedb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_afdceb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_afdecb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_afedcb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_bacdef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_bacdfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_bacedf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_bacefd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_bacfed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_badcef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_badcfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_badecf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_badefc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_badfce,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_badfec,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_baedcf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_baedfc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_baefcd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_baefdc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_bafdec,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_bafedc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>B.
+bad_body(P, Vars):- prop(abcdef_bcadfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_bcaedf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_bcafed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_bcdafe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_bcefad,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_bcfeda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_bdacfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_bdcafe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_bdeacf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_bdefca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_bdfaec,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_bdfeac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_beafcd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_becfad,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_bedcaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_bedcfa,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_befadc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_befdac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_bfaedc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_bfceda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_bfdcae,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_bfdcea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_bfeacd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_bfedca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_cbadef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cbadfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cbaedf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cbaefd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cbafed,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cbdafe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_cbefad,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_cbfeda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_cdabef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cdabfe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cdaebf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cdaefb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cdafbe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cdafeb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cdbafe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), E>F.
+bad_body(P, Vars):- prop(abcdef_cdebaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_cdebfa,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_cdfbae,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_cdfbea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_ceadbf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_ceadfb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_ceafbd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_ceafdb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cebfad,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>F.
+bad_body(P, Vars):- prop(abcdef_cedabf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_cedfba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_cefabd,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_cefdba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_cfadeb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cfaedb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>C.
+bad_body(P, Vars):- prop(abcdef_cfbeda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_cfdaeb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_cfdeab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_cfeadb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_cfedab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_dbcaef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dbcafe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dbeacf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dbeafc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dbefca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_dbfaec,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dbfeac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_dcbaef,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_dcbafe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_dcbeaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_dcbefa,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_dcbfae,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_dcbfea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_dceabf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dceafb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dcfabe,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dcfaeb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_decabf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_decafb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_decfba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_defabc,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_defacb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_defbac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>F.
+bad_body(P, Vars):- prop(abcdef_defcba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_dfcaeb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dfceab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_dfeacb,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>D.
+bad_body(P, Vars):- prop(abcdef_dfebca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_dfecab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>F.
+bad_body(P, Vars):- prop(abcdef_ebcdaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_ebcfad,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_ebdcaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_ebdcfa,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_ebdfac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_ebfdac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_ecbdaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_ecbdfa,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_ecbfad,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_ecbfda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_ecdbaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_ecdfab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_ecfbad,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_ecfdab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_edcbaf,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_edcbfa,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_edcfab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_edfbac,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_edfbca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_edfcab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_efcdab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>E.
+bad_body(P, Vars):- prop(abcdef_efdcab,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_efdcba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_fbcdea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fbceda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), D>E.
+bad_body(P, Vars):- prop(abcdef_fbdcea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+bad_body(P, Vars):- prop(abcdef_fbdeca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fbedca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>E.
+bad_body(P, Vars):- prop(abcdef_fcbdea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_fcbeda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>C.
+bad_body(P, Vars):- prop(abcdef_fcdbea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fcdeba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fcebda,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fcedba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fdcbea,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_fdceba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fdebca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>D.
+bad_body(P, Vars):- prop(abcdef_fdecba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
+bad_body(P, Vars):- prop(abcdef_fecdba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
+bad_body(P, Vars):- prop(abcdef_fedcba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.

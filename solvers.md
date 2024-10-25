@@ -3,18 +3,6 @@
 ### UWrMaxSAT
 
 See the "quick install" section: <https://github.com/marekpiotrow/UWrMaxSat>
-Expand
-install_solvers.md
-1 KB
-Andrew — Today at 12:25
-I will add that the repo
-Thanks
-﻿
-# Install MaxSAT Solvers for Popper
-
-### UWrMaxSAT
-
-See the "quick install" section: <https://github.com/marekpiotrow/UWrMaxSat>
 
 Ensure that `uwrmaxsat` is correctly installed and add it to your PATH.
 
@@ -46,7 +34,14 @@ Ensure that `NuWLS-c` is correctly installed and add it to your PATH.
 *I use MacOS and Homebrew, and I cannot build the solvers:*
 Try adding these to the Makefile:
 
-```
+```makefile
 LFLAGS     += -L/opt/homebrew/lib/
 CFLAGS     += -I/opt/homebrew/include/
+```
+
+*I get the error: FileNotFoundError: No such file or directory: 'timeout':*
+When using an anytime solver, the `timeout` command must be installed. On MacOS, try this command:
+
+```bash
+brew install coreutils
 ```

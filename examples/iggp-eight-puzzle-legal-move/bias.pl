@@ -1,3 +1,7 @@
+%% taken from the paper:
+%% Andrew Cropper, Richard Evans, Mark Law: Inductive general game playing. Mach. Learn. 109(7): 1393-1434 (2020)
+%% https://arxiv.org/pdf/1906.09627.pdf
+
 constant(agent_robot, agent).
 constant(mypos_1, mypos).
 constant(mypos_2, mypos).
@@ -96,7 +100,7 @@ type(tile,(cell_type,)).
 
 :-
 	clause(C),
-	#count{V : clause_var(C,V),var_type(C,V,ex)} != 1.
+	#count{V : var_type(C,V,ex)} != 1.
 
 body_pred(P,1):-
 	constant(P,_).

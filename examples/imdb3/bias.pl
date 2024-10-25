@@ -1,7 +1,4 @@
-
-max_vars(6).
-max_body(10).
-
+%% taken from https://starling.utdallas.edu/datasets/
 
 body_pred(movie,2).
 body_pred(actor,1).

@@ -1,40 +1,28 @@
-
 # Popper
 
 Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) system.  If you use Popper, please cite the paper [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259) (MLJ 2021).
 
 #### Requirements
-- [pyswip](https://github.com/yuce/pyswip) (**You must install pyswip from the master branch with  the command: `pip install git+https://github.com/yuce/pyswip@master#egg=pyswip`**)
-- [SWI-Prolog](https://www.swi-prolog.org) (9.0.4 or above)
+- [SWI-Prolog](https://www.swi-prolog.org) (9.2.0 or above)
 - [Clingo](https://potassco.org/clingo/) (5.6.2 or above)
+- [Janus-swi](https://github.com/SWI-Prolog/packages-swipy)
 - [pysat](https://pysathq.github.io)
+- [bitarray](https://github.com/ilanschnell/bitarray)
 
 #### Installation
-Install Popper with the command: ```pip install git+https://github.com/logic-and-learning-lab/Popper@main```
+Install Popper with the command ```pip install git+https://github.com/logic-and-learning-lab/Popper@main```
 
 #### Command line usage
 Run Popper with the command `python popper.py <input dir>`. For instance, `python popper.py examples/zendo1` produces:
 ```prolog
-11:11:14 Generating programs of size: 3
-11:11:14 Generating programs of size: 4
-11:11:14 Generating programs of size: 5
-11:11:14 Generating programs of size: 6
-11:11:14 ********************
-11:11:14 New best hypothesis:
-11:11:14 tp:19 fn:1 tn:20 fp:0 size:20
-11:11:14 zendo(A):- piece(A,B),red(B),coord1(B,C),size(B,C).
-11:11:14 zendo(A):- piece(A,C),contact(C,B),blue(B),rhs(C).
-11:11:14 zendo(A):- piece(A,C),contact(C,B),red(B),upright(B).
-11:11:14 zendo(A):- piece(A,C),contact(C,B),red(B),lhs(B).
-11:11:14 ********************
 ********** SOLUTION **********
 Precision:1.00 Recall:1.00 TP:20 FN:0 TN:20 FP:0 Size:6
-zendo(A):- piece(A,D),red(D),contact(D,B),size(B,C),small(C).
+zendo(V0):- small(V2),piece(V0,V1),red(V1),contact(V1,V3),size(V3,V2).
 ******************************
 ```
 
 #### Example problem
-Popper requires three files:
+Popper requires three input files:
 - an examples file
 - a background knowledge (BK) file
 - a bias file
@@ -72,15 +60,15 @@ body_pred(father,2).
 These declarations say that Popper can use the symbol *grandparent* with two arguments in the head of a rule and *mother* or *father* in the body, also each with two arguments.
 
 #### Noisy examples
-Popper can learn from [noisy](https://arxiv.org/pdf/2308.09393.pdf) with the `--noisy` flag. In this case, Popper learns the minimal description length program.
+Popper can learn from [noisy](https://arxiv.org/pdf/2308.09393.pdf) data with the `--noisy` flag. Popper learns the minimal description length program.
 
 #### Recursion
-Recursion allows Popper to learn programs where a predicate symbol appears in both the head and body of a rule, such as to find a duplicate element (`python popper.py examples/find-dupl`) in a list:
+Popper can learn recursive programs where a predicate symbol appears in both the head and body of a rule, such as to find a duplicate element (`python popper.py examples/find-dupl`) in a list:
 ```prolog
 f(A,B):- tail(A,C),head(A,B),element(C,B).
 f(A,B):- tail(A,C),f(C,B).
 ```
-To enable recursion add `enable_recursion.` to the bias file. However, recursion is expensive, so it is best to try without it first.
+To enable recursion, add `enable_recursion.` to the bias file. However, recursion is expensive, so it is best to avoid it if possible.
 
 #### Types
 Popper supports type annotations in the bias file. A type annotation is of the form `type(p,(t1,t2,...,tk)` for a predicate symbol `p` with arity `k`, such as:
@@ -114,24 +102,19 @@ direction(prepend,(in,in,out)).
 direction(geq,(in,in)).
 ```
 
-**Popper cannot learn with partial directions. If you provide them, you must provide them for all relations.**
-
-Directions are **optional** but can substantially reduce learning times.
+Popper cannot learn with partial directions. If you provide them, you must provide them for all relations.
 
 #### Bias
-Popper has three important bias settings:
+Popper has two important bias settings:
 
 - `max_vars(N)` sets the maximum number of variables in a rule to `N` (default: 6)
 - `max_body(N)` sets the maximum number of body literals in a rule to `N` (default: 6)
-- `max_clauses(N)` sets the maximum number of rules/clauses to `N` (default: 1 or 2 if `enable_recursion` is set)
 
-These settings greatly influence performance. If the values are too high then Popper might struggle to learn a solution. If the settings are too low then the search space might be too small to contain a good solution. 
-
-**IMPORTANT: do not supply max_clauses if you are learning non-recursive programs.**
+These settings greatly influence performance. If the values are too high, Popper might struggle to find a solution. If the settings are too low, the search space might be too small to contain a good solution. 
 
 #### Predicate invention
 
-Popper supports [automatic predicate invention](https://arxiv.org/pdf/2104.14426.pdf) (PI). With PI enabled, Popper (`python popper.py examples/kinship-pi`) learns the following program:
+Popper supports [automatic predicate invention](https://arxiv.org/pdf/2104.14426.pdf) (PI). With PI enabled, Popper (`python popper.py examples/kinship-pi`) learns the program:
 
 ```prolog
 grandparent(A,B):-inv1(C,B),inv1(A,C).
@@ -143,11 +126,10 @@ To enable PI, add the setting `enable_pi.` to the bias file. However, predicate 
 
 #### Popper settings
  - `--noisy` (default: false) learn from [noisy](https://arxiv.org/pdf/2308.09393.pdf) (misclassified examples)
- - `--bkcons` (default: False) [discover constraints from the BK](https://arxiv.org/pdf/2202.09806.pdf). This flag can greatly improve performance but only works with Datalog programs.
  - `--stats` (default: false) shows runtime statistics
  - `--debug` (default: false) runs in debug mode
  - `--quiet` (default: False)  runs in quiet mode
- - `--timeout` (default: 600 seconds) sets a maximum learning time
+ - `--timeout` (default: 1200 seconds) sets a maximum learning time
  - `--eval-timeout` (default: 0.001 seconds) sets a maximum example testing time. This flag only applies when learning recursive programs.
  - `--solver {clingo,rc2,uwr,wmaxcdcl}`(default: `rc2`) which exact solver to use
  - `--anytime-solver {wmaxcdcl,nuwls}`(default: `None`) which anytime solver to use
@@ -155,21 +137,20 @@ To enable PI, add the setting `enable_pi.` to the bias file. However, predicate 
 
 
 #### Solvers
-Popper uses various MaxSAT solvers. By default, Popper uses the [RC2](https://alexeyignatiev.github.io/assets/pdf/imms-jsat19-preprint.pdf) exact solver provided by PySAT. However, we have found that other solvers work *much* better. Popper supports these solvers:
+Popper uses various MaxSAT solvers. By default, Popper uses the [RC2](https://alexeyignatiev.github.io/assets/pdf/imms-jsat19-preprint.pdf) exact solver provided by PySAT. Popper also supports these solvers:
 
 - UWrMaxSat (exact)
 - WMaxCDCL (exact)
 - NuWLS (anytime)
 
-You can download and compile these solvers from the [MaxSAT 2023 evaluation](https://maxsat-evaluations.github.io/2023/descriptions.html) website. **We strongly recommend using these solvers, especially NuWLS** To use them, ensure that the solver is available on your path.  See the [install solvers](solvers.md) file for help.
+You can download and compile these solvers from the [MaxSAT 2023 evaluation](https://maxsat-evaluations.github.io/2023/descriptions.html) website.
+**We strongly recommend using the anytime NuWLS** solver as it greatly improves the performance of Popper. To use them, ensure that the solver is available on your path.  See the [install solvers](solvers.md) file for help.
 
 #### Performance tips
-- Transform your BK to Datalog, which allows Popper to perform preprocessing on the BK.
-- Use one of the MaxSAT above, especially the NuWLS anytime solver.
-- If you have Datalog BK, try the `--bkcons` flag.
-- Try not to use more than 6 variables.
-- Avoid recursion and predicate invention if possible.
-
+- Transform your BK to Datalog, which allows Popper to perform preprocessing on the BK
+- Use one of the MaxSAT solvers, above, especially the NuWLS anytime solver.
+- Use 6 variables or fewer
+- Avoid recursion and predicate invention
 
 #### Library usage
 

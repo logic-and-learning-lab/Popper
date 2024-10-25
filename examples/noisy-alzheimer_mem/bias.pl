@@ -1,4 +1,14 @@
-max_body(7).
+%% downloaded from https://www.doc.ic.ac.uk/~shm/Datasets/
+%% used in the following paper
+%% @article{King:1996:10.1007/BF03037220,
+%% author = {King, RD and Srinivasan, A and Sternberg, MJE},
+%% doi = {10.1007/BF03037220},
+%% journal = {New Generation Computing},
+%% title = {Relating chemical activity to structure: An examination of ILP successes},
+%% url = {http://dx.doi.org/10.1007/BF03037220},
+%% volume = {14},
+%% year = {1996}
+%% }
 
 head_pred(great_rsd,2).
 body_pred(x_subst,3).

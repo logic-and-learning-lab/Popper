@@ -2,7 +2,7 @@
 import os, subprocess, sys, tempfile
 
 from pysat.formula import WCNF
-from pysat.examples.rc2 import RC2
+from pysat.examples.rc2 import RC2Stratified
 from pysat.card import *
 
 def old_wcnf_to_file(hard_clauses, soft_clauses, weights, file):
@@ -39,13 +39,16 @@ def exact_maxsat_solve(hard_clauses, soft_clauses, weights, settings):
     # print("Calling exact MaxSAT solver!")
     settings.stats.maxsat_calls += 1
     if settings.exact_maxsat_solver == "rc2":
-        rc2 = RC2(WCNF())
+
+        wcnf = WCNF()
         for clause in hard_clauses:
-            rc2.add_clause(clause)
+            wcnf.append(clause)
         for clause, w in zip(soft_clauses, weights):
             if w == 0:
                 continue
-            rc2.add_clause(clause, weight=w)
+            wcnf.append(clause, weight=w)
+
+        rc2 = RC2Stratified(wcnf, solver='g3', adapt=True, exhaust=True, blo='div', incr=False, minz=True, trim=0)
         model = rc2.compute()
         if model is not None:
             return rc2.cost, model

@@ -31,3 +31,7 @@ type(three_load,(load,)).
 type(circle,(load,)).
 type(triangle,(load,)).
 type(rectangle,(load,)).
+
+:-
+    clause(C),
+    #count{V : var_type(C,V,train)} != 1.

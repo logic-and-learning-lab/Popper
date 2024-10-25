@@ -6,16 +6,19 @@ load_examples:-
     load_pos,
     load_neg.
 
+get_pos(S):-
+    findall(K, pos_index(K, _Atom), S).
+
 load_pos:-
     current_predicate(pos/1),!,
     findall(X, pos(X), Pos),
-    assert_pos_aux(Pos,1).
+    assert_pos_aux(Pos,0).
 load_pos.
 
 load_neg:-
     current_predicate(neg/1),!,
     findall(X, neg(X), Neg),
-    assert_neg_aux(Neg,-1).
+    assert_neg_aux(Neg,0).
 load_neg.
 
 assert_pos_aux([],_).
@@ -156,9 +159,8 @@ subset([A|B], D):-
 
 redundant_literal(C1):-
     select(_,C1,C2),
-    subsumes(C1,C2),!.
-    %% writeln(C1),
-    %% writeln(C2).
+    subsumes(C1,C2),
+    !.
 
 redundant_clause(P1):-
     select(C1,P1,P2),
@@ -219,3 +221,7 @@ subsumes2(A,B):-
 %%     reduce_theory_(P3,P2).
 
 %% reduce_theory_(P1,P1).
+
+%% tmp(S, Inconsistent):-
+%%     pos_covered(S),
+%%     (inconsistent -> Inconsistent=true; Inconsistent=false).
