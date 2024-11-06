@@ -3,7 +3,7 @@ from collections import defaultdict
 from bitarray.util import subset, any_and, ones
 from functools import cache
 from itertools import chain, combinations, permutations
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog
+from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, Binomial_MML, MML_Score
 from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons
 from . combine import Combiner
@@ -107,10 +107,21 @@ class Popper():
         self.unsat = set()
         self.tmp = {}
 
+        
+
     def run(self, bkcons):
 
         settings, tester = self.settings, self.tester
         num_pos, num_neg = self.num_pos, self.num_neg = tester.num_pos, tester.num_neg
+
+        #RS: first, calculate the q and theta values for the binomial partition
+        binom_SMML_pos, binom_SMML_neg = None, None
+        if num_pos > 0:
+            binom_SMML_pos = Binomial_MML(num_pos)
+        if num_neg > 0:
+            binom_SMML_neg = Binomial_MML(num_neg)
+        head_arity = len(settings.head_literal.arguments)
+        arities = list(a for p, a in settings.body_preds)
 
         uncovered = ones(self.num_pos)
 
@@ -281,6 +292,10 @@ class Popper():
                         tn = num_neg-fp
                         score = tp, fn, tn, fp, prog_size
                         mdl = mdl_score(fn, fp, prog_size)
+                        mml_calc = MML_Score(prog, head_arity, arities, [tp, fn, tn, fp], binom_SMML_pos, binom_SMML_neg)
+                        mml = mml_calc.MML_total()
+                        print(mdl, mml, prog)
+                        #prog, poss_predicates, learned_predicate, train_res, pos_bin_obj, neg_bin_obj
                         if settings.debug:
                             settings.logger.debug(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} mdl:{mdl}')
                         saved_scores[prog] = [fp, fn, prog_size]

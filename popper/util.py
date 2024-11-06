@@ -207,6 +207,165 @@ def rule_is_invented(rule):
 def mdl_score(fn, fp, size):
     return fn + fp + size
 
+import numpy as np
+import math
+
+class Binomial_MML: 
+    #this class calculates the Exact MML score for the binomial distribution
+    #it should only be called once - once computed, the theta and q values can be determined by table lookup
+    def __init__(self, N):
+        self.N = N
+        self.nlogn = lambda n: 0 if n>=1.0 or n <= 0.0 else n*np.log2(n)
+        self.log_comb = lambda n: 0. if n==self.N or n == 0 else (math.lgamma(self.N) - math.lgamma(self.N-n) - math.lgamma(n)) * np.log2(np.e)
+        self.run()
+        self.int_to_theta = {i:j for i,j,_ in self.partition}
+        self.int_to_q = {i:j for i,_,j in self.partition}
+
+    def binomial_func(self,theta, n):
+        return math.comb(self.N, n) * theta**n * (1-theta)**(self.N-n)
+    def get_group_estimate(self,q,k,m):
+        return (1/(self.N*q)) * sum(n/(self.N+1) for n in range(k,m+1))
+    def get_contribution(self,k,m):
+        r_n = 1/(self.N+1)
+        q = r_n*(m-k+1)
+        theta = self.get_group_estimate(q,k,m)
+        fp = -q*np.log2(q)
+        sp = - sum(r_n*self.log_comb(n) for n in range(k,m+1)) - self.N*q*(self.nlogn(theta) + self.nlogn(1-theta) )
+        return fp + sp, theta, q
+
+    def run(self):
+        T = {self.N+1:0}
+        Q = {self.N+1:((),)}
+        for m in range(self.N,-1,-1):
+            #options are m, m+1 .. m+3
+            bst_q, bst_t = None, 0
+            for k in range(m,self.N+1): #try each k from m..N
+                #print(m,k)
+                l, theta, q = self.get_contribution(m,k)
+                Q_m = (((m,k), round(theta,3), round(-np.log2(q),2)),) + Q[k+1]
+                T_m = l + T[k+1]
+                #print(Q_m)
+                #print(T_m)
+                if k == m: #first iteration
+                    bst_t = T_m
+                    bst_q = Q_m
+                elif T_m < bst_t:
+                    #print('triggered', T_m, )
+                    bst_t = T_m
+                    bst_q = Q_m
+            #print(bst_q, bst_t)
+            T[m] = bst_t
+            Q[m] = bst_q
+        self.partition = Q[0][:-1]
+        return self.partition
+    
+    def get_theta(self, a):
+        for mn,mx in self.int_to_theta.keys():
+            if a >= mn and a <= mx:
+                return self.int_to_theta[(mn,mx)]
+    def get_q(self,a):
+        for mn,mx in self.int_to_q.keys():
+            if a >= mn and a <= mx:
+                return self.int_to_q[(mn,mx)]
+
+log_comb2 = lambda N, n: 0. if n>=N or n <= 0 else (math.lgamma(N+1) - math.lgamma(N-n+1) - math.lgamma(n+1)) * np.log2(np.e) #helper function to compute large log(nCr)
+def logstar(N):
+        #this is an approximation to the logstar code
+        if N == 0:
+            raise ValueError('N must be greater than 0')
+        if N < 2:
+            return np.log2(N)
+        else:
+            return np.log2(N) + np.log2(np.log2(N))
+class MML_Score:
+    def __init__(self, prog, head_arity, body_arities, train_res, pos_bin_obj, neg_bin_obj):
+        self.prog = prog
+        self.head_arity = head_arity
+        self.body_arities = body_arities
+        self.head_bits = {1: 0.0,
+                            2: 1.0,
+                            3: 2.32,
+                            4: 3.91,
+                            5: 5.7,
+                            6: 7.67,
+                            7: 9.78,
+                            8: 12.02,
+                            9: 14.37,
+                            10: 16.82,
+                            11: 19.37,
+                            12: 22.01,
+                            13: 24.72,
+                            14: 27.51,
+                            15: 30.37,
+                            16: 33.29,
+                            17: 36.27,
+                            18: 39.31,
+                            19: 42.41,
+                            20: 45.56,
+                            21: 48.75,
+                            22: 52.0,
+                            23: 55.29,
+                            24: 58.63,
+                            25: 62.01} #bits required to specify the particular head configuration for of a particular arity computed up to head arity 25 
+        self.spec_num_new_vars = lambda n: np.log2(2**(n+1)) #bits required to specify number of new variables: p(0) = 1/2, p(1) = 1/4 ...
+        self.tp, self.fn, self.tn, self.fp = train_res
+        self.pos_bin_obj, self.neg_bin_obj = pos_bin_obj, neg_bin_obj
+    
+    def spec_num_body(self, head_arity, n_new_vars, pred_arities):
+        #calculate bits required to specify number of body variables
+        total = 0
+        for ar in pred_arities:
+            total += ar*(head_arity+n_new_vars)
+        total -= math.factorial(n_new_vars)
+        return total, np.log2(total)
+    def spec_body(self,num_total, num_body):
+        #calculate bits required to specify the particular body variable configuration
+        return log_comb2(num_total, num_body)
+        
+    def compute_theory_nums(self):
+        #helper function to compute relevant numbers for calculating the mesage length
+        n_clauses = len(self.prog) #len(self.theory)
+        arity_head = len(list(self.prog)[0][0].arguments)
+        clause_nums = []
+        for rule in self.prog:
+            new_vars = set()
+            head, body = rule
+            mx_head = max(head.arguments)
+            for body_lit in body:
+                #[new_vars.add(j) for j in body_literal.arguments if j not in head.arguments]
+                [new_vars.add(j) for j in body_lit.arguments if j > mx_head]
+            clause_nums.append([len(new_vars), len(body)])
+        return n_clauses, arity_head, clause_nums
+    def MML_first_part(self):
+        n_clauses, arity_head, clause_nums = self.compute_theory_nums()
+        codeword_length = logstar(n_clauses+1) - math.lgamma(n_clauses)/np.log(2)
+        for n_new, n_body in clause_nums:
+            head_bits_cwd = self.head_bits[arity_head]
+            n_new_vars_cwd = self.spec_num_new_vars(n_new)
+            total, num_body_cwd = self.spec_num_body(self.head_arity, n_new, self.body_arities)
+            spec_body_cwd = self.spec_body(total, n_body)
+            codeword_length += (head_bits_cwd + n_new_vars_cwd + num_body_cwd + spec_body_cwd)
+        return codeword_length
+    def second_part(self, N,e,theta,n_ent,n_not_ent):
+        if 1-theta <= 0.0:
+            return -log_comb2(N,e) - e*np.log2(theta) + log_comb2(n_ent, e) + log_comb2(n_not_ent, N-e)
+        elif theta <= 0.0:
+            return -log_comb2(N,e) - (N-e)*np.log2(1-theta) + log_comb2(n_ent, e) + log_comb2(n_not_ent, N-e)
+        else:
+            return -log_comb2(N,e) - e*np.log2(theta) - (N-e)*np.log2(1-theta) + log_comb2(n_ent, e) + log_comb2(n_not_ent, N-e)
+    def MML_total(self):
+        fst = self.MML_first_part()
+        snd1, snd2 = 0,0
+        if self.pos_bin_obj != None:
+            N_p, theta_pos, q_pos = self.pos_bin_obj.N, self.pos_bin_obj.get_theta(self.tp), self.pos_bin_obj.get_q(self.tp)
+            snd1 = q_pos + self.second_part(N_p, self.tp, theta_pos, self.tp, N_p) #change last 2 arguments to calculations of n_entailed etc.
+        if self.neg_bin_obj != None:
+            N_n, theta_neg, q_neg = self.neg_bin_obj.N, self.neg_bin_obj.get_theta(self.tn), self.neg_bin_obj.get_q(self.tn)
+            snd2 = q_neg + self.second_part(N_p, self.tn, theta_neg, self.tn, N_n) #change last 2 arguments to calculations of n_entailed etc.
+        return fst + snd1 + snd2
+    
+
+
 class DurationSummary:
     def __init__(self, operation, called, total, mean, maximum):
         self.operation = operation

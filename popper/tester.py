@@ -66,7 +66,6 @@ class Tester():
         return atom_str, body_str
 
     def test_prog(self, prog):
-
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'findall(_ID, (pos_index(_ID, {atom_str}), ({body_str} ->  true)), S)'
@@ -114,7 +113,6 @@ class Tester():
         return pos_covered, neg_covered
 
     def test_prog_pos(self, prog):
-
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
