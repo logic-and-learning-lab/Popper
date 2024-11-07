@@ -211,7 +211,7 @@ import numpy as np
 import math
 
 class Binomial_MML: 
-    #this class calculates the Exact MML score for the binomial distribution
+    #this class calculates the Exact MML score for the binomial distribution (dynamic programming algorithm - ~O(N^2) complexity)
     #it should only be called once - once computed, the theta and q values can be determined by table lookup
     def __init__(self, N):
         self.N = N
@@ -220,7 +220,6 @@ class Binomial_MML:
         self.run()
         self.int_to_theta = {i:j for i,j,_ in self.partition}
         self.int_to_q = {i:j for i,_,j in self.partition}
-
     def binomial_func(self,theta, n):
         return math.comb(self.N, n) * theta**n * (1-theta)**(self.N-n)
     def get_group_estimate(self,q,k,m):
@@ -232,7 +231,6 @@ class Binomial_MML:
         fp = -q*np.log2(q)
         sp = - sum(r_n*self.log_comb(n) for n in range(k,m+1)) - self.N*q*(self.nlogn(theta) + self.nlogn(1-theta) )
         return fp + sp, theta, q
-
     def run(self):
         T = {self.N+1:0}
         Q = {self.N+1:((),)}
@@ -258,7 +256,6 @@ class Binomial_MML:
             Q[m] = bst_q
         self.partition = Q[0][:-1]
         return self.partition
-    
     def get_theta(self, a):
         for mn,mx in self.int_to_theta.keys():
             if a >= mn and a <= mx:
@@ -310,7 +307,6 @@ class MML_Score:
         self.spec_num_new_vars = lambda n: np.log2(2**(n+1)) #bits required to specify number of new variables: p(0) = 1/2, p(1) = 1/4 ...
         self.tp, self.fn, self.tn, self.fp = train_res
         self.pos_bin_obj, self.neg_bin_obj = pos_bin_obj, neg_bin_obj
-    
     def spec_num_body(self, head_arity, n_new_vars, pred_arities):
         #calculate bits required to specify number of body variables
         total = 0
@@ -321,7 +317,6 @@ class MML_Score:
     def spec_body(self,num_total, num_body):
         #calculate bits required to specify the particular body variable configuration
         return log_comb2(num_total, num_body)
-        
     def compute_theory_nums(self):
         #helper function to compute relevant numbers for calculating the mesage length
         n_clauses = len(self.prog) #len(self.theory)
@@ -364,7 +359,6 @@ class MML_Score:
             snd2 = q_neg + self.second_part(N_p, self.tn, theta_neg, self.tn, N_n) #change last 2 arguments to calculations of n_entailed etc.
         return fst + snd1 + snd2
     
-
 
 class DurationSummary:
     def __init__(self, operation, called, total, mean, maximum):

@@ -106,6 +106,7 @@ class Popper():
         self.seen_prog = set()
         self.unsat = set()
         self.tmp = {}
+        self.stored_progs = set()
 
         
 
@@ -294,7 +295,9 @@ class Popper():
                         mdl = mdl_score(fn, fp, prog_size)
                         mml_calc = MML_Score(prog, head_arity, arities, [tp, fn, tn, fp], binom_SMML_pos, binom_SMML_neg)
                         mml = mml_calc.MML_total()
-                        print(mdl, mml, prog)
+                        self.stored_progs.add((prog, mml))
+                        #store the program
+                        #print(mdl, mml, prog)
                         #prog, poss_predicates, learned_predicate, train_res, pos_bin_obj, neg_bin_obj
                         if settings.debug:
                             settings.logger.debug(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} mdl:{mdl}')
