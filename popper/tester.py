@@ -241,7 +241,7 @@ class Tester():
 
     def is_body_sat(self, body):
         _, ordered_body = self.settings.order_rule((None, body))
-        query = ','.join(format_literal(literal) for literal in ordered_body)
+        query = ','.join(format_literal_janus(literal) for literal in ordered_body)
         return bool_query(query)
 
     # def has_redundant_rule_(self, prog):
