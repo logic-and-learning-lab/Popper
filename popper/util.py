@@ -551,16 +551,18 @@ class Settings:
 
     @cache
     def order_rule_datalog(self, head, body):
+
         def tmp_score(seen_vars, literal):
             pred, args = literal
             key = []
             for x in args:
                 if x in seen_vars:
-                    key.append('1')
+                    key.append(1)
                 else:
-                    key.append('0')
-            key = ''.join(key)
+                    key.append(0)
+            key = tuple(key)
             k = (pred, key)
+
             if k in self.recall:
                 return self.recall[k]
             return 1000000

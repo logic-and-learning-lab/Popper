@@ -4,10 +4,10 @@ import numbers
 import operator
 import pkg_resources
 import time
-from . util import rule_is_recursive, format_rule, Constraint, order_prog, Literal
+from . util import rule_is_recursive, format_rule, Constraint, order_prog, Literal, suppress_stdout_stderr
 from clingo import Function, Number, Tuple_
 from collections import defaultdict
-from itertools import permutations
+from itertools import permutations, product
 from pysat.card import *
 from pysat.formula import CNF
 from pysat.solvers import Solver
@@ -738,88 +738,66 @@ def deduce_bk_cons(settings, tester):
 
 
 def generate_binary_strings(bit_count):
-    binary_strings = []
-    def genbin(n, bs=''):
-        if len(bs) == n:
-            binary_strings.append(bs)
-        else:
-            genbin(n, bs + '0')
-            genbin(n, bs + '1')
-    genbin(bit_count)
-    return binary_strings
-
+    return list(product((0,1), repeat=bit_count))[1:-1]
 
 def deduce_recalls(settings):
     # Jan Struyf, Hendrik Blockeel: Query Optimization in Inductive Logic Programming by Reordering Literals. ILP 2003: 329-346
 
-    # recall for a subset of arguments, e.g. when A and C are ground in a call to add(A,B,C)
     counts = {}
-    # maximum recall for a predicate symbol
     counts_all = {}
 
-    with open(settings.bk_file) as f:
-        bk = f.read()
-    solver = clingo.Control(['-Wnone'])
-    solver.add('base', [], bk)
-    solver.ground([('base', [])])
+    try:
+
+        with open(settings.bk_file) as f:
+            bk = f.read()
+        solver = clingo.Control(['-Wnone'])
+        with suppress_stdout_stderr():
+            solver.add('base', [], bk)
+            solver.ground([('base', [])])
+    except Exception as Err:
+        print('ERROR deducing recalls', Err)
+        return None
+
 
     for pred, arity in settings.body_preds:
-        # print(pred, arity)
         counts_all[pred] = 0
         counts[pred] = {}
-        # we find all facts for a given predicate symbol
+        d = counts[pred]
+        binary_strings = generate_binary_strings(arity)
+
+        for var_subset in binary_strings:
+            d[var_subset] = defaultdict(set)
 
         for atom in solver.symbolic_atoms.by_signature(pred, arity=arity):
-            args = []
-            for i in range(arity):
-                arg = atom.symbol.arguments[i]
-                t = arg.type
-                if t == clingo.SymbolType.Number:
-                    x = arg.number
-                elif t == clingo.SymbolType.String:
-                    x = arg.string
-                else:
-                    x = arg.name
-                args.append(x)
-
-            # print('X', pred, args)
             counts_all[pred] +=1
-            # x_args = [x[arg] for arg in args]
-            # we now enumerate all subsets of possible input/ground arguments
-            # for instance, for a predicate symbol p/2 we consider p(10) and p(01), where 1 denotes input
-            # note that p(00) is the max recall and p(11) is 1 since it is a boolean check
-            binary_strings = generate_binary_strings(arity)[1:-1]
+
+            args = list(map(str, atom.symbol.arguments))
 
             for var_subset in binary_strings:
-                # print('var_subset', var_subset)
-                if var_subset not in counts[pred]:
-                    counts[pred][var_subset] = {}
                 key = []
                 value = []
                 for i in range(arity):
-                    if var_subset[i] == '1':
+                    if var_subset[i]:
                         key.append(args[i])
                     else:
                         value.append(args[i])
                 key = tuple(key)
                 value = tuple(value)
-                # print('\t', key, value)
-                if key not in counts[pred][var_subset]:
-                    counts[pred][var_subset][key] = set()
-                counts[pred][var_subset][key].add(value)
+                d[var_subset][key].add(value)
 
     # we now calculate the maximum recall
     all_recalls = {}
     for pred, arity in settings.body_preds:
         d1 = counts[pred]
-        all_recalls[(pred, '0'*arity)] = counts_all[pred]
+        all_recalls[(pred, (0,)*arity)] = counts_all[pred]
         for args, d2 in d1.items():
             recall = max(len(xs) for xs in d2.values())
+            # print(pred, args, recall)
             all_recalls[(pred, args)] = recall
 
     settings.recall = all_recalls
 
-    # for k, v in all_recalls.items():
+    # for k, v in sorted(all_recalls.items()):
         # print(k ,v)
 
     out = []
@@ -827,9 +805,8 @@ def deduce_recalls(settings):
     for (pred, key), recall in all_recalls.items():
         if recall > 4:
             continue
-        if '1' not in key:
+        if 1 not in key:
             pass
-            # continue
         arity = len(key)
         args = [f'V{i}' for i in range(arity)]
         args_str = ','.join(args)
@@ -840,29 +817,20 @@ def deduce_recalls(settings):
         fixer = []
 
         for x, y in zip(key, args):
-            if x == '0':
+            if x == 0:
                 subset.append(y)
                 fixer.append('_')
             else:
                 fixer.append(y)
 
-
         subset_str = ','.join(subset)
         fixer_str = ','.join(fixer)
         if len(fixer) == 1:
             fixer_str+= ','
-        # print(pred, key, fixer, fixer_str)
-        # print(args_str)
-
         con2 = f':- body_literal(Rule,{pred},_,({fixer_str})), #count{{{subset_str}: body_literal(Rule,{pred},_,({args_str}))}} > {recall}.'
-        # print(con2)
         out.append(con2)
 
-    # for x in settings.recall.items():
-        # print(x)
-    # print(out)
     return out
-    # settings.deduced_bkcons += '\n' + '\n'.join(out)
 
 def deduce_type_cons(settings):
 

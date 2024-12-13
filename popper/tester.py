@@ -317,6 +317,85 @@ class Tester():
             return self.find_redundant_rule_(step)
         return None
 
+    def find_pointless_relations(self):
+        settings = self.settings
+        keep = set()
+        pointless = set()
+
+        missing = set()
+        arities = {}
+
+        for p, pa in settings.body_preds:
+            arities[p] = pa
+
+            query = f'current_predicate({p}/{pa})'
+            try:
+                if not query_once(query)['truth']:
+                    pointless.add((p, pa))
+                    print(p, pa)
+                    missing.add(p)
+            except Err:
+                print(Err)
+                return pointless
+
+        for p, pa in settings.body_preds:
+            arities[p] = pa
+
+            if p in missing:
+                continue
+
+
+            for q, qa in settings.body_preds:
+                if p == q:
+                    continue
+                if pa != qa:
+                    continue
+                if settings.body_types and settings.body_types[p] != settings.body_types[q]:
+                    continue
+
+                if q in missing:
+                    continue
+
+                arg_str = ','.join(f'_V{i}' for i in range(pa))
+                query1 = f'{p}({arg_str}), \+ {q}({arg_str})'
+                query2 = f'{q}({arg_str}), \+ {p}({arg_str})'
+                # print(query1)
+                # print(query2)
+                try:
+                    if query_once(query1)['truth'] or query_once(query2)['truth']:
+                        continue
+                except Exception as Err:
+                    print('ERROR detecting pointless relations', Err)
+                    return pointless
+
+                a, b = (p,pa), (q,qa)
+
+                # WTF IS GOING ON HERE?
+                if a in keep and b in keep:
+                    assert(False)
+                if a not in pointless and b not in pointless:
+                    if a in keep:
+                        pointless.add(b)
+                    elif b in keep:
+                        pointless.add(a)
+                    else:
+                        keep.add(a)
+                        pointless.add(b)
+                elif a in pointless or b in pointless:
+                    if a not in keep:
+                        pointless.add(a)
+                    if b not in keep:
+                        pointless.add(b)
+                elif a not in pointless and b not in pointless:
+                    keep.add(a)
+                    pointless.add(b)
+                elif a in pointless:
+                    pointless.add(b)
+                elif b in pointless:
+                    pointless.add(b)
+        # return frozenset((p, arities[p]) for p in pointless)
+        return pointless
+
 
     # def has_redundant_rule_(self, prog):
     #     prog_ = []

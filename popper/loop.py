@@ -1643,40 +1643,35 @@ def popper(settings, tester, bkcons):
 def get_bk_cons(settings, tester):
     bkcons = []
 
-    pointless = settings.pointless = set()
-    if settings.debug:
-        try:
-            pointless = settings.pointless = find_pointless_relations(settings)
-            settings.datalog = True
-        except:
-            settings.datalog = False
-    else:
-        with suppress_stdout_stderr():
-            try:
-                pointless = settings.pointless = find_pointless_relations(settings)
-                settings.datalog = True
-            except:
-                settings.datalog = False
+    with settings.stats.duration('find_pointless_relations'):
+        pointless = settings.pointless = tester.find_pointless_relations()
 
     for p,a in pointless:
         if settings.showcons:
             print('remove pointless relation', p, a)
         settings.body_preds.remove((p,a))
 
+    # if settings.datalog:
     settings.logger.debug(f'Loading recalls')
-    if settings.datalog:
-        with settings.stats.duration('recalls'):
-            recalls = tuple(deduce_recalls(settings))
+    with settings.stats.duration('recalls'):
+        recalls = deduce_recalls(settings)
+
+    if recalls == None:
+        settings.datalog = False
+    else:
+        settings.datalog = True
         if settings.showcons:
             for x in recalls:
                 print('recall', x)
         bkcons.extend(recalls)
 
+    if settings.datalog:
         type_cons = tuple(deduce_type_cons(settings))
         if settings.showcons:
             for x in type_cons:
                 print('type_con', x)
         bkcons.extend(type_cons)
+
 
     if not settings.datalog:
         settings.logger.debug(f'Loading recalls FAILURE')
@@ -1863,110 +1858,3 @@ def non_empty_powerset(iterable):
 def non_empty_subset(iterable):
     s = tuple(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)))
-
-def find_pointless_relations(settings):
-
-    import clingo
-    encoding = []
-
-    encoding.append('#show same/2.')
-
-    arities = {}
-
-    for p, pa in settings.body_preds:
-        arities[p] = pa
-        for q, qa in settings.body_preds:
-            if p == q:
-                continue
-            if pa != qa:
-                continue
-
-            if settings.body_types and settings.body_types[p] != settings.body_types[q]:
-                continue
-
-            arg_str = ','.join(f'V{i}' for i in range(pa))
-
-            rule1 = f'diff({p},{q}):- {p}({arg_str}), not {q}({arg_str}).'
-            rule2 = f'diff({p},{q}):- {q}({arg_str}), not {p}({arg_str}).'
-            rule3 = f'same({p},{q}):- {p}<{q}, not diff({p},{q}).'
-
-            encoding.extend([rule1, rule2, rule3])
-
-    encoding.append('\n')
-    with open(settings.bk_file) as f:
-        bk = f.read()
-        encoding.append(bk)
-
-    encoding = '\n'.join(encoding)
-
-    # with open('encoding.pl', 'w') as f:
-    #     f.write(encoding)
-
-    solver = clingo.Control(['-Wnone'])
-    solver.add('base', [], encoding)
-    solver.ground([('base', [])])
-
-    keep = set()
-    pointless = set()
-
-    with solver.solve(yield_=True) as handle:
-        for m in handle:
-            for atom in m.symbols(shown = True):
-                # print(str(atom))
-                a, b = str(atom)[5:-1].split(',')
-                if a in keep and b in keep:
-                    assert(False)
-                if a not in pointless and b not in pointless:
-                    if a in keep:
-                        pointless.add(b)
-                        # print('drop1', b)
-                    elif b in keep:
-                        pointless.add(a)
-                        # print('drop1', a)
-                    else:
-                        keep.add(a)
-                        pointless.add(b)
-                        # print('drop1', b)
-                elif a in pointless or b in pointless:
-                    if a not in keep:
-                        pointless.add(a)
-                        # print('drop5', a)
-                    if b not in keep:
-                        pointless.add(b)
-                        # print('drop5', b)
-                elif a not in pointless and b not in pointless:
-                    keep.add(a)
-                    pointless.add(b)
-                    # print('drop2', b)
-                elif a in pointless:
-                    pointless.add(b)
-                    # print('drop3', b)
-                elif b in pointless:
-                    pointless.add(b)
-                    # print('keep', a)
-                    # print('drop4', b)
-
-
-                # if a in keep and b in keep:
-                #     assert(False)
-                # elif a in keep and b not in keep:
-                #     pointless.add(b)
-                #     print('drop', b)
-                # elif a not in keep and b in keep:
-                #     pointless.add(a)
-                #     print('drop', a)
-                # elif a not in keep and b not in keep:
-                #     keep.add(a)
-                #     pointless.add(b)
-                #     print('keep', a)
-                #     print('drop', b)
-
-                # same(input_plow_row,input_harvest_col)
-    # print('-----')
-    # for x in keep:
-        # print('keep', x)
-    # for x in pointless:
-        # print('drop', x)
-    # exit()
-    return frozenset((p, arities[p]) for p in pointless)
-    # settings.drop_preds = pointless
