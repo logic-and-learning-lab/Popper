@@ -246,6 +246,13 @@ class Tester():
         query = ','.join(format_literal_janus(literal) for literal in ordered_body)
         return bool_query(query)
 
+    def is_literal_redundant(self, body, literal):
+        literal_str = format_literal_janus(literal)
+        _, ordered_body = self.settings.order_rule((None, body))
+        x = ','.join(format_literal_janus(x) for x in ordered_body)
+        q = f'{x}, \+ {literal_str}'
+        return not bool_query(q)
+
     # def has_redundant_rule_(self, prog):
     #     assert(False)
     #     prog_ = []
