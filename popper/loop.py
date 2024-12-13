@@ -858,13 +858,13 @@ class Popper():
         if k2 in tmp:
             return tmp[k2]
 
-        v = self.check_covers_too_few(prog_size, pos_covered)
+        v = self.check_covers_too_few_(prog_size, pos_covered)
 
         tmp[k1] = v
         tmp[k2] = v
         return v
 
-    def check_covers_too_few(self, prog_size, pos_covered):
+    def check_covers_too_few_(self, prog_size, pos_covered):
         num_pos = self.num_pos
 
         len_pos_covered = pos_covered.count(1)
