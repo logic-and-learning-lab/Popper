@@ -321,9 +321,11 @@ class Popper():
                 if settings.solution_found:
                     # if we have a solution then a new rule must entail at least two examples
                     if min_coverage == 1:
+                        assert(settings.min_coverage == 2)
                         min_coverage = settings.min_coverage = 2
                     # if we have a solution with two rules then a new rule must entail all the examples
                     if min_coverage != num_pos and len(settings.solution) == 2:
+                        assert(settings.min_coverage == num_pos)
                         min_coverage = settings.min_coverage = num_pos
 
                 # if the program does not cover any positive examples, check whether it is has an unsat core
@@ -671,6 +673,10 @@ class Popper():
                         if not uncovered.any():
                             settings.solution_found = True
                             settings.max_literals = hypothesis_size-1
+                            min_coverage = settings.min_coverage = 2
+                            # if we have a solution with two rules then a new rule must entail all the examples
+                            if min_coverage != num_pos and len(settings.solution) == 2:
+                                min_coverage = settings.min_coverage = num_pos
 
                             # AC: sometimes adding these size constraints can take longer
                             for i in range(settings.max_literals+1, max_size+1):
@@ -727,10 +733,14 @@ class Popper():
                             settings.solution_found = True
                             settings.max_literals = hypothesis_size-1
 
+                            min_coverage = settings.min_coverage = 2
+                            # if we have a solution with two rules then a new rule must entail all the examples
+                            if min_coverage != num_pos and len(settings.solution) == 2:
+                                min_coverage = settings.min_coverage = num_pos
+
                             if not settings.noisy:
                                 with settings.stats.duration('prune backtrack covers too few'):
                                     subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
-                                    # print('prune_subsumed_backtrack_specialcase2', len(subsumed_progs))
                                     for subsumed_prog_ in subsumed_progs:
                                         subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
                                         new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
@@ -744,26 +754,9 @@ class Popper():
                             for i in range(hypothesis_size, max_size+1):
                                 generator.prune_size(i)
 
-
-
-
                 # BUILD CONSTRAINTS
                 if add_spec and not pruned_more_general and not add_redund2:
                     new_cons.append((Constraint.SPECIALISATION, prog))
-
-                # if not add_spec and not pruned_more_general and settings.solution_found and tp < 2:
-                #     print(format_prog(prog))
-                #     print(tp)
-                #     print(pos_covered)
-                #     print(inconsistent)
-                #     # assert(False)
-
-                # if not add_spec and not pruned_more_general and settings.solution_found and tp < 2:
-                #     print(format_prog(prog))
-                #     print(tp)
-                #     print(pos_covered)
-                #     print(inconsistent)
-                #     assert(False)
 
                 if not skipped:
                     if settings.noisy and not add_spec and spec_size and not pruned_more_general:
@@ -824,6 +817,10 @@ class Popper():
                     if not settings.noisy and fp == 0 and fn == 0:
                         settings.solution_found = True
                         settings.max_literals = hypothesis_size-1
+                        min_coverage = settings.min_coverage = 2
+                        # if we have a solution with two rules then a new rule must entail all the examples
+                        if min_coverage != num_pos and len(settings.solution) == 2:
+                            min_coverage = settings.min_coverage = num_pos
 
                         # if size >= settings.max_literals and not settings.order_space:
                         if size >= settings.max_literals:
@@ -1199,12 +1196,19 @@ class Popper():
 
         for index, (prog2, pos_covered2, prog2_size) in enumerate(could_prune_later):
 
+
+
+
+
             subsumed = subset(pos_covered2, pos_covered)
             subsumed_by_two = False
             if not subsumed:
                 subsumed_by_two = self.subsumed_by_two_new(pos_covered2, prog2_size)
 
             if not (subsumed or subsumed_by_two):
+                if pos_covered2.count(1) < settings.min_coverage:
+                    print(pos_covered2.count(1), settings.min_coverage)
+                    assert(False)
                 continue
 
             head, body = tuple(prog2)[0]
@@ -1296,11 +1300,14 @@ class Popper():
                 assert(False)
                 # continue
 
-            covers_too_few = self.check_covers_too_few(calc_prog_size(prog2), pos_covered2)
+
+            covers_too_few = pos_covered2.count(1) < settings.min_coverage
+
+            if not covers_too_few:
+                covers_too_few = self.check_covers_too_few(calc_prog_size(prog2), pos_covered2)
 
             if not covers_too_few:
                 continue
-            # print('SUB_COVERS_TOO_FEW BACKTRACKING')
 
             head, body = tuple(prog2)[0]
 
@@ -1334,7 +1341,11 @@ class Popper():
                     continue
 
                 sub_prog_pos_covered = tester.get_pos_covered(new_prog)
-                sub_covers_too_few = self.check_covers_too_few(calc_prog_size(new_prog), sub_prog_pos_covered)
+
+                sub_covers_too_few = sub_prog_pos_covered.count(1) < settings.min_coverage
+
+                if not sub_covers_too_few:
+                    sub_covers_too_few = self.check_covers_too_few(calc_prog_size(new_prog), sub_prog_pos_covered)
 
                 if sub_covers_too_few:
                     if self.settings.showcons:
