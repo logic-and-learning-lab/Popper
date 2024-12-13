@@ -178,7 +178,6 @@ class Popper():
 
         min_coverage = self.settings.min_coverage = 1
 
-
         for size in range(2, max_size+1):
             if size > settings.max_literals:
                 continue
@@ -319,13 +318,12 @@ class Popper():
                 if tp == num_pos:
                     add_gen = True
 
-
                 if settings.solution_found:
                     # if we have a solution then a new rule must entail at least two examples
                     if min_coverage == 1:
                         min_coverage = settings.min_coverage = 2
                     # if we have a solution with two rules then a new rule must entail all the examples
-                    if min_coverage != num_pos and len(settings.solution) == 1:
+                    if min_coverage != num_pos and len(settings.solution) == 2:
                         min_coverage = settings.min_coverage = num_pos
 
                 # if the program does not cover any positive examples, check whether it is has an unsat core
@@ -467,6 +465,11 @@ class Popper():
                 #             print('\t','r1',format_rule(order_rule(r1)))
                 #             print('\t','r2',format_rule(order_rule(r2)))
                 #         new_cons.append((Constraint.GENERALISATION, [r1,r2], None, None))
+
+                # must cover minimum number of examples
+                if not add_spec and not pruned_more_general:
+                    if tp < min_coverage:
+                        add_spec = True
 
                 if not add_spec and not pruned_more_general:
                     if is_recursive:
@@ -741,16 +744,19 @@ class Popper():
                             for i in range(hypothesis_size, max_size+1):
                                 generator.prune_size(i)
 
+
+
+
                 # BUILD CONSTRAINTS
                 if add_spec and not pruned_more_general and not add_redund2:
                     new_cons.append((Constraint.SPECIALISATION, prog))
 
-                if not add_spec and not pruned_more_general and settings.solution_found and tp < 2:
-                    print(format_prog(prog))
-                    print(tp)
-                    print(pos_covered)
-                    print(inconsistent)
-                    # assert(False)
+                # if not add_spec and not pruned_more_general and settings.solution_found and tp < 2:
+                #     print(format_prog(prog))
+                #     print(tp)
+                #     print(pos_covered)
+                #     print(inconsistent)
+                #     # assert(False)
 
                 # if not add_spec and not pruned_more_general and settings.solution_found and tp < 2:
                 #     print(format_prog(prog))
