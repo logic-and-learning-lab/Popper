@@ -477,20 +477,18 @@ class Popper():
                         add_spec = True
                         for x in xs:
                             if settings.showcons:
-                                print('\t', 'tREDUCIBLE_1:', '\t', ','.join(format_literal(literal) for literal in x))
+                                print('\t', 'REDUCIBLE_1:', '\t', ','.join(format_literal(literal) for literal in x))
                             new_cons.append((Constraint.UNSAT, x))
-                            # print('\tREDUCIBLE_1\t', ','.join(format_literal(literal) for literal in x))
 
-                # if not add_spec and not pruned_more_general and settings.datalog:
-                #     # if not add_spec and not pruned_more_general:
-                #     with settings.stats.duration('check_reducible2'):
-                #         bad_prog = self.check_neg_reducible(prog)
-                #         if bad_prog:
-                #             add_spec = True
-                #             pruned_more_general = True
-                #             if settings.showcons:
-                #                 print('\tREDUCIBLE_2\t', format_prog(bad_prog))
-                #             new_cons.append((Constraint.SPECIALISATION, bad_prog))
+                if not add_spec and not pruned_more_general and settings.datalog and not settings.recursion_enabled:
+                    with settings.stats.duration('check_reducible2'):
+                        bad_prog = self.check_neg_reducible(prog)
+                        if bad_prog:
+                            add_spec = True
+                            pruned_more_general = True
+                            if settings.showcons:
+                                print('\t', 'REDUCIBLE_2:', '\t', format_prog(bad_prog))
+                            new_cons.append((Constraint.SPECIALISATION, bad_prog))
 
                 # must cover minimum number of examples
                 if not add_spec and not pruned_more_general:
@@ -946,6 +944,49 @@ class Popper():
         to_prune = frozenset(body | {literal})
 
         return [(to_prune, depth > 0)]
+
+    def check_neg_reducible(self, prog):
+        tester = self.tester
+        settings = self.settings
+
+        for rule in prog:
+            head, body = rule
+
+            head_vars = set()
+            for arg in head.arguments:
+                head_vars.add(arg)
+
+            for literal in body:
+                literal_p, literal_args = literal
+                literal_args = set(literal_args)
+
+                # AC: SPECIAL CASE FOR A SINGLE BODY LITERAL IMPLIED BY THE HEAD
+                if settings.non_datalog_flag and literal_args.issubset(head_vars) and tester.diff_subs_single(literal):
+                    bad_rule = (head, frozenset([literal]))
+                    bad_prog = frozenset([bad_rule])
+                    return bad_prog
+
+                body_ = frozenset(body) - {literal}
+                body_vars = set()
+
+                for p, args in body_:
+                    for arg in args:
+                        body_vars.add(arg)
+
+                if not literal_args.issubset(body_vars | head_vars):
+                    continue
+
+                if not settings.non_datalog_flag and any(x not in body_vars for x in head_vars):
+                    continue
+
+                new_rule = (head, body_)
+                new_prog = frozenset([new_rule])
+
+                if not self.has_valid_directions(new_rule):
+                    continue
+
+                if tester.is_neg_reducible(body_, literal):
+                    return frozenset([rule])
 
     def filter_combine_programs(self, combiner, to_combine):
 

@@ -4,7 +4,7 @@ import pkg_resources
 from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
-from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal
+from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal, Literal
 from bitarray import bitarray, frozenbitarray
 
 def format_literal_janus(literal):
@@ -40,6 +40,8 @@ class Tester():
             consult(x)
 
         query_once('load_examples')
+
+        self.neg_fact_str = format_literal_janus(Literal('neg_fact', tuple(range(len(self.settings.head_literal.arguments)))))
 
         self.num_pos = query_once('findall(_K, pos_index(_K, _Atom), _S), length(_S, N)')['N']
         self.num_neg = query_once('findall(_K, neg_index(_K, _Atom), _S), length(_S, N)')['N']
@@ -252,6 +254,22 @@ class Tester():
         x = ','.join(format_literal_janus(x) for x in ordered_body)
         q = f'{x}, \+ {literal_str}'
         return not bool_query(q)
+
+    @cache
+    def diff_subs_single(self, literal):
+        literal_str = format_literal_janus(literal)
+        q = f'{self.neg_fact_str}, \+ {literal_str}'
+        return not bool_query(q)
+
+    def is_neg_reducible(self, body, literal):
+        literal_str = format_literal_janus(literal)
+        # body2 = body | self.neg_literal_set
+        # ordered_body = self.tmp_order_rule_datalog(body2)
+        _, ordered_body = self.settings.order_rule((None, body))
+        x = ','.join(format_literal_janus(x) for x in ordered_body)
+        q = f'{self.neg_fact_str}, {x}, \+ {literal_str}'
+        return not bool_query(q)
+
 
     # def has_redundant_rule_(self, prog):
     #     assert(False)
