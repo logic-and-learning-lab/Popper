@@ -228,10 +228,16 @@ class Tester():
                 q = f'succeeds_k_times({new_head},({x}),K)'
                 return query_once(q, {'K':calc_rule_size(rule)})['truth']
             else:
-                head = f'pos_index(_,{format_literal_janus(head)})'
-                x = format_rule_janus((None, ordered_body))[2:-1]
-                x = f'{head},{x}'
-                return bool_query(x)
+                if self.settings.min_coverage == 1:
+                    head = f'pos_index(_,{format_literal_janus(head)})'
+                    x = format_rule_janus((None, ordered_body))[2:-1]
+                    x = f'{head},{x}'
+                    return bool_query(x)
+                else:
+                    new_head = f'pos_index(_ID, {format_literal_janus(head)})'
+                    x = format_rule_janus((None, ordered_body))[2:-1]
+                    q = f'succeeds_k_times({new_head},({x}),K)'
+                    return query_once(q, {'K':self.settings.min_coverage})['truth']
         else:
             with self.using(prog):
                 if self.settings.noisy:

@@ -7,7 +7,7 @@ import time
 from . util import rule_is_recursive, format_rule, Constraint, order_prog, Literal, suppress_stdout_stderr
 from clingo import Function, Number, Tuple_
 from collections import defaultdict
-from itertools import permutations, pro
+from itertools import permutations, product
 from pysat.card import *
 from pysat.formula import CNF
 from pysat.solvers import Solver
@@ -757,7 +757,6 @@ def deduce_recalls(settings):
     except Exception as Err:
         print('ERROR deducing recalls', Err)
         return None
-
 
     for pred, arity in settings.body_preds:
         counts_all[pred] = 0

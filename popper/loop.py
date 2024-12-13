@@ -176,6 +176,9 @@ class Popper():
 
         last_size = None
 
+        min_coverage = self.settings.min_coverage = 1
+
+
         for size in range(2, max_size+1):
             if size > settings.max_literals:
                 continue
@@ -316,10 +319,16 @@ class Popper():
                 if tp == num_pos:
                     add_gen = True
 
+                if settings.solution_found:
+                    if min_coverage == 1:
+                        min_coverage = settings.min_coverage = 2
+                    if min_coverage != num_pos and len(settings.solution) == 1:
+                        min_coverage = settings.min_coverage = num_pos
+
                 # if the program does not cover any positive examples, check whether it is has an unsat core
                 if not has_invention:
                     # self.seen_prog.add(get_raw_prog(prog))
-                    if tp == 0 or (settings.noisy and tp <= prog_size):
+                    if tp < min_coverage or (settings.noisy and tp <= prog_size):
                         with settings.stats.duration('find mucs'):
                             cons_ = tuple(self.explain_incomplete(prog))
                             new_cons.extend(cons_)
