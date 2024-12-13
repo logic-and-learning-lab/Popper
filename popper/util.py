@@ -282,7 +282,12 @@ class Settings:
         self.no_bias = no_bias
         self.order_space = order_space
         self.noisy = noisy
-        self.batch_size = batch_size
+
+        if noisy:
+            self.batch_size = 20000
+        else:
+            self.batch_size = 1
+
         self.solver = solver
         self.anytime_solver = anytime_solver
         self.anytime_timeout = anytime_timeout

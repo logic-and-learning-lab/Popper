@@ -319,9 +319,12 @@ class Popper():
                 if tp == num_pos:
                     add_gen = True
 
+
                 if settings.solution_found:
+                    # if we have a solution then a new rule must entail at least two examples
                     if min_coverage == 1:
                         min_coverage = settings.min_coverage = 2
+                    # if we have a solution with two rules then a new rule must entail all the examples
                     if min_coverage != num_pos and len(settings.solution) == 1:
                         min_coverage = settings.min_coverage = num_pos
 
