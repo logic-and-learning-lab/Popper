@@ -7,7 +7,7 @@ import time
 from . util import rule_is_recursive, format_rule, Constraint, order_prog, Literal, suppress_stdout_stderr
 from clingo import Function, Number, Tuple_
 from collections import defaultdict
-from itertools import permutations, product
+from itertools import permutations, pro
 from pysat.card import *
 from pysat.formula import CNF
 from pysat.solvers import Solver
@@ -852,14 +852,7 @@ def deduce_type_cons(settings):
             args = []
             for i in range(arity):
                 arg = atom.symbol.arguments[i]
-                t = arg.type
-                if t == clingo.SymbolType.Number:
-                    x = arg.number
-                elif t == clingo.SymbolType.String:
-                    x = arg.string
-                else:
-                    x = arg.name
-
+                x = str(arg)
                 arg_type = body_types[pred][i]
                 type_objects[arg_type].add(x)
 
