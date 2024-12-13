@@ -477,7 +477,7 @@ class Popper():
                         add_spec = True
                         for x in xs:
                             if settings.showcons:
-                                print('\tREDUCIBLE_1\t', ','.join(format_literal(literal) for literal in x))
+                                print('\t', 'tREDUCIBLE_1:', '\t', ','.join(format_literal(literal) for literal in x))
                             new_cons.append((Constraint.UNSAT, x))
                             # print('\tREDUCIBLE_1\t', ','.join(format_literal(literal) for literal in x))
 
