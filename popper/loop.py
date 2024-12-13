@@ -960,11 +960,13 @@ class Popper():
                 literal_p, literal_args = literal
                 literal_args = set(literal_args)
 
-                # AC: SPECIAL CASE FOR A SINGLE BODY LITERAL IMPLIED BY THE HEAD
-                if settings.non_datalog_flag and literal_args.issubset(head_vars) and tester.diff_subs_single(literal):
-                    bad_rule = (head, frozenset([literal]))
-                    bad_prog = frozenset([bad_rule])
-                    return bad_prog
+                if len(body) == 1:
+                    # AC: SPECIAL CASE FOR A SINGLE BODY LITERAL IMPLIED BY THE HEAD
+                    if settings.non_datalog_flag and literal_args.issubset(head_vars) and tester.diff_subs_single(literal):
+                        bad_rule = (head, frozenset([literal]))
+                        bad_prog = frozenset([bad_rule])
+                        return bad_prog
+                    continue
 
                 body_ = frozenset(body) - {literal}
                 body_vars = set()
