@@ -794,9 +794,10 @@ def deduce_recalls(settings):
             # print(pred, args, recall)
             all_recalls[(pred, args)] = recall
 
-    settings.recall = all_recalls
+    # settings.recall = all_recalls
+    settings.recall = settings.recall | all_recalls
 
-    # for k, v in sorted(all_recalls.items()):
+    # for k, v in sorted(settings.recall.items()):
         # print(k ,v)
 
     out = []
