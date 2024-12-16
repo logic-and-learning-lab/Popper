@@ -1,6 +1,6 @@
 
-:-style_check(-discontiguous).
-:-style_check(-singleton).
+%% :-style_check(-discontiguous).
+%% :-style_check(-singleton).
 
 % polarities etc.
 

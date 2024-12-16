@@ -5,7 +5,7 @@ from functools import cache
 from itertools import chain, combinations, permutations
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog
 from . tester import Tester
-from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons
+from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons, deduce_non_singletons
 from . combine import Combiner
 
 def explain_none_functional(settings, tester, prog):
@@ -486,8 +486,8 @@ class Popper():
                         if bad_prog:
                             add_spec = True
                             pruned_more_general = True
-                            if settings.showcons:
-                                print('\t', 'REDUCIBLE_2:', '\t', format_prog(bad_prog))
+                            # if settings.showcons:
+                                # print('\t', 'REDUCIBLE_2:', '\t', format_prog(bad_prog))
                             new_cons.append((Constraint.SPECIALISATION, bad_prog))
 
                 # must cover minimum number of examples
@@ -1856,6 +1856,15 @@ def get_bk_cons(settings, tester):
         bkcons.extend(recalls)
 
     if settings.datalog:
+
+        xs = deduce_non_singletons(settings)
+        # if settings.showcons:
+        # xs = []
+        for x in xs:
+            print('singletons', x)
+        bkcons.extend(xs)
+
+
         type_cons = tuple(deduce_type_cons(settings))
         if settings.showcons:
             for x in type_cons:

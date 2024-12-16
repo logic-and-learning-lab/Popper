@@ -8,6 +8,11 @@
 
 #show body_literal/4.
 
+singleton(V):-
+    var(V),
+    not head_var(_, V),
+    #count{P, Vars : body_literal(_, P, _, Vars), var_member(V, Vars)} == 1.
+
 
 %% max_size(K):-
 %%     custom_max_size(K).

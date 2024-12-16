@@ -865,3 +865,160 @@ def deduce_type_cons(settings):
         con = ":- clause(C), #count{V : var_type(C, V," + k + ")} > " + str(n) + "."
         # print(con)
         yield con
+
+SINGLETON_ENCODING="""
+#show total/2.
+#show total2/3.
+#show total3/4.
+not_total(P, I):-
+    type(P, I, T),
+    domain(T, X), not holds(P,I,X),
+    pred(P,_).
+
+total(P, I):-
+    type(P, I, _),
+    not not_total(P, I),
+    pred(P,_).
+
+
+not_total2(P, I, J):-
+    pred(P,A),
+    A>2,
+    I < J,
+    type(P, I, T1),
+    type(P, J, T2),
+    domain(T1, X),
+    domain(T2, Y),
+    not holds2(P, I, J, X, Y).
+
+total2(P, I, J):-
+    pred(P, A),
+    A>2,
+    type(P, I, _),
+    type(P, J, _),
+    I < J,
+    not not_total2(P, I, J).
+
+
+not_total3(P, I, J, K):-
+    pred(P,A),
+    A>3,
+    I < J,
+    J < K,
+    type(P, I, T1),
+    type(P, J, T2),
+    type(P, K, T3),
+    domain(T1, X),
+    domain(T2, Y),
+    domain(T3, Z),
+    not holds3(P, I, J, K, X, Y, Z).
+
+total3(P, I, J, K):-
+    pred(P, A),
+    A>3,
+    type(P, I, _),
+    type(P, J, _),
+    type(P, K, _),
+    I < J,
+    J < K,
+    not not_total3(P, I, J, K).
+"""
+
+def deduce_non_singletons(settings):
+    encoding = []
+
+
+    if len(settings.body_types) == 0:
+        return []
+
+    for p, a in settings.body_preds:
+
+        if a > 1:
+            encoding.append(f'pred({p},{a}).')
+
+        types = settings.body_types[p]
+        for i, t in enumerate(types):
+            rule = f'domain({t},X):- holds({p},{i},X).'
+            encoding.append(rule)
+            rule = f'type({p},{i},{t}).'
+            encoding.append(rule)
+
+        args = [f'V{i}' for i in range(a)]
+        arg_str = ','.join(args)
+        # for i in range(a):
+
+        for i in range(a):
+
+            rule = f'holds({p},{i},{args[i]}):- {p}({arg_str}).'
+            encoding.append(rule)
+
+            x = args[i]
+            for j in range(i+1, a):
+                y = args[j]
+                rule = f'holds2({p},{i},{j},{x},{y}):- {p}({arg_str}).'
+                encoding.append(rule)
+
+                for k in range(j+1, a):
+                    z = args[k]
+                    rule = f'holds3({p},{i},{j},{k},{x},{y},{z}):- {p}({arg_str}).'
+                    encoding.append(rule)
+
+    encoding = sorted(encoding)
+    encoding.append(SINGLETON_ENCODING)
+
+    with open(settings.bk_file) as f:
+        bk = f.read()
+
+    encoding.append(bk)
+    encoding = '\n'.join(encoding)
+
+    with open('TOTAL', 'w') as f:
+        f.write(encoding)
+
+    solver = clingo.Control(['-Wnone'])
+    solver.add('base', [], encoding)
+    solver.ground([('base', [])])
+
+    cons = []
+
+    pred_lookup = {p:a for p,a in settings.body_preds}
+
+    for atom in solver.symbolic_atoms.by_signature('total', arity=2):
+        p = str(atom.symbol.arguments[0])
+        i = int(atom.symbol.arguments[1].number)
+        a = pred_lookup[p]
+        args = [f'V{i}' for i in range(a)]
+        arg_str = ','.join(args)
+        total_v = args[i]
+        non_singletons = ','.join(f'singleton({v})' for v in args if v != total_v)
+        con = f':- body_literal(_, {p}, _, ({arg_str})), {non_singletons}.'
+        cons.append(con)
+    for atom in solver.symbolic_atoms.by_signature('total2', arity=3):
+        p = str(atom.symbol.arguments[0])
+        i = int(atom.symbol.arguments[1].number)
+        j = int(atom.symbol.arguments[2].number)
+        a = pred_lookup[p]
+        args = [f'V{i}' for i in range(a)]
+        arg_str = ','.join(args)
+        total_x = args[i]
+        total_y = args[j]
+        non_singletons = ','.join(f'singleton({v})' for v in args if v not in (total_x, total_y))
+        con = f':- body_literal(_, {p}, _, ({arg_str})), {non_singletons}.'
+        cons.append(con)
+    for atom in solver.symbolic_atoms.by_signature('total3', arity=4):
+        p = str(atom.symbol.arguments[0])
+        i = int(atom.symbol.arguments[1].number)
+        j = int(atom.symbol.arguments[2].number)
+        k = int(atom.symbol.arguments[3].number)
+        a = pred_lookup[p]
+        args = [f'V{i}' for i in range(a)]
+        arg_str = ','.join(args)
+        total_x = args[i]
+        total_y = args[j]
+        total_z = args[k]
+        non_singletons = ','.join(f'singleton({v})' for v in args if v not in (total_x, total_y, total_z))
+        con = f':- body_literal(_, {p}, _, ({arg_str})), {non_singletons}.'
+        cons.append(con)
+
+    # exit()
+    return cons

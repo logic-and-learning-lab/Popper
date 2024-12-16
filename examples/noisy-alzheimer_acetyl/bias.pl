@@ -79,36 +79,36 @@ type(great_pi_acc,(i,i)).
 type(great_polari,(j,j)).
 type(great_sigma,(k,k)).
 
-direction(great,(in,in)).
-direction(x_subst,(in,out,out)).
-direction(alk_groups,(in,out)).
-direction(r_subst_1,(in,out)).
-direction(r_subst_2,(in,out)).
-direction(r_subst_3,(in,out)).
-direction(ring_substitutions,(in,out)).
-%direction(ring_subst_1,(in,out)).
-direction(ring_subst_2,(in,out)).
-direction(ring_subst_3,(in,out)).
-direction(ring_subst_4,(in,out)).
-direction(ring_subst_5,(in,out)).
-direction(ring_subst_6,(in,out)).
-direction(polar,(in,out)).
-direction(size,(in,out)).
-direction(flex,(in,out)).
-direction(h_doner,(in,out)).
-direction(h_acceptor,(in,out)).
-direction(pi_doner,(in,out)).
-direction(pi_acceptor,(in,out)).
-direction(polarisable,(in,out)).
-direction(sigma,(in,out)).
-direction(n_val,(in,out)).
-direction(gt,(in,out)).
-direction(great_polar,(in,out)).
-direction(great_size,(in,out)).
-direction(great_flex,(in,out)).
-direction(great_h_don,(in,out)).
-direction(great_h_acc,(in,out)).
-direction(great_pi_don,(in,out)).
-direction(great_pi_acc,(in,out)).
-direction(great_polari,(in,out)).
-direction(great_sigma,(in,out)).
+%% direction(great,(in,in)).
+%% direction(x_subst,(in,out,out)).
+%% direction(alk_groups,(in,out)).
+%% direction(r_subst_1,(in,out)).
+%% direction(r_subst_2,(in,out)).
+%% direction(r_subst_3,(in,out)).
+%% direction(ring_substitutions,(in,out)).
+%% %direction(ring_subst_1,(in,out)).
+%% direction(ring_subst_2,(in,out)).
+%% direction(ring_subst_3,(in,out)).
+%% direction(ring_subst_4,(in,out)).
+%% direction(ring_subst_5,(in,out)).
+%% direction(ring_subst_6,(in,out)).
+%% direction(polar,(in,out)).
+%% direction(size,(in,out)).
+%% direction(flex,(in,out)).
+%% direction(h_doner,(in,out)).
+%% direction(h_acceptor,(in,out)).
+%% direction(pi_doner,(in,out)).
+%% direction(pi_acceptor,(in,out)).
+%% direction(polarisable,(in,out)).
+%% direction(sigma,(in,out)).
+%% direction(n_val,(in,out)).
+%% direction(gt,(in,out)).
+%% direction(great_polar,(in,out)).
+%% direction(great_size,(in,out)).
+%% direction(great_flex,(in,out)).
+%% direction(great_h_don,(in,out)).
+%% direction(great_h_acc,(in,out)).
+%% direction(great_pi_don,(in,out)).
+%% direction(great_pi_acc,(in,out)).
+%% direction(great_polari,(in,out)).
+%% direction(great_sigma,(in,out)).
