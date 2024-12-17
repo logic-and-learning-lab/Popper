@@ -13,7 +13,6 @@ singleton(V):-
     not head_var(_, V),
     #count{P, Vars : body_literal(_, P, _, Vars), var_member(V, Vars)} == 1.
 
-
 %% max_size(K):-
 %%     custom_max_size(K).
 max_size(K):-
@@ -436,3 +435,109 @@ bad_body(P, Vars):- prop(abcdef_fdebca,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F)
 bad_body(P, Vars):- prop(abcdef_fdecba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), A>F.
 bad_body(P, Vars):- prop(abcdef_fecdba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), B>E.
 bad_body(P, Vars):- prop(abcdef_fedcba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
+
+%% TRY TO REDUCE THE NUMBER OF RULES WITH REDUNDANT LITERALS
+
+:-
+    body_literal(_,P,_,(A,B)),
+    body_literal(_,P,_,(A,C)),
+    B!=C,
+    singleton(B).
+
+:-
+    body_literal(_,P,_,(B,A)),
+    body_literal(_,P,_,(C,A)),
+    B!=C,
+    singleton(B).
+
+:-
+    body_literal(_,P,_,(A,B,X)),
+    body_literal(_,P,_,(A,B,Y)),
+    X!=Y,
+    singleton(X).
+
+:-
+    body_literal(_,P,_,(A,X,B)),
+    body_literal(_,P,_,(A,Y,B)),
+    X!=Y,
+    singleton(X).
+
+:-
+    body_literal(_,P,_,(A,B,C)),
+    body_literal(_,P,_,(A,X,Y)),
+    B!=X,
+    C!=Y,
+    singleton(X),
+    singleton(Y).
+
+:-
+    body_literal(_,P,_,(B,A,C)),
+    body_literal(_,P,_,(X,A,Y)),
+    B!=X,
+    C!=Y,
+    singleton(X).
+
+:-
+    body_literal(_,P,_,(B,C,A)),
+    body_literal(_,P,_,(X,Y,A)),
+    B!=X,
+    C!=Y,
+    singleton(X).
+
+:-
+    body_literal(_,P,_,(X,V0,V1)),
+    body_literal(_,P,_,(Y,V0,V1)),
+    X!=Y,
+    singleton(X).
+
+:-
+    body_literal(_,P,_,(V0,V4,V3,V5)),
+    body_literal(_,P,_,(V0,V2,V3,V1)),
+    V4!=V2,
+    V5!=V1,
+    singleton(V2),
+    singleton(V1).
+
+:-
+    body_literal(_,P,_,(V0,V1,V2,X)),
+    body_literal(_,P,_,(V0,V1,V2,Y)),
+    X!=Y,
+    singleton(Y).
+
+:-
+    body_literal(_,P,_,(V0,V3,V4,V1)),
+    body_literal(_,P,_,(V0,V2,V4,V1)),
+    V3!=V2,
+    singleton(V3).
+
+:-
+    body_literal(_,P,_,(V0,V4,V3,V1)),
+    body_literal(_,P,_,(V0,V4,V2,V1)),
+    V3!=V2,
+    singleton(V3).
+
+:-
+    body_literal(_,P,_,(V0,V2,V3,V1)),
+    body_literal(_,P,_,(V0,V5,V4,V1)),
+    V2!=V5,
+    V3!=V4,
+    singleton(V5),
+    singleton(V4).
+
+:-
+    body_literal(_,P,_,(V0,V3,V5,V2)),
+    body_literal(_,P,_,(V0,V3,V4,V1)),
+    V5!=V3,
+    V2!=V1,
+    singleton(V4),
+    singleton(V1).
+
+:-
+    body_literal(_,P,_,(V0,V4,V3,V2)),
+    body_literal(_,P,_,(V0,V5,V6,V1)),
+    V4!=V5,
+    V3!=V6,
+    V2!=V1,
+    singleton(V5),
+    singleton(V6),
+    singleton(V1).
