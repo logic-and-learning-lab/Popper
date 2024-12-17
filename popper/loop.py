@@ -486,8 +486,8 @@ class Popper():
                         if bad_prog:
                             add_spec = True
                             pruned_more_general = True
-                            # if settings.showcons:
-                                # print('\t', 'REDUCIBLE_2:', '\t', format_prog(bad_prog))
+                            if settings.showcons:
+                                print('\t', 'REDUCIBLE_2:', '\t', format_prog(bad_prog))
                             new_cons.append((Constraint.SPECIALISATION, bad_prog))
 
                 # must cover minimum number of examples
