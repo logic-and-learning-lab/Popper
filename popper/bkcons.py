@@ -1006,8 +1006,8 @@ def deduce_non_singletons(settings):
     encoding.append(bk)
     encoding = '\n'.join(encoding)
 
-    with open('TOTAL', 'w') as f:
-        f.write(encoding)
+    # with open('TOTAL', 'w') as f:
+        # f.write(encoding)
 
     solver = clingo.Control(['-Wnone'])
     solver.add('base', [], encoding)
