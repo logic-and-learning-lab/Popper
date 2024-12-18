@@ -1858,10 +1858,9 @@ def get_bk_cons(settings, tester):
     if settings.datalog:
 
         xs = deduce_non_singletons(settings)
-        # if settings.showcons:
-        # xs = []
-        for x in xs:
-            print('singletons', x)
+        if settings.showcons:
+            for x in xs:
+                print('singletons', x)
         bkcons.extend(xs)
 
 
