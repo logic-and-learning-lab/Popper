@@ -55,7 +55,10 @@ class Tester():
             atoms.append(x)
 
         if atoms:
-            settings.recall = settings.recall | deduce_neg_example_recalls(settings, atoms)
+            try:
+                settings.recall = settings.recall | deduce_neg_example_recalls(settings, atoms)
+            except Exception as e:
+                print(e)
 
         self.num_pos = query_once('findall(_K, pos_index(_K, _Atom), _S), length(_S, N)')['N']
         self.num_neg = query_once('findall(_K, neg_index(_K, _Atom), _S), length(_S, N)')['N']
