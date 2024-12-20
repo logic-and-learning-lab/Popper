@@ -1043,7 +1043,7 @@ def deduce_non_singletons(settings):
             # print('skip', con)
             continue
         cons.append(con)
-        print('MOOOO', con)
+        # print('MOOOO', con)
         seen[p].add(singletons_checked)
 
     for atom in solver.symbolic_atoms.by_signature('total3', arity=4):
