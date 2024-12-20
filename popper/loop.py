@@ -341,7 +341,7 @@ class Popper():
                 if tp > 0 and success_sets and (not settings.noisy or (settings.noisy and fp==0)):
                     with settings.stats.duration('check subsumed and covers_too_few'):
                         subsumed = pos_covered in success_sets or any(subset(pos_covered, xs) for xs in success_sets)
-                        subsumed_by_two = not subsumed and self.subsumed_by_two_new(pos_covered, prog_size)
+                        subsumed_by_two = not subsumed and self.check_subsumed_by_two(pos_covered, prog_size)
                         # AC: DISABLE WHEN THERE IS NOISE
                         covers_too_few = not subsumed and not subsumed_by_two and not settings.noisy and self.check_covers_too_few(prog_size, pos_covered)
 
@@ -1011,7 +1011,7 @@ class Popper():
             else:
                 to_combine.remove(prog_hash)
 
-    def subsumed_by_two_new(self, pos_covered, prog_size):
+    def check_subsumed_by_two(self, pos_covered, prog_size):
         paired_success_sets = self.paired_success_sets
         for i in range(2, prog_size+2):
             if pos_covered in paired_success_sets[i]:
@@ -1019,6 +1019,20 @@ class Popper():
             for x in paired_success_sets[i]:
                 if subset(pos_covered, x):
                     return True
+        return False
+
+    def check_subsumed_by_two_v2(self, prog_size, prog2_size, pos_covered, pos_covered2):
+        space = prog2_size-prog_size
+
+        if space < self.min_size:
+            return False
+        uncovered = pos_covered2 & ~pos_covered
+
+        for xs, size in self.success_sets.items():
+            if size > space:
+                continue
+            if subset(xs, uncovered):
+                return True
         return False
 
     def check_covers_too_few(self, prog_size, pos_covered):
@@ -1307,7 +1321,7 @@ class Popper():
 
             # with self.settings.stats.duration('old'):
             subsumed = sub_prog_pos_covered in success_sets or any(subset(sub_prog_pos_covered, xs) for xs in success_sets)
-            subsumed_by_two = not subsumed and self.subsumed_by_two_new(sub_prog_pos_covered, new_prog_size)
+            subsumed_by_two = not subsumed and self.check_subsumed_by_two(sub_prog_pos_covered, new_prog_size)
             covers_too_few = not subsumed and not subsumed_by_two and self.check_covers_too_few(new_prog_size, sub_prog_pos_covered)
 
             if not (subsumed or subsumed_by_two or covers_too_few):
@@ -1333,6 +1347,7 @@ class Popper():
                 assert(False)
         return out
 
+
     def prune_subsumed_backtrack(self, pos_covered, prog_size):
         could_prune_later, could_prune_later_rec, tester, settings = self.could_prune_later, self.could_prune_later_rec, self.tester, self.settings
         to_prune = set()
@@ -1350,21 +1365,18 @@ class Popper():
                 # TODO: FIND MOST GENERAL SUBSUMED PROGRAM
                 to_delete_rec.add(index)
                 to_prune.add(prog2)
-            # elif self.subsumed_by_two_new(pos_covered2, calc_prog_size(prog2)):
+            # elif self.check_subsumed_by_two(pos_covered2, calc_prog_size(prog2)):
                 # print('PRUNE!!!')
                 # print(format_prog(prog2))
 
 
         for index, (prog2, pos_covered2, prog2_size) in enumerate(could_prune_later):
 
-
-
-
-
             subsumed = subset(pos_covered2, pos_covered)
             subsumed_by_two = False
             if not subsumed:
-                subsumed_by_two = self.subsumed_by_two_new(pos_covered2, prog2_size)
+                # subsumed_by_two = self.check_subsumed_by_two(pos_covered2, prog2_size)
+                subsumed_by_two = self.check_subsumed_by_two_v2(prog_size, prog2_size, pos_covered, pos_covered2)
 
             if not (subsumed or subsumed_by_two):
                 if pos_covered2.count(1) < settings.min_coverage:
@@ -1407,7 +1419,7 @@ class Popper():
 
                 sub_prog_subsumed = sub_prog_pos_covered == pos_covered2
 
-                sub_subsumed_by_two = not sub_prog_subsumed and self.subsumed_by_two_new(sub_prog_pos_covered, calc_prog_size(new_prog))
+                sub_subsumed_by_two = not sub_prog_subsumed and self.check_subsumed_by_two(sub_prog_pos_covered, calc_prog_size(new_prog))
 
                 if self.settings.showcons:
                     if sub_prog_subsumed:
