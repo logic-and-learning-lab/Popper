@@ -794,9 +794,10 @@ def deduce_recalls(settings):
             # print(pred, args, recall)
             all_recalls[(pred, args)] = recall
 
-    settings.recall = all_recalls
+    # settings.recall = all_recalls
+    settings.recall = settings.recall | all_recalls
 
-    # for k, v in sorted(all_recalls.items()):
+    # for k, v in sorted(settings.recall.items()):
         # print(k ,v)
 
     out = []
@@ -864,3 +865,249 @@ def deduce_type_cons(settings):
         con = ":- clause(C), #count{V : var_type(C, V," + k + ")} > " + str(n) + "."
         # print(con)
         yield con
+
+SINGLETON_ENCODING="""
+#show total/2.
+#show total2/3.
+#show total3/4.
+#show total4/5.
+not_total(P, I):-
+    type(P, I, T),
+    domain(T, X), not holds(P,I,X),
+    pred(P,_).
+
+total(P, I):-
+    type(P, I, _),
+    not not_total(P, I),
+    pred(P,_).
+
+
+not_total2(P, I, J):-
+    pred(P,A),
+    A>2,
+    I < J,
+    type(P, I, T1),
+    type(P, J, T2),
+    domain(T1, X),
+    domain(T2, Y),
+    not holds2(P, I, J, X, Y).
+
+total2(P, I, J):-
+    pred(P, A),
+    A>2,
+    type(P, I, _),
+    type(P, J, _),
+    I < J,
+    not not_total2(P, I, J).
+
+
+not_total3(P, I, J, K):-
+    pred(P,A),
+    A>3,
+    I < J,
+    J < K,
+    type(P, I, T1),
+    type(P, J, T2),
+    type(P, K, T3),
+    domain(T1, X),
+    domain(T2, Y),
+    domain(T3, Z),
+    not holds3(P, I, J, K, X, Y, Z).
+
+total3(P, I, J, K):-
+    pred(P, A),
+    A>3,
+    type(P, I, _),
+    type(P, J, _),
+    type(P, K, _),
+    I < J,
+    J < K,
+    not not_total3(P, I, J, K).
+
+not_total4(P, I1, I2, I3, I4):-
+    pred(P,A),
+    A>4,
+    I1 < I2,
+    I2 < I3,
+    I3 < I4,
+    type(P, I1, T1),
+    type(P, I2, T2),
+    type(P, I3, T3),
+    type(P, I4, T4),
+    domain(T1, X1),
+    domain(T2, X2),
+    domain(T3, X3),
+    domain(T4, X4),
+    not holds4(P, I1, I2, I3, I4, X1, X2, X3, X4).
+
+total4(P, I1, I2, I3, I4):-
+    pred(P,A),
+    A>4,
+    I1 < I2,
+    I2 < I3,
+    I3 < I4,
+    type(P, I1, T1),
+    type(P, I2, T2),
+    type(P, I3, T3),
+    type(P, I4, T4),
+    not not_total4(P, I1, I2, I3, I4).
+"""
+
+def deduce_non_singletons(settings):
+    encoding = []
+
+
+    if len(settings.body_types) == 0:
+        return []
+
+    for p, a in settings.body_preds:
+
+        if a > 1:
+            encoding.append(f'pred({p},{a}).')
+
+        types = settings.body_types[p]
+        for i, t in enumerate(types):
+            rule = f'domain({t},X):- holds({p},{i},X).'
+            encoding.append(rule)
+            rule = f'type({p},{i},{t}).'
+            encoding.append(rule)
+
+        args = [f'V{i}' for i in range(a)]
+        arg_str = ','.join(args)
+        # for i in range(a):
+
+        for i in range(a):
+
+            rule = f'holds({p},{i},{args[i]}):- {p}({arg_str}).'
+            encoding.append(rule)
+
+            x = args[i]
+            for j in range(i+1, a):
+                y = args[j]
+                rule = f'holds2({p},{i},{j},{x},{y}):- {p}({arg_str}).'
+                encoding.append(rule)
+
+                for k in range(j+1, a):
+                    z = args[k]
+                    rule = f'holds3({p},{i},{j},{k},{x},{y},{z}):- {p}({arg_str}).'
+                    encoding.append(rule)
+
+                    for i_4 in range(k+1, a):
+                        x_4 = args[i_4]
+                        rule = f'holds4({p},{i},{j},{k},{i_4},{x},{y},{z},{x_4}):- {p}({arg_str}).'
+                        encoding.append(rule)
+
+    encoding = sorted(encoding)
+    encoding.append(SINGLETON_ENCODING)
+
+    with open(settings.bk_file) as f:
+        bk = f.read()
+
+    encoding.append(bk)
+    encoding = '\n'.join(encoding)
+
+    # with open('TOTAL', 'w') as f:
+        # f.write(encoding)
+
+    solver = clingo.Control(['-Wnone'])
+    solver.add('base', [], encoding)
+    solver.ground([('base', [])])
+
+    cons = []
+
+    pred_lookup = {p:a for p,a in settings.body_preds}
+
+
+    seen = defaultdict(set)
+    for atom in solver.symbolic_atoms.by_signature('total4', arity=5):
+        p = str(atom.symbol.arguments[0])
+        i = int(atom.symbol.arguments[1].number)
+        j = int(atom.symbol.arguments[2].number)
+        k = int(atom.symbol.arguments[3].number)
+        i_4 = int(atom.symbol.arguments[4].number)
+        a = pred_lookup[p]
+        args = [f'V{i}' for i in range(a)]
+        arg_str = ','.join(args)
+        total_x = args[i]
+        total_y = args[j]
+        total_z = args[k]
+        x_4 = args[i_4]
+
+        singletons_checked = frozenset([v for v in args if v not in (total_x, total_y, total_z, x_4)])
+
+        non_singletons = ','.join(f'singleton({v})' for v in args if v not in (total_x, total_y, total_z, x_4))
+        con = f':- body_literal(_, {p}, _, ({arg_str})), {non_singletons}.'
+
+        if any(x.issubset(singletons_checked) for x in seen[p]):
+            # print(atom.symbol)
+            # print('skip', con)
+            continue
+        cons.append(con)
+        print('MOOOO', con)
+        seen[p].add(singletons_checked)
+
+    for atom in solver.symbolic_atoms.by_signature('total3', arity=4):
+        p = str(atom.symbol.arguments[0])
+        i = int(atom.symbol.arguments[1].number)
+        j = int(atom.symbol.arguments[2].number)
+        k = int(atom.symbol.arguments[3].number)
+        a = pred_lookup[p]
+        args = [f'V{i}' for i in range(a)]
+        arg_str = ','.join(args)
+        total_x = args[i]
+        total_y = args[j]
+        total_z = args[k]
+
+        singletons_checked = frozenset([v for v in args if v not in (total_x, total_y, total_z)])
+
+        non_singletons = ','.join(f'singleton({v})' for v in args if v not in (total_x, total_y, total_z))
+        con = f':- body_literal(_, {p}, _, ({arg_str})), {non_singletons}.'
+
+        if any(x.issubset(singletons_checked) for x in seen[p]):
+            # print(atom.symbol)
+            # print('skip', con)
+            continue
+        cons.append(con)
+        seen[p].add(singletons_checked)
+
+    for atom in solver.symbolic_atoms.by_signature('total2', arity=3):
+        p = str(atom.symbol.arguments[0])
+        i = int(atom.symbol.arguments[1].number)
+        j = int(atom.symbol.arguments[2].number)
+        a = pred_lookup[p]
+        args = [f'V{i}' for i in range(a)]
+        arg_str = ','.join(args)
+        total_x = args[i]
+        total_y = args[j]
+        singletons_checked = frozenset([v for v in args if v not in (total_x, total_y)])
+        non_singletons = ','.join(f'singleton({v})' for v in args if v not in (total_x, total_y))
+        con = f':- body_literal(_, {p}, _, ({arg_str})), {non_singletons}.'
+
+        if any(x.issubset(singletons_checked) for x in seen[p]):
+            # print(atom.symbol)
+            # print('skip', con)
+            continue
+
+        # print('keep', con)
+        cons.append(con)
+        seen[p].add(singletons_checked)
+
+    for atom in solver.symbolic_atoms.by_signature('total', arity=2):
+        p = str(atom.symbol.arguments[0])
+        i = int(atom.symbol.arguments[1].number)
+        a = pred_lookup[p]
+        args = [f'V{i}' for i in range(a)]
+        arg_str = ','.join(args)
+        total_v = args[i]
+        non_singletons = ','.join(f'singleton({v})' for v in args if v != total_v)
+        singletons_checked = frozenset([v for v in args if v != total_v])
+        con = f':- body_literal(_, {p}, _, ({arg_str})), {non_singletons}.'
+        if any(x.issubset(singletons_checked) for x in seen[p]):
+            # print('skip', con)
+            continue
+
+        # print('keep', con)
+        cons.append(con)
+
+    # exit()
+    return cons

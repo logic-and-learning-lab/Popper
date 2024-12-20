@@ -30,6 +30,9 @@ assert_pos_aux([H|T],I1):-
 assert_neg_aux([],_).
 assert_neg_aux([H|T],I1):-
     assertz(neg_index(I1, H)),
+    H=..[_|Args],
+    NegFact=..[neg_fact|Args],
+    assertz(NegFact),
     I2 is I1-1,
     assert_neg_aux(T,I2).
 

@@ -4,8 +4,10 @@ import pkg_resources
 from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
-from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal
+from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal, Literal
 from bitarray import bitarray, frozenbitarray
+from collections import defaultdict
+from itertools import product
 
 def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
@@ -40,6 +42,20 @@ class Tester():
             consult(x)
 
         query_once('load_examples')
+
+        neg_literal = Literal('neg_fact', tuple(range(len(self.settings.head_literal.arguments))))
+        self.neg_fact_str = format_literal_janus(neg_literal)
+        self.neg_literal_set = frozenset([neg_literal])
+
+        q = 'findall(_Atom2, (neg_index(_K, _Atom1), term_string(_Atom1, _Atom2)), S)'
+        res = query_once(q)['S']
+        atoms = []
+        for x in res:
+            x = x[:-1].split('(')[1].split(',')
+            atoms.append(x)
+
+        if atoms:
+            settings.recall = settings.recall | deduce_neg_example_recalls(settings, atoms)
 
         self.num_pos = query_once('findall(_K, pos_index(_K, _Atom), _S), length(_S, N)')['N']
         self.num_neg = query_once('findall(_K, neg_index(_K, _Atom), _S), length(_S, N)')['N']
@@ -246,33 +262,25 @@ class Tester():
         query = ','.join(format_literal_janus(literal) for literal in ordered_body)
         return bool_query(query)
 
-    # def has_redundant_rule_(self, prog):
-    #     assert(False)
-    #     prog_ = []
-    #     for head, body in prog:
-    #         c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-    #         prog_.append(c)
-    #     prog_ = f"[{','.join(prog_)}]"
-    #     prog_ = janus_format_rule(prog_)
-    #     q = f'redundant_clause({prog_})'
-    #     return bool_query(q)
+    def is_literal_redundant(self, body, literal):
+        literal_str = format_literal_janus(literal)
+        _, ordered_body = self.settings.order_rule((None, body))
+        x = ','.join(format_literal_janus(x) for x in ordered_body)
+        q = f'{x}, \+ {literal_str}'
+        return not bool_query(q)
 
-    # def has_redundant_rule(self, prog):
-    #     assert(False)
-    #     # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
+    @cache
+    def diff_subs_single(self, literal):
+        literal_str = format_literal_janus(literal)
+        q = f'{self.neg_fact_str}, \+ {literal_str}'
+        return not bool_query(q)
 
-    #     base = []
-    #     step = []
-    #     for rule in prog:
-    #         if rule_is_recursive(rule):
-    #             step.append(rule)
-    #         else:
-    #             base.append(rule)
-    #     if len(base) > 1 and self.has_redundant_rule_(base):
-    #         return True
-    #     if len(step) > 1 and self.has_redundant_rule_(step):
-    #         return True
-    #     return False
+    def is_neg_reducible(self, body, literal):
+        literal_str = format_literal_janus(literal)
+        ordered_body = self.tmp_order_rule_datalog(body | self.neg_literal_set)
+        x = ','.join(format_literal_janus(x) for x in ordered_body)
+        q = f'{x}, \+ {literal_str}'
+        return not bool_query(q)
 
     @cache
     def has_redundant_literal(self, prog):
@@ -346,7 +354,6 @@ class Tester():
             if p in missing:
                 continue
 
-
             for q, qa in settings.body_preds:
                 if p == q:
                     continue
@@ -398,252 +405,81 @@ class Tester():
         # return frozenset((p, arities[p]) for p in pointless)
         return pointless
 
+    def tmp_order_rule_datalog(self, body):
 
-    # def has_redundant_rule_(self, prog):
-    #     prog_ = []
-    #     for head, body in prog:
-    #         c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-    #         prog_.append(c)
-    #     prog_ = f"[{','.join(prog_)}]"
-    #     return len(list(self.prolog.query(f'redundant_clause({prog_})'))) > 0
-    #     # return self.bool_query(f'redundant_clause({prog_})')
+        if not self.settings.datalog:
+            return self.settings.order_rule((None, body))
 
-    # def has_redundant_rule(self, prog):
-    #     # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
+        recalls = self.settings.recall
+        def tmp_score(seen_vars, literal):
+            pred, args = literal
+            key = []
+            for x in args:
+                if x in seen_vars:
+                    key.append(1)
+                else:
+                    key.append(0)
+            key = tuple(key)
+            k = (pred, key)
+            if k in recalls:
+                return recalls[k]
+            # print(k)
+            assert(False)
+            return 1000000
 
-    #     base = []
-    #     step = []
-    #     for rule in prog:
-    #         if rule_is_recursive(rule):
-    #             step.append(rule)
-    #         else:
-    #             base.append(rule)
-    #     if len(base) > 1 and self.has_redundant_rule_(base):
-    #         return True
-    #     if len(step) > 1 and self.has_redundant_rule_(step):
-    #         return True
-    #     return False
+        ordered_body = []
+        seen_vars = set()
 
+        body_literals = set(body)
+        while body_literals:
+            selected_literal = None
+            for literal in body_literals:
+                if set(literal.arguments).issubset(seen_vars):
+                    selected_literal = literal
+                    break
 
-    # def test_single_rule_neg(self, prog):
-    #     # pos_covered = frozenset()
-    #     neg_covered = frozenset()
-    #     try:
-    #         rule = list(prog)[0]
-    #         head, _body = rule
-    #         head, ordered_body = order_rule(rule, self.settings)
-    #         atom_str = format_literal(head)
-    #         body_str = format_rule((None,ordered_body))[2:-1]
-    #         if len(self.neg_index) > 0:
-    #             q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-    #             xs = next(self.prolog.query(q))
-    #             neg_covered = frozenset(xs['Xs'])
+            if selected_literal == None:
+                xs = sorted(body_literals, key=lambda x: tmp_score(seen_vars, x))
+                selected_literal = xs[0]
 
-    #     except PrologError as err:
-    #         print('PROLOG ERROR',err)
-    #     return neg_covered
+            ordered_body.append(selected_literal)
+            seen_vars = seen_vars.union(selected_literal.arguments)
+            body_literals = body_literals.difference({selected_literal})
 
-    # def test_single_rule_neg_at_most_k2(self, prog, k):
-    #     # pos_covered = frozenset()
-    #     neg_covered = frozenset()
-    #     try:
-    #         rule = list(prog)[0]
-    #         head, _body = rule
-    #         head, ordered_body = order_rule(rule, self.settings)
-    #         atom_str = format_literal(head)
-    #         body_str = format_rule((None,ordered_body))[2:-1]
-    #         if len(self.neg_index) > 0:
-    #             q = f'findfirstn({k}, ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-    #             # q = f'findfirstn(ID, limit({k},(neg_index(ID,{atom_str}),({body_str}->  true))), Xs)'
-    #             xs = next(self.prolog.query(q))
-    #             neg_covered = frozenset(xs['Xs'])
+        return tuple(ordered_body)
 
-    #     except PrologError as err:
-    #         print('PROLOG ERROR',err)
-    #     return neg_covered
+def deduce_neg_example_recalls(settings, atoms):
+    # Jan Struyf, Hendrik Blockeel: Query Optimization in Inductive Logic Programming by Reordering Literals. ILP 2003: 329-346
 
+    arity = len(settings.head_literal.arguments)
+    binary_strings = generate_binary_strings(arity)
+    counts = {var_subset: defaultdict(set) for var_subset in binary_strings}
 
-    # def is_complete(self, prog):
-    #     with self.using(prog):
-    #         pos_covered = frozenset(self.query('pos_covered(Xs)', 'Xs'))
-    #         return len(pos_covered) == len(self.pos_index)
+    for var_subset in binary_strings:
+        # print(var_subset)
+        d1 = counts[var_subset]
+        for args in atoms:
+            # print(args)
+            key = []
+            value = []
+            for i in range(arity):
+                if var_subset[i]:
+                    key.append(args[i])
+                else:
+                    value.append(args[i])
+            key = tuple(key)
+            value = tuple(value)
+            d2 = d1[key]
+            d2.add(value)
 
-# def get_neg_covered(self, prog):
-    #      with self.using(prog):
-    #         return frozenset(self.query('neg_covered(S)', 'S'))
+    all_recalls = {}
+    pred = 'neg_fact'
+    all_recalls[(pred, (0,)*arity)] = len(atoms)
+    # print(counts.items())
+    for args, d2 in counts.items():
+        recall = max(len(xs) for xs in d2.values())
+        all_recalls[(pred, args)] = recall
+    return all_recalls
 
-    # def get_neg_covered2(self, prog):
-    #     k = prog_hash(prog)
-    #     assert(k not in self.cached_neg_covers)
-
-    #     if len(prog) == 1:
-    #         rule = list(prog)[0]
-    #         head, _body = rule
-    #         head, ordered_body = order_rule(rule, self.settings)
-    #         atom_str = janus_format_rule(format_literal(head))
-    #         body_str = janus_format_rule(format_rule((None,ordered_body))[2:-1])
-    #         q = f'findall(_ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
-    #         xs = self.bool_query(q, 'S')
-    #         self.cached_neg_covers[k] = xs
-    #         return frozenset(xs)
-    #     else:
-    #         with self.using(prog):
-    #             xs = frozenset(self.query('neg_covered(S)', 'S'))
-    #             self.cached_neg_covers[k] = xs
-    #             return xs
-
-
-    # def get_neg_uncovered(self, prog):
-    #     with self.using(prog):
-    #         return frozenset(self.query('neg_uncovered(Xs)', 'Xs'))
-
-    # def is_more_inconsistent(self, prog, neg_covered):
-    #     with self.using(prog):
-    #         return len(list(self.prolog.query(f"is_more_inconsistent({neg_covered})"))) > 0
-
-
-    # def covers_any3(self, prog, neg):
-    #     # k = rule_hash(rule)
-    #     rule = list(prog)[0]
-    #     # k = prog_hash(prog)
-    #     # if k in self.cached_covers_any:
-    #     #     for x in self.cached_covers_any[k]:
-    #     #         if x in neg:
-    #     #             return True
-    #     # if k in self.cached_covers_any2:
-    #     #     for x in self.cached_covers_any2[k]:
-    #     #         if x in neg:
-    #     #             return True
-    #     #             # print('MOOCOWJONES!!!!!!!!')
-    #     # self.cached_covers_any[k] = set()
-
-    #     # for rule in prog:
-    #         # print('\tcalling prolog', format_rule(rule))
-
-    #     rule = list(prog)[0]
-    #     head, _body = rule
-    #     head, ordered_body = order_rule(rule, self.settings)
-    #     atom_str = format_literal(head)
-    #     body_str = format_rule((None,ordered_body))[2:-1]
-    #     # q = f'findall(ID, (neg_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-    #     q = f'member(Id,{neg}),neg_index(Id,{atom_str}),{body_str},!'
-    #     # print(q)
-    #     xs = list(self.prolog.query(q))
-    #     if len(xs) > 0:
-    #         ex = xs[0]['Id']
-    #         # self.cached_covers_any[k].add(ex)
-    #         return True
-    #     # print(xs)
-    #     return False
-
-        # return frozenset(xs['Xs'])
-
-        # with self.using(prog):
-        #     xs = list(self.prolog.query(f"covers_any({neg},ID)"))
-        #     if len(xs) > 0:
-        #         ex = xs[0]['ID']
-        #         # print(ex)
-        #         self.cached_covers_any[k].add(ex)
-        #         return True
-        #     return False
-
-    # def get_num_neg_covered(self, prog):
-    #     assert(len(prog) == 1)
-
-    #     rule = list(prog)[0]
-    #     head, _body = rule
-    #     head, ordered_body = order_rule(rule, self.settings)
-    #     atom_str = format_literal(head)
-    #     body_str = format_rule((None,ordered_body))[2:-1]
-    #     q = f'findall(ID, (pos_index(ID,{atom_str}),({body_str}->  true)), Xs)'
-    #     xs = next(self.prolog.query(q))
-    #     pos_covered = frozenset(xs['Xs'])
-    #     inconsistent = False
-    #     q = f'neg_index(_,{atom_str}),{body_str},!'
-    #     if len(self.neg_index) > 0:
-    #     inconsistent = len(list(self.prolog.query(q))) > 0
-
-
-
-# def check_redundant_literal(self, prog):
-    #     for rule in prog:
-    #         head, body = rule
-    #         if head:
-    #             c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-    #         else:
-    #             c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
-    #         res = list(self.prolog.query(f'redundant_literal({c})'))
-    #         if res:
-    #             yield rule
-
-    # @profile
-    # def has_redundant_literal(self, prog):
-    #     k = prog_hash(prog)
-    #     out = None
-    #     if k in self.cached_redundant:
-    #         out = self.cached_redundant[k]
-    #     else:
-    #         for rule in prog:
-    #             head, body = rule
-    #             if head:
-    #                 c = f"[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-    #             else:
-    #                 c = f"[{','.join(tuple(format_literal(lit) for lit in body))}]"
-    #             c = janus_format_rule(c)
-    #             # print(c)
-    #             res = janus.query_once(f'redundant_literal({c})')['truth']
-    #             # print('res', res)
-    #             if res:
-    #                 print(res)
-    #                 self.cached_redundant[k] = True
-    #                 break
-    #     self.cached_redundant[k] = False
-    #     out = self.cached_redundant[k]
-    #     return out
-
-
-# # WE ASSUME THAT THERE IS A REUNDANT RULE
-    # def subsumes(self, r1, r2):
-    #     r2 = str(r2)
-    #     r2 = r2.replace('A','X')
-    #     r2 = r2.replace('B','Y')
-    #     r2 = r2.replace('C','Z')
-    #     q = f'subsumes_term({r1},{r2})'.replace("'",'')
-    #     # q = f'subsumes({r1},{r2})'.replace("'",'')
-    #     # print(q)
-    #     res = list(self.prolog.query(q))
-    #     return len(res) > 0
-
-    # def find_redundant_rule_2(self, rules):
-    #     prog_ = []
-    #     for i, rule in enumerate(rules):
-    #         c = f"{i}-[{','.join(rule)}]"
-    #         prog_.append(c)
-    #         # print(c)
-    #     prog_ = f"[{','.join(prog_)}]"
-    #     # print(prog_)
-    #     q = f'reduce_theory({prog_},K2)'
-    #     print(len(rules))
-
-    #     res = list(self.prolog.query(q))
-    #     # print(res)
-    #     # k1 = res[0]['K1']
-    #     k2 = res[0]['K2']
-    #     print(len(k2))
-    #     # pr
-    #     # return prog[k1], prog[k2]
-
-    # def find_redundant_rules(self, prog):
-    #     # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
-    #     base = []
-    #     step = []
-    #     for rule in prog:
-    #         if rule_is_recursive(rule):
-    #             step.append(rule)
-    #         else:
-    #             base.append(rule)
-    #     if len(base) > 1 and self.has_redundant_rule(base):
-    #         return self.find_redundant_rule_(base)
-    #     if len(step) > 1 and self.has_redundant_rule(step):
-    #         return self.find_redundant_rule_(step)
-    #     return None
+def generate_binary_strings(bit_count):
+    return list(product((0,1), repeat=bit_count))[1:-1]
