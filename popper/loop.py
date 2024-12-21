@@ -168,8 +168,8 @@ class Popper():
 
         scores = self.scores = {}
 
-        could_prune_later = self.could_prune_later = []
-        could_prune_later_rec = self.could_prune_later_rec = []
+        # could_prune_later = self.could_prune_later = []
+        # could_prune_later_rec = self.could_prune_later_rec = []
 
         to_combine = set()
 
@@ -495,11 +495,11 @@ class Popper():
                     if tp < min_coverage:
                         add_spec = True
 
-                if not add_spec and not pruned_more_general:
-                    if is_recursive:
-                        could_prune_later_rec.append((prog, pos_covered, prog_size))
-                    else:
-                        could_prune_later.append((prog, pos_covered, prog_size))
+                # if not add_spec and not pruned_more_general:
+                #     if is_recursive:
+                #         could_prune_later_rec.append((prog, pos_covered, prog_size))
+                #     else:
+                #         could_prune_later.append((prog, pos_covered, prog_size))
 
                 add_to_combiner = False
                 if settings.noisy and not skipped and not skip_early_neg and not is_recursive and not has_invention and tp > prog_size+fp and fp+prog_size < settings.best_mdl and not noisy_subsumed:
@@ -1348,203 +1348,203 @@ class Popper():
         return out
 
 
-    def prune_subsumed_backtrack(self, pos_covered, prog_size):
-        could_prune_later, could_prune_later_rec, tester, settings = self.could_prune_later, self.could_prune_later_rec, self.tester, self.settings
-        to_prune = set()
-        to_delete = set()
-        to_delete_rec = set()
-        seen = set()
-        pruned2 = self.pruned2
+    # def prune_subsumed_backtrack(self, pos_covered, prog_size):
+    #     could_prune_later, could_prune_later_rec, tester, settings = self.could_prune_later, self.could_prune_later_rec, self.tester, self.settings
+    #     to_prune = set()
+    #     to_delete = set()
+    #     to_delete_rec = set()
+    #     seen = set()
+    #     pruned2 = self.pruned2
 
-        for index, (prog2, pos_covered2, prog2_size) in enumerate(could_prune_later_rec):
-            # AC: TODO: separate this check
-            # should_prune = check_coverage and len(pos_covered2) == 1
-            if subset(pos_covered2, pos_covered):
-                # print('PRUNE!!!')
-                # print(format_prog(prog2))
-                # TODO: FIND MOST GENERAL SUBSUMED PROGRAM
-                to_delete_rec.add(index)
-                to_prune.add(prog2)
-            # elif self.check_subsumed_by_two(pos_covered2, calc_prog_size(prog2)):
-                # print('PRUNE!!!')
-                # print(format_prog(prog2))
-
-
-        for index, (prog2, pos_covered2, prog2_size) in enumerate(could_prune_later):
-
-            subsumed = subset(pos_covered2, pos_covered)
-            subsumed_by_two = False
-            if not subsumed:
-                # subsumed_by_two = self.check_subsumed_by_two(pos_covered2, prog2_size)
-                subsumed_by_two = self.check_subsumed_by_two_v2(prog_size, prog2_size, pos_covered, pos_covered2)
-
-            if not (subsumed or subsumed_by_two):
-                if pos_covered2.count(1) < settings.min_coverage:
-                    print(pos_covered2.count(1), settings.min_coverage)
-                    assert(False)
-                continue
-
-            head, body = tuple(prog2)[0]
-
-            seen.add(body)
-
-            # If we have seen a subset of the body then ignore this program
-            if any(frozenset(x) in pruned2 for x in non_empty_powerset(body)):
-                to_delete.add(index)
-                continue
-
-            pruned_subprog = False
-
-            # We now enumerate the subsets of the body of this role to find the most general subsumed subset
-            for new_body in non_empty_subset(body):
-                new_rule = (head, new_body)
-
-                if not head_connected(new_rule):
-                    continue
-
-                if not self.has_valid_directions(new_rule):
-                    continue
-
-                tmp = frozenset(new_body)
-                if tmp in seen:
-                    continue
-                seen.add(tmp)
-
-                new_prog = frozenset([new_rule])
-
-                if tester.has_redundant_literal(new_prog):
-                    continue
-
-                sub_prog_pos_covered = tester.get_pos_covered(new_prog)
-
-                sub_prog_subsumed = sub_prog_pos_covered == pos_covered2
-
-                sub_subsumed_by_two = not sub_prog_subsumed and self.check_subsumed_by_two(sub_prog_pos_covered, calc_prog_size(new_prog))
-
-                if self.settings.showcons:
-                    if sub_prog_subsumed:
-                        print('\t', 'SUBSUMED BACKTRACK (GENERALISATION):', '\t', format_prog(new_prog))
-                    elif sub_subsumed_by_two:
-                        print('\t', 'SUBSUMED BY TWO BACKTRACK (GENERALISATION):', '\t', format_prog(new_prog))
-
-                if sub_prog_subsumed or sub_subsumed_by_two:
-                    to_prune.add(new_prog)
-                    pruned_subprog = True
-                    for x in self.find_variants(remap_variables(new_rule)):
-                        pruned2.add(x)
-                    break
-
-            to_delete.add(index)
-
-            if pruned_subprog:
-                continue
-
-            for x in self.find_variants(remap_variables((head, body))):
-                pruned2.add(x)
-
-            if self.settings.showcons:
-                if subsumed:
-                    print('\t', 'SUBSUMED BACKTRACK:', '\t', format_prog(prog2))
-                elif subsumed_by_two:
-                    print('\t', 'SUBSUMED BY TWO BACKTRACK:', '\t', format_prog(prog2))
-            to_prune.add(prog2)
-
-        for i in sorted(to_delete_rec, reverse=True):
-            del could_prune_later_rec[i]
-
-        for i in sorted(to_delete, reverse=True):
-            del could_prune_later[i]
-
-        return to_prune
-
-    def prune_subsumed_backtrack_specialcase(self):
-        could_prune_later, tester, settings = self.could_prune_later, self.tester, self.settings
-        to_prune = set()
-        to_delete = set()
-        seen = set()
-        pruned2 = self.pruned2
-
-        if not settings.solution_found:
-            return
-
-        for index, (prog2, pos_covered2, prog2_size) in enumerate(could_prune_later):
-
-            if len(prog2) > 1:
-                assert(False)
-                # continue
+    #     for index, (prog2, pos_covered2, prog2_size) in enumerate(could_prune_later_rec):
+    #         # AC: TODO: separate this check
+    #         # should_prune = check_coverage and len(pos_covered2) == 1
+    #         if subset(pos_covered2, pos_covered):
+    #             # print('PRUNE!!!')
+    #             # print(format_prog(prog2))
+    #             # TODO: FIND MOST GENERAL SUBSUMED PROGRAM
+    #             to_delete_rec.add(index)
+    #             to_prune.add(prog2)
+    #         # elif self.check_subsumed_by_two(pos_covered2, calc_prog_size(prog2)):
+    #             # print('PRUNE!!!')
+    #             # print(format_prog(prog2))
 
 
-            covers_too_few = pos_covered2.count(1) < settings.min_coverage
+    #     for index, (prog2, pos_covered2, prog2_size) in enumerate(could_prune_later):
 
-            if not covers_too_few:
-                covers_too_few = self.check_covers_too_few(calc_prog_size(prog2), pos_covered2)
+    #         subsumed = subset(pos_covered2, pos_covered)
+    #         subsumed_by_two = False
+    #         if not subsumed:
+    #             # subsumed_by_two = self.check_subsumed_by_two(pos_covered2, prog2_size)
+    #             subsumed_by_two = self.check_subsumed_by_two_v2(prog_size, prog2_size, pos_covered, pos_covered2)
 
-            if not covers_too_few:
-                continue
+    #         if not (subsumed or subsumed_by_two):
+    #             if pos_covered2.count(1) < settings.min_coverage:
+    #                 print(pos_covered2.count(1), settings.min_coverage)
+    #                 assert(False)
+    #             continue
 
-            head, body = tuple(prog2)[0]
+    #         head, body = tuple(prog2)[0]
 
-            seen.add(body)
+    #         seen.add(body)
 
-            # If we have seen a subset of the body then ignore this program
-            if any(frozenset(x) in pruned2 for x in non_empty_powerset(body)):
-                to_delete.add(index)
-                continue
+    #         # If we have seen a subset of the body then ignore this program
+    #         if any(frozenset(x) in pruned2 for x in non_empty_powerset(body)):
+    #             to_delete.add(index)
+    #             continue
 
-            pruned_subprog = False
+    #         pruned_subprog = False
 
-            # We now enumerate the subsets of the body of this role to find the most general subsumed subset
-            for new_body in non_empty_subset(body):
-                new_rule = (head, new_body)
+    #         # We now enumerate the subsets of the body of this role to find the most general subsumed subset
+    #         for new_body in non_empty_subset(body):
+    #             new_rule = (head, new_body)
 
-                if not head_connected(new_rule):
-                    continue
+    #             if not head_connected(new_rule):
+    #                 continue
 
-                if not self.has_valid_directions(new_rule):
-                    continue
+    #             if not self.has_valid_directions(new_rule):
+    #                 continue
 
-                tmp = frozenset(new_body)
-                if tmp in seen:
-                    continue
-                seen.add(tmp)
+    #             tmp = frozenset(new_body)
+    #             if tmp in seen:
+    #                 continue
+    #             seen.add(tmp)
 
-                new_prog = frozenset([new_rule])
+    #             new_prog = frozenset([new_rule])
 
-                if tester.has_redundant_literal(new_prog):
-                    continue
+    #             if tester.has_redundant_literal(new_prog):
+    #                 continue
 
-                sub_prog_pos_covered = tester.get_pos_covered(new_prog)
+    #             sub_prog_pos_covered = tester.get_pos_covered(new_prog)
 
-                sub_covers_too_few = sub_prog_pos_covered.count(1) < settings.min_coverage
+    #             sub_prog_subsumed = sub_prog_pos_covered == pos_covered2
 
-                if not sub_covers_too_few:
-                    sub_covers_too_few = self.check_covers_too_few(calc_prog_size(new_prog), sub_prog_pos_covered)
+    #             sub_subsumed_by_two = not sub_prog_subsumed and self.check_subsumed_by_two(sub_prog_pos_covered, calc_prog_size(new_prog))
 
-                if sub_covers_too_few:
-                    if self.settings.showcons:
-                        print('\t', 'COVERS TOO FEW BACKTRACK (GENERALISATION)', '\t', format_prog(new_prog))
-                    to_prune.add(new_prog)
-                    pruned_subprog = True
-                    for x in self.find_variants(remap_variables(new_rule)):
-                        pruned2.add(x)
-                    break
+    #             if self.settings.showcons:
+    #                 if sub_prog_subsumed:
+    #                     print('\t', 'SUBSUMED BACKTRACK (GENERALISATION):', '\t', format_prog(new_prog))
+    #                 elif sub_subsumed_by_two:
+    #                     print('\t', 'SUBSUMED BY TWO BACKTRACK (GENERALISATION):', '\t', format_prog(new_prog))
 
-            to_delete.add(index)
+    #             if sub_prog_subsumed or sub_subsumed_by_two:
+    #                 to_prune.add(new_prog)
+    #                 pruned_subprog = True
+    #                 for x in self.find_variants(remap_variables(new_rule)):
+    #                     pruned2.add(x)
+    #                 break
 
-            if pruned_subprog:
-                continue
+    #         to_delete.add(index)
 
-            for x in self.find_variants(remap_variables((head, body))):
-                pruned2.add(x)
+    #         if pruned_subprog:
+    #             continue
 
-            if self.settings.showcons:
-                print('\t', 'COVERS TOO FEW BACKTRACK', '\t', format_prog(prog2))
-            to_prune.add(prog2)
+    #         for x in self.find_variants(remap_variables((head, body))):
+    #             pruned2.add(x)
 
-        for i in sorted(to_delete, reverse=True):
-            del could_prune_later[i]
+    #         if self.settings.showcons:
+    #             if subsumed:
+    #                 print('\t', 'SUBSUMED BACKTRACK:', '\t', format_prog(prog2))
+    #             elif subsumed_by_two:
+    #                 print('\t', 'SUBSUMED BY TWO BACKTRACK:', '\t', format_prog(prog2))
+    #         to_prune.add(prog2)
 
-        return to_prune
+    #     for i in sorted(to_delete_rec, reverse=True):
+    #         del could_prune_later_rec[i]
+
+    #     for i in sorted(to_delete, reverse=True):
+    #         del could_prune_later[i]
+
+    #     return to_prune
+
+    # def prune_subsumed_backtrack_specialcase(self):
+    #     could_prune_later, tester, settings = self.could_prune_later, self.tester, self.settings
+    #     to_prune = set()
+    #     to_delete = set()
+    #     seen = set()
+    #     pruned2 = self.pruned2
+
+    #     if not settings.solution_found:
+    #         return
+
+    #     for index, (prog2, pos_covered2, prog2_size) in enumerate(could_prune_later):
+
+    #         if len(prog2) > 1:
+    #             assert(False)
+    #             # continue
+
+
+    #         covers_too_few = pos_covered2.count(1) < settings.min_coverage
+
+    #         if not covers_too_few:
+    #             covers_too_few = self.check_covers_too_few(calc_prog_size(prog2), pos_covered2)
+
+    #         if not covers_too_few:
+    #             continue
+
+    #         head, body = tuple(prog2)[0]
+
+    #         seen.add(body)
+
+    #         # If we have seen a subset of the body then ignore this program
+    #         if any(frozenset(x) in pruned2 for x in non_empty_powerset(body)):
+    #             to_delete.add(index)
+    #             continue
+
+    #         pruned_subprog = False
+
+    #         # We now enumerate the subsets of the body of this role to find the most general subsumed subset
+    #         for new_body in non_empty_subset(body):
+    #             new_rule = (head, new_body)
+
+    #             if not head_connected(new_rule):
+    #                 continue
+
+    #             if not self.has_valid_directions(new_rule):
+    #                 continue
+
+    #             tmp = frozenset(new_body)
+    #             if tmp in seen:
+    #                 continue
+    #             seen.add(tmp)
+
+    #             new_prog = frozenset([new_rule])
+
+    #             if tester.has_redundant_literal(new_prog):
+    #                 continue
+
+    #             sub_prog_pos_covered = tester.get_pos_covered(new_prog)
+
+    #             sub_covers_too_few = sub_prog_pos_covered.count(1) < settings.min_coverage
+
+    #             if not sub_covers_too_few:
+    #                 sub_covers_too_few = self.check_covers_too_few(calc_prog_size(new_prog), sub_prog_pos_covered)
+
+    #             if sub_covers_too_few:
+    #                 if self.settings.showcons:
+    #                     print('\t', 'COVERS TOO FEW BACKTRACK (GENERALISATION)', '\t', format_prog(new_prog))
+    #                 to_prune.add(new_prog)
+    #                 pruned_subprog = True
+    #                 for x in self.find_variants(remap_variables(new_rule)):
+    #                     pruned2.add(x)
+    #                 break
+
+    #         to_delete.add(index)
+
+    #         if pruned_subprog:
+    #             continue
+
+    #         for x in self.find_variants(remap_variables((head, body))):
+    #             pruned2.add(x)
+
+    #         if self.settings.showcons:
+    #             print('\t', 'COVERS TOO FEW BACKTRACK', '\t', format_prog(prog2))
+    #         to_prune.add(prog2)
+
+    #     for i in sorted(to_delete, reverse=True):
+    #         del could_prune_later[i]
+
+    #     return to_prune
 
     def find_variants(self, rule):
         head, body = rule
