@@ -1298,7 +1298,7 @@ class Popper():
                 continue
 
             # check whether we have pruned any subset (HORRIBLE CODE)
-            if any(frozenset(x) in self.pruned2 for x in non_empty_powerset(new_body)):
+            if any(hash(frozenset(x)) in self.pruned2 for x in non_empty_powerset(new_body)):
                 continue
 
             if not head_connected(new_rule):
@@ -1335,7 +1335,7 @@ class Popper():
             # for each pruned program, add the variants to the list of pruned programs
             # doing so reduces the number of pointless checks
             for x in self.find_variants(remap_variables(new_rule)):
-                self.pruned2.add(x)
+                self.pruned2.add(hash(x))
 
             if subsumed:
                 out.add((new_prog, ('SUBSUMED (GENERALISATION)')))
