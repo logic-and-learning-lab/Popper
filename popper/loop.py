@@ -663,12 +663,12 @@ class Popper():
                     to_combine.add(hash(prog))
                     # print('combine', format_prog(prog))
 
-                    if not settings.noisy and not has_invention:
-                        with settings.stats.duration('prune backtrack subsumed'):
-                            subsumed_progs = tuple(self.prune_subsumed_backtrack(pos_covered, prog_size))
-                            for subsumed_prog_ in subsumed_progs:
-                                subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
-                                new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
+                    # if not settings.noisy and not has_invention:
+                    #     with settings.stats.duration('prune backtrack subsumed'):
+                    #         subsumed_progs = tuple(self.prune_subsumed_backtrack(pos_covered, prog_size))
+                    #         for subsumed_prog_ in subsumed_progs:
+                    #             subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
+                    #             new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
                 call_combine = len(to_combine) > 0
                 call_combine = call_combine and (settings.noisy or settings.solution_found)
@@ -704,12 +704,12 @@ class Popper():
                             for i in range(settings.max_literals+1, max_size+1):
                                 generator.prune_size(i)
 
-                            if not settings.noisy:
-                                with settings.stats.duration('prune backtrack covers too few'):
-                                    subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
-                                    for subsumed_prog_ in subsumed_progs:
-                                        subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
-                                        new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
+                            # if not settings.noisy:
+                            #     with settings.stats.duration('prune backtrack covers too few'):
+                            #         subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
+                            #         for subsumed_prog_ in subsumed_progs:
+                            #             subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
+                            #             new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
                         call_combine = not uncovered.any()
 
@@ -760,12 +760,12 @@ class Popper():
                             if min_coverage != num_pos and len(settings.solution) == 2:
                                 min_coverage = settings.min_coverage = num_pos
 
-                            if not settings.noisy:
-                                with settings.stats.duration('prune backtrack covers too few'):
-                                    subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
-                                    for subsumed_prog_ in subsumed_progs:
-                                        subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
-                                        new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
+                            # if not settings.noisy:
+                            #     with settings.stats.duration('prune backtrack covers too few'):
+                            #         subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
+                            #         for subsumed_prog_ in subsumed_progs:
+                            #             subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
+                            #             new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
                             # if size >= settings.max_literals and not settings.order_space:
                             if size >= settings.max_literals:
@@ -893,16 +893,17 @@ class Popper():
 
 
         # print('\tA \t\t\t',format_prog(prog), '\t\t', format_literal(literal))
-        prog_key = (prog, literal)
-        if prog_key in self.seen_allsat:
+        # prog_key = (prog, literal)
+        prog_key = (body, literal)
+        if hash(prog_key) in self.seen_allsat:
             return out
 
         h_, b = remap_variables((None, body | frozenset([literal])))
-        if b in self.seen_allsat:
+        if hash(b) in self.seen_allsat:
             return out
 
-        self.seen_allsat.add(prog_key)
-        self.seen_allsat.add(b)
+        self.seen_allsat.add(hash(prog_key))
+        self.seen_allsat.add(hash(b))
 
         body_vars = set()
         for atom in body:
@@ -1596,14 +1597,14 @@ class Popper():
                 # continue
 
             subprog = frozenset(subprog)
-            if subprog in self.seen_prog:
+            if hash(subprog) in self.seen_prog:
                 continue
             raw_prog = get_raw_prog(subprog)
-            if raw_prog in self.seen_prog:
+            if hash(raw_prog) in self.seen_prog:
                 continue
 
-            self.seen_prog.add(subprog)
-            self.seen_prog.add(raw_prog)
+            self.seen_prog.add(hash(subprog))
+            self.seen_prog.add(hash(raw_prog))
             # self.seen_prog.add(raw_prog2)
 
 
