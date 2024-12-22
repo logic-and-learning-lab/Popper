@@ -29,6 +29,9 @@ BATCH_SIZE=20000
 ANYTIME_TIMEOUT=10
 BKCONS_TIMEOUT=10
 
+
+savings=0
+
 class Constraint:
     GENERALISATION = 1
     SPECIALISATION = 2
@@ -558,10 +561,6 @@ class Settings:
 
     def order_rule_datalog(self, head, body):
 
-        def tmp_score(seen_vars, literal):
-            pred, args = literal
-            return self.recall[pred, tuple(1 if x in seen_vars else 0 for x in args)]
-
         ordered_body = []
         seen_vars = set()
 
@@ -577,14 +576,17 @@ class Settings:
                     break
 
             if selected_literal == None:
-                xs = sorted(body_literals, key=lambda x: tmp_score(seen_vars, x))
-                selected_literal = xs[0]
+                selected_literal = max(body_literals, key=lambda x: self.tmp_score_(seen_vars, x))
 
             ordered_body.append(selected_literal)
             seen_vars.update(selected_literal.arguments)
             body_literals.remove(selected_literal)
 
         return head, tuple(ordered_body)
+
+    def tmp_score_(self, seen_vars, literal):
+        pred, args = literal
+        return self.recall[pred, tuple(1 if x in seen_vars else 0 for x in args)]
 
 # def non_empty_powerset(iterable):
 #     s = tuple(iterable)

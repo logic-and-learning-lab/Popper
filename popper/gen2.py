@@ -125,10 +125,7 @@ class Generator:
         if self.model is None:
             return None
 
-        atoms = self.model.symbols(shown = True)
-
-        return self.parse_model_single_rule(atoms)
-
+        return self.parse_model_single_rule(self.model.symbols(shown = True))
 
     def parse_model_single_rule(self, model):
         settings = self.settings
@@ -137,12 +134,9 @@ class Generator:
         cached_literals = settings.cached_literals
         for atom in model:
             args = atom.arguments
-            predicate = args[1].name
-            atom_args = tuple(args[3].arguments)
-            literal = cached_literals[(predicate, atom_args)]
-            body.add(literal)
+            body.add(cached_literals[args[1].name, tuple(args[3].arguments)])
         rule = head, frozenset(body)
-        return frozenset([rule])
+        return frozenset({rule})
 
     def prune_size(self, size):
         if size in self.pruned_sizes:
