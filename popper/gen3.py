@@ -9,7 +9,7 @@ import numbers
 import clingo.script
 import pkg_resources
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, bias_order, Literal
+from . util import rule_is_recursive, Constraint, Literal
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations

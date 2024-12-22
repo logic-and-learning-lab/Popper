@@ -80,7 +80,9 @@ class Tester():
     def parse_single_rule(self, prog):
         rule = list(prog)[0]
         head, ordered_body = self.settings.order_rule(rule)
-        atom_str = format_literal_janus(head)
+        atom_str = ''
+        if head:
+            atom_str = format_literal_janus(head)
         body_str = format_rule_janus((None, ordered_body))[2:-1]
         return atom_str, body_str
 
@@ -194,6 +196,10 @@ class Tester():
         self.cached_pos_covered[k] = pos_covered
         return pos_covered
 
+    @cache
+    def parse_rule_for_recursion(self, rule):
+        return format_rule(self.settings.order_rule(rule))[:-1]
+
     @contextmanager
     def using(self, prog):
 
@@ -205,7 +211,7 @@ class Tester():
         current_clauses = set()
         for rule in prog:
             head, _body = rule
-            x = format_rule(self.settings.order_rule(rule))[:-1]
+            x = self.parse_rule_for_recursion(rule)
             str_prog.append(x)
             current_clauses.add((head.predicate, len(head.arguments)))
 
@@ -240,18 +246,17 @@ class Tester():
         if len(prog) == 1:
             rule = list(prog)[0]
             head, _body = rule
-            head, ordered_body = self.settings.order_rule(rule)
             new_head = f'pos_index(_ID, {format_literal_janus(head)})'
-            x = format_rule_janus((None, ordered_body))[2:-1]
+            _, ordered_body = self.parse_single_rule(prog)
             if self.settings.noisy:
-                q = f'succeeds_k_times({new_head},({x}),K)'
+                q = f'succeeds_k_times({new_head},({ordered_body}),K)'
                 return query_once(q, {'K':calc_rule_size(rule)})['truth']
             else:
                 if self.settings.min_coverage == 1:
-                    q = f'{new_head},{x}'
+                    q = f'{new_head},{ordered_body}'
                     return bool_query(q)
                 else:
-                    q = f'succeeds_k_times({new_head},({x}),K)'
+                    q = f'succeeds_k_times({new_head},({ordered_body}),K)'
                     return query_once(q, {'K':self.settings.min_coverage})['truth']
         else:
             with self.using(prog):
@@ -261,15 +266,13 @@ class Tester():
                     return bool_query('sat')
 
     def is_body_sat(self, body):
-        _, ordered_body = self.settings.order_rule((None, body))
-        query = ','.join(format_literal_janus(literal) for literal in ordered_body)
-        return bool_query(query)
+        _, ordered_body = self.parse_single_rule(frozenset([(None, body)]))
+        return bool_query(ordered_body)
 
     def is_literal_redundant(self, body, literal):
+        _, ordered_body = self.parse_single_rule(frozenset([(None, body)]))
         literal_str = format_literal_janus(literal)
-        _, ordered_body = self.settings.order_rule((None, body))
-        x = ','.join(format_literal_janus(x) for x in ordered_body)
-        q = f'{x}, \+ {literal_str}'
+        q = f'{ordered_body}, \+ {literal_str}'
         return not bool_query(q)
 
     @cache
@@ -280,9 +283,8 @@ class Tester():
 
     def is_neg_reducible(self, body, literal):
         literal_str = format_literal_janus(literal)
-        ordered_body = self.tmp_order_rule_datalog(body | self.neg_literal_set)
-        x = ','.join(format_literal_janus(x) for x in ordered_body)
-        q = f'{x}, \+ {literal_str}'
+        _, ordered_body = self.parse_single_rule(frozenset([(None, body | self.neg_literal_set)]))
+        q = f'{ordered_body}, \+ {literal_str}'
         return not bool_query(q)
 
     @cache
@@ -407,49 +409,6 @@ class Tester():
                     pointless.add(b)
         # return frozenset((p, arities[p]) for p in pointless)
         return pointless
-
-    def tmp_order_rule_datalog(self, body):
-
-        if not self.settings.datalog:
-            return self.settings.order_rule((None, body))
-
-        recalls = self.settings.recall
-        def tmp_score(seen_vars, literal):
-            pred, args = literal
-            key = []
-            for x in args:
-                if x in seen_vars:
-                    key.append(1)
-                else:
-                    key.append(0)
-            key = tuple(key)
-            k = (pred, key)
-            if k in recalls:
-                return recalls[k]
-            # print(k)
-            assert(False)
-            return 1000000
-
-        ordered_body = []
-        seen_vars = set()
-
-        body_literals = set(body)
-        while body_literals:
-            selected_literal = None
-            for literal in body_literals:
-                if set(literal.arguments).issubset(seen_vars):
-                    selected_literal = literal
-                    break
-
-            if selected_literal == None:
-                xs = sorted(body_literals, key=lambda x: tmp_score(seen_vars, x))
-                selected_literal = xs[0]
-
-            ordered_body.append(selected_literal)
-            seen_vars = seen_vars.union(selected_literal.arguments)
-            body_literals = body_literals.difference({selected_literal})
-
-        return tuple(ordered_body)
 
 def deduce_neg_example_recalls(settings, atoms):
     # Jan Struyf, Hendrik Blockeel: Query Optimization in Inductive Logic Programming by Reordering Literals. ILP 2003: 329-346

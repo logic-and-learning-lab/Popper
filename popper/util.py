@@ -119,6 +119,7 @@ class Stats:
         message += f'Total operation time: {total_op_time:0.2f}s\n'
         message += f'Total execution time: {self.total_exec_time():0.2f}s'
         print(message)
+        return message
 
     def duration_summary(self):
         summary = []
@@ -224,6 +225,7 @@ class Settings:
         if cmd_line:
             args = parse_args()
             self.bk_file, self.ex_file, self.bias_file = load_kbpath(args.kbpath)
+            self.path = args.kbpath
             quiet = args.quiet
             debug = args.debug
             show_stats = args.stats
@@ -253,6 +255,7 @@ class Settings:
                 self.bk_file = bk_file
                 self.bias_file = bias_file
 
+        self.tmp_cache = set()
         self.logger = logging.getLogger("popper")
 
         if quiet:
@@ -554,7 +557,7 @@ class Settings:
 
         return head, tuple(ordered_body)
 
-    @cache
+    # @cache
     def order_rule_datalog(self, head, body):
 
         def tmp_score(seen_vars, literal):
@@ -598,13 +601,13 @@ class Settings:
 
         return head, tuple(ordered_body)
 
-def non_empty_powerset(iterable):
-    s = tuple(iterable)
-    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
+# def non_empty_powerset(iterable):
+#     s = tuple(iterable)
+#     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
 
-def non_empty_subset(iterable):
-    s = tuple(iterable)
-    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)))
+# def non_empty_subset(iterable):
+#     s = tuple(iterable)
+#     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)))
 
 def load_types(settings):
     enc = """
@@ -635,76 +638,76 @@ def load_types(settings):
 
     return head_types, body_types
 
-def bias_order(settings, max_size):
+# def bias_order(settings, max_size):
 
-    if not (settings.no_bias or settings.order_space):
-        return [(size_literals, settings.max_vars, settings.max_rules, None) for size_literals in range(1, max_size+1)]
+#     if not (settings.no_bias or settings.order_space):
+#         return [(size_literals, settings.max_vars, settings.max_rules, None) for size_literals in range(1, max_size+1)]
 
-    # if settings.search_order is None:
-    ret = []
-    predicates = len(settings.body_preds) + 1
-    arity = settings.max_arity
-    min_rules = settings.max_rules
-    if settings.no_bias:
-        min_rules = 1
-    for size_rules in range(min_rules, settings.max_rules+1):
-        max_size = (1 + settings.max_body) * size_rules
-        for size_literals in range(1, max_size+1):
-            # print(size_literals)
-            minimum_vars = settings.max_vars
-            if settings.no_bias:
-                minimum_vars = 1
-            for size_vars in range(minimum_vars, settings.max_vars+1):
-                # FG We should not search for configurations with more variables than the possible variables for the number of litereals considered
-                # There must be at least one variable repeated, otherwise all the literals are disconnected
-                max_possible_vars = (size_literals * arity) - 1
-                # print(f'size_literals:{size_literals} size_vars:{size_vars} size_rules:{size_rules} max_possible_vars:{max_possible_vars}')
-                if size_vars > max_possible_vars:
-                    break
+#     # if settings.search_order is None:
+#     ret = []
+#     predicates = len(settings.body_preds) + 1
+#     arity = settings.max_arity
+#     min_rules = settings.max_rules
+#     if settings.no_bias:
+#         min_rules = 1
+#     for size_rules in range(min_rules, settings.max_rules+1):
+#         max_size = (1 + settings.max_body) * size_rules
+#         for size_literals in range(1, max_size+1):
+#             # print(size_literals)
+#             minimum_vars = settings.max_vars
+#             if settings.no_bias:
+#                 minimum_vars = 1
+#             for size_vars in range(minimum_vars, settings.max_vars+1):
+#                 # FG We should not search for configurations with more variables than the possible variables for the number of litereals considered
+#                 # There must be at least one variable repeated, otherwise all the literals are disconnected
+#                 max_possible_vars = (size_literals * arity) - 1
+#                 # print(f'size_literals:{size_literals} size_vars:{size_vars} size_rules:{size_rules} max_possible_vars:{max_possible_vars}')
+#                 if size_vars > max_possible_vars:
+#                     break
 
-                hspace = comb(predicates * pow(size_vars, arity), size_literals)
+#                 hspace = comb(predicates * pow(size_vars, arity), size_literals)
 
-                # AC @ FG: handy code to skip pointless unsat calls
-                if hspace == 0:
-                    continue
-                if size_rules > 1 and size_literals < 5:
-                    continue
-                ret.append((size_literals, size_vars, size_rules, hspace))
+#                 # AC @ FG: handy code to skip pointless unsat calls
+#                 if hspace == 0:
+#                     continue
+#                 if size_rules > 1 and size_literals < 5:
+#                     continue
+#                 ret.append((size_literals, size_vars, size_rules, hspace))
 
-    if settings.order_space:
-        ret.sort(key=lambda tup: (tup[3],tup[0]))
+#     if settings.order_space:
+#         ret.sort(key=lambda tup: (tup[3],tup[0]))
 
-    #for x in ret:
-    #    print(x)
+#     #for x in ret:
+#     #    print(x)
 
-    settings.search_order = ret
-    return settings.search_order
+#     settings.search_order = ret
+#     return settings.search_order
 
-def is_headless(prog):
-    return any(head is None for head, body in prog)
+# def is_headless(prog):
+#     return any(head is None for head, body in prog)
 
-@cache
-def head_connected(rule):
-    head, body = rule
-    _head_pred, head_args = head
-    head_connected_vars = set(head_args)
-    body_literals = set(body)
+# @cache
+# def head_connected(rule):
+#     head, body = rule
+#     _head_pred, head_args = head
+#     head_connected_vars = set(head_args)
+#     body_literals = set(body)
 
-    if not any(x in head_connected_vars for _pred, args in body for x in args):
-        return False
+#     if not any(x in head_connected_vars for _pred, args in body for x in args):
+#         return False
 
-    while body_literals:
-        changed = False
-        for literal in body_literals:
-            pred, args = literal
-            if any (x in head_connected_vars for x in args):
-                head_connected_vars.update(args)
-                body_literals = body_literals.difference({literal})
-                changed = True
-        if changed == False and body_literals:
-            return False
+#     while body_literals:
+#         changed = False
+#         for literal in body_literals:
+#             pred, args = literal
+#             if any (x in head_connected_vars for x in args):
+#                 head_connected_vars.update(args)
+#                 body_literals = body_literals.difference({literal})
+#                 changed = True
+#         if changed == False and body_literals:
+#             return False
 
-    return True
+#     return True
 
 import os
 # AC: I do not know what this code below really does, but it works

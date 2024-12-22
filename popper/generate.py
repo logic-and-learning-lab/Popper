@@ -9,7 +9,7 @@ import numbers
 import clingo.script
 import pkg_resources
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, bias_order, Literal, format_rule, remap_variables
+from . util import rule_is_recursive, Constraint, Literal, format_rule, remap_variables
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
@@ -169,19 +169,21 @@ class Generator:
         # - considering a preference for minimum hspace size parameters configuration
         if settings.single_solve:
             if settings.order_space:
-                horder = bias_order(settings, max_size)
-                iorder = 1
-                for (size, n_vars, n_rules, _) in horder:
-                    encoding.append(f'h_order({iorder},{size},{n_vars},{n_rules}).')
-                    iorder += 1
-                HSPACE_HEURISTIC = """
-                #heuristic hspace(N). [1000-N@30,true]
-                hspace(N) :- h_order(N,K,V,R), size(K), size_vars(V), size_rules(R).
-                size_vars(V):- #count{K : clause_var(_,K)} == V.
-                size_rules(R):- #count{K : clause(K)} == R.
-                """
+                assert(False)
+                pass
+                # horder = bias_order(settings, max_size)
+                # iorder = 1
+                # for (size, n_vars, n_rules, _) in horder:
+                #     encoding.append(f'h_order({iorder},{size},{n_vars},{n_rules}).')
+                #     iorder += 1
+                # HSPACE_HEURISTIC = """
+                # #heuristic hspace(N). [1000-N@30,true]
+                # hspace(N) :- h_order(N,K,V,R), size(K), size_vars(V), size_rules(R).
+                # size_vars(V):- #count{K : clause_var(_,K)} == V.
+                # size_rules(R):- #count{K : clause(K)} == R.
+                # """
 
-                encoding.append(HSPACE_HEURISTIC)
+                # encoding.append(HSPACE_HEURISTIC)
             elif settings.no_bias:
                 DEFAULT_HEURISTIC = """
                 size_vars(V):- #count{K : clause_var(_,K)} == V.
