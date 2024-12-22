@@ -1,4 +1,3 @@
-from functools import cache
 import clingo
 import clingo.script
 import signal
@@ -557,7 +556,6 @@ class Settings:
 
         return head, tuple(ordered_body)
 
-    # @cache
     def order_rule_datalog(self, head, body):
 
         def tmp_score(seen_vars, literal):

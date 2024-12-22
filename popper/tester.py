@@ -75,8 +75,6 @@ class Tester():
     def janus_clear_cache(self):
         return query_once('retractall(janus:py_call_cache(_String,_Input,_TV,_M,_Goal,_Dict,_Truth,_OutVars))')
 
-    # AC: THIS METHOD IS VERY EXPENSIVE, ESPECIALLY THE ORDER_RULE CALL
-    @cache
     def parse_single_rule(self, prog):
         rule = list(prog)[0]
         head, ordered_body = self.settings.order_rule(rule)
@@ -86,26 +84,50 @@ class Tester():
         body_str = format_rule_janus((None, ordered_body))[2:-1]
         return atom_str, body_str
 
+    @cache
+    def parse_body(self, body):
+        head, ordered_body = self.settings.order_rule((None, body))
+        body_str = format_rule_janus((None, ordered_body))[2:-1]
+        return body_str
+
     def test_prog(self, prog):
 
-        if len(prog) == 1:
-            atom_str, body_str = self.parse_single_rule(prog)
-            q = f'findall(_ID, (pos_index(_ID, {atom_str}), ({body_str} ->  true)), S)'
-            pos_covered = query_once(q)['S']
-            inconsistent = False
-            if self.num_neg > 0:
-                q = f'neg_index(_ID, {atom_str}), {body_str}'
-                inconsistent = bool_query(q)
-        else:
-            with self.using(prog):
-                pos_covered = query_once('pos_covered(S)')['S']
+        if self.settings.recursion_enabled or self.settings.pi_enabled:
+
+            if len(prog) == 1:
+                atom_str, body_str = self.parse_single_rule(prog)
+                q = f'findall(_ID, (pos_index(_ID, {atom_str}), ({body_str} ->  true)), S)'
+                pos_covered = query_once(q)['S']
                 inconsistent = False
                 if self.num_neg > 0:
-                    inconsistent = bool_query("inconsistent")
+                    q = f'neg_index(_ID, {atom_str}), {body_str}'
+                    inconsistent = bool_query(q)
+            else:
+                with self.using(prog):
+                    pos_covered = query_once('pos_covered(S)')['S']
+                    inconsistent = False
+                    if self.num_neg > 0:
+                        inconsistent = bool_query("inconsistent")
 
-        pos_covered_bits = bitarray(self.num_pos)
-        pos_covered_bits[pos_covered] = 1
-        pos_covered = frozenbitarray(pos_covered_bits)
+            pos_covered_bits = bitarray(self.num_pos)
+            pos_covered_bits[pos_covered] = 1
+            pos_covered = frozenbitarray(pos_covered_bits)
+        else:
+            atom_str, body_str = self.parse_single_rule(prog)
+            q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
+            pos_covered = query_once(q)['S']
+            pos_covered_bits = bitarray(self.num_pos)
+            pos_covered_bits[pos_covered] = 1
+            pos_covered = frozenbitarray(pos_covered_bits)
+
+            inconsistent = True
+            if self.num_neg == 0:
+                inconsistent = True
+            elif pos_covered.any():
+                q = f'neg_index(_ID, {atom_str}), {body_str}'
+                inconsistent = bool_query(q)
+
+        self.cached_pos_covered[hash(prog)] = pos_covered
         return pos_covered, inconsistent
 
     def test_prog_all(self, prog):
@@ -243,6 +265,15 @@ class Tester():
         return program
 
     def is_sat(self, prog):
+
+        k1 = hash(prog)
+        if k1 in self.cached_pos_covered:
+            return self.cached_pos_covered[k1].any()
+
+        k = prog_hash(prog)
+        if k in self.cached_pos_covered:
+            return self.cached_pos_covered[k].any()
+
         if len(prog) == 1:
             rule = list(prog)[0]
             head, _body = rule
@@ -266,25 +297,34 @@ class Tester():
                     return bool_query('sat')
 
     def is_body_sat(self, body):
-        _, ordered_body = self.parse_single_rule(frozenset([(None, body)]))
-        return bool_query(ordered_body)
+        if len(body) > 1:
+            q = self.parse_body(body)
+        else:
+            q = format_literal_janus(list(body)[0])
+            assert(bool_query(q))
+
+        return bool_query(q)
 
     def is_literal_redundant(self, body, literal):
-        _, ordered_body = self.parse_single_rule(frozenset([(None, body)]))
         literal_str = format_literal_janus(literal)
-        q = f'{ordered_body}, \+ {literal_str}'
+        if len(body) > 1:
+            x = self.parse_body(body)
+        else:
+            x = format_literal_janus(list(body)[0])
+        q = f'{x}, \+ {literal_str}'
         return not bool_query(q)
 
-    @cache
     def diff_subs_single(self, literal):
         literal_str = format_literal_janus(literal)
         q = f'{self.neg_fact_str}, \+ {literal_str}'
         return not bool_query(q)
 
     def is_neg_reducible(self, body, literal):
+        # AC: we do not cache as we can never see body + neg_literal again
+        head, ordered_body = self.settings.order_rule((None, body | self.neg_literal_set))
+        body_str = format_rule_janus((None, ordered_body))[2:-1]
         literal_str = format_literal_janus(literal)
-        _, ordered_body = self.parse_single_rule(frozenset([(None, body | self.neg_literal_set)]))
-        q = f'{ordered_body}, \+ {literal_str}'
+        q = f'{body_str}, \+ {literal_str}'
         return not bool_query(q)
 
     @cache
