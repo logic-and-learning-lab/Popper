@@ -158,8 +158,6 @@ class Popper():
                 subsumed = subsumed_by_two = covers_too_few = noisy_subsumed = False
                 spec_size = gen_size = None
                 size_change = False
-                neg_covered = None
-                inconsistent = None
 
                 # new cons to add to the solver
                 new_cons = []
@@ -189,71 +187,47 @@ class Popper():
                     settings.search_depth = prog_size
                     settings.logger.info(f'Generating programs of size: {prog_size}')
 
-                # TODO: refactor out for readability
-                # test a program
-                skipped, skip_early_neg = False, False
-
                 with settings.stats.duration('test'):
                     if settings.noisy:
-                        if settings.recursion_enabled or settings.pi_enabled:
-                            pos_covered, neg_covered = tester.test_prog_all(prog)
-                            inconsistent = neg_covered.any()
-                        else:
-                            # AC: we could push all this reasoning to Prolog to only need a single call
-                            pos_covered = tester.test_prog_pos(prog)
-                            tp = pos_covered.count(1)
-                            # assert(tp == tp_)
-                            if tp > prog_size:
-                                # maximum size of specialisations allowed
-                                test_at_most_k_neg1 = min([settings.max_body-(prog_size-1), settings.max_literals-prog_size])
-                                # conditions which determine whether a program can be part of a solution
-                                test_at_most_k_neg2 = min([settings.best_mdl - prog_size, tp-prog_size])
-                                test_at_most_k_neg = max([test_at_most_k_neg1, test_at_most_k_neg2])
-                                neg_covered = tester.test_single_rule_neg_at_most_k(prog, test_at_most_k_neg)
-                                if neg_covered.count(1) == test_at_most_k_neg:
-                                    skip_early_neg = True
-
-                                inconsistent = neg_covered.any()
-                            else:
-                                skipped = True
+                        pos_covered, neg_covered, inconsistent, skipped, skip_early_neg = tester.test_prog_noisy(prog, prog_size)
                     else:
                         pos_covered, inconsistent = tester.test_prog(prog)
+                        # @CH: can you explain these?
+                        skipped, skip_early_neg = False, False
 
                 tp = pos_covered.count(1)
                 fn = num_pos-tp
 
                 # if non-separable program covers all examples, stop
-                if not skipped and not inconsistent and tp == num_pos: # and not settings.order_space:
-                    if not settings.functional_test or not tester.is_non_functional(prog):
+                if not inconsistent and tp == num_pos and not skipped:
+                    # if not settings.functional_test or not tester.is_non_functional(prog):
+                    settings.solution = prog
+                    settings.best_prog_score = num_pos, 0, num_neg, 0, prog_size
+                    settings.best_mdl = prog_size
+                    return
+
+                if settings.noisy and not skipped:
+                    fp = neg_covered.count(1)
+                    tn = num_neg-fp
+                    score = tp, fn, tn, fp, prog_size
+                    mdl = mdl_score(fn, fp, prog_size)
+                    if settings.debug:
+                        settings.logger.debug(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} mdl:{mdl}')
+                    saved_scores[prog] = [fp, fn, prog_size]
+                    if not min_score:
+                        min_score = prog_size
+
+                    if mdl < settings.best_mdl:
+                        if skip_early_neg:
+                            assert False
+                        # HORRIBLE
+                        combiner.best_cost = mdl
+                        settings.best_prog_score = score
                         settings.solution = prog
-                        settings.best_prog_score = num_pos, 0, num_neg, 0, prog_size
-                        settings.best_mdl = prog_size
-                        return
-
-                if settings.noisy:
-                    fp, tn = None, None
-                    if not skipped:
-                        fp = neg_covered.count(1)
-                        tn = num_neg-fp
-                        score = tp, fn, tn, fp, prog_size
-                        mdl = mdl_score(fn, fp, prog_size)
-                        if settings.debug:
-                            settings.logger.debug(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} mdl:{mdl}')
-                        saved_scores[prog] = [fp, fn, prog_size]
-                        if not min_score:
-                            min_score = prog_size
-
-                        if mdl < settings.best_mdl:
-                            if skip_early_neg:
-                                assert False
-                            # HORRIBLE
-                            combiner.best_cost = mdl
-                            settings.best_prog_score = score
-                            settings.solution = prog
-                            settings.best_mdl = mdl
-                            settings.max_literals = mdl-1
-                            settings.print_incomplete_solution2(prog, tp, fn, tn, fp, prog_size)
-                            new_cons.extend(self.build_constraints_previous_hypotheses(mdl, prog_size))
+                        settings.best_mdl = mdl
+                        settings.max_literals = mdl-1
+                        settings.print_incomplete_solution2(prog, tp, fn, tn, fp, prog_size)
+                        new_cons.extend(self.build_constraints_previous_hypotheses(mdl, prog_size))
 
                 # if it does not cover any example, prune specialisations
                 if tp == 0:
@@ -274,7 +248,6 @@ class Popper():
 
                 # if the program does not cover any positive examples, check whether it is has an unsat core
                 if not has_invention:
-                    # self.seen_prog.add(get_raw_prog(prog))
                     if tp < min_coverage or (settings.noisy and tp <= prog_size):
                         with settings.stats.duration('find mucs'):
                             cons_ = tuple(self.explain_incomplete(prog))
@@ -285,7 +258,6 @@ class Popper():
                     with settings.stats.duration('check subsumed and covers_too_few'):
                         subsumed = pos_covered in success_sets or any(subset(pos_covered, xs) for xs in success_sets)
                         subsumed_by_two = not subsumed and self.check_subsumed_by_two(pos_covered, prog_size)
-                        # AC: DISABLE WHEN THERE IS NOISE
                         covers_too_few = not subsumed and not subsumed_by_two and not settings.noisy and self.check_covers_too_few(prog_size, pos_covered)
 
                     if subsumed or subsumed_by_two or covers_too_few:
@@ -337,8 +309,7 @@ class Popper():
                             new_cons.extend(cons_)
                             pruned_sub_inconsistent = len(cons_) > 0
                     else:
-                        # if consistent, prune specialisations
-                        add_spec = True
+                        # messy thing so the combiner can look at something
                         neg_covered = frozenset()
 
                     # if consistent and partially complete, test whether functional
@@ -438,12 +409,6 @@ class Popper():
                     if tp < min_coverage:
                         add_spec = True
 
-                # if not add_spec and not pruned_more_general:
-                #     if is_recursive:
-                #         could_prune_later_rec.append((prog, pos_covered, prog_size))
-                #     else:
-                #         could_prune_later.append((prog, pos_covered, prog_size))
-
                 add_to_combiner = False
                 if settings.noisy and not skipped and not skip_early_neg and not is_recursive and not has_invention and tp > prog_size+fp and fp+prog_size < settings.best_mdl and not noisy_subsumed:
 
@@ -464,12 +429,6 @@ class Popper():
                                 ignore_this_prog = True
                                 # print('skip1')
                                 break
-
-                    # if inconsistent != fp>0:
-                    #     print('inconsistent', inconsistent)
-                    #     print('fp>0', fp>0)
-                    #     print('inconsistent == fp>0', inconsistent == fp>0)
-                    #     assert(inconsistent == fp>0)
 
                     if not ignore_this_prog and (inconsistent or fp>0):
                         # neg_covered is a subset of all programs in s_neg
@@ -625,7 +584,6 @@ class Popper():
                             settings.solution = settings.solution | prog
                         else:
                             settings.solution = prog
-                        # uncovered = uncovered-pos_covered
                         uncovered = uncovered & ~pos_covered
                         tp = num_pos- uncovered.count(1)
                         fn = uncovered.count(1)
@@ -753,8 +711,6 @@ class Popper():
 
                 # CONSTRAIN
                 with settings.stats.duration('constrain'):
-                    pass
-                    # print(new_cons)
                     generator.constrain(new_cons)
 
             # if not pi_or_rec:
@@ -1007,7 +963,7 @@ class Popper():
             return False
 
         min_size = self.min_size
-        assert(min_size)
+        # assert(min_size)
 
         max_literals = self.settings.max_literals
 
@@ -1262,7 +1218,7 @@ class Popper():
                 continue
 
             new_prog_size = calc_prog_size(new_prog)
-            sub_prog_pos_covered = tester.get_pos_covered(new_prog, ignore=True)
+            sub_prog_pos_covered = tester.get_pos_covered(new_prog)
 
             # with self.settings.stats.duration('old'):
             subsumed = sub_prog_pos_covered in success_sets or any(subset(sub_prog_pos_covered, xs) for xs in success_sets)
@@ -1291,9 +1247,6 @@ class Popper():
             else:
                 assert(False)
         return out
-
-
-
 
     def find_variants(self, rule):
         head, body = rule

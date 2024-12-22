@@ -560,28 +560,15 @@ class Settings:
 
         def tmp_score(seen_vars, literal):
             pred, args = literal
-            key = []
-            for x in args:
-                if x in seen_vars:
-                    key.append(1)
-                else:
-                    key.append(0)
-            key = tuple(key)
-            k = (pred, key)
+            return self.recall[pred, tuple(1 if x in seen_vars else 0 for x in args)]
 
-            if k in self.recall:
-                return self.recall[k]
-            return 1000000
-
-
-
-        # head, body = rule
         ordered_body = []
         seen_vars = set()
 
         if head:
             seen_vars.update(head.arguments)
         body_literals = set(body)
+
         while body_literals:
             selected_literal = None
             for literal in body_literals:
@@ -594,8 +581,8 @@ class Settings:
                 selected_literal = xs[0]
 
             ordered_body.append(selected_literal)
-            seen_vars = seen_vars.union(selected_literal.arguments)
-            body_literals = body_literals.difference({selected_literal})
+            seen_vars.update(selected_literal.arguments)
+            body_literals.remove(selected_literal)
 
         return head, tuple(ordered_body)
 
@@ -773,10 +760,9 @@ def prog_hash(prog):
 
 def remap_variables(rule):
     head, body = rule
-    head_vars = frozenset()
 
-    if head:
-        head_vars = frozenset(head.arguments)
+    head_vars = frozenset(head.arguments) if head else frozenset()
+
 
     next_var = len(head_vars)
     lookup = {i:i for i in head_vars}

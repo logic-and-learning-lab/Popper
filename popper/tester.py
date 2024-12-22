@@ -6,20 +6,13 @@ from functools import cache
 from contextlib import contextmanager
 from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal, Literal
 from bitarray import bitarray, frozenbitarray
+from bitarray.util import ones
 from collections import defaultdict
 from itertools import product
 
 def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
     return f'{literal.predicate}({args})'
-
-def format_rule_janus(rule):
-    head, body = rule
-    head_str = ''
-    if head:
-        head_str = format_literal_janus(head)
-    body_str = ','.join(format_literal_janus(literal) for literal in body)
-    return f'{head_str}:- {body_str}.'
 
 def bool_query(query):
     return query_once(query)['truth']
@@ -63,8 +56,7 @@ class Tester():
         self.num_pos = query_once('findall(_K, pos_index(_K, _Atom), _S), length(_S, N)')['N']
         self.num_neg = query_once('findall(_K, neg_index(_K, _Atom), _S), length(_S, N)')['N']
 
-        self.pos_examples_ = bitarray(self.num_pos)
-        self.pos_examples_.setall(1)
+        self.pos_examples_ = ones(self.num_pos)
 
         self.cached_pos_covered = {}
         self.cached_inconsistent = {}
@@ -76,19 +68,48 @@ class Tester():
         return query_once('retractall(janus:py_call_cache(_String,_Input,_TV,_M,_Goal,_Dict,_Truth,_OutVars))')
 
     def parse_single_rule(self, prog):
-        rule = list(prog)[0]
+        rule = next(iter(prog))
         head, ordered_body = self.settings.order_rule(rule)
-        atom_str = ''
-        if head:
-            atom_str = format_literal_janus(head)
-        body_str = format_rule_janus((None, ordered_body))[2:-1]
+        atom_str = format_literal_janus(head)
+        body_str = ','.join(format_literal_janus(literal) for literal in ordered_body)
         return atom_str, body_str
 
     @cache
     def parse_body(self, body):
-        head, ordered_body = self.settings.order_rule((None, body))
-        body_str = format_rule_janus((None, ordered_body))[2:-1]
+        _, ordered_body = self.settings.order_rule((None, body))
+        body_str = ','.join(format_literal_janus(literal) for literal in ordered_body)
         return body_str
+
+    def test_prog_noisy(self, prog, prog_size):
+        settings = self.settings
+        neg_covered = None
+        skipped, skip_early_neg = False, False
+        inconsistent = False
+
+        if settings.recursion_enabled or settings.pi_enabled:
+            pos_covered, neg_covered = self.test_prog_all(prog)
+            inconsistent = neg_covered.any()
+        else:
+            # AC: we could push all this reasoning to Prolog to only need a single call
+            pos_covered = self.test_prog_pos(prog)
+            tp = pos_covered.count(1)
+            # assert(tp == tp_)
+            if tp > prog_size:
+                # maximum size of specialisations allowed
+                test_at_most_k_neg1 = min([settings.max_body-(prog_size-1), settings.max_literals-prog_size])
+                # conditions which determine whether a program can be part of a solution
+                test_at_most_k_neg2 = min([settings.best_mdl - prog_size, tp-prog_size])
+                test_at_most_k_neg = max([test_at_most_k_neg1, test_at_most_k_neg2])
+                neg_covered = self.test_single_rule_neg_at_most_k(prog, test_at_most_k_neg)
+                if neg_covered.count(1) == test_at_most_k_neg:
+                    skip_early_neg = True
+                inconsistent = neg_covered.any()
+            else:
+                skipped = True
+                # neg_covered
+
+        return pos_covered, neg_covered, inconsistent, skipped, skip_early_neg
+
 
     def test_prog(self, prog):
 
@@ -178,7 +199,6 @@ class Tester():
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
             q = f'neg_index(_ID, {atom_str}), {body_str}'
-            # print('tester', q)
             return bool_query(q)
 
         with self.using(prog):
@@ -198,10 +218,16 @@ class Tester():
         return neg_covered
 
     # why twice???
-    def get_pos_covered(self, prog, ignore=True):
+    def get_pos_covered(self, prog):
+
+        k1 = hash(prog)
+        if k1 in self.cached_pos_covered:
+            return self.cached_pos_covered[k1]
+
         k = prog_hash(prog)
         if k in self.cached_pos_covered:
             return self.cached_pos_covered[k]
+
 
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
@@ -216,6 +242,8 @@ class Tester():
         pos_covered = frozenbitarray(pos_covered_bits)
 
         self.cached_pos_covered[k] = pos_covered
+        self.cached_pos_covered[k1] = pos_covered
+
         return pos_covered
 
     @cache
@@ -275,7 +303,7 @@ class Tester():
             return self.cached_pos_covered[k].any()
 
         if len(prog) == 1:
-            rule = list(prog)[0]
+            rule = next(iter(prog))
             head, _body = rule
             new_head = f'pos_index(_ID, {format_literal_janus(head)})'
             _, ordered_body = self.parse_single_rule(prog)
@@ -300,8 +328,7 @@ class Tester():
         if len(body) > 1:
             q = self.parse_body(body)
         else:
-            q = format_literal_janus(list(body)[0])
-            assert(bool_query(q))
+            q = format_literal_janus(next(iter(body)))
 
         return bool_query(q)
 
@@ -310,7 +337,7 @@ class Tester():
         if len(body) > 1:
             x = self.parse_body(body)
         else:
-            x = format_literal_janus(list(body)[0])
+            x = format_literal_janus(next(iter(body)))
         q = f'{x}, \+ {literal_str}'
         return not bool_query(q)
 
@@ -322,7 +349,7 @@ class Tester():
     def is_neg_reducible(self, body, literal):
         # AC: we do not cache as we can never see body + neg_literal again
         head, ordered_body = self.settings.order_rule((None, body | self.neg_literal_set))
-        body_str = format_rule_janus((None, ordered_body))[2:-1]
+        body_str = ','.join(format_literal_janus(literal) for literal in ordered_body)
         literal_str = format_literal_janus(literal)
         q = f'{body_str}, \+ {literal_str}'
         return not bool_query(q)
