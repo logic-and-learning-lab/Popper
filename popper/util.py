@@ -576,7 +576,7 @@ class Settings:
                     break
 
             if selected_literal == None:
-                selected_literal = max(body_literals, key=lambda x: self.tmp_score_(seen_vars, x))
+                selected_literal = min(body_literals, key=lambda x: self.tmp_score_(seen_vars, x))
 
             ordered_body.append(selected_literal)
             seen_vars.update(selected_literal.arguments)
