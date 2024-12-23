@@ -111,6 +111,7 @@ class Popper():
         # pos_covered_bit_array -> prog_size
         # it only maintains success sets for programs where fp = 0
         success_sets = self.success_sets = {}
+        success_sets_aux = self.success_sets_aux = {}
 
         # (pos_covered_bit_array, neg_covered_bitarray) -> prog_size
         success_sets_noise = {}
@@ -530,25 +531,32 @@ class Popper():
                     if not inconsistent and not subsumed and not add_gen and tp > 0 and not pruned_more_general:
                         add_to_combiner = True
 
-                        # TMP!!!!!!!!
-                        # AC: DO THIS!!!
-                        if not settings.recursion_enabled and False:
+                        if not settings.recursion_enabled:
                             to_delete = []
-                            for a, b in success_sets.items():
-                                if subset(a, pos_covered) and prog_size <= b:
-                                    to_delete.append(a)
-                            for x in to_delete:
-                                print('DELETED')
-                                # MOOOOOOOO!!!
-                                combiner.saved_progs.remove(k)
-                                # del success_sets[x]
-                                # del coverage_pos[x]
-                                # del coverage_neg[x]
-                                # del prog_lookup[x]
+                            for pos_covered2, prog_size2 in success_sets.items():
+                                if prog_size > prog_size2:
+                                    continue
+                                if subset(pos_covered2, pos_covered):
+                                    to_delete.append(success_sets_aux[pos_covered2])
+
+                            for prog2_hash in to_delete:
+                                pos_covered2 = coverage_pos[prog2_hash]
+                                if prog2_hash in to_combine:
+                                    to_combine.remove(prog2_hash)
+                                elif prog2_hash in combiner.saved_progs:
+                                    combiner.saved_progs.remove(prog2_hash)
+                                else:
+                                    assert(False)
+                                del success_sets[pos_covered2]
+                                del success_sets_aux[pos_covered2]
+                                del coverage_pos[prog2_hash]
+                                del coverage_neg[prog2_hash]
+                                del prog_lookup[prog2_hash]
                                 # AC: SOMEHOW DELETE FROM PAIRED_SUCCESS_SETS
 
                         k = hash(prog)
                         success_sets[pos_covered] = prog_size
+                        success_sets_aux[pos_covered] = k
                         coverage_pos[k] = pos_covered
                         coverage_neg[k] = neg_covered
                         prog_lookup[k] = prog
@@ -563,14 +571,6 @@ class Popper():
 
                 if add_to_combiner:
                     to_combine.add(hash(prog))
-                    # print('combine', format_prog(prog))
-
-                    # if not settings.noisy and not has_invention:
-                    #     with settings.stats.duration('prune backtrack subsumed'):
-                    #         subsumed_progs = tuple(self.prune_subsumed_backtrack(pos_covered, prog_size))
-                    #         for subsumed_prog_ in subsumed_progs:
-                    #             subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
-                    #             new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
                 call_combine = len(to_combine) > 0
                 call_combine = call_combine and (settings.noisy or settings.solution_found)
@@ -604,13 +604,6 @@ class Popper():
                             # AC: sometimes adding these size constraints can take longer
                             for i in range(settings.max_literals+1, max_size+1):
                                 generator.prune_size(i)
-
-                            # if not settings.noisy:
-                            #     with settings.stats.duration('prune backtrack covers too few'):
-                            #         subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
-                            #         for subsumed_prog_ in subsumed_progs:
-                            #             subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
-                            #             new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
                         call_combine = not uncovered.any()
 
@@ -660,13 +653,6 @@ class Popper():
                             # if we have a solution with two rules then a new rule must entail all the examples
                             if min_coverage != num_pos and len(settings.solution) == 2:
                                 min_coverage = settings.min_coverage = num_pos
-
-                            # if not settings.noisy:
-                            #     with settings.stats.duration('prune backtrack covers too few'):
-                            #         subsumed_progs = tuple(self.prune_subsumed_backtrack_specialcase())
-                            #         for subsumed_prog_ in subsumed_progs:
-                            #             subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog_)
-                            #             new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
                             # if size >= settings.max_literals and not settings.order_space:
                             if size >= settings.max_literals:
