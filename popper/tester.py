@@ -141,12 +141,14 @@ class Tester():
             pos_covered_bits[pos_covered] = 1
             pos_covered = frozenbitarray(pos_covered_bits)
 
-            inconsistent = True
+            inconsistent = False
             if self.num_neg == 0:
-                inconsistent = True
+                inconsistent = False
             elif pos_covered.any():
-                q = f'neg_index(_ID, {atom_str}), {body_str}'
-                inconsistent = bool_query(q)
+                head, body = next(iter(prog))
+                head, ordered_body = self.settings.order_rule((None, body | self.neg_literal_set))
+                body_str = ','.join(format_literal_janus(literal) for literal in ordered_body)
+                inconsistent = bool_query(body_str)
 
         self.cached_pos_covered[hash(prog)] = pos_covered
         return pos_covered, inconsistent
@@ -414,7 +416,7 @@ class Tester():
             try:
                 if not query_once(query)['truth']:
                     pointless.add((p, pa))
-                    print(p, pa)
+                    # print(p, pa)
                     missing.add(p)
             except Err:
                 print(Err)
