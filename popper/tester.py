@@ -145,10 +145,13 @@ class Tester():
             if self.num_neg == 0:
                 inconsistent = False
             elif pos_covered.any():
-                head, body = next(iter(prog))
-                head, ordered_body = self.settings.order_rule((None, body | self.neg_literal_set))
-                body_str = ','.join(format_literal_janus(literal) for literal in ordered_body)
-                inconsistent = bool_query(body_str)
+                if self.settings.has_directions:
+                    q = f'neg_index(_ID, {atom_str}), {body_str}'
+                else:
+                    head, body = next(iter(prog))
+                    head, ordered_body = self.settings.order_rule((None, body | self.neg_literal_set))
+                    q = ','.join(format_literal_janus(literal) for literal in ordered_body)
+                inconsistent = bool_query(q)
 
         self.cached_pos_covered[hash(prog)] = pos_covered
         return pos_covered, inconsistent
