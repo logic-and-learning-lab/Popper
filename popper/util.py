@@ -505,6 +505,9 @@ class Settings:
     def order_rule(self, rule):
         head, body = rule
 
+        if self.pi_enabled:
+            return rule
+
         if self.datalog:
             return self.order_rule_datalog(head, frozenset(body))
 
@@ -566,7 +569,11 @@ class Settings:
 
         if head:
             seen_vars.update(head.arguments)
-        body_literals = set(body)
+            recursive_literals = set(literal for literal in body if literal.predicate == head.predicate)
+        else:
+            recursive_literals = set()
+
+        body_literals = set(body) - recursive_literals
 
         while body_literals:
             selected_literal = None
@@ -582,7 +589,7 @@ class Settings:
             seen_vars.update(selected_literal.arguments)
             body_literals.remove(selected_literal)
 
-        return head, tuple(ordered_body)
+        return head, tuple(ordered_body) + tuple(recursive_literals)
 
     def tmp_score_(self, seen_vars, literal):
         pred, args = literal
