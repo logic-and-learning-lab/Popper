@@ -343,12 +343,12 @@ class Tester():
             x = self.parse_body(body)
         else:
             x = format_literal_janus(next(iter(body)))
-        q = f'{x}, \+ {literal_str}'
+        q = f'{x}, \\+ {literal_str}'
         return not bool_query(q)
 
     def diff_subs_single(self, literal):
         literal_str = format_literal_janus(literal)
-        q = f'{self.neg_fact_str}, \+ {literal_str}'
+        q = f'{self.neg_fact_str}, \\+ {literal_str}'
         return not bool_query(q)
 
     def is_neg_reducible(self, body, literal):
@@ -356,7 +356,7 @@ class Tester():
         head, ordered_body = self.settings.order_rule((None, body | self.neg_literal_set))
         body_str = ','.join(format_literal_janus(literal) for literal in ordered_body)
         literal_str = format_literal_janus(literal)
-        q = f'{body_str}, \+ {literal_str}'
+        q = f'{body_str}, \\+ {literal_str}'
         return not bool_query(q)
 
     @cache
@@ -443,8 +443,8 @@ class Tester():
                     continue
 
                 arg_str = ','.join(f'_V{i}' for i in range(pa))
-                query1 = f'{p}({arg_str}), \+ {q}({arg_str})'
-                query2 = f'{q}({arg_str}), \+ {p}({arg_str})'
+                query1 = f'{p}({arg_str}), \\+ {q}({arg_str})'
+                query2 = f'{q}({arg_str}), \\+ {p}({arg_str})'
                 # print(query1)
                 # print(query2)
                 try:
