@@ -1,16 +1,16 @@
+import numbers
+import sys
+import traceback
+from collections import defaultdict
+from itertools import product
+from traceback import format_tb
+
 import clingo
 import clingo.script
-import numbers
-import operator
-import pkg_resources
-import time
-from . util import rule_is_recursive, format_rule, Constraint, order_prog, Literal, suppress_stdout_stderr
 from clingo import Function, Number, Tuple_
-from collections import defaultdict
-from itertools import permutations, product
-from pysat.card import *
-from pysat.formula import CNF
-from pysat.solvers import Solver
+
+from .util import suppress_stdout_stderr
+
 clingo.script.enable_python()
 
 tmp_map = {}
@@ -52,7 +52,8 @@ TIDY_OUTPUT = """
 #     return (head_pred, arity), body_preds
 
 
-from itertools import permutations, combinations
+from itertools import permutations
+
 all_myvars = ['A','B','C','D','E','F','G','H']
 
 def connected(xs, ys):
@@ -628,7 +629,6 @@ def atom_to_symbol(pred, args):
     return Function(name = pred, arguments = xs)
 
 def deduce_bk_cons(settings, tester):
-    import re
     prog = []
     lookup2 = {k: f'({v})' for k,v in tmp_map.items()}
     lookup1 = {k:v for k,v in lookup2.items()}
@@ -755,7 +755,8 @@ def deduce_recalls(settings):
             solver.add('base', [], bk)
             solver.ground([('base', [])])
     except Exception as Err:
-        print('ERROR deducing recalls', Err)
+        settings.logger.error(f'ERROR deducing recalls: {Err}')
+        traceback.print_exc(None, file=sys.stderr)
         return None
 
     for pred, arity in settings.body_preds:
