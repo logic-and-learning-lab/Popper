@@ -421,8 +421,9 @@ class Tester():
                     pointless.add((p, pa))
                     # print(p, pa)
                     missing.add(p)
-            except Err:
-                print(Err)
+            except Exception as Err:
+                print(f"Error in find_pointless_relations: {Err}")
+                settings.logger.error(f"Error in find_pointless_relations: {Err}")
                 return pointless
 
         for p, pa in settings.body_preds:
