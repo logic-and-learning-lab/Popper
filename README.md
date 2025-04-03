@@ -2,6 +2,8 @@
 
 Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) system.  If you use Popper, please cite the paper [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259) (MLJ 2021).
 
+If you have any questions about Popper, ask us in [Discord](https://discord.gg/Rv5mQCayAp) or email [Andrew Cropper](mailto:andrew.cropper@cs.ox.ac.uk).
+
 #### Requirements
 - [SWI-Prolog](https://www.swi-prolog.org) (9.2.0 or above)
 - [Clingo](https://potassco.org/clingo/) (5.6.2 or above)
