@@ -10,6 +10,8 @@ import clingo.script
 import pkg_resources
 from collections import defaultdict
 from . util import rule_is_recursive, Constraint, Literal
+from . abs_generate import Generator as AbstractGenerator
+
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
@@ -30,7 +32,7 @@ def atom_to_symbol(pred, args):
     xs = tuple(arg_to_symbol(arg) for arg in args)
     return Function(name = pred, arguments = xs)
 
-class Generator:
+class Generator(AbstractGenerator):
 
     def __init__(self, settings, bkcons=[]):
         self.settings = settings

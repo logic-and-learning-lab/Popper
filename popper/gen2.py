@@ -8,7 +8,8 @@ import clingo.script
 import pkg_resources
 from clingo import Function, Number, Tuple_
 
-from .util import Constraint, Literal
+from .util import Constraint, Literal, Settings
+from . abs_generate import Generator as AbstractGenerator
 
 
 def arg_to_symbol(arg):
@@ -20,7 +21,7 @@ def arg_to_symbol(arg):
         return Function(arg)
 
 
-def atom_to_symbol(pred, args):
+def atom_to_symbol(pred, args) -> Function:
     xs = tuple(arg_to_symbol(arg) for arg in args)
     return Function(name=pred, arguments=xs)
 
@@ -35,9 +36,10 @@ program_size_at_least(M):- size(N), program_bounds(M), M <= N.
 """
 
 
-class Generator:
+class Generator(AbstractGenerator):
+    settings: Settings
 
-    def __init__(self, settings, bkcons=[]):
+    def __init__(self, settings: Settings, bkcons=[]):
         self.savings = 0
         self.settings = settings
         self.cached_clingo_atoms = {}
@@ -109,8 +111,8 @@ class Generator:
 
         encoding = '\n'.join(encoding)
 
-        # with open('ENCODING-GEN.pl', 'w') as f:
-        # f.write(encoding)
+        with open('/tmp/ENCODING-GEN.pro', 'w') as f:
+            f.write(encoding)
 
         if self.settings.single_solve:
             solver = clingo.Control(['--heuristic=Domain', '-Wnone'])

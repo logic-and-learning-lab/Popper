@@ -14,6 +14,7 @@ clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
 import dataclasses
+from . abs_generate import Generator as AbstractGenerator
 
 @dataclasses.dataclass(frozen=True)
 class Var:
@@ -75,7 +76,7 @@ def build_rule_literals(rule, rule_var, pi=False):
     if rule_is_recursive(rule):
         yield gteq(rule_var, 1)
 
-class Generator:
+class Generator(AbstractGenerator):
 
     def __init__(self, settings, bkcons=[]):
         self.savings = 0

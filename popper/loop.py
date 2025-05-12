@@ -2,17 +2,21 @@ import time
 from collections import defaultdict
 from functools import cache
 from itertools import chain, combinations, permutations
+from typing import Any, List, Optional, Set, Tuple
 
 from bitarray.util import any_and, ones, subset
 
 from .bkcons import deduce_bk_cons, deduce_non_singletons, deduce_recalls, deduce_type_cons
 from .combine import Combiner
 from .tester import Tester
-from .util import Constraint, Literal, calc_prog_size, format_literal, format_prog, format_rule, get_raw_prog, \
+from .util import Constraint, Literal, Settings, calc_prog_size, format_literal, format_prog, format_rule, get_raw_prog, \
     mdl_score, order_prog, prog_has_invention, prog_is_recursive, remap_variables, rule_is_recursive, timeout
+from .abs_generate import Generator
+from .generate import Generator as Generator1
+from .gen2 import Generator as Generator2
+from .gen3 import Generator as Generator3
 
-
-def load_solver(settings, tester, coverage_pos, coverage_neg, prog_lookup):
+def load_solver(settings: Settings, tester: Tester, coverage_pos, coverage_neg, prog_lookup):
     if settings.debug:
         settings.logger.debug(f'Load exact solver: {settings.solver}')
 
@@ -67,7 +71,12 @@ def load_solver(settings, tester, coverage_pos, coverage_neg, prog_lookup):
 
 
 class Popper():
-    def __init__(self, settings, tester):
+    settings: Settings
+    tester: Tester
+    # the following 2 type hints are conjectural -- rpg
+    num_pos: int
+    num_neg: int
+    def __init__(self, settings: Settings, tester: Tester):
         self.settings = settings
         self.tester = tester
         self.pruned2 = set()
@@ -77,6 +86,21 @@ class Popper():
         self.unsat = set()
         self.tmp = {}
         self.seen_allsat = set()
+
+    def select_generator(self, bkcons):
+        settings = self.settings
+        gen: type[Generator]
+        if settings.single_solve:
+            gen = Generator2
+            settings.logger.debug("using generator 2")
+
+        elif settings.max_rules == 2 and not settings.pi_enabled:
+            gen = Generator3
+            settings.logger.debug("using generator 3")
+        else:
+            gen = Generator1
+            settings.logger.debug("using generate")
+        return gen(settings, bkcons)
 
     def run(self, bkcons):
 
@@ -102,16 +126,7 @@ class Popper():
         # generator that builds programs
         # AC: all very hacky until the refactoring is complete
         with settings.stats.duration('init'):
-            if settings.single_solve:
-                from .gen2 import Generator
-                print("using generator 2")
-            elif settings.max_rules == 2 and not settings.pi_enabled:
-                from .gen3 import Generator
-                print("using generator 3")
-            else:
-                from .generate import Generator
-                print("using generate")
-            generator = self.generator = Generator(settings, bkcons)
+            generator = self.generator = self.select_generator(bkcons)
 
         # track the success sets of tested hypotheses
 
@@ -173,7 +188,6 @@ class Popper():
                 # generate a program
                 with settings.stats.duration('generate'):
                     prog = generator.get_prog()
-                    print("Generated prog: {}".format(prog))
                     settings.logger.info("Generated prog: {}".format(prog))
                     if prog is None:
                         break
@@ -203,7 +217,7 @@ class Popper():
                                                                                                                  prog_size)
                     else:
                         pos_covered, inconsistent = tester.test_prog(prog)
-                        print(f"pos_covered: {pos_covered}, inconsistent: {inconsistent}")
+                        settings.logger.debug(f"pos_covered: {pos_covered}, inconsistent: {inconsistent}")
                         # @CH: can you explain these?
                         skipped, skip_early_neg = False, False
 
@@ -258,7 +272,8 @@ class Popper():
                 if tp == num_pos:
                     add_gen = True
 
-                # if the program does not cover any positive examples, check whether it is has an unsat core
+                # if the program does not cover any positive examples, check whether
+                # it has an unsat core
                 if not has_invention:
                     if tp < min_coverage or (settings.noisy and tp <= prog_size):
                         with settings.stats.duration('find mucs'):
@@ -1560,8 +1575,10 @@ def popper(settings, tester, bkcons):
     Popper(settings, tester).run(bkcons)
 
 
-def get_bk_cons(settings, tester):
+def get_bk_cons(settings: Settings, tester: Tester):
     bkcons = []
+    recalls: Optional[List[str]]
+    pointless: Set[Tuple[str, Any]]
 
     with settings.stats.duration('find_pointless_relations'):
         pointless = settings.pointless = tester.find_pointless_relations()
@@ -1576,9 +1593,11 @@ def get_bk_cons(settings, tester):
     with settings.stats.duration('recalls'):
         recalls = deduce_recalls(settings)
 
-    if recalls == None:
+    if recalls is None:
+        settings.logger.debug('No recalls; datalog is False')
         settings.datalog = False
     else:
+        settings.logger.debug('Non-empty recalls: datalog is True')
         settings.datalog = True
         if settings.showcons:
             for x in recalls:
