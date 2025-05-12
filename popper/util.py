@@ -256,11 +256,16 @@ def flatten(xs):
 
 
 class Settings:
+
+    showcons: bool
+    datalog: bool
+    show_failures: bool  # display detailed FP and FN information
+
     def __init__(self, cmd_line=False, info=True, debug=False, show_stats=True, max_literals=MAX_LITERALS,
                  timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=None,
                  max_rules=None, max_vars=None, functional_test=False, kbpath=False, ex_file=False, bk_file=False,
                  bias_file=False, showcons=False, no_bias=False, order_space=False, noisy=False, batch_size=BATCH_SIZE,
-                 solver='rc2', anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT):
+                 solver='rc2', anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT, show_failures=False):
 
         if cmd_line:
             args = parse_args()
@@ -299,14 +304,15 @@ class Settings:
         self.logger = logging.getLogger("popper")
 
         if quiet:
-            pass
+            log_level = logging.ERROR
         elif debug:
             log_level = logging.DEBUG
             # logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
             logging.basicConfig(format='%(message)s', level=log_level, datefmt='%H:%M:%S')
         elif info:
             log_level = logging.INFO
-            logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
+        else:
+            log_level = logging.WARNING
 
         self.info = info
         self.debug = debug
@@ -516,9 +522,9 @@ class Settings:
             self.logger.info(format_rule(self.order_rule(rule)))
         self.logger.info('*' * 20)
 
-    def print_prog_score(self, prog, score):
+    def print_prog_score(self, prog, score: Tuple[int, int, int, int, int]) -> None:
         tp, fn, tn, fp, size = score
-        precision = 'n/a'
+        precision: str = 'n/a'
         if (tp + fp) > 0:
             precision = f'{tp / (tp + fp):0.2f}'
         recall = 'n/a'
