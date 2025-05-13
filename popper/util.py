@@ -5,7 +5,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from itertools import permutations
 from time import perf_counter
-from typing import NamedTuple
+from typing import NamedTuple, Optional, Dict
 
 import clingo
 import clingo.script
@@ -83,8 +83,10 @@ def parse_args():
     return parser.parse_args()
 
 
-def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
+def timeout(settings, func, args=(), kwargs: Optional[Dict] = None, timeout_duration=1):
     result = None
+    if kwargs is None:
+        kwargs = {}
 
     class TimeoutError(Exception):
         pass

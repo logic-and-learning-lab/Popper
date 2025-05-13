@@ -291,7 +291,8 @@ class Popper():
                     #             print('\t', 'moo', format_rule(rule))
                     #         new_cons.append((Constraint.SPECIALISATION, [functional_rename_vars(rule) for rule in x]))
 
-                    # If a program is subsumed or dioesn't cover enough examples, we search for the most general subprogram that also is also subsumed or doesn't cover enough examples
+                    # If a program is subsumed or doesn't cover enough examples, we search for the most general
+                    # subprogram that is also subsumed or doesn't cover enough examples
                     # only applies to non-recursive and non-PI programs
                     subsumed_progs = []
                     with settings.stats.duration('find most general subsumed/covers_too_few'):
@@ -635,7 +636,7 @@ class Popper():
 
                     to_combine = set()
 
-                    new_hypothesis_found = is_new_solution_found != None
+                    new_hypothesis_found = is_new_solution_found is not None
 
                     # if we find a new solution, update the maximum program size
                     # if only adding nogoods, eliminate larger programs
@@ -728,7 +729,7 @@ class Popper():
                     is_new_solution_found = combiner.update_best_prog(to_combine)
                 to_combine = set()
 
-                new_hypothesis_found = is_new_solution_found != None
+                new_hypothesis_found = is_new_solution_found is not None
 
                 # if we find a new solution, update the maximum program size
                 # if only adding nogoods, eliminate larger programs
@@ -1171,7 +1172,7 @@ class Popper():
                 seen_hyp_gen[k].remove(to_del)
         return cons
 
-    def subsumed_or_covers_too_few(self, prog, seen=set()):
+    def subsumed_or_covers_too_few(self, prog, seen:Optional[Set] = None):
         tester, success_sets, settings = self.tester, self.success_sets, self.settings
         head, body = list(prog)[0]
         body = list(body)
@@ -1180,6 +1181,8 @@ class Popper():
             return []
 
         out = set()
+        if seen is None:
+            seen = set()
         head_vars = set(head.arguments)
 
         # try the body with one literal removed (the literal at position i)
@@ -1290,10 +1293,14 @@ class Popper():
     def explain_totally_incomplete(self, prog):
         return list(self.explain_totally_incomplete_aux2(prog, set(), set()))
 
-    def explain_totally_incomplete_aux2(self, prog, unsat2=set(), unsat=set()):
+    def explain_totally_incomplete_aux2(self, prog, unsat2: Optional[Set] = None, unsat: Optional[Set] = None):
         has_recursion = prog_is_recursive(prog)
 
         out = []
+        if unsat is None:
+            unsat = set()
+        if unsat2 is None:
+            unsat2 = set()
         for subprog in generalisations(prog, allow_headless=True, recursive=has_recursion):
 
             # print('---')
