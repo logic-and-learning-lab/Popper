@@ -186,6 +186,7 @@ class Popper():
                 new_cons = []
 
                 # generate a program
+                # prog: Optional[Program]
                 with settings.stats.duration('generate'):
                     prog = generator.get_prog()
                     settings.logger.info("Generated prog: {}".format(prog))

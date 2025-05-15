@@ -1,10 +1,17 @@
 import abc
+from typing import FrozenSet, Tuple, TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from . util import Literal, Settings
+
+Rule = Tuple['Literal', FrozenSet['Literal']]
+RuleBase = FrozenSet[Rule]
 
 class Generator(abc.ABC):
+    settings: 'Settings'
 
     # @profile
-    def get_prog(self):
+    def get_prog(self) -> RuleBase:
         pass
 
     def gen_symbol(self, literal, backend):

@@ -5,10 +5,12 @@ from collections import defaultdict
 from contextlib import contextmanager
 from itertools import permutations
 from time import perf_counter
-from typing import NamedTuple, Optional, Dict
+from typing import NamedTuple, Optional, Dict, Tuple, Any
 
 import clingo
 import clingo.script
+
+from popper.abs_generate import Rule
 
 
 class Literal(NamedTuple):
@@ -260,6 +262,7 @@ class Settings:
     showcons: bool
     datalog: bool
     show_failures: bool  # display detailed FP and FN information
+    cached_literals: Dict[Tuple[str, Any], Literal]
 
     def __init__(self, cmd_line=False, info=True, debug=False, show_stats=True, max_literals=MAX_LITERALS,
                  timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=None,
@@ -814,7 +817,7 @@ def prog_hash(prog):
     return hash(new_prog)
 
 
-def remap_variables(rule):
+def remap_variables(rule: Tuple[Any, Any]) -> Rule:
     head, body = rule
 
     head_vars = frozenset(head.arguments) if head else frozenset()
