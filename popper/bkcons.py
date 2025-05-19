@@ -755,8 +755,7 @@ def deduce_recalls(settings):
             solver.add('base', [], bk)
             solver.ground([('base', [])])
     except Exception as Err:
-        settings.logger.error(f'ERROR deducing recalls: {Err}')
-        traceback.print_exc(None, file=sys.stderr)
+        print('WARNING: cannot deduce recalls', Err)
         return None
 
     for pred, arity in settings.body_preds:
