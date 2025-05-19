@@ -4,6 +4,7 @@ from functools import cache
 from itertools import chain, combinations, permutations
 
 from bitarray.util import any_and, ones, subset
+from typing import Optional, Set
 
 from .bkcons import deduce_bk_cons, deduce_non_singletons, deduce_recalls, deduce_type_cons
 from .combine import Combiner
@@ -173,8 +174,6 @@ class Popper():
                 # generate a program
                 with settings.stats.duration('generate'):
                     prog = generator.get_prog()
-                    print("Generated prog: {}".format(prog))
-                    settings.logger.info("Generated prog: {}".format(prog))
                     if prog is None:
                         break
 
@@ -203,7 +202,6 @@ class Popper():
                                                                                                                  prog_size)
                     else:
                         pos_covered, inconsistent = tester.test_prog(prog)
-                        print(f"pos_covered: {pos_covered}, inconsistent: {inconsistent}")
                         # @CH: can you explain these?
                         skipped, skip_early_neg = False, False
 
@@ -1634,7 +1632,6 @@ def learn_solution(settings):
         tester = Tester(settings)
 
     bkcons = get_bk_cons(settings, tester)
-    print("Have incorporated bk cons.")
     time_so_far = time.time() - t1
     timeout(settings, popper, (settings, tester, bkcons), timeout_duration=int(settings.timeout - time_so_far), )
     return settings.solution, settings.best_prog_score, settings.stats

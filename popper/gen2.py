@@ -56,7 +56,8 @@ class Generator:
 
         # AC: NEED TO COMPLETELY REFACTOR THIS CODE
         for p,a in settings.pointless:
-            bias_text = re.sub(rf'body_pred\({p},\s*{a}\)\.', '', bias_text)            bias_text = re.sub(rf'constant\({p},.*?\).*', '', bias_text, flags=re.MULTILINE)
+            bias_text = re.sub(rf'body_pred\({p},\s*{a}\)\.', '', bias_text)
+            bias_text = re.sub(rf'constant\({p},.*?\).*', '', bias_text, flags=re.MULTILINE)
 
         encoding.append(bias_text)
         encoding.append(f'max_clauses({settings.max_rules}).')
