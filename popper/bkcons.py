@@ -683,7 +683,7 @@ def deduce_bk_cons(settings, tester):
 
 
     # cons = pkg_resources.resource_string(__name__, "lp/cons.pl").decode()
-    bk = bk.replace('\+','not')
+    bk = bk.replace('\\+','not')
 
     new_props1, new_cons1 = build_props(settings, arities, tester)
     new_props2, new_cons2 = build_props2(settings, arities)
