@@ -1,19 +1,24 @@
-import time
 import re
-from pysat.formula import CNF
-from pysat.solvers import Solver
-from pysat.card import *
-import clingo
-import operator
+from typing import Optional, Sequence, Set
+
 import numbers
+import operator
+import re
+from collections import defaultdict
+from typing import Optional, Sequence, Set
+
+import clingo
 import clingo.script
 import pkg_resources
-from collections import defaultdict
-from . util import rule_is_recursive, Constraint, Literal, format_rule, remap_variables
+
+from .util import rule_is_recursive, Constraint, Literal, remap_variables
+
 clingo.script.enable_python()
-from clingo import Function, Number, Tuple_
+from clingo import Function, Number, Tuple_, Model, Symbol
 from itertools import permutations
 import dataclasses
+from . abs_generate import Generator as AbstractGenerator
+from . abs_generate import Rule, RuleBase
 
 @dataclasses.dataclass(frozen=True)
 class Var:
@@ -75,8 +80,9 @@ def build_rule_literals(rule, rule_var, pi=False):
     if rule_is_recursive(rule):
         yield gteq(rule_var, 1)
 
-class Generator:
+class Generator(AbstractGenerator):
 
+    model: Optional[Model]
     def __init__(self, settings, bkcons=[]):
         self.savings = 0
         self.settings = settings
@@ -244,13 +250,13 @@ class Generator:
         self.solver = solver
 
     # @profile
-    def get_prog(self):
+    def get_prog(self) -> Optional[RuleBase]:
         if self.handle is None:
             self.handle = iter(self.solver.solve(yield_ = True))
         self.model = next(self.handle, None)
         if self.model is None:
             return None
-        atoms = self.model.symbols(shown = True)
+        atoms: Sequence[Symbol] = self.model.symbols(shown = True)
 
         if self.settings.single_solve:
             return self.parse_model_single_rule(atoms)
@@ -270,7 +276,7 @@ class Generator:
             self.seen_symbols[k] = symbol
         return symbol
 
-    def parse_model_recursion(self, model):
+    def parse_model_recursion(self, model) -> RuleBase:
         settings = self.settings
         rule_index_to_body = defaultdict(set)
         head = settings.head_literal
@@ -292,10 +298,10 @@ class Generator:
 
         return frozenset(prog)
 
-    def parse_model_single_rule(self, model):
+    def parse_model_single_rule(self, model: Sequence[Symbol]) -> RuleBase:
         settings = self.settings
-        head = settings.head_literal
-        body = set()
+        head: Literal = settings.head_literal
+        body: Set[Literal] = set()
         cached_literals = settings.cached_literals
         for atom in model:
             args = atom.arguments
@@ -303,10 +309,10 @@ class Generator:
             atom_args = tuple(args[3].arguments)
             literal = cached_literals[(predicate, atom_args)]
             body.add(literal)
-        rule = head, frozenset(body)
+        rule: Rule = head, frozenset(body)
         return frozenset([rule])
 
-    def parse_model_pi(self, model):
+    def parse_model_pi(self, model) -> RuleBase:
         settings = self.settings
         # directions = defaultdict(lambda: defaultdict(lambda: '?'))
         rule_index_to_body = defaultdict(set)
