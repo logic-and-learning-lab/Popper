@@ -1,12 +1,15 @@
-import time
-import re
-import clingo
 import numbers
+import re
+from itertools import permutations
+from typing import Any, Set, Tuple
+
+import clingo
 import clingo.script
 import pkg_resources
-from . util import Constraint, Literal
 from clingo import Function, Number, Tuple_
-from itertools import permutations
+
+from .util import Constraint, Literal
+
 
 def arg_to_symbol(arg):
     if isinstance(arg, tuple):
@@ -16,9 +19,11 @@ def arg_to_symbol(arg):
     if isinstance(arg, str):
         return Function(arg)
 
+
 def atom_to_symbol(pred, args):
     xs = tuple(arg_to_symbol(arg) for arg in args)
-    return Function(name = pred, arguments = xs)
+    return Function(name=pred, arguments=xs)
+
 
 DEFAULT_HEURISTIC = """
 #heuristic size(N). [1000-N,true]
@@ -28,6 +33,7 @@ NOISY_ENCODING = """
 program_bounds(0..K):- max_size(K).
 program_size_at_least(M):- size(N), program_bounds(M), M <= N.
 """
+
 
 class Generator:
 
@@ -44,9 +50,9 @@ class Generator:
 
         with open(settings.bias_file) as f:
             bias_text = f.read()
-        bias_text = re.sub(r'max_vars\(\d*\).','', bias_text)
-        bias_text = re.sub(r'max_body\(\d*\).','', bias_text)
-        bias_text = re.sub(r'max_clauses\(\d*\).','', bias_text)
+        bias_text = re.sub(r'max_vars\(\d*\).', '', bias_text)
+        bias_text = re.sub(r'max_body\(\d*\).', '', bias_text)
+        bias_text = re.sub(r'max_clauses\(\d*\).', '', bias_text)
 
         # AC: NEED TO COMPLETELY REFACTOR THIS CODE
         for p,a in settings.pointless:
@@ -72,13 +78,13 @@ class Generator:
         type_encoding = set()
         if self.settings.head_types:
             types = tuple(self.settings.head_types)
-            str_types = str(types).replace("'","")
+            str_types = str(types).replace("'", "")
             for i, x in enumerate(self.settings.head_types):
                 type_encoding.add(f'type_pos({str_types}, {i}, {x}).')
 
             for pred, types in self.settings.body_types.items():
                 types = tuple(types)
-                str_types = str(types).replace("'","")
+                str_types = str(types).replace("'", "")
                 for i, x in enumerate(types):
                     type_encoding.add(f'type_pos({str_types}, {i}, {x}).')
             encoding.extend(type_encoding)
@@ -105,10 +111,10 @@ class Generator:
         encoding = '\n'.join(encoding)
 
         # with open('ENCODING-GEN.pl', 'w') as f:
-            # f.write(encoding)
+        # f.write(encoding)
 
         if self.settings.single_solve:
-            solver = clingo.Control(['--heuristic=Domain','-Wnone'])
+            solver = clingo.Control(['--heuristic=Domain', '-Wnone'])
 
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
@@ -121,12 +127,12 @@ class Generator:
 
     def get_prog(self):
         if self.handle is None:
-            self.handle = iter(self.solver.solve(yield_ = True))
+            self.handle = iter(self.solver.solve(yield_=True))
         self.model = next(self.handle, None)
         if self.model is None:
             return None
 
-        return self.parse_model_single_rule(self.model.symbols(shown = True))
+        return self.parse_model_single_rule(self.model.symbols(shown=True))
 
     def parse_model_single_rule(self, model):
         settings = self.settings
@@ -155,13 +161,13 @@ class Generator:
 
             if con_type == Constraint.GENERALISATION or con_type == Constraint.BANISH:
                 con_size = None
-                if self.settings.noisy and len(xs)>2:
+                if self.settings.noisy and len(xs) > 2:
                     con_size = xs[2]
                 ground_rules2 = tuple(self.build_generalisation_constraint3(con_prog, con_size))
                 new_ground_cons.update(ground_rules2)
             elif con_type == Constraint.SPECIALISATION:
                 con_size = None
-                if self.settings.noisy and len(xs)>2:
+                if self.settings.noisy and len(xs) > 2:
                     con_size = xs[2]
                 ground_rules2 = tuple(self.build_specialisation_constraint3(con_prog, con_size))
                 new_ground_cons.update(ground_rules2)
@@ -242,12 +248,12 @@ class Generator:
         if len(body_types) == 0 or head_types is None:
             num_vars = len({var for atom in body for var in atom.arguments})
             for xs in permutations(range(self.settings.max_vars), num_vars):
-                x = {i:xs[i] for i in range(num_vars)}
+                x = {i: xs[i] for i in range(num_vars)}
                 yield x
             return
 
         # if there are types, only find type-safe permutations
-        var_type_lookup = {i:head_type for i, head_type in enumerate(head_types)}
+        var_type_lookup = {i: head_type for i, head_type in enumerate(head_types)}
 
         head_vars = set(range(len(self.settings.head_literal.arguments)))
         body_vars = set()
@@ -273,7 +279,7 @@ class Generator:
                 k = (x, y)
                 bad_type_matching.add(k)
 
-        lookup = {x:i for i, x in enumerate(body_vars)}
+        lookup = {x: i for i, x in enumerate(body_vars)}
 
         for xs in permutations(range(self.settings.max_vars), len(lookup)):
             assignment = {}
@@ -288,15 +294,17 @@ class Generator:
                 continue
             yield assignment
 
-def remap_variables(rule):
+
+def remap_variables(rule: Tuple[Literal,Any]):
+    head: Literal
     head, body = rule
-    head_vars = set()
+    head_vars: Set = set()
 
     if head:
-        head_vars.extend(head.arguments)
+        head_vars |= head.arguments
 
     next_var = len(head_vars)
-    lookup = {i:i for i in head_vars}
+    lookup = {i: i for i in head_vars}
 
     new_body = set()
     for pred, args in body:
@@ -304,7 +312,7 @@ def remap_variables(rule):
         for var in args:
             if var not in lookup:
                 lookup[var] = next_var
-                next_var+=1
+                next_var += 1
             new_args.append(lookup[var])
         new_atom = Literal(pred, tuple(new_args))
         new_body.add(new_atom)
