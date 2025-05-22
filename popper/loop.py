@@ -425,7 +425,9 @@ class Popper():
                                 print('\t', 'REDUCIBLE_1:', '\t', ','.join(format_literal(literal) for literal in x))
                             new_cons.append((Constraint.UNSAT, x))
 
-                if not add_spec and not pruned_more_general and settings.datalog and not settings.recursion_enabled:
+                # CHECK WHETHER THE PROGRAM DOES NOT DISCRIMINATE AGAINST NEGATIVE EXAMPLES
+                # this paper outlines the idea: # https://arxiv.org/pdf/2502.01232
+                if not add_spec and not pruned_more_general and settings.datalog and not settings.recursion_enabled and num_neg > 0:
                     with settings.stats.duration('check_reducible2'):
                         bad_prog = self.check_neg_reducible(prog)
                         if bad_prog:
