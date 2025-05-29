@@ -9,7 +9,6 @@ from typing import Optional, Sequence, Set
 
 import clingo
 import clingo.script
-import pkg_resources
 
 from .util import rule_is_recursive, Constraint, Literal, remap_variables
 
@@ -19,6 +18,7 @@ from itertools import permutations
 import dataclasses
 from . abs_generate import Generator as AbstractGenerator
 from . abs_generate import Rule, RuleBase
+from .resources import resource_string
 
 @dataclasses.dataclass(frozen=True)
 class Var:
@@ -109,7 +109,7 @@ class Generator(AbstractGenerator):
         self.new_ground_cons = set()
 
         encoding = []
-        alan = pkg_resources.resource_string(__name__, "lp/alan-old.pl").decode()
+        alan = resource_string(__name__, "lp/alan-old.pl").decode()
         # alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
         encoding.append(alan)
 

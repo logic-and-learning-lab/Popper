@@ -7,10 +7,10 @@ import clingo
 import operator
 import numbers
 import clingo.script
-import pkg_resources
 from collections import defaultdict
 from . util import rule_is_recursive, Constraint, Literal
 from . abs_generate import Generator as AbstractGenerator
+from .resources import resource_string
 
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
@@ -56,7 +56,7 @@ class Generator(AbstractGenerator):
         self.new_ground_cons = set()
 
         encoding = []
-        alan = pkg_resources.resource_string(__name__, "lp/alan-old.pl").decode()
+        alan = resource_string(__name__, "lp/alan-old.pl").decode()
         encoding.append(alan)
 
         with open(settings.bias_file) as f:

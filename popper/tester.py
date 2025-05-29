@@ -5,12 +5,12 @@ from functools import cache
 from itertools import product
 from typing import Tuple
 
-import pkg_resources
 from bitarray import bitarray, frozenbitarray
 from bitarray.util import ones
 from janus_swi import consult, query_once
 
 from .util import Literal, calc_prog_size, calc_rule_size, format_rule, order_prog, prog_hash, prog_is_recursive
+from .resources import resource_string, resource_filename, close_resource_file
 
 
 def format_literal_janus(literal):
@@ -27,7 +27,8 @@ class Tester():
 
         bk_pl_path = self.settings.bk_file
         exs_pl_path = self.settings.ex_file
-        test_pl_path = pkg_resources.resource_filename(__name__, "lp/test.pl")
+        test_pl_path = str(resource_filename(__name__, "lp/test.pl"))
+        assert isinstance(test_pl_path, str)
 
         if not settings.pi_enabled:
             consult('prog', f':- dynamic {settings.head_literal.predicate}/{len(settings.head_literal.arguments)}.')
@@ -36,6 +37,7 @@ class Tester():
             if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
                 x = x.replace('\\', '\\\\')
             consult(x)
+            close_resource_file(x)
 
         query_once('load_examples')
 
