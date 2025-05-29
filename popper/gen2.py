@@ -5,11 +5,11 @@ from typing import Any, Set, Tuple
 
 import clingo
 import clingo.script
-import pkg_resources
 from clingo import Function, Number, Tuple_
 
 from .util import Constraint, Literal, Settings
 from . abs_generate import Generator as AbstractGenerator
+from .resources import resource_string
 
 
 def arg_to_symbol(arg):
@@ -47,7 +47,7 @@ class Generator(AbstractGenerator):
         self.pruned_sizes = set()
 
         encoding = []
-        alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
+        alan = resource_string(__name__, "lp/alan.pl").decode()
         encoding.append(alan)
 
         with open(settings.bias_file) as f:
