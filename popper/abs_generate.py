@@ -1,8 +1,10 @@
 import abc
-from typing import FrozenSet, Tuple, TYPE_CHECKING
+from typing import FrozenSet, Tuple, TYPE_CHECKING, List
+
+import clingo
 
 if TYPE_CHECKING:
-    from . util import Literal, Settings
+    from . util import Settings
 
 Rule = Tuple['Literal', FrozenSet['Literal']]
 RuleBase = FrozenSet[Rule]
@@ -41,4 +43,14 @@ class Generator(abc.ABC):
         pass
 
     def constrain(self, tmp_new_cons):
+        pass
+
+    @abc.abstractmethod
+    def build_encoding(self, bkcons: List, settings: "Settings") -> str:
+        """Build and return a string for an ASP solver, used to generate hypotheses."""
+        pass
+
+    @abc.abstractmethod
+    def init_solver(self, encoding: str) -> clingo.Control:
+        """Incorporate the `encoding` into a new solver (`clingo.Control`) and return it."""
         pass

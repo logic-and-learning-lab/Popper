@@ -1,7 +1,7 @@
 import numbers
 import re
 from itertools import permutations
-from typing import Any, Set, Tuple
+from typing import Any, Set, Tuple, Optional
 
 import clingo
 import clingo.script
@@ -19,6 +19,7 @@ def arg_to_symbol(arg):
         return Number(arg)
     if isinstance(arg, str):
         return Function(arg)
+    raise TypeError(f"Cannot translate {arg} to clingo Symbol")
 
 
 def atom_to_symbol(pred, args) -> Function:
@@ -38,6 +39,9 @@ program_size_at_least(M):- size(N), program_bounds(M), M <= N.
 
 class Generator(AbstractGenerator):
     settings: Settings
+    model: Optional[clingo.Model]
+    solver: Optional[clingo.Control]
+    handler: Optional[clingo.SolveHandle]
 
     def __init__(self, settings: Settings, bkcons=[]):
         self.savings = 0
@@ -46,26 +50,41 @@ class Generator(AbstractGenerator):
         self.handle = None
         self.pruned_sizes = set()
 
+        encoding = self.build_encoding(bkcons, settings)
+
+        with open('/tmp/ENCODING-GEN.pro', 'w') as f:
+            f.write(encoding)
+
+        solver = self.init_solver(encoding)
+        self.solver = solver
+
+        self.model = None
+
+    def init_solver(self, encoding):
+        if self.settings.single_solve:
+            solver = clingo.Control(['--heuristic=Domain', '-Wnone'])
+        solver.configuration.solve.models = 0
+        solver.add('base', [], encoding)
+        solver.ground([('base', [])])
+        return solver
+
+    def build_encoding(self, bkcons, settings):
         encoding = []
         alan = resource_string(__name__, "lp/alan.pl").decode()
         encoding.append(alan)
-
         with open(settings.bias_file) as f:
             bias_text = f.read()
         bias_text = re.sub(r'max_vars\(\d*\).', '', bias_text)
         bias_text = re.sub(r'max_body\(\d*\).', '', bias_text)
         bias_text = re.sub(r'max_clauses\(\d*\).', '', bias_text)
-
         # AC: NEED TO COMPLETELY REFACTOR THIS CODE
-        for p,a in settings.pointless:
+        for p, a in settings.pointless:
             bias_text = re.sub(rf'body_pred\({p},\s*{a}\)\.', '', bias_text)
             bias_text = re.sub(rf'constant\({p},.*?\).*', '', bias_text, flags=re.MULTILINE)
-
         encoding.append(bias_text)
         encoding.append(f'max_clauses({settings.max_rules}).')
         encoding.append(f'max_body({settings.max_body}).')
         encoding.append(f'max_vars({settings.max_vars}).')
-
         # ADD VARS, DIRECTIONS, AND TYPES
         head_arity = len(settings.head_literal.arguments)
         encoding.append(f'head_vars({head_arity}, {tuple(range(head_arity))}).')
@@ -76,7 +95,6 @@ class Generator(AbstractGenerator):
                 encoding.append(f'vars({arity}, {tuple(xs)}).')
                 for i, x in enumerate(xs):
                     encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
-
         type_encoding = set()
         if self.settings.head_types:
             types = tuple(self.settings.head_types)
@@ -90,38 +108,22 @@ class Generator(AbstractGenerator):
                 for i, x in enumerate(types):
                     type_encoding.add(f'type_pos({str_types}, {i}, {x}).')
             encoding.extend(type_encoding)
-
         for pred, xs in self.settings.directions.items():
             for i, v in xs.items():
                 if v == '+':
                     encoding.append(f'direction_({pred}, {i}, in).')
                 if v == '-':
                     encoding.append(f'direction_({pred}, {i}, out).')
-
         max_size = (1 + settings.max_body) * settings.max_rules
         if settings.max_literals < max_size:
             encoding.append(f'custom_max_size({settings.max_literals}).')
-
         if settings.noisy:
             encoding.append(NOISY_ENCODING)
-
         encoding.extend(bkcons)
-
         if settings.single_solve:
             encoding.append(DEFAULT_HEURISTIC)
-
         encoding = '\n'.join(encoding)
-
-        with open('/tmp/ENCODING-GEN.pro', 'w') as f:
-            f.write(encoding)
-
-        if self.settings.single_solve:
-            solver = clingo.Control(['--heuristic=Domain', '-Wnone'])
-
-        solver.configuration.solve.models = 0
-        solver.add('base', [], encoding)
-        solver.ground([('base', [])])
-        self.solver = solver
+        return encoding
 
     def update_solver(self, size):
         # not used when learning programs without pi or recursion

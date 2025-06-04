@@ -55,20 +55,45 @@ class Generator(AbstractGenerator):
         self.new_seen_rules = set()
         self.new_ground_cons = set()
 
+        encoding = self.build_encoding(bkcons, settings)
+
+        # with open('ENCODING-GEN.pl', 'w') as f:
+            # f.write(encoding)
+
+        solver = self.init_solver(encoding)
+        self.solver = solver
+
+    def init_solver(self, encoding):
+        if self.settings.single_solve:
+            solver = clingo.Control(['--heuristic=Domain', '-Wnone'])
+        else:
+            solver = clingo.Control(['-Wnone'])
+            NUM_OF_LITERALS = """
+            %%% External atom for number of literals in the program %%%%%
+            #external size_in_literals(n).
+            :-
+                size_in_literals(n),
+                #sum{K+1,Clause : body_size(Clause,K)} != n.
+            """
+            solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
+        solver.configuration.solve.models = 0
+        solver.add('base', [], encoding)
+        solver.ground([('base', [])])
+        return solver
+
+    def build_encoding(self, bkcons, settings):
         encoding = []
         alan = resource_string(__name__, "lp/alan-old.pl").decode()
         encoding.append(alan)
-
         with open(settings.bias_file) as f:
             bias_text = f.read()
-        bias_text = re.sub(r'max_vars\(\d*\).','', bias_text)
-        bias_text = re.sub(r'max_body\(\d*\).','', bias_text)
-        bias_text = re.sub(r'max_clauses\(\d*\).','', bias_text)
+        bias_text = re.sub(r'max_vars\(\d*\).', '', bias_text)
+        bias_text = re.sub(r'max_body\(\d*\).', '', bias_text)
+        bias_text = re.sub(r'max_clauses\(\d*\).', '', bias_text)
         encoding.append(bias_text)
         encoding.append(f'max_clauses({settings.max_rules}).')
         encoding.append(f'max_body({settings.max_body}).')
         encoding.append(f'max_vars({settings.max_vars}).')
-
         # ADD VARS, DIRECTIONS, AND TYPES
         head_arity = len(settings.head_literal.arguments)
         encoding.append(f'head_vars({head_arity}, {tuple(range(head_arity))}).')
@@ -80,68 +105,38 @@ class Generator(AbstractGenerator):
 
                 for i, x in enumerate(xs):
                     encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
-
         # types = tuple(self.settings.head_types)
         # str_types = str(types).replace("'","")
         # for x, i in enumerate(self.settings.head_types):
         #     encoding.append(f'type_pos({str_types}, {i}, {x}).')
-
         # for pred, types in self.settings.body_types.items():
         #     types = tuple(types)
         #     str_types = str(types).replace("'","")
         #     for i, x in enumerate(types):
-
         #         encoding.append(f'type_pos({str_types}, {i}, {x}).')
-
         # for pred, xs in self.settings.directions.items():
         #     for i, v in xs.items():
         #         if v == '+':
         #             encoding.append(f'direction_({pred}, {i}, in).')
         #         if v == '-':
         #             encoding.append(f'direction_({pred}, {i}, out).')
-
         max_size = (1 + settings.max_body) * settings.max_rules
         if settings.max_literals < max_size:
             encoding.append(f'custom_max_size({settings.max_literals}).')
-
         if settings.pi_enabled:
             encoding.append(f'#show head_literal/4.')
-
         if settings.noisy:
             encoding.append("""
             program_bounds(0..K):- max_size(K).
             program_size_at_least(M):- size(N), program_bounds(M), M <= N.
             """)
-
         # if settings.bkcons:
         encoding.extend(bkcons)
-
         if settings.single_solve:
             if settings.order_space:
                 encoding.append(DEFAULT_HEURISTIC)
-
         encoding = '\n'.join(encoding)
-
-        # with open('ENCODING-GEN.pl', 'w') as f:
-            # f.write(encoding)
-
-        if self.settings.single_solve:
-            solver = clingo.Control(['--heuristic=Domain','-Wnone'])
-        else:
-            solver = clingo.Control(['-Wnone'])
-            NUM_OF_LITERALS = """
-            %%% External atom for number of literals in the program %%%%%
-            #external size_in_literals(n).
-            :-
-                size_in_literals(n),
-                #sum{K+1,Clause : body_size(Clause,K)} != n.
-            """
-            solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
-
-        solver.configuration.solve.models = 0
-        solver.add('base', [], encoding)
-        solver.ground([('base', [])])
-        self.solver = solver
+        return encoding
 
     def get_prog(self):
         if self.handle is None:
