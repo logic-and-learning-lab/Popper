@@ -311,11 +311,11 @@ class Settings:
         elif debug:
             log_level = logging.DEBUG
             # logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
-            logging.basicConfig(format='%(message)s', level=log_level, datefmt='%H:%M:%S')
         elif info:
             log_level = logging.INFO
         else:
             log_level = logging.WARNING
+        logging.basicConfig(format='%(message)s', level=log_level, datefmt='%H:%M:%S')
 
         self.info = info
         self.debug = debug
