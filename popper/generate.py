@@ -1,6 +1,3 @@
-import re
-from typing import Optional, Sequence, Set
-
 import numbers
 import operator
 import re

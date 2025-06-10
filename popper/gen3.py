@@ -1,19 +1,18 @@
-import time
-import re
-from pysat.formula import CNF
-from pysat.solvers import Solver
-from pysat.card import *
-import clingo
-import operator
 import numbers
-import clingo.script
+import operator
+import re
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, Literal
-from . abs_generate import Generator as AbstractGenerator
+from typing import Optional
+
+import clingo
+import clingo.script
+
+from .abs_generate import Generator as AbstractGenerator
 from .resources import resource_string
+from .util import rule_is_recursive, Constraint, Literal
 
 clingo.script.enable_python()
-from clingo import Function, Number, Tuple_
+from clingo import Function, Number, Tuple_, Model
 from itertools import permutations
 
 DEFAULT_HEURISTIC = """
@@ -33,6 +32,7 @@ def atom_to_symbol(pred, args):
     return Function(name = pred, arguments = xs)
 
 class Generator(AbstractGenerator):
+    model: Optional[Model]
 
     def __init__(self, settings, bkcons=[]):
         self.settings = settings
