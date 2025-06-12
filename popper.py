@@ -6,7 +6,7 @@ from popper.loop import learn_solution
 if __name__ == '__main__':
     settings = Settings(cmd_line=True)
     prog, score, stats = learn_solution(settings)
-    if prog != None:
+    if prog is not None:
         settings.print_prog_score(prog, score)
     else:
         print('NO SOLUTION')
