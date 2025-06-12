@@ -1,19 +1,21 @@
-import time
-import re
-from pysat.formula import CNF
-from pysat.solvers import Solver
-from pysat.card import *
-import clingo
-import operator
 import numbers
-import clingo.script
-import pkg_resources
+import operator
+import re
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, Literal, format_rule, remap_variables
+from typing import Optional, Sequence, Set
+
+import clingo
+import clingo.script
+
+from .util import rule_is_recursive, Constraint, Literal, remap_variables
+
 clingo.script.enable_python()
-from clingo import Function, Number, Tuple_
+from clingo import Function, Number, Tuple_, Model, Symbol
 from itertools import permutations
 import dataclasses
+from . abs_generate import Generator as AbstractGenerator
+from . abs_generate import Rule, RuleBase
+from .resources import resource_string
 
 @dataclasses.dataclass(frozen=True)
 class Var:
@@ -75,8 +77,9 @@ def build_rule_literals(rule, rule_var, pi=False):
     if rule_is_recursive(rule):
         yield gteq(rule_var, 1)
 
-class Generator:
+class Generator(AbstractGenerator):
 
+    model: Optional[Model]
     def __init__(self, settings, bkcons=[]):
         self.savings = 0
         self.settings = settings
@@ -102,110 +105,17 @@ class Generator:
         # TODO: dunno
         self.new_ground_cons = set()
 
-        encoding = []
-        alan = pkg_resources.resource_string(__name__, "lp/alan-old.pl").decode()
-        # alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
-        encoding.append(alan)
-
-        with open(settings.bias_file) as f:
-            bias_text = f.read()
-        bias_text = re.sub(r'max_vars\(\d*\).','', bias_text)
-        bias_text = re.sub(r'max_body\(\d*\).','', bias_text)
-        bias_text = re.sub(r'max_clauses\(\d*\).','', bias_text)
-        encoding.append(bias_text)
-        encoding.append(f'max_clauses({settings.max_rules}).')
-        encoding.append(f'max_body({settings.max_body}).')
-        encoding.append(f'max_vars({settings.max_vars}).')
-
-        # ADD VARS, DIRECTIONS, AND TYPES
-        head_arity = len(settings.head_literal.arguments)
-        encoding.append(f'head_vars({head_arity}, {tuple(range(head_arity))}).')
-        arities = set(a for p, a in self.settings.body_preds)
-        arities.add(head_arity)
-        for arity in arities:
-            for xs in permutations(range(settings.max_vars), arity):
-                encoding.append(f'vars({arity}, {tuple(xs)}).')
-
-                for i, x in enumerate(xs):
-                    encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
-
-        # types = tuple(self.settings.head_types)
-        # str_types = str(types).replace("'","")
-        # for x, i in enumerate(self.settings.head_types):
-        #     encoding.append(f'type_pos({str_types}, {i}, {x}).')
-
-        # for pred, types in self.settings.body_types.items():
-        #     types = tuple(types)
-        #     str_types = str(types).replace("'","")
-        #     for i, x in enumerate(types):
-
-        #         encoding.append(f'type_pos({str_types}, {i}, {x}).')
-
-        # for pred, xs in self.settings.directions.items():
-        #     for i, v in xs.items():
-        #         if v == '+':
-        #             encoding.append(f'direction_({pred}, {i}, in).')
-        #         if v == '-':
-        #             encoding.append(f'direction_({pred}, {i}, out).')
-
-        max_size = (1 + settings.max_body) * settings.max_rules
-        if settings.max_literals < max_size:
-            encoding.append(f'custom_max_size({settings.max_literals}).')
-
-        if settings.pi_enabled:
-            encoding.append(f'#show head_literal/4.')
-
-        if settings.noisy:
-            encoding.append("""
-            program_bounds(0..K):- max_size(K).
-            program_size_at_least(M):- size(N), program_bounds(M), M <= N.
-            """)
-
-        # if settings.bkcons:
-        encoding.extend(bkcons)
-
-        # FG Heuristic for single solve
-        # - considering a default order of minimum rules, then minimum literals, and then minimum variables
-        # - considering a preference for minimum hspace size parameters configuration
-        if settings.single_solve:
-            if settings.order_space:
-                assert(False)
-                pass
-                # horder = bias_order(settings, max_size)
-                # iorder = 1
-                # for (size, n_vars, n_rules, _) in horder:
-                #     encoding.append(f'h_order({iorder},{size},{n_vars},{n_rules}).')
-                #     iorder += 1
-                # HSPACE_HEURISTIC = """
-                # #heuristic hspace(N). [1000-N@30,true]
-                # hspace(N) :- h_order(N,K,V,R), size(K), size_vars(V), size_rules(R).
-                # size_vars(V):- #count{K : clause_var(_,K)} == V.
-                # size_rules(R):- #count{K : clause(K)} == R.
-                # """
-
-                # encoding.append(HSPACE_HEURISTIC)
-            elif settings.no_bias:
-                DEFAULT_HEURISTIC = """
-                size_vars(V):- #count{K : clause_var(_,K)} == V.
-                size_rules(R):- #count{K : clause(K)} == R.
-                #heuristic size_rules(R). [1500-R@30,true]
-                #heuristic size(N). [1000-N@20,true]
-                #heuristic size_vars(V). [500-V@10,true]
-                """
-                encoding.append(DEFAULT_HEURISTIC)
-            else:
-                DEFAULT_HEURISTIC = """
-                #heuristic size(N). [1000-N,true]
-                """
-                encoding.append(DEFAULT_HEURISTIC)
-
-        encoding = '\n'.join(encoding)
+        encoding = self.build_encoding(bkcons, settings)
 
         # with open('ENCODING-GEN.pl', 'w') as f:
             # f.write(encoding)
 
+        solver = self.init_solver(encoding)
+        self.solver = solver
+
+    def init_solver(self, encoding):
         if self.settings.single_solve:
-            solver = clingo.Control(['--heuristic=Domain','-Wnone'])
+            solver = clingo.Control(['--heuristic=Domain', '-Wnone'])
         else:
             solver = clingo.Control(['-Wnone'])
             NUM_OF_LITERALS = """
@@ -235,22 +145,108 @@ class Generator:
                     #max{R : clause(R)} != r - 1.
                 """
                 solver.add('number_of_rules', ['r'], NUM_OF_RULES)
-
-
-
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
-        self.solver = solver
+        return solver
+
+    def build_encoding(self, bkcons, settings):
+        encoding = []
+        alan = resource_string(__name__, "lp/alan-old.pl").decode()
+        # alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
+        encoding.append(alan)
+        with open(settings.bias_file) as f:
+            bias_text = f.read()
+        bias_text = re.sub(r'max_vars\(\d*\).', '', bias_text)
+        bias_text = re.sub(r'max_body\(\d*\).', '', bias_text)
+        bias_text = re.sub(r'max_clauses\(\d*\).', '', bias_text)
+        encoding.append(bias_text)
+        encoding.append(f'max_clauses({settings.max_rules}).')
+        encoding.append(f'max_body({settings.max_body}).')
+        encoding.append(f'max_vars({settings.max_vars}).')
+        # ADD VARS, DIRECTIONS, AND TYPES
+        head_arity = len(settings.head_literal.arguments)
+        encoding.append(f'head_vars({head_arity}, {tuple(range(head_arity))}).')
+        arities = set(a for p, a in self.settings.body_preds)
+        arities.add(head_arity)
+        for arity in arities:
+            for xs in permutations(range(settings.max_vars), arity):
+                encoding.append(f'vars({arity}, {tuple(xs)}).')
+
+                for i, x in enumerate(xs):
+                    encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
+        # types = tuple(self.settings.head_types)
+        # str_types = str(types).replace("'","")
+        # for x, i in enumerate(self.settings.head_types):
+        #     encoding.append(f'type_pos({str_types}, {i}, {x}).')
+        # for pred, types in self.settings.body_types.items():
+        #     types = tuple(types)
+        #     str_types = str(types).replace("'","")
+        #     for i, x in enumerate(types):
+        #         encoding.append(f'type_pos({str_types}, {i}, {x}).')
+        # for pred, xs in self.settings.directions.items():
+        #     for i, v in xs.items():
+        #         if v == '+':
+        #             encoding.append(f'direction_({pred}, {i}, in).')
+        #         if v == '-':
+        #             encoding.append(f'direction_({pred}, {i}, out).')
+        max_size = (1 + settings.max_body) * settings.max_rules
+        if settings.max_literals < max_size:
+            encoding.append(f'custom_max_size({settings.max_literals}).')
+        if settings.pi_enabled:
+            encoding.append(f'#show head_literal/4.')
+        if settings.noisy:
+            encoding.append("""
+            program_bounds(0..K):- max_size(K).
+            program_size_at_least(M):- size(N), program_bounds(M), M <= N.
+            """)
+        # if settings.bkcons:
+        encoding.extend(bkcons)
+        # FG Heuristic for single solve
+        # - considering a default order of minimum rules, then minimum literals, and then minimum variables
+        # - considering a preference for minimum hspace size parameters configuration
+        if settings.single_solve:
+            if settings.order_space:
+                assert (False)
+                pass
+                # horder = bias_order(settings, max_size)
+                # iorder = 1
+                # for (size, n_vars, n_rules, _) in horder:
+                #     encoding.append(f'h_order({iorder},{size},{n_vars},{n_rules}).')
+                #     iorder += 1
+                # HSPACE_HEURISTIC = """
+                # #heuristic hspace(N). [1000-N@30,true]
+                # hspace(N) :- h_order(N,K,V,R), size(K), size_vars(V), size_rules(R).
+                # size_vars(V):- #count{K : clause_var(_,K)} == V.
+                # size_rules(R):- #count{K : clause(K)} == R.
+                # """
+
+                # encoding.append(HSPACE_HEURISTIC)
+            elif settings.no_bias:
+                DEFAULT_HEURISTIC = """
+                size_vars(V):- #count{K : clause_var(_,K)} == V.
+                size_rules(R):- #count{K : clause(K)} == R.
+                #heuristic size_rules(R). [1500-R@30,true]
+                #heuristic size(N). [1000-N@20,true]
+                #heuristic size_vars(V). [500-V@10,true]
+                """
+                encoding.append(DEFAULT_HEURISTIC)
+            else:
+                DEFAULT_HEURISTIC = """
+                #heuristic size(N). [1000-N,true]
+                """
+                encoding.append(DEFAULT_HEURISTIC)
+        encoding = '\n'.join(encoding)
+        return encoding
 
     # @profile
-    def get_prog(self):
+    def get_prog(self) -> Optional[RuleBase]:
         if self.handle is None:
             self.handle = iter(self.solver.solve(yield_ = True))
         self.model = next(self.handle, None)
         if self.model is None:
             return None
-        atoms = self.model.symbols(shown = True)
+        atoms: Sequence[Symbol] = self.model.symbols(shown = True)
 
         if self.settings.single_solve:
             return self.parse_model_single_rule(atoms)
@@ -270,7 +266,7 @@ class Generator:
             self.seen_symbols[k] = symbol
         return symbol
 
-    def parse_model_recursion(self, model):
+    def parse_model_recursion(self, model) -> RuleBase:
         settings = self.settings
         rule_index_to_body = defaultdict(set)
         head = settings.head_literal
@@ -292,10 +288,10 @@ class Generator:
 
         return frozenset(prog)
 
-    def parse_model_single_rule(self, model):
+    def parse_model_single_rule(self, model: Sequence[Symbol]) -> RuleBase:
         settings = self.settings
-        head = settings.head_literal
-        body = set()
+        head: Literal = settings.head_literal
+        body: Set[Literal] = set()
         cached_literals = settings.cached_literals
         for atom in model:
             args = atom.arguments
@@ -303,10 +299,10 @@ class Generator:
             atom_args = tuple(args[3].arguments)
             literal = cached_literals[(predicate, atom_args)]
             body.add(literal)
-        rule = head, frozenset(body)
+        rule: Rule = head, frozenset(body)
         return frozenset([rule])
 
-    def parse_model_pi(self, model):
+    def parse_model_pi(self, model) -> RuleBase:
         settings = self.settings
         # directions = defaultdict(lambda: defaultdict(lambda: '?'))
         rule_index_to_body = defaultdict(set)
