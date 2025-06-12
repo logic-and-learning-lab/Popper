@@ -133,7 +133,7 @@ To enable PI, add the setting `enable_pi.` to the bias file. However, predicate 
  - `--quiet` (default: False)  runs in quiet mode
  - `--timeout` (default: 1200 seconds) sets a maximum learning time
  - `--eval-timeout` (default: 0.001 seconds) sets a maximum example testing time. This flag only applies when learning recursive programs.
- - `--solver {clingo,rc2,uwr,wmaxcdcl}`(default: `rc2`) which exact solver to use
+ - `--solver {rc2,uwr,wmaxcdcl}`(default: `rc2`) which exact solver to use
  - `--anytime-solver {wmaxcdcl,nuwls}`(default: `None`) which anytime solver to use
  - `--anytime-timeout` (default: 10 seconds) sets the maximum time allowed by the anytime solver
 
