@@ -840,4 +840,4 @@ def remap_variables(rule: Tuple[Any, Any]) -> Rule:
 
 
 def format_prog(prog):
-    return '\n'.join(format_rule(rule) for rule in prog)
+    return '\n'.join(sorted(format_rule(rule) for rule in prog))
