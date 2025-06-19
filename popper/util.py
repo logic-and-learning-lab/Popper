@@ -119,6 +119,9 @@ def load_kbpath(kbpath):
 
 
 class Stats:
+    logger: logging.Logger
+    maxsat_calls: int
+
     def __init__(self, info=False, debug=False):
         self.exec_start = perf_counter()
         self.total_programs = 0
@@ -254,10 +257,27 @@ def flatten(xs):
 
 class Settings:
 
-    showcons: bool
-    datalog: bool
-    show_failures: bool  # display detailed FP and FN information
+    anytime_maxsat_solver: str
+    anytime_maxsat_solver_params: str
+    anytime_maxsat_solver_signal: int
+    batch_size: int
+    best_mdl: int # best model description length
     cached_literals: Dict[Tuple[str, Any], Literal]
+    datalog: bool
+    exact_maxsat_solver: str
+    exact_maxsat_solver_params: str
+    last_combine_stage: Any
+    lex: bool
+    lex_via_weights: bool
+    max_size: int
+    maxsat_timeout: Optional[int]
+    min_coverage: int
+    old_format: bool
+    pointless: Set[Tuple[str, Any]]
+    search_depth: int
+    showcons: bool
+    solution_found: Any
+    show_failures: bool  # display detailed FP and FN information
 
     def __init__(self, cmd_line=False, info=True, debug=False, show_stats=True, max_literals=MAX_LITERALS,
                  timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=None,
@@ -286,7 +306,7 @@ class Settings:
             # no_bias = args.no_bias
             # order_space = args.order_space
             noisy = args.noisy
-            batch_size = args.batch_size
+            self.batch_size = args.batch_size
             solver = args.solver
             anytime_solver = args.anytime_solver
             anytime_timeout = args.anytime_timeout

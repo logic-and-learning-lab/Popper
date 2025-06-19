@@ -2,6 +2,7 @@ import time
 from collections import defaultdict
 from functools import cache
 from itertools import chain, combinations, permutations
+from logging import Logger
 from typing import Any, List, Optional, Set, Tuple
 
 from bitarray.util import any_and, ones, subset
@@ -73,6 +74,8 @@ def load_solver(settings: Settings, tester: Tester, coverage_pos, coverage_neg, 
 class Popper():
     settings: Settings
     tester: Tester
+    logger: Logger
+    noisy: bool
     # the following 2 type hints are conjectural -- rpg
     num_pos: int
     num_neg: int
