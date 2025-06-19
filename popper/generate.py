@@ -304,62 +304,6 @@ class Generator(AbstractGenerator):
         rule: Rule = head, frozenset(body)
         return frozenset([rule])
 
-    def parse_model_pi(self, model) -> RuleBase:
-        settings = self.settings
-        # directions = defaultdict(lambda: defaultdict(lambda: '?'))
-        rule_index_to_body = defaultdict(set)
-        rule_index_to_head = {}
-        # rule_index_ordering = defaultdict(set)
-
-        for atom in model:
-            args = atom.arguments
-            name = atom.name
-
-            if name == 'body_literal':
-                rule_index = args[0].number
-                predicate = args[1].name
-                atom_args = args[3].arguments
-                atom_args = settings.cached_atom_args[tuple(atom_args)]
-                arity = len(atom_args)
-                body_literal = (predicate, atom_args, arity)
-                rule_index_to_body[rule_index].add(body_literal)
-
-            elif name == 'head_literal':
-                rule_index = args[0].number
-                predicate = args[1].name
-                atom_args = args[3].arguments
-                atom_args = settings.cached_atom_args[tuple(atom_args)]
-                arity = len(atom_args)
-                head_literal = (predicate, atom_args, arity)
-                rule_index_to_head[rule_index] = head_literal
-
-            # # TODO AC: STOP READING THESE THE MODELS
-            # elif name == 'direction_':
-            #     pred_name = args[0].name
-            #     arg_index = args[1].number
-            #     arg_dir_str = args[2].name
-
-            #     if arg_dir_str == 'in':
-            #         arg_dir = '+'
-            #     elif arg_dir_str == 'out':
-            #         arg_dir = '-'
-            #     else:
-            #         raise Exception(f'Unrecognised argument direction "{arg_dir_str}"')
-            #     directions[pred_name][arg_index] = arg_dir
-
-        prog = []
-
-        for rule_index in rule_index_to_head:
-            head_pred, head_args, head_arity = rule_index_to_head[rule_index]
-            head = Literal(head_pred, head_args)
-            body = set()
-            for (body_pred, body_args, body_arity) in rule_index_to_body[rule_index]:
-                body.add(Literal(body_pred, body_args))
-            body = frozenset(body)
-            rule = head, body
-            prog.append((rule))
-
-        return frozenset(prog)
 
     def update_solver(self, size):
         self.update_number_of_literals(size)
