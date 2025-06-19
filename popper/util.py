@@ -5,17 +5,12 @@ from collections import defaultdict
 from contextlib import contextmanager
 from itertools import permutations
 from time import perf_counter
-from typing import NamedTuple, Optional, Dict, Tuple, Any
+from typing import Any, Dict, Optional, Set, Tuple
 
 import clingo
 import clingo.script
 
-from popper.abs_generate import Rule
-
-
-class Literal(NamedTuple):
-    predicate: str
-    arguments: tuple
+from popper.type_defs import Literal, Rule
 
 
 clingo.script.enable_python()

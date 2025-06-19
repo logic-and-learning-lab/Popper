@@ -1,13 +1,15 @@
 import abc
-from typing import FrozenSet, Tuple, TYPE_CHECKING, List
+from collections import defaultdict
+from typing import Set, TYPE_CHECKING, List
 
 import clingo
+
+from . type_defs import Literal, RuleBase
+
 
 if TYPE_CHECKING:
     from . util import Settings
 
-Rule = Tuple['Literal', FrozenSet['Literal']]
-RuleBase = FrozenSet[Rule]
 
 class Generator(abc.ABC):
     settings: 'Settings'

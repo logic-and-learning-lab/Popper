@@ -10,11 +10,13 @@ import clingo.script
 from .util import rule_is_recursive, Constraint, Literal, remap_variables
 
 clingo.script.enable_python()
+# ruff: noqa: E402
+# flake8: noqa: E402
 from clingo import Function, Number, Tuple_, Model, Symbol
 from itertools import permutations
 import dataclasses
 from . abs_generate import Generator as AbstractGenerator
-from . abs_generate import Rule, RuleBase
+from . type_defs import Rule, RuleBase
 from .resources import resource_string
 
 @dataclasses.dataclass(frozen=True)
