@@ -14,47 +14,53 @@ if TYPE_CHECKING:
 class Generator(abc.ABC):
     settings: 'Settings'
 
-    # @profile
+    @abc.abstractmethod
     def get_prog(self) -> RuleBase:
         pass
 
+    @abc.abstractmethod
     def gen_symbol(self, literal, backend):
         pass
 
+    @abc.abstractmethod
     def update_solver(self, size):
         pass
-        self.update_number_of_literals(size)
 
+    @abc.abstractmethod
     def update_number_of_literals(self, size):
         pass
 
+    @abc.abstractmethod
     def update_number_of_vars(self, size):
         pass
 
+    @abc.abstractmethod
     def update_number_of_rules(self, size):
         pass
 
+    @abc.abstractmethod
     def prune_size(self, size):
         pass
 
-    # @profile
+    @abc.abstractmethod
     def get_ground_rules(self, rule):
         pass
 
+    @abc.abstractmethod
     def parse_handles(self, new_handles):
         pass
 
+    @abc.abstractmethod
     def constrain(self, tmp_new_cons):
         pass
 
     @abc.abstractmethod
     def build_encoding(self, bkcons: List, settings: "Settings") -> str:
-        """Build and return a string for an ASP solver, used to generate hypotheses."""
-        pass
+        """Build and return a string for an ASP solver."""
 
     @abc.abstractmethod
     def init_solver(self, encoding: str) -> clingo.Control:
-        """Incorporate the `encoding` into a new solver (`clingo.Control`) and return it."""
+        """Incorporate the `encoding` into a new solver and return it."""
 
     def parse_model_pi(self, model) -> RuleBase:
         settings = self.settings
