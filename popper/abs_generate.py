@@ -18,37 +18,37 @@ class Generator(abc.ABC):
     def get_prog(self) -> RuleBase:
         pass
 
-    @abc.abstractmethod
-    def gen_symbol(self, literal, backend):
-        pass
+    # @abc.abstractmethod
+    # def gen_symbol(self, literal, backend):
+    #     pass
 
     @abc.abstractmethod
     def update_solver(self, size):
         pass
 
-    @abc.abstractmethod
-    def update_number_of_literals(self, size):
-        pass
+    # @abc.abstractmethod
+    # def update_number_of_literals(self, size):
+    #     pass
 
-    @abc.abstractmethod
-    def update_number_of_vars(self, size):
-        pass
+    # @abc.abstractmethod
+    # def update_number_of_vars(self, size):
+    #     pass
 
-    @abc.abstractmethod
-    def update_number_of_rules(self, size):
-        pass
+    # @abc.abstractmethod
+    # def update_number_of_rules(self, size):
+    #     pass
 
     @abc.abstractmethod
     def prune_size(self, size):
         pass
 
-    @abc.abstractmethod
-    def get_ground_rules(self, rule):
-        pass
+    # @abc.abstractmethod
+    # def get_ground_rules(self, rule):
+    #     pass
 
-    @abc.abstractmethod
-    def parse_handles(self, new_handles):
-        pass
+    # @abc.abstractmethod
+    # def parse_handles(self, new_handles):
+    #     pass
 
     @abc.abstractmethod
     def constrain(self, tmp_new_cons):
