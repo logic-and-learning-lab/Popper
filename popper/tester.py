@@ -1,29 +1,41 @@
+import logging
 import os
 from collections import defaultdict
 from contextlib import contextmanager
 from functools import cache
 from itertools import product
-from typing import Tuple
+from typing import Optional, Tuple
 
 from bitarray import bitarray, frozenbitarray
 from bitarray.util import ones
 from janus_swi import consult, query_once
+from janus_swi.janus import PrologError
 
 from .util import Literal, calc_prog_size, calc_rule_size, format_rule, order_prog, prog_hash, prog_is_recursive
 from .resources import resource_string, resource_filename, close_resource_file
 
+
+logger: Optional[logging.Logger] = None
 
 def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
     return f'{literal.predicate}({args})'
 
 def bool_query(query):
-    return query_once(query)['truth']
+    try:
+        return query_once(query)['truth']
+    except PrologError as e:
+        if logger is not None:
+            logger.debug(f"Error in SWI bool_query {query}: {e}")
+        return False
 
 class Tester():
 
     def __init__(self, settings):
+        global logger
         self.settings = settings
+
+        logger = self.settings.logger
 
         bk_pl_path = self.settings.bk_file
         exs_pl_path = self.settings.ex_file
