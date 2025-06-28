@@ -1,30 +1,46 @@
+import logging
 import os
-import time
-import pkg_resources
-from janus_swi import query_once, consult
-from functools import cache
+from collections import defaultdict
 from contextlib import contextmanager
-from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal, Literal
+from functools import cache
+from itertools import product
+from typing import Optional, Tuple
+
 from bitarray import bitarray, frozenbitarray
 from bitarray.util import ones
-from collections import defaultdict
-from itertools import product
+from janus_swi import consult, query_once
+from janus_swi.janus import PrologError
+
+from .util import Literal, calc_prog_size, calc_rule_size, format_rule, order_prog, prog_hash, prog_is_recursive
+from .resources import resource_string, resource_filename, close_resource_file
+
+
+logger: Optional[logging.Logger] = None
 
 def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
     return f'{literal.predicate}({args})'
 
 def bool_query(query):
-    return query_once(query)['truth']
+    try:
+        return query_once(query)['truth']
+    except PrologError as e:
+        if logger is not None:
+            logger.debug(f"Error in SWI bool_query {query}: {e}")
+        return False
 
 class Tester():
 
     def __init__(self, settings):
+        global logger
         self.settings = settings
+
+        logger = self.settings.logger
 
         bk_pl_path = self.settings.bk_file
         exs_pl_path = self.settings.ex_file
-        test_pl_path = pkg_resources.resource_filename(__name__, "lp/test.pl")
+        test_pl_path = str(resource_filename(__name__, "lp/test.pl"))
+        assert isinstance(test_pl_path, str)
 
         if not settings.pi_enabled:
             consult('prog', f':- dynamic {settings.head_literal.predicate}/{len(settings.head_literal.arguments)}.')
@@ -33,6 +49,7 @@ class Tester():
             if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
                 x = x.replace('\\', '\\\\')
             consult(x)
+            close_resource_file(x)
 
         query_once('load_examples')
 
@@ -84,7 +101,7 @@ class Tester():
         settings = self.settings
         neg_covered = None
         skipped, skip_early_neg = False, False
-        inconsistent = False
+        inconsistent: bool = False
 
         if settings.recursion_enabled or settings.pi_enabled:
             pos_covered, neg_covered = self.test_prog_all(prog)
@@ -111,8 +128,9 @@ class Tester():
         return pos_covered, neg_covered, inconsistent, skipped, skip_early_neg
 
 
-    def test_prog(self, prog):
+    def test_prog(self, prog) -> Tuple[frozenbitarray, bool]:
 
+        # sourcery skip: no-conditionals-in-tests
         if self.settings.recursion_enabled or self.settings.pi_enabled:
 
             if len(prog) == 1:
@@ -156,7 +174,7 @@ class Tester():
         self.cached_pos_covered[hash(prog)] = pos_covered
         return pos_covered, inconsistent
 
-    def test_prog_all(self, prog):
+    def test_prog_all(self, prog) -> Tuple[frozenbitarray, frozenbitarray]:
 
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
@@ -174,15 +192,15 @@ class Tester():
 
         pos_covered_bits = bitarray(self.num_pos)
         pos_covered_bits[pos_covered] = 1
-        pos_covered = frozenbitarray(pos_covered_bits)
+        pos_covered_arr: frozenbitarray = frozenbitarray(pos_covered_bits)
 
         neg_covered_bits = bitarray(self.num_neg)
         neg_covered_bits[neg_covered] = 1
-        neg_covered = frozenbitarray(neg_covered_bits)
+        neg_covered_arr: frozenbitarray = frozenbitarray(neg_covered_bits)
 
-        return pos_covered, neg_covered
+        return pos_covered_arr, neg_covered_arr
 
-    def test_prog_pos(self, prog):
+    def test_prog_pos(self, prog) -> frozenbitarray:
 
         if len(prog) == 1:
             atom_str, body_str = self.parse_single_rule(prog)
@@ -192,7 +210,7 @@ class Tester():
             with self.using(prog):
                 pos_covered = query_once('pos_covered(S)')['S']
 
-        pos_covered_bits = bitarray(self.num_pos)
+        pos_covered_bits: bitarray = bitarray(self.num_pos)
         pos_covered_bits[pos_covered] = 1
         pos_covered = frozenbitarray(pos_covered_bits)
         return pos_covered
@@ -374,35 +392,35 @@ class Tester():
             # print(q, False)
         return False
 
-    # # WE ASSUME THAT THERE IS A REUNDANT RULE
-    def find_redundant_rule_(self, prog):
-        prog_ = []
-        for i, (head, body) in enumerate(prog):
-            c = f"{i}-[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-            prog_.append(c)
-        prog_ = f"[{','.join(prog_)}]"
-        prog_ = janus_format_rule(prog_)
-        q = f'find_redundant_rule({prog_}, K1, K2)'
-        res = query_once(q)
-        k1 = res['K1']
-        k2 = res['K2']
-        return prog[k1], prog[k2]
-
-    def find_redundant_rules(self, prog):
-        # assert(False)
-        # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
-        base = []
-        step = []
-        for rule in prog:
-            if rule_is_recursive(rule):
-                step.append(rule)
-            else:
-                base.append(rule)
-        if len(base) > 1 and self.has_redundant_rule(base):
-            return self.find_redundant_rule_(base)
-        if len(step) > 1 and self.has_redundant_rule(step):
-            return self.find_redundant_rule_(step)
-        return None
+    # # WE ASSUME THAT THERE IS A REDUNDANT RULE
+    # def find_redundant_rule_(self, prog):
+    #     prog_ = []
+    #     for i, (head, body) in enumerate(prog):
+    #         c = f"{i}-[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+    #         prog_.append(c)
+    #     prog_ = f"[{','.join(prog_)}]"
+    #     prog_ = janus_format_rule(prog_)
+    #     q = f'find_redundant_rule({prog_}, K1, K2)'
+    #     res = query_once(q)
+    #     k1 = res['K1']
+    #     k2 = res['K2']
+    #     return prog[k1], prog[k2]
+    #
+    # def find_redundant_rules(self, prog):
+    #     # assert(False)
+    #     # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
+    #     base = []
+    #     step = []
+    #     for rule in prog:
+    #         if rule_is_recursive(rule):
+    #             step.append(rule)
+    #         else:
+    #             base.append(rule)
+    #     if len(base) > 1 and self.has_redundant_rule(base):
+    #         return self.find_redundant_rule_(base)
+    #     if len(step) > 1 and self.has_redundant_rule(step):
+    #         return self.find_redundant_rule_(step)
+    #     return None
 
     def find_pointless_relations(self):
         settings = self.settings
@@ -452,7 +470,7 @@ class Tester():
                     if query_once(query1)['truth'] or query_once(query2)['truth']:
                         continue
                 except Exception as Err:
-                    print('ERROR detecting pointless relations', Err)
+                    settings.logger.error(f'ERROR detecting pointless relations: {Err}')
                     return pointless
 
                 a, b = (p,pa), (q,qa)
