@@ -258,7 +258,7 @@ class Combiner:
 
             else:
                 if not self.settings.lex:
-                    print("ERROR: Combining rec or pi programs not supported with MDL objective. Exiting.")
+                    self.settings.logger.error("ERROR: Combining rec or pi programs not supported with MDL objective. Exiting.")
                     assert(False)
 
                 model_inconsistent = self.tester.test_prog_inconsistent(model_prog)

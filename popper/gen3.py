@@ -1,17 +1,19 @@
-import time
-import re
-from pysat.formula import CNF
-from pysat.solvers import Solver
-from pysat.card import *
-import clingo
-import operator
 import numbers
-import clingo.script
-import pkg_resources
+import operator
+import re
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, Literal
+from typing import Optional
+
+import clingo
+import clingo.script
+import clingo.configuration
+
+from .abs_generate import Generator as AbstractGenerator
+from .resources import resource_string
+from .util import rule_is_recursive, Constraint, Literal
+
 clingo.script.enable_python()
-from clingo import Function, Number, Tuple_
+from clingo import Function, Number, Tuple_, Model
 from itertools import permutations
 
 DEFAULT_HEURISTIC = """
@@ -30,7 +32,8 @@ def atom_to_symbol(pred, args):
     xs = tuple(arg_to_symbol(arg) for arg in args)
     return Function(name = pred, arguments = xs)
 
-class Generator:
+class Generator(AbstractGenerator):
+    model: Optional[Model]
 
     def __init__(self, settings, bkcons=[]):
         self.settings = settings
@@ -53,20 +56,47 @@ class Generator:
         self.new_seen_rules = set()
         self.new_ground_cons = set()
 
-        encoding = []
-        alan = pkg_resources.resource_string(__name__, "lp/alan-old.pl").decode()
-        encoding.append(alan)
+        encoding = self.build_encoding(bkcons, settings)
 
+        # with open('ENCODING-GEN.pl', 'w') as f:
+            # f.write(encoding)
+
+        solver = self.init_solver(encoding)
+        self.solver = solver
+
+    def init_solver(self, encoding) -> clingo.Control:
+        if self.settings.single_solve:
+            solver = clingo.Control(['--heuristic=Domain', '-Wnone'])
+        else:
+            solver = clingo.Control(['-Wnone'])
+            NUM_OF_LITERALS = """
+            %%% External atom for number of literals in the program %%%%%
+            #external size_in_literals(n).
+            :-
+                size_in_literals(n),
+                #sum{K+1,Clause : body_size(Clause,K)} != n.
+            """
+            solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
+        assert isinstance(solver.configuration.solve,
+                          clingo.configuration.Configuration)
+        solver.configuration.solve.models = 0
+        solver.add('base', [], encoding)
+        solver.ground([('base', [])])
+        return solver
+
+    def build_encoding(self, bkcons, settings):
+        encoding = []
+        alan = resource_string(__name__, "lp/alan-old.pl").decode()
+        encoding.append(alan)
         with open(settings.bias_file) as f:
             bias_text = f.read()
-        bias_text = re.sub(r'max_vars\(\d*\).','', bias_text)
-        bias_text = re.sub(r'max_body\(\d*\).','', bias_text)
-        bias_text = re.sub(r'max_clauses\(\d*\).','', bias_text)
+        bias_text = re.sub(r'max_vars\(\d*\).', '', bias_text)
+        bias_text = re.sub(r'max_body\(\d*\).', '', bias_text)
+        bias_text = re.sub(r'max_clauses\(\d*\).', '', bias_text)
         encoding.append(bias_text)
         encoding.append(f'max_clauses({settings.max_rules}).')
         encoding.append(f'max_body({settings.max_body}).')
         encoding.append(f'max_vars({settings.max_vars}).')
-
         # ADD VARS, DIRECTIONS, AND TYPES
         head_arity = len(settings.head_literal.arguments)
         encoding.append(f'head_vars({head_arity}, {tuple(range(head_arity))}).')
@@ -78,68 +108,38 @@ class Generator:
 
                 for i, x in enumerate(xs):
                     encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
-
         # types = tuple(self.settings.head_types)
         # str_types = str(types).replace("'","")
         # for x, i in enumerate(self.settings.head_types):
         #     encoding.append(f'type_pos({str_types}, {i}, {x}).')
-
         # for pred, types in self.settings.body_types.items():
         #     types = tuple(types)
         #     str_types = str(types).replace("'","")
         #     for i, x in enumerate(types):
-
         #         encoding.append(f'type_pos({str_types}, {i}, {x}).')
-
         # for pred, xs in self.settings.directions.items():
         #     for i, v in xs.items():
         #         if v == '+':
         #             encoding.append(f'direction_({pred}, {i}, in).')
         #         if v == '-':
         #             encoding.append(f'direction_({pred}, {i}, out).')
-
         max_size = (1 + settings.max_body) * settings.max_rules
         if settings.max_literals < max_size:
             encoding.append(f'custom_max_size({settings.max_literals}).')
-
         if settings.pi_enabled:
             encoding.append(f'#show head_literal/4.')
-
         if settings.noisy:
             encoding.append("""
             program_bounds(0..K):- max_size(K).
             program_size_at_least(M):- size(N), program_bounds(M), M <= N.
             """)
-
         # if settings.bkcons:
         encoding.extend(bkcons)
-
         if settings.single_solve:
             if settings.order_space:
                 encoding.append(DEFAULT_HEURISTIC)
-
         encoding = '\n'.join(encoding)
-
-        # with open('ENCODING-GEN.pl', 'w') as f:
-            # f.write(encoding)
-
-        if self.settings.single_solve:
-            solver = clingo.Control(['--heuristic=Domain','-Wnone'])
-        else:
-            solver = clingo.Control(['-Wnone'])
-            NUM_OF_LITERALS = """
-            %%% External atom for number of literals in the program %%%%%
-            #external size_in_literals(n).
-            :-
-                size_in_literals(n),
-                #sum{K+1,Clause : body_size(Clause,K)} != n.
-            """
-            solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
-
-        solver.configuration.solve.models = 0
-        solver.add('base', [], encoding)
-        solver.ground([('base', [])])
-        self.solver = solver
+        return encoding
 
     def get_prog(self):
         if self.handle is None:
