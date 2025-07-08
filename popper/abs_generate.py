@@ -1,6 +1,6 @@
 import abc
 from collections import defaultdict
-from typing import Set, TYPE_CHECKING, List
+from typing import Set, TYPE_CHECKING, List, Optional
 
 import clingo
 
@@ -13,6 +13,9 @@ if TYPE_CHECKING:
 
 class Generator(abc.ABC):
     settings: 'Settings'
+    solver: clingo.Control
+    handle: Optional[clingo.SolveHandle]
+    model: Optional[clingo.Model]
 
     @abc.abstractmethod
     def get_prog(self) -> RuleBase:

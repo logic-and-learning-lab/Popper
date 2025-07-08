@@ -40,8 +40,8 @@ program_size_at_least(M):- size(N), program_bounds(M), M <= N.
 class Generator(AbstractGenerator):
     settings: Settings
     model: Optional[clingo.Model]
-    solver: Optional[clingo.Control]
-    handler: Optional[clingo.SolveHandle]
+    solver: clingo.Control
+    handle: Optional[clingo.SolveHandle]
 
     def __init__(self, settings: Settings, bkcons=[]):
         self.savings = 0
@@ -60,9 +60,8 @@ class Generator(AbstractGenerator):
 
         self.model = None
 
-    def init_solver(self, encoding):
-        if self.settings.single_solve:
-            solver = clingo.Control(['--heuristic=Domain', '-Wnone'])
+    def init_solver(self, encoding) -> clingo.Control:
+        solver = clingo.Control(['--heuristic=Domain', '-Wnone'])
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
         solver.ground([('base', [])])

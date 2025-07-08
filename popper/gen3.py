@@ -6,6 +6,7 @@ from typing import Optional
 
 import clingo
 import clingo.script
+import clingo.configuration
 
 from .abs_generate import Generator as AbstractGenerator
 from .resources import resource_string
@@ -63,7 +64,7 @@ class Generator(AbstractGenerator):
         solver = self.init_solver(encoding)
         self.solver = solver
 
-    def init_solver(self, encoding):
+    def init_solver(self, encoding) -> clingo.Control:
         if self.settings.single_solve:
             solver = clingo.Control(['--heuristic=Domain', '-Wnone'])
         else:
@@ -76,6 +77,8 @@ class Generator(AbstractGenerator):
                 #sum{K+1,Clause : body_size(Clause,K)} != n.
             """
             solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
+        assert isinstance(solver.configuration.solve,
+                          clingo.configuration.Configuration)
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
