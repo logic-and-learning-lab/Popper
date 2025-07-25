@@ -15,7 +15,11 @@ def format_literal_janus(literal):
     return f'{literal.predicate}({args})'
 
 def bool_query(query):
-    return query_once(query)['truth']
+    try:
+        return query_once(query)["truth"]
+    except janus_swi.janus.PrologError as e:
+        return False
+
 
 class Tester():
 
