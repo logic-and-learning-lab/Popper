@@ -48,7 +48,6 @@ class Generator:
         bias_text = re.sub(r'max_body\(\d*\).','', bias_text)
         bias_text = re.sub(r'max_clauses\(\d*\).','', bias_text)
 
-        # AC: NEED TO COMPLETELY REFACTOR THIS CODE
         for p,a in settings.pointless:
             bias_text = re.sub(rf'body_pred\({p},\s*{a}\)\.', '', bias_text)
             bias_text = re.sub(rf'constant\({p},.*?\).*', '', bias_text, flags=re.MULTILINE)
@@ -68,6 +67,62 @@ class Generator:
                 encoding.append(f'vars({arity}, {tuple(xs)}).')
                 for i, x in enumerate(xs):
                     encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
+                encoding.append(f'ordered_vars({tuple(xs)},{tuple(sorted(xs))}).')
+
+
+
+        # ORDERING THINGY
+        # %% appears((0,0,V0)):- body_literal(_, _, _, (V0,)), not head_var(_,V0).
+        # appears((0,V0,V1)):- body_literal(_, _, _, (A,B)), ordered_vars((A,B), (V0,V1)).
+        # appears((V0,V1,V2)):- body_literal(_, _, _, (A,B,C)), ordered_vars((A,B,C), (V0,V1,V2)).
+        order_cons = []
+        max_arity = max(arities)
+        for arity in range(2, max_arity+1):
+            xs1 = ','.join(f'V{i}' for i in range(arity)) # Vs
+            xs2 = ','.join(f'X{i}' for i in range(arity)) # Xs
+
+            if arity < max_arity:
+                prefix = ','.join(str(0) for i in range(arity, max_arity)) + ',' + xs1
+            else:
+                prefix = xs1
+
+
+            order_cons.append(f'appears(({prefix})):- body_literal(_,_,_,({xs2})), ordered_vars(({xs2}), ({xs1})).')
+
+            order_cons.append(f'var_tuple(({prefix})):- body_pred(P,{arity}), vars({arity},Vars), not bad_body(P,Vars), not type_mismatch(P,Vars), ordered_vars(Vars,OrderedVars), OrderedVars=({xs1}).')
+
+
+            if arity == 1:
+                order_cons.append(f'var_member(V,(0,0,0,V)):-var(V).')
+            else:
+                order_cons.append(f'var_member(V,({prefix})):-vars(_, Vars), Vars=({xs1}), var_member(V,Vars).')
+            # print(f)
+            # var_member(V,(0,0,V0,V1)):-vars(_, Vars), Vars=(V0,V1), var_member(V,Vars).
+            # var_member(V,(0,V0,V1,V2)):-vars(_, Vars), Vars=(V0,V1,V2), var_member(V,Vars).
+
+        xs1 = ','.join(f'V{i}' for i in range(max_arity)) # Vs
+        for k in range(max_arity):
+            xs2 = ','.join(f'V{i}' for i in range(k)) # Vs
+            if k > 0 and k < max_arity:
+                xs2 += ','
+            xs2 += ','.join(f'X{i}' for i in range(k, max_arity))
+            order_cons.append(f'lower(({xs1}),({xs2})):- var_tuple(({xs1})), var_tuple(({xs2})), X{k} < V{k}.')
+
+        for k in range(max_arity-1):
+            # A,B,C,D
+            v0 = f'V{k}'
+            v1 = f'V{k+1}'
+            order_cons.append(f'seen_lower(Vars1, V):- V={v1}-1, Vars1 = ({xs1}), {v0} < V < {v1}, lower(Vars1, Vars2), var_tuple(Vars1), appears(Vars2), var_member(V, Vars2), not head_var(_,V).')
+            order_cons.append(f'gap_(({xs1}),{v1}-1):- var_tuple(({xs1})), {v0} < V < {v1}, var(V).')
+
+
+        order_cons.append(f'gap(({xs1}),V):- gap_(({xs1}), _), #max' + '{X :gap_((' + xs1 + '), X)} == V.')
+
+        order_cons.append(f':- appears(({xs1})), gap(({xs1}), V), not seen_lower(({xs1}),V), not head_var(_,V).')
+
+        # print('\n'.join(order_cons))
+        encoding.extend(order_cons)
+
 
         type_encoding = set()
         if self.settings.head_types:
@@ -105,7 +160,7 @@ class Generator:
         encoding = '\n'.join(encoding)
 
         # with open('ENCODING-GEN.pl', 'w') as f:
-            # f.write(encoding)
+        #     f.write(encoding)
 
         if self.settings.single_solve:
             solver = clingo.Control(['--heuristic=Domain','-Wnone'])
@@ -157,6 +212,7 @@ class Generator:
                 con_size = None
                 if self.settings.noisy and len(xs)>2:
                     con_size = xs[2]
+                # print('gen', con_type)
                 ground_rules2 = tuple(self.build_generalisation_constraint3(con_prog, con_size))
                 new_ground_cons.update(ground_rules2)
             elif con_type == Constraint.SPECIALISATION:
@@ -173,6 +229,8 @@ class Generator:
         cached_clingo_atoms = self.cached_clingo_atoms
 
         for ground_body in new_ground_cons:
+
+            # print(', '.join(sorted(map(str,ground_body))))
             nogood = []
             for sign, pred, args in ground_body:
                 k = hash((sign, pred, args))

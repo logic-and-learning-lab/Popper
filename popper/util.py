@@ -257,18 +257,33 @@ class Settings:
                 self.bk_file = bk_file
                 self.bias_file = bias_file
 
-        self.tmp_cache = set()
+        # self.tmp_cache = set()
         self.logger = logging.getLogger("popper")
+
+        class SecondsFormatter(logging.Formatter):
+            def format(self, record):
+                record.elapsed_secs = record.relativeCreated / 1000.0
+                return super().format(record)
+
+        formatter = SecondsFormatter(
+            "%(elapsed_secs).1f s %(levelname)s: %(message)s"
+        )
+
+        handler = logging.StreamHandler()
+        handler.setFormatter(formatter)
+
+        self.logger = logging.getLogger("popper")
+        self.logger.addHandler(handler)
+
 
         if quiet:
             pass
         elif debug:
             log_level = logging.DEBUG
-            # logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
-            logging.basicConfig(format='%(message)s', level=log_level, datefmt='%H:%M:%S')
+            self.logger.setLevel(logging.DEBUG)
         elif info:
             log_level = logging.INFO
-            logging.basicConfig(format='%(asctime)s %(message)s', level=log_level, datefmt='%H:%M:%S')
+            self.logger.setLevel(logging.INFO)
 
         self.info = info
         self.debug = debug
