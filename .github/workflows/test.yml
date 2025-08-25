@@ -1,0 +1,43 @@
+name: test
+
+# Controls when the action will run.
+on:
+  # Triggers the workflow on push or pull request events but only for the master branch
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  prt-test:
+    runs-on: ubuntu-latest
+
+    container:
+      image: rpgoldman/popper-prt:latest
+
+    steps:
+    - name: checkout-popper
+      uses: actions/checkout@v3
+
+    - name: install-popper
+      run: pip install .
+
+    - name: run-prt-tests
+      run:
+        cd /popper-prt && prt | tee prt.out
+
+    - name: Upload log
+      uses: actions/upload-artifact@v4
+      with:
+        name: prt output
+        path: prt.out
+
+    - name: Upload results
+      uses: actions/upload-artifact@v4
+      with:
+        name: prt results directories
+        path: results
