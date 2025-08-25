@@ -37,10 +37,10 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: prt output
-        path: prt.out
+        path: /popper-prt/prt.out
 
     - name: Upload results
       uses: actions/upload-artifact@v4
       with:
         name: prt results directories
-        path: results
+        path: /popper-prt/results
