@@ -26,9 +26,12 @@ jobs:
     - name: install-popper
       run: pip install --break-system-packages .
 
+    - name: configure tests
+      run: |
+        echo "POPPER_DIR=${GITHUB_WORKSPACE}\nPOPPER_PYTHON=/usr/bin/python3" >> $GITHUB_ENV
+
     - name: run-prt-tests
-      run:
-        cd /popper-prt && prt | tee prt.out
+      run: cd /popper-prt && prt | tee prt.out
 
     - name: Upload log
       uses: actions/upload-artifact@v4
