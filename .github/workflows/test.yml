@@ -35,12 +35,14 @@ jobs:
 
     - name: Upload log
       uses: actions/upload-artifact@v4
+      if: always()
       with:
         name: prt output
         path: /popper-prt/prt.out
 
     - name: Upload results
       uses: actions/upload-artifact@v4
+      if: always()
       with:
         name: prt results directories
         path: /popper-prt/results
