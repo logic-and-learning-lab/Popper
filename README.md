@@ -1,8 +1,10 @@
 # Popper
 
-Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) system.  If you use Popper, please cite the paper [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259) (MLJ 2021).
+Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) system. Popper combines logical reasoning with machine learning to induce rules from examples and background knowledge.
 
-If you have any questions about Popper, ask us on [Discord](https://discord.gg/Rv5mQCayAp) or email [Andrew Cropper](mailto:andrew.cropper@cs.ox.ac.uk).
+If you use Popper, please cite the paper [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259) (MLJ 2021).
+
+If you have any questions, ask us on [Discord](https://discord.gg/Rv5mQCayAp) or email [Andrew Cropper](mailto:andrew.cropper@helsinki.fi).
 
 #### Requirements
 - [SWI-Prolog](https://www.swi-prolog.org) (9.2.0 or above)
@@ -167,3 +169,6 @@ prog, score, stats = learn_solution(settings)
 if prog != None:
     print_prog_score(prog, score)
 ```
+
+#### Contributing
+If you want to make Popper better, look at the [discussion page](https://github.com/logic-and-learning-lab/Popper/discussions) for open problems or email  [Andrew Cropper](mailto:andrew.cropper@helsinki.fi).
