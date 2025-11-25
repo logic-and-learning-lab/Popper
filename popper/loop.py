@@ -3,7 +3,9 @@ from collections import defaultdict
 from bitarray.util import subset, any_and, ones
 from functools import cache
 from itertools import chain, combinations, permutations
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog
+from .util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, \
+    format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, \
+    order_prog
 from . tester import Tester
 from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons, deduce_non_singletons
 from . combine import Combiner
@@ -1509,7 +1511,7 @@ class Popper():
         else:
             self.logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size}')
         for rule in order_prog(prog):
-            self.logger.info(format_rule(order_rule(rule)))
+            self.logger.info(format_rule(self.settings.order_rule(rule)))
         self.logger.info('*'*20)
 
     def needs_datalog(self, prog):
@@ -1613,6 +1615,7 @@ def learn_solution(settings):
     bkcons = get_bk_cons(settings, tester)
     time_so_far = time.time()-t1
     timeout(settings, popper, (settings, tester, bkcons), timeout_duration=int(settings.timeout-time_so_far),)
+    tester.destroy_prolog_module()
     return settings.solution, settings.best_prog_score, settings.stats
 
 def generalisations(prog, allow_headless=True, recursive=False):
