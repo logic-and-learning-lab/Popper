@@ -9,6 +9,7 @@ from collections import defaultdict
 from typing import NamedTuple
 from time import perf_counter
 from contextlib import contextmanager
+from typing import Any, Callable, Dict, Iterable, Optional, Set, Tuple, TypeVar
 
 class Literal(NamedTuple):
     predicate: str
@@ -68,12 +69,24 @@ def parse_args():
 
     return parser.parse_args()
 
-def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
-    result = None
-    class TimeoutError(Exception):
-        pass
 
-    def handler(signum, frame):
+T = TypeVar("T")
+
+
+def timeout(settings: 'Settings',
+            func: Callable[..., T],
+            args: Tuple[Any, ...] = (),
+            kwargs: Optional[Dict] = None,
+            timeout_duration: int = 1) -> Optional[T]:
+    result = None
+    if kwargs is None:
+        kwargs = {}
+
+    if timeout_duration <= 0:
+        settings.logger.error("Attempting to run %s(%s) with timeout value of zero or below.", str(func), str(args))
+        return result
+
+    def handler(signum: int, frame: Any) -> None:
         raise TimeoutError()
 
     # set the timeout handler
@@ -81,14 +94,17 @@ def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
     signal.alarm(timeout_duration)
     try:
         result = func(*args, **kwargs)
-    except TimeoutError as _exc:
+    except TimeoutError:
         settings.logger.warn(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
         return result
+    # I'm not sure why we claim that there's a timeout issue here
     except AttributeError as moo:
         if '_SolveEventHandler' in str(moo):
             settings.logger.warn(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
             return result
         raise moo
+    else:
+        settings.logger.info('Normal termination of timeout block with result %s', result)
     finally:
         signal.alarm(0)
 
