@@ -19,7 +19,8 @@ setuptools.setup(
         'clingo',
         'bitarray',
         'janus_swi',
-        'python-sat'
+        'python-sat',
+        'setuptools',
     ],
     url="https://github.com/logic-and-learning-lab/Popper",
     scripts=['bin/popper-ilp'],
