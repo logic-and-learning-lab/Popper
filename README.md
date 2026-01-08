@@ -161,13 +161,13 @@ You can download and compile these solvers from the [MaxSAT 2023 evaluation](htt
 You can import Popper and use it in your Python code like so:
 
 ```python
-from popper.util import Settings, print_prog_score
+from popper.util import Settings
 from popper.loop import learn_solution
 
 settings = Settings(kbpath='input_dir')
 prog, score, stats = learn_solution(settings)
 if prog != None:
-    print_prog_score(prog, score)
+    settings.print_prog_score(prog, score)
 ```
 
 #### Contributing
