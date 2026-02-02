@@ -437,107 +437,299 @@ bad_body(P, Vars):- prop(abcdef_fecdba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F)
 bad_body(P, Vars):- prop(abcdef_fedcba,(P,P)), vars(_, Vars), Vars=(A,B,C,D,E,F), C>D.
 
 %% TRY TO REDUCE THE NUMBER OF RULES WITH REDUNDANT LITERALS
+%% the idea is to prune rules with clearly subsumed literals, e.g. h(A):- p(A,B), p(A,C), since the substitution {C->B} removes one redundant literal
 
-:-
-    body_literal(_,P,_,(A,B)),
-    body_literal(_,P,_,(A,C)),
-    B!=C,
-    singleton(B).
+:- body_literal(_,P,_,(V0,V1)),
+  body_literal(_,P,_,(V0R,V1)),
+  V0 != V0R,
+  singleton(V0R).
 
-:-
-    body_literal(_,P,_,(B,A)),
-    body_literal(_,P,_,(C,A)),
-    B!=C,
-    singleton(B).
+:- body_literal(_,P,_,(V0,V1)),
+  body_literal(_,P,_,(V0,V1R)),
+  V1 != V1R,
+  singleton(V1R).
 
-:-
-    body_literal(_,P,_,(A,B,X)),
-    body_literal(_,P,_,(A,B,Y)),
-    X!=Y,
-    singleton(X).
+:- body_literal(_,P,_,(V0,V1,V2)),
+  body_literal(_,P,_,(V0R,V1,V2)),
+  V0 != V0R,
+  singleton(V0R).
 
-:-
-    body_literal(_,P,_,(A,X,B)),
-    body_literal(_,P,_,(A,Y,B)),
-    X!=Y,
-    singleton(X).
+:- body_literal(_,P,_,(V0,V1,V2)),
+  body_literal(_,P,_,(V0,V1R,V2)),
+  V1 != V1R,
+  singleton(V1R).
 
-:-
-    body_literal(_,P,_,(A,B,C)),
-    body_literal(_,P,_,(A,X,Y)),
-    B!=X,
-    C!=Y,
-    singleton(X),
-    singleton(Y).
+:- body_literal(_,P,_,(V0,V1,V2)),
+  body_literal(_,P,_,(V0,V1,V2R)),
+  V2 != V2R,
+  singleton(V2R).
 
-:-
-    body_literal(_,P,_,(B,A,C)),
-    body_literal(_,P,_,(X,A,Y)),
-    B!=X,
-    C!=Y,
-    singleton(X).
+:- body_literal(_,P,_,(V0,V1,V2)),
+  body_literal(_,P,_,(V0R,V1R,V2)),
+  V0 != V0R,
+  V1 != V1R,
+  singleton(V0R),
+  singleton(V1R).
 
-:-
-    body_literal(_,P,_,(B,C,A)),
-    body_literal(_,P,_,(X,Y,A)),
-    B!=X,
-    C!=Y,
-    singleton(X).
+:- body_literal(_,P,_,(V0,V1,V2)),
+  body_literal(_,P,_,(V0R,V1,V2R)),
+  V0 != V0R,
+  V2 != V2R,
+  singleton(V0R),
+  singleton(V2R).
 
-:-
-    body_literal(_,P,_,(X,V0,V1)),
-    body_literal(_,P,_,(Y,V0,V1)),
-    X!=Y,
-    singleton(X).
+:- body_literal(_,P,_,(V0,V1,V2)),
+  body_literal(_,P,_,(V0,V1R,V2R)),
+  V1 != V1R,
+  V2 != V2R,
+  singleton(V1R),
+  singleton(V2R).
 
-:-
-    body_literal(_,P,_,(V0,V4,V3,V5)),
-    body_literal(_,P,_,(V0,V2,V3,V1)),
-    V4!=V2,
-    V5!=V1,
-    singleton(V2),
-    singleton(V1).
+:- body_literal(_,P,_,(V0,V1,V2,V3)),
+  body_literal(_,P,_,(V0R,V1,V2,V3)),
+  V0 != V0R,
+  singleton(V0R).
 
-:-
-    body_literal(_,P,_,(V0,V1,V2,X)),
-    body_literal(_,P,_,(V0,V1,V2,Y)),
-    X!=Y,
-    singleton(Y).
+:- body_literal(_,P,_,(V0,V1,V2,V3)),
+  body_literal(_,P,_,(V0,V1R,V2,V3)),
+  V1 != V1R,
+  singleton(V1R).
 
-:-
-    body_literal(_,P,_,(V0,V3,V4,V1)),
-    body_literal(_,P,_,(V0,V2,V4,V1)),
-    V3!=V2,
-    singleton(V3).
+:- body_literal(_,P,_,(V0,V1,V2,V3)),
+  body_literal(_,P,_,(V0,V1,V2R,V3)),
+  V2 != V2R,
+  singleton(V2R).
 
-:-
-    body_literal(_,P,_,(V0,V4,V3,V1)),
-    body_literal(_,P,_,(V0,V4,V2,V1)),
-    V3!=V2,
-    singleton(V3).
+:- body_literal(_,P,_,(V0,V1,V2,V3)),
+  body_literal(_,P,_,(V0,V1,V2,V3R)),
+  V3 != V3R,
+  singleton(V3R).
 
-:-
-    body_literal(_,P,_,(V0,V2,V3,V1)),
-    body_literal(_,P,_,(V0,V5,V4,V1)),
-    V2!=V5,
-    V3!=V4,
-    singleton(V5),
-    singleton(V4).
+:- body_literal(_,P,_,(V0,V1,V2,V3)),
+  body_literal(_,P,_,(V0R,V1R,V2,V3)),
+  V0 != V0R,
+  V1 != V1R,
+  singleton(V0R),
+  singleton(V1R).
 
-:-
-    body_literal(_,P,_,(V0,V3,V5,V2)),
-    body_literal(_,P,_,(V0,V3,V4,V1)),
-    V5!=V3,
-    V2!=V1,
-    singleton(V4),
-    singleton(V1).
+:- body_literal(_,P,_,(V0,V1,V2,V3)),
+  body_literal(_,P,_,(V0R,V1,V2R,V3)),
+  V0 != V0R,
+  V2 != V2R,
+  singleton(V0R),
+  singleton(V2R).
 
-:-
-    body_literal(_,P,_,(V0,V4,V3,V2)),
-    body_literal(_,P,_,(V0,V5,V6,V1)),
-    V4!=V5,
-    V3!=V6,
-    V2!=V1,
-    singleton(V5),
-    singleton(V6),
-    singleton(V1).
+:- body_literal(_,P,_,(V0,V1,V2,V3)),
+  body_literal(_,P,_,(V0R,V1,V2,V3R)),
+  V0 != V0R,
+  V3 != V3R,
+  singleton(V0R),
+  singleton(V3R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3)),
+  body_literal(_,P,_,(V0,V1R,V2R,V3)),
+  V1 != V1R,
+  V2 != V2R,
+  singleton(V1R),
+  singleton(V2R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3)),
+  body_literal(_,P,_,(V0,V1R,V2,V3R)),
+  V1 != V1R,
+  V3 != V3R,
+  singleton(V1R),
+  singleton(V3R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3)),
+  body_literal(_,P,_,(V0,V1,V2R,V3R)),
+  V2 != V2R,
+  V3 != V3R,
+  singleton(V2R),
+  singleton(V3R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3)),
+  body_literal(_,P,_,(V0R,V1R,V2R,V3)),
+  V0 != V0R,
+  V1 != V1R,
+  V2 != V2R,
+  singleton(V0R),
+  singleton(V1R),
+  singleton(V2R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3)),
+  body_literal(_,P,_,(V0R,V1R,V2,V3R)),
+  V0 != V0R,
+  V1 != V1R,
+  V3 != V3R,
+  singleton(V0R),
+  singleton(V1R),
+  singleton(V3R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3)),
+  body_literal(_,P,_,(V0R,V1,V2R,V3R)),
+  V0 != V0R,
+  V2 != V2R,
+  V3 != V3R,
+  singleton(V0R),
+  singleton(V2R),
+  singleton(V3R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3)),
+  body_literal(_,P,_,(V0,V1R,V2R,V3R)),
+  V1 != V1R,
+  V2 != V2R,
+  V3 != V3R,
+  singleton(V1R),
+  singleton(V2R),
+  singleton(V3R).
+
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1,V2,V3,V4)),
+  V0 != V0R,
+  singleton(V0R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1R,V2,V3,V4)),
+  V1 != V1R,
+  singleton(V1R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1,V2R,V3,V4)),
+  V2 != V2R,
+  singleton(V2R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1,V2,V3R,V4)),
+  V3 != V3R,
+  singleton(V3R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1,V2,V3,V4R)),
+  V4 != V4R,
+  singleton(V4R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1R,V2,V3,V4)),
+  V0 != V0R, V1 != V1R,
+  singleton(V0R), singleton(V1R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1,V2R,V3,V4)),
+  V0 != V0R, V2 != V2R,
+  singleton(V0R), singleton(V2R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1,V2,V3R,V4)),
+  V0 != V0R, V3 != V3R,
+  singleton(V0R), singleton(V3R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1,V2,V3,V4R)),
+  V0 != V0R, V4 != V4R,
+  singleton(V0R), singleton(V4R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1R,V2R,V3,V4)),
+  V1 != V1R, V2 != V2R,
+  singleton(V1R), singleton(V2R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1R,V2,V3R,V4)),
+  V1 != V1R, V3 != V3R,
+  singleton(V1R), singleton(V3R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1R,V2,V3,V4R)),
+  V1 != V1R, V4 != V4R,
+  singleton(V1R), singleton(V4R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1,V2R,V3R,V4)),
+  V2 != V2R, V3 != V3R,
+  singleton(V2R), singleton(V3R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1,V2R,V3,V4R)),
+  V2 != V2R, V4 != V4R,
+  singleton(V2R), singleton(V4R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1,V2,V3R,V4R)),
+  V3 != V3R, V4 != V4R,
+  singleton(V3R), singleton(V4R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1R,V2R,V3,V4)),
+  V0!=V0R,V1!=V1R,V2!=V2R,
+  singleton(V0R),singleton(V1R),singleton(V2R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1R,V2,V3R,V4)),
+  V0!=V0R,V1!=V1R,V3!=V3R,
+  singleton(V0R),singleton(V1R),singleton(V3R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1R,V2,V3,V4R)),
+  V0!=V0R,V1!=V1R,V4!=V4R,
+  singleton(V0R),singleton(V1R),singleton(V4R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1,V2R,V3R,V4)),
+  V0!=V0R,V2!=V2R,V3!=V3R,
+  singleton(V0R),singleton(V2R),singleton(V3R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1,V2R,V3,V4R)),
+  V0!=V0R,V2!=V2R,V4!=V4R,
+  singleton(V0R),singleton(V2R),singleton(V4R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1,V2,V3R,V4R)),
+  V0!=V0R,V3!=V3R,V4!=V4R,
+  singleton(V0R),singleton(V3R),singleton(V4R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1R,V2R,V3R,V4)),
+  V1!=V1R,V2!=V2R,V3!=V3R,
+  singleton(V1R),singleton(V2R),singleton(V3R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1R,V2R,V3,V4R)),
+  V1!=V1R,V2!=V2R,V4!=V4R,
+  singleton(V1R),singleton(V2R),singleton(V4R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1R,V2,V3R,V4R)),
+  V1!=V1R,V3!=V3R,V4!=V4R,
+  singleton(V1R),singleton(V3R),singleton(V4R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1,V2R,V3R,V4R)),
+  V2!=V2R,V3!=V3R,V4!=V4R,
+  singleton(V2R),singleton(V3R),singleton(V4R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1R,V2R,V3R,V4)),
+  V0!=V0R,V1!=V1R,V2!=V2R,V3!=V3R,
+  singleton(V0R),singleton(V1R),singleton(V2R),singleton(V3R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1R,V2R,V3,V4R)),
+  V0!=V0R,V1!=V1R,V2!=V2R,V4!=V4R,
+  singleton(V0R),singleton(V1R),singleton(V2R),singleton(V4R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1R,V2,V3R,V4R)),
+  V0!=V0R,V1!=V1R,V3!=V3R,V4!=V4R,
+  singleton(V0R),singleton(V1R),singleton(V3R),singleton(V4R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0R,V1,V2R,V3R,V4R)),
+  V0!=V0R,V2!=V2R,V3!=V3R,V4!=V4R,
+  singleton(V0R),singleton(V2R),singleton(V3R),singleton(V4R).
+
+:- body_literal(_,P,_,(V0,V1,V2,V3,V4)),
+  body_literal(_,P,_,(V0,V1R,V2R,V3R,V4R)),
+  V1!=V1R,V2!=V2R,V3!=V3R,V4!=V4R,
+  singleton(V1R),singleton(V2R),singleton(V3R),singleton(V4R).
