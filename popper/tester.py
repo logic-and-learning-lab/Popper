@@ -375,18 +375,18 @@ class Tester():
         return False
 
     # # WE ASSUME THAT THERE IS A REUNDANT RULE
-    def find_redundant_rule_(self, prog):
-        prog_ = []
-        for i, (head, body) in enumerate(prog):
-            c = f"{i}-[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-            prog_.append(c)
-        prog_ = f"[{','.join(prog_)}]"
-        prog_ = janus_format_rule(prog_)
-        q = f'find_redundant_rule({prog_}, K1, K2)'
-        res = query_once(q)
-        k1 = res['K1']
-        k2 = res['K2']
-        return prog[k1], prog[k2]
+    # def find_redundant_rule_(self, prog):
+    #     prog_ = []
+    #     for i, (head, body) in enumerate(prog):
+    #         c = f"{i}-[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
+    #         prog_.append(c)
+    #     prog_ = f"[{','.join(prog_)}]"
+    #     prog_ = janus_format_rule(prog_)
+    #     q = f'find_redundant_rule({prog_}, K1, K2)'
+    #     res = query_once(q)
+    #     k1 = res['K1']
+    #     k2 = res['K2']
+    #     return prog[k1], prog[k2]
 
     def find_redundant_rules(self, prog):
         # assert(False)
