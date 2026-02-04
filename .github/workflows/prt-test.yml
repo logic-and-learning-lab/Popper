@@ -18,7 +18,7 @@ jobs:
         run: |
           cd /popper-prt
           export PATH="/prt:${PATH}"
-          POPPER_PYTHON=`which python` POPPER_DIR=${GITHUB_WORKSPACE} MAXPARALLEL=16 ./parallel-prt.sh
+          POPPER_PYTHON=`which python` POPPER_DIR=${GITHUB_WORKSPACE} MAXPARALLEL=4 ./parallel-prt.sh
       - name: move_results
         if: always()
         run: |
