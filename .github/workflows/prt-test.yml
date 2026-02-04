@@ -12,6 +12,8 @@ jobs:
           python-version: '3.12'
       - name: setup
         run: python -m pip install --break-system-packages --root-user-action=ignore $GITHUB_WORKSPACE
+      - name: check-cpus
+        run: lscpu
       - name: do_tests
         run: |
           cd /popper-prt
