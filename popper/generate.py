@@ -7,7 +7,7 @@ import clingo
 import operator
 import numbers
 import clingo.script
-import pkg_resources
+from importlib import resources
 from collections import defaultdict
 from . util import rule_is_recursive, Constraint, Literal, format_rule, remap_variables
 clingo.script.enable_python()
@@ -103,8 +103,8 @@ class Generator:
         self.new_ground_cons = set()
 
         encoding = []
-        alan = pkg_resources.resource_string(__name__, "lp/alan-old.pl").decode()
-        # alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
+        alan = resources.files(__name__).joinpath("lp/alan-old.pl").read_text()
+        # alan = resources.files(__name__).joinpath("lp/alan.pl").read_text()
         encoding.append(alan)
 
         with open(settings.bias_file) as f:

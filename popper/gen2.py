@@ -3,7 +3,7 @@ import re
 import clingo
 import numbers
 import clingo.script
-import pkg_resources
+from importlib import resources
 from . util import Constraint, Literal
 from clingo import Function, Number, Tuple_
 from itertools import permutations
@@ -39,7 +39,7 @@ class Generator:
         self.pruned_sizes = set()
 
         encoding = []
-        alan = pkg_resources.resource_string(__name__, "lp/alan.pl").decode()
+        alan = resources.files(__name__).joinpath("lp/alan.pl").read_text()
         encoding.append(alan)
 
         with open(settings.bias_file) as f:
