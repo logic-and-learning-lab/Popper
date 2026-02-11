@@ -39,7 +39,7 @@ class Generator:
         self.pruned_sizes = set()
 
         encoding = []
-        alan = resources.files(__name__).joinpath("lp/alan.pl").read_text()
+        alan = resources.files(__package__).joinpath("lp/alan.pl").read_text()
         encoding.append(alan)
 
         with open(settings.bias_file) as f:

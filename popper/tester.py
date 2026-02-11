@@ -24,7 +24,7 @@ class Tester():
 
         bk_pl_path = self.settings.bk_file
         exs_pl_path = self.settings.ex_file
-        test_pl_path = str(resources.files(__name__).joinpath("lp/test.pl"))
+        test_pl_path = str(resources.files(__package__).joinpath("lp/test.pl"))
 
         if not settings.pi_enabled:
             consult('prog', f':- dynamic {settings.head_literal.predicate}/{len(settings.head_literal.arguments)}.')
