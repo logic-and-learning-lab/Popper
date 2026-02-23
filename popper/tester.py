@@ -1,6 +1,6 @@
 import os
 import time
-import pkg_resources
+from importlib import resources
 from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
@@ -24,7 +24,7 @@ class Tester():
 
         bk_pl_path = self.settings.bk_file
         exs_pl_path = self.settings.ex_file
-        test_pl_path = pkg_resources.resource_filename(__name__, "lp/test.pl")
+        test_pl_path = str(resources.files(__package__).joinpath("lp/test.pl"))
 
         if not settings.pi_enabled:
             consult('prog', f':- dynamic {settings.head_literal.predicate}/{len(settings.head_literal.arguments)}.')
