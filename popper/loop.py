@@ -5,67 +5,13 @@ from functools import cache
 from itertools import chain, combinations, permutations
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations
 from . tester import Tester
-# from . bkcons import deduce_bk_cons, deduce_recalls, deduce_type_cons, deduce_non_singletons, get_bk_cons
 from . bkcons import get_bk_cons
-from . combine import Combiner
 from . unsat import UnsatCoreFinder
 from . allsat import AllSatCoreFinder
 from . subsume import SubsumeChecker
 from . state import SearchState
+from . combine_helper import CombineHelper
 
-
-def load_solver(settings, tester, coverage_pos, coverage_neg, prog_lookup):
-    if settings.debug:
-        settings.logger.debug(f'Load exact solver: {settings.solver}')
-
-    if settings.solver not in ['rc2', 'uwr', 'wmaxcdcl']:
-        print('INVALID SOLVER')
-        exit()
-
-    settings.maxsat_timeout = None
-    settings.stats.maxsat_calls = 0
-
-    if settings.solver == 'rc2':
-        settings.exact_maxsat_solver = 'rc2'
-        settings.old_format = False
-    elif settings.solver == 'uwr':
-        settings.exact_maxsat_solver='uwrmaxsat'
-        settings.exact_maxsat_solver_params="-v0 -no-sat -no-bin -m -bm"
-        settings.old_format = False
-    else:
-        settings.exact_maxsat_solver='wmaxcdcl'
-        settings.exact_maxsat_solver_params=""
-        settings.old_format = True
-
-    if settings.noisy:
-        settings.lex = False
-    else:
-        settings.lex = True
-        settings.best_mdl = False
-        settings.lex_via_weights = False
-
-    if settings.debug:
-        settings.logger.debug(f'Load anytime solver:{settings.anytime_solver}')
-
-    if settings.anytime_solver in ['wmaxcdcl', 'nuwls']:
-        settings.maxsat_timeout = settings.anytime_timeout
-        if settings.anytime_solver == 'wmaxcdcl':
-            settings.anytime_maxsat_solver = 'wmaxcdcl'
-            settings.anytime_maxsat_solver_params = ""
-            settings.anytime_maxsat_solver_signal = 10
-            settings.old_format = True
-        elif settings.anytime_solver == 'nuwls':
-            settings.anytime_maxsat_solver = 'NuWLS-c'
-            settings.anytime_maxsat_solver_params = ""
-            settings.anytime_maxsat_solver_signal = 15
-        else:
-            print('INVALID ANYTIME SOLVER')
-            exit()
-
-    # TODO: temporary config, need to be modified
-    settings.last_combine_stage = False
-
-    return Combiner(settings, tester, coverage_pos, coverage_neg, prog_lookup)
 
 def popper(settings, tester, bkcons):
     state = SearchState()
@@ -73,49 +19,28 @@ def popper(settings, tester, bkcons):
     allsatcore_finder = AllSatCoreFinder(settings, tester)
     subsumer = SubsumeChecker(settings, tester, state)
 
-    # ----------------------------
-    # Run-time state (former self.* created inside run)
-    # ----------------------------
+
     num_pos, num_neg = tester.num_pos, tester.num_neg
 
 
-    covered_by_pos = defaultdict(set)
-    covered_by_neg = defaultdict(set)
-
-    # program_hash -> coverage (bit_arrary)
-    coverage_pos = {}
-    coverage_neg = {}
-
-    cached_prog_size = {}
-
-    prog_lookup = {}
-
-    scores = {}
-
+    # TODO, MOVE TO COMBINE_HELPER
     to_combine = set()
-    # min_size = None
-    generator = None
+    combine_helper = CombineHelper(settings, tester, state, to_combine)
+
+    # generator that builds programs
+    with settings.stats.duration('init'):
+        if settings.single_solve:
+            from .gen2 import Generator
+        elif settings.max_rules == 2 and not settings.pi_enabled:
+            from .gen3 import Generator
+        else:
+            from .generate import Generator
+        generator = Generator(settings, bkcons)
 
     # Only used in noisy mode (initialized later)
     seen_hyp_spec = None
     seen_hyp_gen = None
 
-    def filter_combine_programs(combiner, to_combine_set):
-        xs = combiner.saved_progs | to_combine_set
-        min_sz = min(cached_prog_size[prog] for prog in xs)
-        must_beat = settings.best_mdl - min_sz
-
-        to_delete = set()
-        for prog_hash in xs:
-            size, tp, fp = scores[prog_hash]
-            if fp + size >= must_beat:
-                to_delete.add(prog_hash)
-
-        for prog_hash in to_delete:
-            if prog_hash in combiner.saved_progs:
-                combiner.saved_progs.remove(prog_hash)
-            else:
-                to_combine_set.remove(prog_hash)
 
     # given a program with more than one rule, look for inconsistent subrules/subprograms
     def explain_inconsistent(prog):
@@ -175,6 +100,8 @@ def popper(settings, tester, bkcons):
             for to_del in to_delete:
                 seen_hyp_gen[k].remove(to_del)
 
+        for x in cons:
+            print(x)
         return cons
 
     uncovered = ones(num_pos)
@@ -191,19 +118,6 @@ def popper(settings, tester, bkcons):
     else:
         max_size = (1 + settings.max_body) * settings.max_rules
 
-    settings.max_size = max_size
-
-    # generator that builds programs
-    with settings.stats.duration('init'):
-        if settings.single_solve:
-            from .gen2 import Generator
-        elif settings.max_rules == 2 and not settings.pi_enabled:
-            from .gen3 import Generator
-        else:
-            from .generate import Generator
-        generator = Generator(settings, bkcons)
-
-    combiner = load_solver(settings, tester, coverage_pos, coverage_neg, prog_lookup)
 
     last_size = None
     min_coverage = settings.min_coverage = 1
@@ -259,6 +173,7 @@ def popper(settings, tester, bkcons):
 
             tp = pos_covered.count(1)
             fn = num_pos - tp
+            fp = None
 
             # if non-separable program covers all examples, stop
             if not inconsistent and tp == num_pos and not skipped:
@@ -282,7 +197,7 @@ def popper(settings, tester, bkcons):
                     if skip_early_neg:
                         assert False
                     # HORRIBLE
-                    combiner.best_cost = mdl
+                    combine_helper.combiner.best_cost = mdl
                     settings.best_prog_score = score
                     settings.solution = prog
                     settings.best_mdl = mdl
@@ -345,11 +260,13 @@ def popper(settings, tester, bkcons):
                     subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog)
                     new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
+
+            # print(not settings.noisy, not pruned_more_general)
             if not settings.noisy and not pruned_more_general:
                 if inconsistent:
                     add_gen = True
                     if is_recursive:
-                        combiner.add_inconsistent(prog)
+                        combine_helper.combiner.add_inconsistent(prog)
                         cons_ = frozenset(explain_inconsistent(prog))
                         new_cons.extend(cons_)
                         pruned_sub_inconsistent = len(cons_) > 0
@@ -433,137 +350,12 @@ def popper(settings, tester, bkcons):
                 if tp < min_coverage:
                     add_spec = True
 
-            add_to_combiner = False
 
-            if settings.noisy and (not skipped) and (not skip_early_neg) and (not is_recursive) and (not has_invention) and tp > prog_size + fp and fp + prog_size < settings.best_mdl and (not noisy_subsumed):
-                local_delete = set()
-                ignore_this_prog = (pos_covered, neg_covered) in state.success_sets_noise
 
-                if not ignore_this_prog:
-                    s_pos = set.intersection(*(covered_by_pos[ex] for ex, ex_cov in enumerate(pos_covered) if ex_cov == 1))
-                    for prog1 in s_pos:
-                        n1 = coverage_neg[prog1]
-                        if subset(n1, neg_covered):
-                            ignore_this_prog = True
-                            break
+            if not settings.noisy:
+                neg_covered = None
 
-                if not ignore_this_prog and (inconsistent or fp > 0):
-                    s_neg = set.intersection(*(covered_by_neg[ex] for ex, ex_cov in enumerate(neg_covered) if ex_cov == 1))
-                    for prog1 in s_neg:
-                        if subset(coverage_pos[prog1], pos_covered):
-                            size1, tp1, fp1 = scores[prog1]
-                            if size1 == prog_size:
-                                local_delete.add(prog1)
-                                continue
-
-                            if fp == fp1 and (tp - prog_size) < (tp1 - size1):
-                                ignore_this_prog = True
-                                break
-
-                            if tp == tp1 and (fp + prog_size) >= (fp1 + size1):
-                                ignore_this_prog = True
-                                break
-
-                            if (tp - fp - prog_size) <= (tp1 - fp1 - size1):
-                                ignore_this_prog = True
-                                break
-
-                if not inconsistent:
-                    not_covered = tester.pos_examples_ ^ pos_covered
-                    progs_not_subsumed = set.union(*(covered_by_pos[ex] for ex, ex_cov in enumerate(not_covered) if ex_cov == 1))
-                    all_progs = set.union(*(covered_by_pos[ex] for ex, ex_cov in enumerate(tester.pos_examples_) if ex_cov == 1))
-                    s_pos2 = all_progs.difference(progs_not_subsumed)
-                    for prog1 in s_pos2:
-                        size1, tp1, fp1 = scores[prog1]
-                        if size1 >= prog_size:
-                            local_delete.add(prog1)
-
-                for k in local_delete:
-                    assert k in (combiner.saved_progs | to_combine)
-                    if k in combiner.saved_progs:
-                        combiner.saved_progs.remove(k)
-                    elif k in to_combine:
-                        to_combine.remove(k)
-
-                    k_pos, k_neg = coverage_pos[k], coverage_neg[k]
-                    del state.success_sets_noise[(k_pos, k_neg)]
-                    for ex, ex_cov in enumerate(k_pos):
-                        if ex_cov == 1:
-                            covered_by_pos[ex].remove(k)
-                    for ex, ex_cov in enumerate(k_neg):
-                        if ex_cov == 1:
-                            covered_by_neg[ex].remove(k)
-                    del coverage_pos[k]
-                    del coverage_neg[k]
-                    del scores[k]
-                    del cached_prog_size[k]
-                    del prog_lookup[k]
-
-                if not ignore_this_prog:
-                    state.success_sets_noise[(pos_covered, neg_covered)] = (prog, prog_size, fn, fp, tp)
-                    add_to_combiner = True
-                    k = hash(prog)
-
-                    for ex, x in enumerate(pos_covered):
-                        if x == 1:
-                            covered_by_pos[ex].add(k)
-                    for ex, x in enumerate(neg_covered):
-                        if x == 1:
-                            covered_by_neg[ex].add(k)
-
-                    coverage_pos[k] = pos_covered
-                    coverage_neg[k] = neg_covered
-                    cached_prog_size[k] = prog_size
-                    scores[k] = (prog_size, tp, fp)
-                    prog_lookup[k] = prog
-
-                    if fp == 0:
-                        state.success_sets[pos_covered] = prog_size
-                        for p, s in state.success_sets.items():
-                            if p == pos_covered:
-                                continue
-                            state.paired_success_sets[s + prog_size].add(p | pos_covered)
-
-            elif not settings.noisy:
-                if (not inconsistent) and (not subsumed) and (not add_gen) and tp > 0 and (not pruned_more_general):
-                    add_to_combiner = True
-
-                    if not settings.recursion_enabled:
-                        to_delete = []
-                        for pos_covered2, prog_size2 in state.success_sets.items():
-                            if prog_size > prog_size2:
-                                continue
-                            if subset(pos_covered2, pos_covered):
-                                to_delete.append(state.success_sets_aux[pos_covered2])
-
-                        for prog2_hash in to_delete:
-                            pos_covered2 = coverage_pos[prog2_hash]
-                            if prog2_hash in to_combine:
-                                to_combine.remove(prog2_hash)
-                            elif prog2_hash in combiner.saved_progs:
-                                combiner.saved_progs.remove(prog2_hash)
-                            else:
-                                assert False
-                            del state.success_sets[pos_covered2]
-                            del state.success_sets_aux[pos_covered2]
-                            del coverage_pos[prog2_hash]
-                            del coverage_neg[prog2_hash]
-                            del prog_lookup[prog2_hash]
-
-                    k = hash(prog)
-                    state.success_sets[pos_covered] = prog_size
-                    state.success_sets_aux[pos_covered] = k
-                    coverage_pos[k] = pos_covered
-                    coverage_neg[k] = neg_covered
-                    prog_lookup[k] = prog
-
-                    for p, s in state.success_sets.items():
-                        if p == pos_covered:
-                            continue
-                        state.paired_success_sets[s + prog_size].add(p | pos_covered)
-
-                    if settings.min_size is None:
-                        settings.min_size = prog_size
+            add_to_combiner = combine_helper.decide_whether_to_combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention)
 
             if add_to_combiner:
                 to_combine.add(hash(prog))
@@ -599,12 +391,13 @@ def popper(settings, tester, bkcons):
 
             if call_combine:
                 if settings.noisy:
-                    filter_combine_programs(combiner, to_combine)
+                    combine_helper.filter_combine_programs(to_combine)
 
                 with settings.stats.duration('combine'):
-                    is_new_solution_found = combiner.update_best_prog(to_combine)
+                    is_new_solution_found = combine_helper.combiner.update_best_prog(to_combine)
 
-                to_combine = set()
+                # to_combine = set()
+                to_combine.clear()
 
                 new_hypothesis_found = is_new_solution_found is not None
 
@@ -677,8 +470,9 @@ def popper(settings, tester, bkcons):
         if to_combine:
             settings.last_combine_stage = True
             with settings.stats.duration('combine'):
-                is_new_solution_found = combiner.update_best_prog(to_combine)
-            to_combine = set()
+                is_new_solution_found = combine_helper.combiner.update_best_prog(to_combine)
+            # to_combine = set()
+            to_combine.clear()
 
             if is_new_solution_found is not None:
                 new_hypothesis, conf_matrix = is_new_solution_found
