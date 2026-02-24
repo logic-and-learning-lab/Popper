@@ -9,6 +9,17 @@ from bitarray import bitarray, frozenbitarray
 from bitarray.util import ones
 from collections import defaultdict
 from itertools import product
+from typing import NamedTuple
+
+class TestResult(NamedTuple):
+    tp: int
+    fn: int
+    tn: int
+    fp: int
+    size: int
+    pos_covered : frozenbitarray
+    neg_covered : frozenbitarray
+    inconsistent: bool
 
 def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
@@ -83,7 +94,7 @@ class Tester():
     def test_prog_noisy(self, prog, prog_size):
         settings = self.settings
         neg_covered = None
-        skipped, skip_early_neg = False, False
+        covers_too_few_tp, skip_early_neg = False, False
         inconsistent = False
 
         if settings.recursion_enabled or settings.pi_enabled:
@@ -105,10 +116,10 @@ class Tester():
                     skip_early_neg = True
                 inconsistent = neg_covered.any()
             else:
-                skipped = True
+                covers_too_few_tp = True
                 # neg_covered
 
-        return pos_covered, neg_covered, inconsistent, skipped, skip_early_neg
+        return pos_covered, neg_covered, inconsistent, covers_too_few_tp, skip_early_neg
 
 
     def test_prog(self, prog):

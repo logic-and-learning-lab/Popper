@@ -30,7 +30,6 @@ def popper(settings, tester, bkcons):
     generator = Generator(settings, bkcons)
 
     if settings.noisy:
-        min_score = None
         settings.best_prog_score = (0, num_pos, num_neg, 0, 0)
         settings.best_mdl = num_pos
         # save hypotheses for which we pruned spec / gen from a certain size only, once we update the best mdl score, we can prune spec / gen from a better size for some of these
@@ -65,7 +64,6 @@ def popper(settings, tester, bkcons):
             has_invention = settings.pi_enabled and prog_has_invention(prog)
 
             settings.stats.total_programs += 1
-
             if settings.stats.total_programs % 10000 == 0:
                 tester.janus_clear_cache()
 
@@ -82,10 +80,10 @@ def popper(settings, tester, bkcons):
             # TEST
             with settings.stats.duration('test'):
                 if settings.noisy:
-                    pos_covered, neg_covered, inconsistent, skipped, skip_early_neg = tester.test_prog_noisy(prog, prog_size)
+                    pos_covered, neg_covered, inconsistent, too_few_tp, too_many_fp = tester.test_prog_noisy(prog, prog_size)
                 else:
                     pos_covered, inconsistent = tester.test_prog(prog)
-                    skipped, skip_early_neg = False, False
+                    too_few_tp, too_many_fp = False, False
                     neg_covered = None
 
             tp = pos_covered.count(1)
@@ -95,25 +93,17 @@ def popper(settings, tester, bkcons):
             mdl = None
 
             # if non-separable program covers all examples, stop
-            if not inconsistent and tp == num_pos and not skipped:
+            if not inconsistent and tp == num_pos and not too_few_tp:
                 settings.solution = prog
                 settings.best_prog_score = (num_pos, 0, num_neg, 0, prog_size)
-                settings.best_mdl = prog_size
                 return
 
-            if settings.noisy and not skipped:
+            if settings.noisy and not too_few_tp:
                 fp = neg_covered.count(1)
                 tn = num_neg - fp
                 score = (tp, fn, tn, fp, prog_size)
                 mdl = mdl_score(fn, fp, prog_size)
-                if settings.debug:
-                    settings.logger.debug(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} mdl:{mdl}')
-                if not min_score:
-                    min_score = prog_size
-
                 if mdl < settings.best_mdl:
-                    if skip_early_neg:
-                        assert False
                     # HORRIBLE
                     combine_helper.combiner.best_cost = mdl
                     settings.best_prog_score = score
@@ -127,23 +117,23 @@ def popper(settings, tester, bkcons):
             new_cons_, subsumed, noisy_subsumed, add_gen, pruned_more_general = build_constraints(
                 settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer,
                 prog, prog_size, tp, fn, fp, tn, num_pos, num_neg,
-                is_recursive, has_invention, inconsistent, skipped,
-                skip_early_neg, min_coverage, seen_hyp_spec, seen_hyp_gen, mdl, combine_helper, pos_covered, neg_covered)
+                is_recursive, has_invention, inconsistent, too_few_tp,
+                too_many_fp, min_coverage, seen_hyp_spec, seen_hyp_gen, mdl, combine_helper, pos_covered, neg_covered)
             new_cons.extend(new_cons_)
 
             # COMBINE
-            new_hypothesis_result = combine_helper.combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention, size_change)
+            new_hypothesis_result = combine_helper.combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention, size_change)
 
             if new_hypothesis_result is not None:
                 new_hypothesis, conf_matrix = new_hypothesis_result
                 tp3, fn3, tn3, fp3, hypothesis_size = conf_matrix
                 settings.best_prog_score = conf_matrix
                 settings.solution = new_hypothesis
-                best_score = mdl_score(fn3, fp3, hypothesis_size)
-
                 settings.print_incomplete_solution2(new_hypothesis, tp3, fn3, tn3, fp3, hypothesis_size)
 
-                if settings.noisy and best_score < settings.best_mdl:
+                if settings.noisy:
+                    best_score = mdl_score(fn3, fp3, hypothesis_size)
+                    assert(best_score < settings.best_mdl)
                     settings.best_mdl = best_score
                     settings.max_literals = settings.best_mdl - 1
                     new_cons.extend(build_constraints_previous_hypotheses(settings.best_mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
@@ -181,6 +171,9 @@ def popper(settings, tester, bkcons):
                 settings.solution = new_hypothesis
                 best_score = mdl_score(fn4, fp4, hypothesis_size)
                 settings.print_incomplete_solution2(new_hypothesis, tp4, fn4, tn4, fp4, hypothesis_size)
+
+                if settings.noisy:
+                    assert(best_score < settings.best_mdl)
 
                 if (not settings.noisy) and fp4 == 0 and fn4 == 0:
                     settings.solution_found = True
@@ -243,8 +236,8 @@ def explain_none_functional(settings, tester, prog):
 
 def build_constraints(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer,
                 prog, prog_size, tp, fn, fp, tn, num_pos, num_neg,
-                is_recursive, has_invention, inconsistent, skipped,
-                skip_early_neg, min_coverage, seen_hyp_spec, seen_hyp_gen, mdl, combine_helper, pos_covered, neg_covered):
+                is_recursive, has_invention, inconsistent, too_few_tp,
+                too_many_fp, min_coverage, seen_hyp_spec, seen_hyp_gen, mdl, combine_helper, pos_covered, neg_covered):
 
     new_cons = []
     pruned_sub_inconsistent = pruned_more_general = False
@@ -262,7 +255,7 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
                 add_redund1 = True
 
     # if consistent, prune specialisations
-    if not inconsistent and not skipped:
+    if not inconsistent and not too_few_tp:
         add_spec = True
 
     # if covers all positive examples prune generalisations
@@ -333,7 +326,7 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
         if tp <= prog_size:
             add_spec = True
 
-        if not skipped:
+        if not too_few_tp:
             spec_size_ = min([tp, fp + prog_size])
             if spec_size_ <= prog_size:
                 add_spec = True
@@ -342,7 +335,7 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
             elif len(prog) > 1 and spec_size_ < settings.max_literals:
                 spec_size = spec_size_
 
-        if skipped or skip_early_neg:
+        if too_few_tp or too_many_fp:
             gen_size_ = fn + prog_size
             if gen_size_ <= prog_size:
                 add_gen = True
@@ -401,7 +394,7 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
     if add_spec and (not pruned_more_general) and (not add_redund2):
         new_cons.append((Constraint.SPECIALISATION, prog))
 
-    if not skipped:
+    if not too_few_tp:
         if settings.noisy and (not add_spec) and spec_size and (not pruned_more_general):
             if spec_size <= settings.max_literals and ((is_recursive or has_invention or spec_size <= settings.max_body)):
                 new_cons.append((Constraint.SPECIALISATION, prog, spec_size))
