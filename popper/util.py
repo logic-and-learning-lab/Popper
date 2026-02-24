@@ -491,7 +491,9 @@ class Settings:
 
         self.min_size = None
 
-    def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
+    # def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
+    def print_incomplete_solution2(self, prog, size, conf_matrix):
+        tp, fn, tn, fp = conf_matrix
         self.logger.info('*'*20)
         self.logger.info('New best hypothesis:')
         if self.noisy:
@@ -503,7 +505,8 @@ class Settings:
         self.logger.info('*'*20)
 
     def print_prog_score(self, prog, score):
-        tp, fn, tn, fp, size = score
+        tp, fn, tn, fp = score
+        size = calc_prog_size(prog)
         precision = 'n/a'
         if (tp+fp) > 0:
             precision = f'{tp / (tp+fp):0.2f}'

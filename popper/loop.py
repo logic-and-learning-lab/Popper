@@ -30,7 +30,7 @@ def popper(settings, tester, bkcons):
     generator = Generator(settings, bkcons)
 
     if settings.noisy:
-        settings.best_prog_score = (0, num_pos, num_neg, 0, 0)
+        settings.best_prog_score = (0, num_pos, num_neg, 0)
         settings.best_mdl = num_pos
         # save hypotheses for which we pruned spec / gen from a certain size only, once we update the best mdl score, we can prune spec / gen from a better size for some of these
         seen_hyp_spec, seen_hyp_gen = defaultdict(list), defaultdict(list)
@@ -95,22 +95,24 @@ def popper(settings, tester, bkcons):
             # if non-separable program covers all examples, stop
             if not inconsistent and tp == num_pos and not too_few_tp:
                 settings.solution = prog
-                settings.best_prog_score = (num_pos, 0, num_neg, 0, prog_size)
+                settings.best_prog_score = (num_pos, 0, num_neg, 0)
                 return
 
             if settings.noisy and not too_few_tp:
                 fp = neg_covered.count(1)
                 tn = num_neg - fp
-                score = (tp, fn, tn, fp, prog_size)
+                score = (tp, fn, tn, fp)
                 mdl = mdl_score(fn, fp, prog_size)
                 if mdl < settings.best_mdl:
                     # HORRIBLE
                     combine_helper.combiner.best_cost = mdl
                     settings.best_prog_score = score
+                    settings.best_prog_size = prog_size
                     settings.solution = prog
                     settings.best_mdl = mdl
                     settings.max_literals = mdl - 1
-                    settings.print_incomplete_solution2(prog, tp, fn, tn, fp, prog_size)
+                    conf_matrix = (tp, fn, tn, fp)
+                    settings.print_incomplete_solution2(prog, prog_size, conf_matrix)
                     new_cons.extend(build_constraints_previous_hypotheses(mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
 
             # BUILD CONSTRAINTS
@@ -125,11 +127,12 @@ def popper(settings, tester, bkcons):
             new_hypothesis_result = combine_helper.combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention, size_change)
 
             if new_hypothesis_result is not None:
-                new_hypothesis, conf_matrix = new_hypothesis_result
-                tp3, fn3, tn3, fp3, hypothesis_size = conf_matrix
+                new_hypothesis, hypothesis_size, conf_matrix = new_hypothesis_result
+                tp3, fn3, tn3, fp3 = conf_matrix
                 settings.best_prog_score = conf_matrix
+                settings.best_prog_size = hypothesis_size
                 settings.solution = new_hypothesis
-                settings.print_incomplete_solution2(new_hypothesis, tp3, fn3, tn3, fp3, hypothesis_size)
+                settings.print_incomplete_solution2(new_hypothesis, hypothesis_size, conf_matrix)
 
                 if settings.noisy:
                     best_score = mdl_score(fn3, fp3, hypothesis_size)
@@ -165,12 +168,13 @@ def popper(settings, tester, bkcons):
             combine_helper.to_combine.clear()
 
             if is_new_solution_found is not None:
-                new_hypothesis, conf_matrix = is_new_solution_found
-                tp4, fn4, tn4, fp4, hypothesis_size = conf_matrix
+                new_hypothesis, hypothesis_size, conf_matrix = is_new_solution_found
+                tp4, fn4, tn4, fp4 = conf_matrix
                 settings.best_prog_score = conf_matrix
+                settings.best_prog_size = hypothesis_size
                 settings.solution = new_hypothesis
                 best_score = mdl_score(fn4, fp4, hypothesis_size)
-                settings.print_incomplete_solution2(new_hypothesis, tp4, fn4, tn4, fp4, hypothesis_size)
+                settings.print_incomplete_solution2(new_hypothesis, hypothesis_size, conf_matrix)
 
                 if settings.noisy:
                     assert(best_score < settings.best_mdl)

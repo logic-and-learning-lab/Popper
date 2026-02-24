@@ -141,7 +141,8 @@ class Combiner:
         weights = []
 
         if self.settings.best_prog_score:
-            tp_, fn_, tn_, fp_, size_ = self.settings.best_prog_score
+            tp_, fn_, tn_, fp_ = self.settings.best_prog_score
+            size_ = self.settings.best_prog_size
 
         if self.settings.lex:
             soft_lit_groups = []
@@ -305,4 +306,4 @@ class Combiner:
         fn = self.tester.num_pos - tp
         size = calc_prog_size(new_solution)
 
-        return new_solution, (tp, fn, tn, fp, size)
+        return new_solution, size, (tp, fn, tn, fp)

@@ -53,8 +53,10 @@ class CombineHelper:
                 tn2 = self.tester.num_neg
                 fp2 = 0
                 hypothesis_size = calc_prog_size(self.settings.solution)
-                self.settings.best_prog_score = (tp2, fn2, tn2, fp2, hypothesis_size)
-                self.settings.print_incomplete_solution2(self.settings.solution, tp2, fn2, tn2, fp2, hypothesis_size)
+                self.settings.best_prog_score = (tp2, fn2, tn2, fp2)
+                self.settings.best_prog_size = hypothesis_size
+                conf_matrix = (tp2, fn2, tn2, fp2)
+                self.settings.print_incomplete_solution2(self.settings.solution, hypothesis_size, conf_matrix)
 
                 if not self.uncovered.any():
                     self.settings.solution_found = True

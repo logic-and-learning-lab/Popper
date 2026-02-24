@@ -94,7 +94,7 @@ class Tester():
     def test_prog_noisy(self, prog, prog_size):
         settings = self.settings
         neg_covered = None
-        covers_too_few_tp, skip_early_neg = False, False
+        too_few_tp, too_many_fp = False, False
         inconsistent = False
 
         if settings.recursion_enabled or settings.pi_enabled:
@@ -113,13 +113,13 @@ class Tester():
                 test_at_most_k_neg = max([test_at_most_k_neg1, test_at_most_k_neg2])
                 neg_covered = self.test_single_rule_neg_at_most_k(prog, test_at_most_k_neg)
                 if neg_covered.count(1) == test_at_most_k_neg:
-                    skip_early_neg = True
+                    too_many_fp = True
                 inconsistent = neg_covered.any()
             else:
-                covers_too_few_tp = True
+                too_few_tp = True
                 # neg_covered
 
-        return pos_covered, neg_covered, inconsistent, covers_too_few_tp, skip_early_neg
+        return pos_covered, neg_covered, inconsistent, too_few_tp, too_many_fp
 
 
     def test_prog(self, prog):
