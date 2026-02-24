@@ -1110,3 +1110,70 @@ def deduce_non_singletons(settings):
 
     # exit()
     return cons
+
+
+def get_bk_cons(settings, tester):
+    bkcons = []
+
+    with settings.stats.duration('find_pointless_relations'):
+        pointless = settings.pointless = tester.find_pointless_relations()
+
+    for p,a in pointless:
+        if settings.showcons:
+            print('remove pointless relation', p, a)
+        settings.body_preds.remove((p,a))
+
+    # if settings.datalog:
+    settings.logger.debug(f'Loading recalls')
+    with settings.stats.duration('recalls'):
+        recalls = deduce_recalls(settings)
+
+    if recalls == None:
+        settings.datalog = False
+    else:
+        settings.datalog = True
+        if settings.showcons:
+            for x in recalls:
+                print('recall', x)
+        bkcons.extend(recalls)
+
+    if settings.datalog:
+
+        xs = deduce_non_singletons(settings)
+        if settings.showcons:
+            for x in xs:
+                print('singletons', x)
+        bkcons.extend(xs)
+
+
+        type_cons = tuple(deduce_type_cons(settings))
+        if settings.showcons:
+            for x in type_cons:
+                print('type_con', x)
+        bkcons.extend(type_cons)
+
+
+    if not settings.datalog:
+        settings.logger.debug(f'Loading recalls FAILURE')
+    else:
+        import signal
+
+        def handler(signum, frame):
+            raise TimeoutError()
+
+        settings.logger.debug(f'Loading bkcons')
+        xs = []
+        with settings.stats.duration('bkcons'):
+            signal.signal(signal.SIGALRM, handler)
+            signal.alarm(settings.bkcons_timeout)
+            try:
+                xs = deduce_bk_cons(settings, tester)
+            except TimeoutError as _exc:
+                settings.logger.debug(f'Loading bkcons FAILURE')
+            finally:
+                signal.alarm(0)
+        if settings.showcons:
+            for x in sorted(xs):
+                print('BKCON', x)
+        bkcons.extend(xs)
+    return bkcons

@@ -1,3 +1,4 @@
+from functools import cache
 import clingo
 import clingo.script
 import signal
@@ -610,6 +611,74 @@ class Settings:
         pred, args = literal
         return self.recall[pred, tuple(1 if x in seen_vars else 0 for x in args)]
 
+    def has_valid_directions(self, rule):
+        if self.has_directions:
+            return self.has_valid_directions_(rule)
+        return True
+
+    @cache
+    def has_valid_directions_(self,rule):
+        head, body = rule
+
+        if head:
+            head_pred, head_args = head
+            head_inputs = self.literal_inputs[(head_pred, head_args)]
+            if len(head_inputs) == 0:
+                return True
+
+            grounded_variables = head_inputs
+            body_literals = set(body)
+
+            while body_literals:
+                selected_literal = None
+                for literal in body_literals:
+                    pred, args = literal
+                    literal_inputs = self.literal_inputs[(pred, args)]
+                    if not literal_inputs.issubset(grounded_variables):
+                        continue
+                    if pred != head_pred:
+                        selected_literal = literal
+                        break
+                    elif selected_literal is None:
+                        selected_literal = literal
+
+                if selected_literal is None:
+                    return False
+
+                pred, args = selected_literal
+                selected_literal_outputs = self.literal_outputs[(pred, args)]
+                grounded_variables = grounded_variables.union(selected_literal_outputs)
+                body_literals = body_literals.difference({selected_literal})
+            return True
+
+        # headless
+        if all(len(self.literal_inputs[(pred, args)]) == 0 for pred, args in body):
+            return True
+
+        body_literals = set(body)
+        grounded_variables = set()
+
+        while body_literals:
+            selected_literal = None
+            for literal in body_literals:
+                pred, args = literal
+                literal_outputs = self.literal_outputs[(pred, args)]
+                if len(literal_outputs) == len(literal.arguments):
+                    selected_literal = literal
+                    break
+                literal_inputs = self.literal_inputs[(pred, args)]
+                if literal_inputs.issubset(grounded_variables):
+                    selected_literal = literal
+                    break
+
+            if selected_literal is None:
+                return False
+
+            grounded_variables = grounded_variables.union(selected_literal.arguments)
+            body_literals = body_literals.difference({selected_literal})
+
+        return True
+
 # def non_empty_powerset(iterable):
 #     s = tuple(iterable)
 #     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
@@ -806,3 +875,92 @@ def remap_variables(rule):
 
 def format_prog(prog):
     return '\n'.join(format_rule(rule) for rule in prog)
+
+
+# TODO: THIS CHECK IS NOT COMPLETE
+# IT DOES NOT ACCOUNT FOR VARIABLE RENAMING
+# R1 = (None, frozenset({('c3', ('A',)), ('c2', ('A',))}))
+# R2 = (None, frozenset({('c3', ('B',)), ('c2', ('B',), true_value(A,B))}))
+def rule_subsumes(r1, r2):
+    # r1 subsumes r2 if r1 is a subset of r2
+    h1, b1 = r1
+    h2, b2 = r2
+    if h1 != None and h2 == None:
+        return False
+    return b1.issubset(b2)
+
+# P1 subsumes P2 if for every rule R2 in P2 there is a rule R1 in P1 such that R1 subsumes R2
+def theory_subsumes(prog1, prog2):
+    return all(any(rule_subsumes(r1, r2) for r1 in prog1) for r2 in prog2)
+
+def head_connected(rule):
+    head, body = rule
+    head_connected_vars = set(head.arguments)
+    body_literals = set(body)
+
+    while body_literals:
+        connected = []
+        for literal in body_literals:
+            if any (x in head_connected_vars for x in literal.arguments):
+                head_connected_vars.update(literal.arguments)
+                connected.append(literal)
+        if not connected and body_literals:
+            return False
+        body_literals.difference_update(connected)
+    return True
+
+def connected(body):
+    if len(body) == 1:
+        return True
+
+    body = list(body)
+    connected_vars = set(body[0].arguments)
+    body_literals = set(body[1:])
+
+    while body_literals:
+        connected = []
+        for literal in body_literals:
+            if any (x in connected_vars for x in literal.arguments):
+                connected_vars.update(literal.arguments)
+                connected.append(literal)
+        if not connected and body_literals:
+            return False
+        body_literals.difference_update(connected)
+    return True
+
+def non_empty_powerset(iterable):
+    s = tuple(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
+
+
+def generalisations(prog, allow_headless=True, recursive=False):
+
+    if len(prog) == 1:
+        rule = list(prog)[0]
+        head, body = rule
+
+        if allow_headless:
+            if head and len(body) > 0:
+                new_rule = (None, body)
+                new_prog = [new_rule]
+                yield new_prog
+
+        if (recursive and len(body) > 2 and head) or (not recursive and len(body) > 1):
+            body = list(body)
+            for i in range(len(body)):
+                # do not remove recursive literals
+                if recursive and body[i].predicate == head.predicate:
+                    continue
+                new_body = body[:i] + body[i+1:]
+                new_rule = (head, frozenset(new_body))
+                new_prog = [new_rule]
+                yield new_prog
+
+    else:
+        prog = list(prog)
+        for i in range(len(prog)):
+            subrule = prog[i]
+            recursive = rule_is_recursive(subrule)
+            for new_subrule in generalisations([subrule], allow_headless=False, recursive=recursive):
+                new_prog = prog[:i] + new_subrule + prog[i+1:]
+                yield new_prog
