@@ -10,6 +10,8 @@ from . bkcons import get_bk_cons
 from . combine import Combiner
 from . unsat import UnsatCoreFinder
 from . allsat import AllSatCoreFinder
+from . subsume import SubsumeChecker
+from . state import SearchState
 
 
 def load_solver(settings, tester, coverage_pos, coverage_neg, prog_lookup):
@@ -66,23 +68,15 @@ def load_solver(settings, tester, coverage_pos, coverage_neg, prog_lookup):
     return Combiner(settings, tester, coverage_pos, coverage_neg, prog_lookup)
 
 def popper(settings, tester, bkcons):
-    """
-    Closure-style refactor of the former Popper class.
-    Drop the old:
-        def popper(...): Popper(...).run(...)
-        class Popper: ...
-    and replace with THIS single function.
-    """
-
+    state = SearchState()
     unsatcore_finder = UnsatCoreFinder(settings, tester)
     allsatcore_finder = AllSatCoreFinder(settings, tester)
+    subsumer = SubsumeChecker(settings, tester, state)
 
-    # ----------------------------
-    # Former Popper.__init__ state
-    # ----------------------------
-    pruned2 = set()
 
-    tmp = {}
+
+
+
 
 
     # ----------------------------
@@ -90,17 +84,6 @@ def popper(settings, tester, bkcons):
     # ----------------------------
     num_pos, num_neg = tester.num_pos, tester.num_neg
 
-    # pos_covered_bit_array -> prog_size
-    # it only maintains success sets for programs where fp = 0
-    success_sets = {}
-    success_sets_aux = {}
-
-    # (pos_covered_bit_array, neg_covered_bitarray) -> prog_size
-    success_sets_noise = {}
-
-    # pos_covered_bit_array -> prog_size+prog_size2
-    # it only maintains success sets for pairs of programs where fp = 0
-    paired_success_sets = defaultdict(set)
 
     covered_by_pos = defaultdict(set)
     covered_by_neg = defaultdict(set)
@@ -116,14 +99,12 @@ def popper(settings, tester, bkcons):
     scores = {}
 
     to_combine = set()
-    min_size = None
+    # min_size = None
     generator = None
 
     # Only used in noisy mode (initialized later)
     seen_hyp_spec = None
     seen_hyp_gen = None
-
-
 
     def filter_combine_programs(combiner, to_combine_set):
         xs = combiner.saved_progs | to_combine_set
@@ -141,150 +122,6 @@ def popper(settings, tester, bkcons):
                 combiner.saved_progs.remove(prog_hash)
             else:
                 to_combine_set.remove(prog_hash)
-
-    def check_subsumed_by_two(pos_covered, prog_size):
-        for i in range(2, prog_size + 2):
-            if pos_covered in paired_success_sets[i]:
-                return True
-            for x in paired_success_sets[i]:
-                if subset(pos_covered, x):
-                    return True
-        return False
-
-    def check_subsumed_by_two_v2(prog_size, prog2_size, pos_covered, pos_covered2):
-        nonlocal min_size
-        space = prog2_size - prog_size
-
-        if space < min_size:
-            return False
-        uncovered = pos_covered2 & ~pos_covered
-
-        for xs, size in success_sets.items():
-            if size > space:
-                continue
-            if subset(xs, uncovered):
-                return True
-        return False
-
-    def check_covers_too_few(prog_size, pos_covered):
-        k1 = hash((prog_size, pos_covered))
-        if k1 in tmp:
-            v = tmp[k1]
-            if v:
-                return True
-
-        k2 = hash((prog_size, pos_covered, settings.max_literals, settings.search_depth))
-        if k2 in tmp:
-            return tmp[k2]
-
-        v = check_covers_too_few_(prog_size, pos_covered)
-
-        tmp[k1] = v
-        tmp[k2] = v
-        return v
-
-    def check_covers_too_few_(prog_size, pos_covered):
-        nonlocal min_size
-        len_pos_covered = pos_covered.count(1)
-        if len_pos_covered == num_pos:
-            return False
-
-        max_literals = settings.max_literals
-
-        # MAX RULES = 1
-        if (prog_size + min_size) > max_literals:
-            return True
-
-        # MAX RULES = 2
-        if (prog_size + (min_size * 2)) > max_literals:
-            space_remaining = max_literals - prog_size
-            if space_remaining > settings.search_depth:
-                return False
-
-            uncovered = tester.pos_examples_ & ~pos_covered
-            for pos_covered2, size2 in success_sets.items():
-                if size2 > space_remaining:
-                    continue
-                if subset(uncovered, pos_covered2):
-                    return False
-            return True
-
-        # MAX RULES = 3
-        if (prog_size + (min_size * 3)) > max_literals:
-            space_remaining = max_literals - prog_size
-
-            if space_remaining - min_size > settings.search_depth:
-                return False
-
-            uncovered = tester.pos_examples_ & ~pos_covered
-            success_sets_sorted = sorted(((pos_covered_, size) for (pos_covered_, size) in success_sets.items()),
-                                         key=lambda x: x[1])
-            n = len(success_sets_sorted)
-
-            for i in range(n):
-                pos_covered2, size2 = success_sets_sorted[i]
-                if size2 > space_remaining:
-                    break
-                if subset(uncovered, pos_covered2):
-                    return False
-                space_remaining_ = space_remaining - size2
-                if space_remaining_ < min_size:
-                    continue
-                uncovered2 = uncovered & ~pos_covered2
-                for j in range(i + 1, n):
-                    pos_covered3, size3 = success_sets_sorted[j]
-                    if size3 > space_remaining_:
-                        break
-                    if subset(uncovered2, pos_covered3):
-                        return False
-            return True
-
-        # MAX RULES = 4
-        if prog_size + (min_size * 4) > max_literals:
-            space_remaining = max_literals - prog_size
-            space_remaining -= (min_size * 2)
-
-            if space_remaining > settings.search_depth:
-                return False
-
-            missing = tester.pos_examples_ & ~pos_covered
-
-            success_sets_sorted = sorted(((pos_covered_, size) for (pos_covered_, size) in success_sets.items()),
-                                         key=lambda x: x[1])
-            space_remaining = max_literals - prog_size
-
-            n = len(success_sets_sorted)
-
-            for i in range(n):
-                pos_covered2, size2 = success_sets_sorted[i]
-                if size2 > space_remaining:
-                    break
-                if subset(missing, pos_covered2):
-                    return False
-                space_remaining_ = space_remaining - size2
-                if space_remaining_ < min_size:
-                    continue
-                missing2 = missing & ~pos_covered2
-                for j in range(i + 1, n):
-                    pos_covered3, size3 = success_sets_sorted[j]
-                    if size3 > space_remaining_:
-                        break
-                    if subset(missing2, pos_covered3):
-                        return False
-                    space_remaining__ = space_remaining_ - size3
-                    if space_remaining__ < min_size:
-                        continue
-                    missing3 = missing2 & ~pos_covered3
-                    for k in range(j + 1, n):
-                        pos_covered4, size4 = success_sets_sorted[k]
-                        if size4 > space_remaining__:
-                            break
-                        if subset(missing3, pos_covered4):
-                            return False
-            return True
-
-        return False
-
 
     # given a program with more than one rule, look for inconsistent subrules/subprograms
     def explain_inconsistent(prog):
@@ -346,125 +183,6 @@ def popper(settings, tester, bkcons):
 
         return cons
 
-    def subsumed_or_covers_too_few(prog, seen=None):
-        if seen is None:
-            seen = set()
-
-        head, body = list(prog)[0]
-        body = list(body)
-
-        if len(body) == 0:
-            return []
-
-        out = set()
-        head_vars = set(head.arguments)
-
-        for i in range(len(body)):
-            new_body = body[:i] + body[i + 1:]
-            new_body = frozenset(new_body)
-
-            if len(new_body) == 0:
-                continue
-
-            k1 = frozenset(new_body)
-            if k1 in seen:
-                continue
-            seen.add(k1)
-
-            new_rule = (head, new_body)
-            new_prog = frozenset({new_rule})
-
-            # ensure at least one head variable is in the body
-            if not settings.non_datalog_flag and not any(x in head_vars for literal in new_body for x in literal.arguments):
-                continue
-
-            # check whether we have pruned any subset (HORRIBLE CODE)
-            if any(hash(frozenset(x)) in pruned2 for x in non_empty_powerset(new_body)):
-                continue
-
-            if not head_connected(new_rule):
-                xs = subsumed_or_covers_too_few(new_prog, seen)
-                out.update(xs)
-                continue
-
-            if not settings.has_valid_directions(new_rule):
-                xs = subsumed_or_covers_too_few(new_prog, seen)
-                out.update(xs)
-                continue
-
-            if tester.has_redundant_literal(new_prog):
-                xs = subsumed_or_covers_too_few(new_prog, seen)
-                out.update(xs)
-                continue
-
-            new_prog_size = calc_prog_size(new_prog)
-            sub_prog_pos_covered = tester.get_pos_covered(new_prog)
-
-            subsumed = sub_prog_pos_covered in success_sets or any(subset(sub_prog_pos_covered, xs) for xs in success_sets)
-            subsumed_by_two = not subsumed and check_subsumed_by_two(sub_prog_pos_covered, new_prog_size)
-            covers_too_few = not subsumed and not subsumed_by_two and check_covers_too_few(new_prog_size, sub_prog_pos_covered)
-
-            if not (subsumed or subsumed_by_two or covers_too_few):
-                continue
-
-            xs = subsumed_or_covers_too_few(new_prog, seen)
-            if len(xs) > 0:
-                out.update(xs)
-                continue
-
-            for x in find_variants(remap_variables(new_rule)):
-                pruned2.add(hash(x))
-
-            if subsumed:
-                out.add((new_prog, 'SUBSUMED (GENERALISATION)'))
-            elif subsumed_by_two:
-                out.add((new_prog, 'SUBSUMED BY TWO (GENERALISATION)'))
-            elif covers_too_few:
-                out.add((new_prog, 'COVERS TOO FEW (GENERALISATION)'))
-            else:
-                assert False
-
-        return out
-
-    def find_variants(rule):
-        head, body = rule
-        _head_pred, head_args = head
-        head_arity = len(head_args)
-        body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head_arity)
-        subset_vars = range(head_arity, settings.max_vars)
-        for xs in permutations(subset_vars, len(body_vars)):
-            xs = head_args + xs
-            new_body = []
-            for pred, args in body:
-                new_args = tuple(xs[arg] for arg in args)
-                new_literal = (pred, new_args)
-                new_body.append(new_literal)
-            yield frozenset(new_body)
-
-    def needs_datalog(prog):
-        if not settings.has_directions:
-            return False
-        for rule in prog:
-            rec_outputs = set()
-            non_rec_inputs = set()
-            head, body = rule
-            head_pred, _head_args = head
-            for literal in body:
-                pred, args = literal
-                if pred == head_pred:
-                    literal_outputs = settings.literal_outputs[(pred, args)]
-                    rec_outputs.update(literal_outputs)
-                else:
-                    literal_inputs = settings.literal_inputs[(pred, args)]
-                    non_rec_inputs.update(literal_inputs)
-            if any(x in rec_outputs for x in non_rec_inputs):
-                return True
-        return False
-
-
-    # ----------------------------
-    # Former Popper.run body
-    # ----------------------------
     uncovered = ones(num_pos)
 
     if settings.noisy:
@@ -603,11 +321,11 @@ def popper(settings, tester, bkcons):
                         new_cons.extend(cons_)
                         pruned_more_general = len(cons_) > 0
 
-            if tp > 0 and success_sets and (not settings.noisy or (settings.noisy and fp == 0)):
+            if tp > 0 and state.success_sets and (not settings.noisy or (settings.noisy and fp == 0)):
                 with settings.stats.duration('check subsumed and covers_too_few'):
-                    subsumed = pos_covered in success_sets or any(subset(pos_covered, xs) for xs in success_sets)
-                    subsumed_by_two = (not subsumed) and check_subsumed_by_two(pos_covered, prog_size)
-                    covers_too_few = (not subsumed) and (not subsumed_by_two) and (not settings.noisy) and check_covers_too_few(prog_size, pos_covered)
+                    subsumed = pos_covered in state.success_sets or any(subset(pos_covered, xs) for xs in state.success_sets)
+                    subsumed_by_two = (not subsumed) and subsumer.check_subsumed_by_two(pos_covered, prog_size)
+                    covers_too_few = (not subsumed) and (not subsumed_by_two) and (not settings.noisy) and subsumer.check_covers_too_few(prog_size, pos_covered)
 
                 if subsumed or subsumed_by_two or covers_too_few:
                     add_spec = True
@@ -616,7 +334,7 @@ def popper(settings, tester, bkcons):
             if (not settings.noisy) and (not has_invention) and (not is_recursive) and (subsumed or subsumed_by_two or covers_too_few):
                 subsumed_progs = []
                 with settings.stats.duration('find most general subsumed/covers_too_few'):
-                    subsumed_progs = subsumed_or_covers_too_few(prog, seen=set())
+                    subsumed_progs = subsumer.subsumed_or_covers_too_few(prog, seen=set())
                 pruned_more_general = len(subsumed_progs) > 0
 
                 if settings.showcons and not pruned_more_general:
@@ -725,7 +443,7 @@ def popper(settings, tester, bkcons):
 
             if settings.noisy and (not skipped) and (not skip_early_neg) and (not is_recursive) and (not has_invention) and tp > prog_size + fp and fp + prog_size < settings.best_mdl and (not noisy_subsumed):
                 local_delete = set()
-                ignore_this_prog = (pos_covered, neg_covered) in success_sets_noise
+                ignore_this_prog = (pos_covered, neg_covered) in state.success_sets_noise
 
                 if not ignore_this_prog:
                     s_pos = set.intersection(*(covered_by_pos[ex] for ex, ex_cov in enumerate(pos_covered) if ex_cov == 1))
@@ -774,7 +492,7 @@ def popper(settings, tester, bkcons):
                         to_combine.remove(k)
 
                     k_pos, k_neg = coverage_pos[k], coverage_neg[k]
-                    del success_sets_noise[(k_pos, k_neg)]
+                    del state.success_sets_noise[(k_pos, k_neg)]
                     for ex, ex_cov in enumerate(k_pos):
                         if ex_cov == 1:
                             covered_by_pos[ex].remove(k)
@@ -788,7 +506,7 @@ def popper(settings, tester, bkcons):
                     del prog_lookup[k]
 
                 if not ignore_this_prog:
-                    success_sets_noise[(pos_covered, neg_covered)] = (prog, prog_size, fn, fp, tp)
+                    state.success_sets_noise[(pos_covered, neg_covered)] = (prog, prog_size, fn, fp, tp)
                     add_to_combiner = True
                     k = hash(prog)
 
@@ -806,11 +524,11 @@ def popper(settings, tester, bkcons):
                     prog_lookup[k] = prog
 
                     if fp == 0:
-                        success_sets[pos_covered] = prog_size
-                        for p, s in success_sets.items():
+                        state.success_sets[pos_covered] = prog_size
+                        for p, s in state.success_sets.items():
                             if p == pos_covered:
                                 continue
-                            paired_success_sets[s + prog_size].add(p | pos_covered)
+                            state.paired_success_sets[s + prog_size].add(p | pos_covered)
 
             elif not settings.noisy:
                 if (not inconsistent) and (not subsumed) and (not add_gen) and tp > 0 and (not pruned_more_general):
@@ -818,11 +536,11 @@ def popper(settings, tester, bkcons):
 
                     if not settings.recursion_enabled:
                         to_delete = []
-                        for pos_covered2, prog_size2 in success_sets.items():
+                        for pos_covered2, prog_size2 in state.success_sets.items():
                             if prog_size > prog_size2:
                                 continue
                             if subset(pos_covered2, pos_covered):
-                                to_delete.append(success_sets_aux[pos_covered2])
+                                to_delete.append(state.success_sets_aux[pos_covered2])
 
                         for prog2_hash in to_delete:
                             pos_covered2 = coverage_pos[prog2_hash]
@@ -832,26 +550,26 @@ def popper(settings, tester, bkcons):
                                 combiner.saved_progs.remove(prog2_hash)
                             else:
                                 assert False
-                            del success_sets[pos_covered2]
-                            del success_sets_aux[pos_covered2]
+                            del state.success_sets[pos_covered2]
+                            del state.success_sets_aux[pos_covered2]
                             del coverage_pos[prog2_hash]
                             del coverage_neg[prog2_hash]
                             del prog_lookup[prog2_hash]
 
                     k = hash(prog)
-                    success_sets[pos_covered] = prog_size
-                    success_sets_aux[pos_covered] = k
+                    state.success_sets[pos_covered] = prog_size
+                    state.success_sets_aux[pos_covered] = k
                     coverage_pos[k] = pos_covered
                     coverage_neg[k] = neg_covered
                     prog_lookup[k] = prog
 
-                    for p, s in success_sets.items():
+                    for p, s in state.success_sets.items():
                         if p == pos_covered:
                             continue
-                        paired_success_sets[s + prog_size].add(p | pos_covered)
+                        state.paired_success_sets[s + prog_size].add(p | pos_covered)
 
-                    if min_size is None:
-                        min_size = prog_size
+                    if settings.min_size is None:
+                        settings.min_size = prog_size
 
             if add_to_combiner:
                 to_combine.add(hash(prog))
@@ -1002,16 +720,6 @@ def learn_solution(settings):
     timeout(settings, popper, (settings, tester, bkcons), timeout_duration=int(settings.timeout-time_so_far),)
     return settings.solution, settings.best_prog_score, settings.stats
 
-
-
-def tmp(prog):
-    for rule in prog:
-        head, body = rule
-        _head_pred, head_args = head
-        body_args = set(x for _pred, args in body for x in args)
-        if any(x not in body_args for x in head_args):
-            return False
-    return True
 
 def explain_none_functional(settings, tester, prog):
     new_cons = []

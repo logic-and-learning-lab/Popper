@@ -150,10 +150,30 @@ class UnsatCoreFinder:
         if not has_recursion:
             return False
 
-        if needs_datalog(prog) and not tmp(prog):
+        if self.needs_datalog(prog) and not tmp(prog):
             return False
 
         return True
+
+    def needs_datalog(self, prog):
+        if not self.settings.has_directions:
+            return False
+        for rule in prog:
+            rec_outputs = set()
+            non_rec_inputs = set()
+            head, body = rule
+            head_pred, _head_args = head
+            for literal in body:
+                pred, args = literal
+                if pred == head_pred:
+                    literal_outputs = self.settings.literal_outputs[(pred, args)]
+                    rec_outputs.update(literal_outputs)
+                else:
+                    literal_inputs = self.settings.literal_inputs[(pred, args)]
+                    non_rec_inputs.update(literal_inputs)
+            if any(x in rec_outputs for x in non_rec_inputs):
+                return True
+        return False
 
 def seen_more_general_unsat(prog, unsat):
     return any(theory_subsumes(seen, prog) for seen in unsat)
@@ -172,3 +192,13 @@ def build_test_prog(subprog):
         rule = head_literal, frozenset(body_literals)
         test_prog.append(rule)
     return frozenset(test_prog)
+
+
+def tmp(prog):
+    for rule in prog:
+        head, body = rule
+        _head_pred, head_args = head
+        body_args = set(x for _pred, args in body for x in args)
+        if any(x not in body_args for x in head_args):
+            return False
+    return True

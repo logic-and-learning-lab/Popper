@@ -488,6 +488,9 @@ class Settings:
 
         self.single_solve = not (self.recursion_enabled or self.pi_enabled)
 
+
+        self.min_size = None
+
     def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
         self.logger.info('*'*20)
         self.logger.info('New best hypothesis:')
