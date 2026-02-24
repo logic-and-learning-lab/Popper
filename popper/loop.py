@@ -73,12 +73,6 @@ def popper(settings, tester, bkcons):
     allsatcore_finder = AllSatCoreFinder(settings, tester)
     subsumer = SubsumeChecker(settings, tester, state)
 
-
-
-
-
-
-
     # ----------------------------
     # Run-time state (former self.* created inside run)
     # ----------------------------
