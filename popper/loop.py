@@ -21,7 +21,6 @@ def popper(settings, tester, bkcons):
     combine_helper = CombineHelper(settings, tester, state)
 
     # generator that builds programs
-    # with settings.stats.duration('init'):
     if settings.single_solve:
         from .gen2 import Generator
     elif settings.max_rules == 2 and not settings.pi_enabled:
@@ -30,19 +29,16 @@ def popper(settings, tester, bkcons):
         from .generate import Generator
     generator = Generator(settings, bkcons)
 
-    seen_hyp_spec = None
-    seen_hyp_gen = None
-
     if settings.noisy:
         min_score = None
         settings.best_prog_score = (0, num_pos, num_neg, 0, 0)
         settings.best_mdl = num_pos
-        # save hypotheses for which we pruned spec / gen from a certain size only
-        # once we update the best mdl score, we can prune spec / gen from a better size for some of these
+        # save hypotheses for which we pruned spec / gen from a certain size only, once we update the best mdl score, we can prune spec / gen from a better size for some of these
         seen_hyp_spec, seen_hyp_gen = defaultdict(list), defaultdict(list)
         settings.max_size = min((1 + settings.max_body) * settings.max_rules, num_pos)
     else:
         settings.max_size = (1 + settings.max_body) * settings.max_rules
+        seen_hyp_spec = seen_hyp_gen = None, None
 
     last_size = None
     min_coverage = settings.min_coverage = 1
@@ -62,7 +58,6 @@ def popper(settings, tester, bkcons):
                 prog = generator.get_prog()
                 if prog is None:
                     break
-
 
             new_cons = []
             prog_size = calc_prog_size(prog)
@@ -134,15 +129,12 @@ def popper(settings, tester, bkcons):
                 prog, prog_size, tp, fn, fp, tn, num_pos, num_neg,
                 is_recursive, has_invention, inconsistent, skipped,
                 skip_early_neg, min_coverage, seen_hyp_spec, seen_hyp_gen, mdl, combine_helper, pos_covered, neg_covered)
-
             new_cons.extend(new_cons_)
 
             # COMBINE
             new_hypothesis_result = combine_helper.combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention, size_change)
 
-            if new_hypothesis_result is None:
-                pass
-            else:
+            if new_hypothesis_result is not None:
                 new_hypothesis, conf_matrix = new_hypothesis_result
                 tp3, fn3, tn3, fp3, hypothesis_size = conf_matrix
                 settings.best_prog_score = conf_matrix
