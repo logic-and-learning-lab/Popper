@@ -26,6 +26,65 @@ class CombineHelper:
         self.combiner = self.load_solver()
         self.to_combine = to_combine
 
+        self.uncovered = ones(self.tester.num_pos)
+
+
+    def combine(self, prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed,add_gen, tp, fp, fn, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention):
+
+
+        add_to_combiner = self.decide_whether_to_combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention)
+
+        if add_to_combiner:
+            self.to_combine.add(hash(prog))
+
+        call_combine = len(self.to_combine) > 0
+        call_combine = call_combine and (self.settings.noisy or self.settings.solution_found)
+        call_combine = call_combine and (len(self.to_combine) >= self.settings.batch_size or size_change)
+
+        if add_to_combiner and (not self.settings.noisy) and (not self.settings.solution_found) and (not self.settings.recursion_enabled):
+            if any_and(self.uncovered, pos_covered):
+                if self.settings.solution:
+                    self.settings.solution = self.settings.solution | prog
+                else:
+                    self.settings.solution = prog
+                self.uncovered = self.uncovered & ~pos_covered
+                tp2 = self.tester.num_pos - self.uncovered.count(1)
+                fn2 = self.uncovered.count(1)
+                tn2 = self.tester.num_neg
+                fp2 = 0
+                hypothesis_size = calc_prog_size(self.settings.solution)
+                self.settings.best_prog_score = (tp2, fn2, tn2, fp2, hypothesis_size)
+                self.settings.print_incomplete_solution2(self.settings.solution, tp2, fn2, tn2, fp2, hypothesis_size)
+
+                if not self.uncovered.any():
+                    self.settings.solution_found = True
+                    self.settings.max_literals = hypothesis_size - 1
+                    min_coverage = self.settings.min_coverage = 2
+
+                    for i in range(self.settings.max_literals + 1, self.settings.max_size + 1):
+                        print('MOO_generator.prune_size', i)
+                        # generator.prune_size(i)
+
+                call_combine = not self.uncovered.any()
+
+        if call_combine:
+            if self.settings.noisy:
+                self.filter_combine_programs(self.to_combine)
+
+            with self.settings.stats.duration('combine'):
+                is_new_solution_found = self.combiner.update_best_prog(self.to_combine)
+
+            # to_combine = set()
+            self.to_combine.clear()
+
+            return is_new_solution_found
+
+            # new_hypothesis_found = is_new_solution_found is not None
+
+            # if new_hypothesis_found:
+            #     new_hypothesis, conf_matrix = is_new_solution_found
+
+
     def decide_whether_to_combine(self, prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed,add_gen, tp, fp, fn, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention):
         add_to_combiner = False
         if self.settings.noisy and (not skipped) and (not skip_early_neg) and (not is_recursive) and (not has_invention) and tp > prog_size + fp and fp + prog_size < self.settings.best_mdl and (not noisy_subsumed):

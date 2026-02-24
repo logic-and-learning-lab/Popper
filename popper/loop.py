@@ -104,8 +104,6 @@ def popper(settings, tester, bkcons):
             print(x)
         return cons
 
-    uncovered = ones(num_pos)
-
     if settings.noisy:
         min_score = None
         saved_scores = dict()
@@ -114,15 +112,15 @@ def popper(settings, tester, bkcons):
         # save hypotheses for which we pruned spec / gen from a certain size only
         # once we update the best mdl score, we can prune spec / gen from a better size for some of these
         seen_hyp_spec, seen_hyp_gen = defaultdict(list), defaultdict(list)
-        max_size = min((1 + settings.max_body) * settings.max_rules, num_pos)
+        settings.max_size = min((1 + settings.max_body) * settings.max_rules, num_pos)
     else:
-        max_size = (1 + settings.max_body) * settings.max_rules
+        settings.max_size = (1 + settings.max_body) * settings.max_rules
 
 
     last_size = None
     min_coverage = settings.min_coverage = 1
 
-    for size in range(2, max_size + 1):
+    for size in range(2, settings.max_size + 1):
         if size > settings.max_literals:
             continue
 
@@ -350,85 +348,44 @@ def popper(settings, tester, bkcons):
                 if tp < min_coverage:
                     add_spec = True
 
-
-
+            # TMPHACK
             if not settings.noisy:
                 neg_covered = None
 
-            add_to_combiner = combine_helper.decide_whether_to_combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention)
 
-            if add_to_combiner:
-                to_combine.add(hash(prog))
+            # COMBINE
+            new_hypothesis_result = combine_helper.combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed,add_gen, tp, fp, fn, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention)
 
-            call_combine = len(to_combine) > 0
-            call_combine = call_combine and (settings.noisy or settings.solution_found)
-            call_combine = call_combine and (len(to_combine) >= settings.batch_size or size_change)
+            if new_hypothesis_result is None:
+                pass
+            else:
+                new_hypothesis, conf_matrix = new_hypothesis_result
+                tp3, fn3, tn3, fp3, hypothesis_size = conf_matrix
+                settings.best_prog_score = conf_matrix
+                settings.solution = new_hypothesis
+                best_score = mdl_score(fn3, fp3, hypothesis_size)
 
-            if add_to_combiner and (not settings.noisy) and (not settings.solution_found) and (not settings.recursion_enabled):
-                if any_and(uncovered, pos_covered):
-                    if settings.solution:
-                        settings.solution = settings.solution | prog
-                    else:
-                        settings.solution = prog
-                    uncovered = uncovered & ~pos_covered
-                    tp2 = num_pos - uncovered.count(1)
-                    fn2 = uncovered.count(1)
-                    tn2 = num_neg
-                    fp2 = 0
-                    hypothesis_size = calc_prog_size(settings.solution)
-                    settings.best_prog_score = (tp2, fn2, tn2, fp2, hypothesis_size)
-                    settings.print_incomplete_solution2(settings.solution, tp2, fn2, tn2, fp2, hypothesis_size)
+                settings.print_incomplete_solution2(new_hypothesis, tp3, fn3, tn3, fp3, hypothesis_size)
 
-                    if not uncovered.any():
-                        settings.solution_found = True
-                        settings.max_literals = hypothesis_size - 1
-                        min_coverage = settings.min_coverage = 2
-
-                        for i in range(settings.max_literals + 1, max_size + 1):
+                if settings.noisy and best_score < settings.best_mdl:
+                    settings.best_mdl = best_score
+                    settings.max_literals = settings.best_mdl - 1
+                    new_cons.extend(build_constraints_previous_hypotheses(settings.best_mdl, prog_size))
+                    if settings.single_solve:
+                        for i in range(best_score, settings.max_size + 1):
                             generator.prune_size(i)
 
-                    call_combine = not uncovered.any()
+                if (not settings.noisy) and fp3 == 0 and fn3 == 0:
+                    settings.solution_found = True
+                    settings.max_literals = hypothesis_size - 1
+                    min_coverage = settings.min_coverage = 2
 
-            if call_combine:
-                if settings.noisy:
-                    combine_helper.filter_combine_programs(to_combine)
+                    if size >= settings.max_literals:
+                        print('POOPER')
+                        return
 
-                with settings.stats.duration('combine'):
-                    is_new_solution_found = combine_helper.combiner.update_best_prog(to_combine)
-
-                # to_combine = set()
-                to_combine.clear()
-
-                new_hypothesis_found = is_new_solution_found is not None
-
-                if new_hypothesis_found:
-                    new_hypothesis, conf_matrix = is_new_solution_found
-                    tp3, fn3, tn3, fp3, hypothesis_size = conf_matrix
-                    settings.best_prog_score = conf_matrix
-                    settings.solution = new_hypothesis
-                    best_score = mdl_score(fn3, fp3, hypothesis_size)
-
-                    settings.print_incomplete_solution2(new_hypothesis, tp3, fn3, tn3, fp3, hypothesis_size)
-
-                    if settings.noisy and best_score < settings.best_mdl:
-                        settings.best_mdl = best_score
-                        settings.max_literals = settings.best_mdl - 1
-                        new_cons.extend(build_constraints_previous_hypotheses(settings.best_mdl, prog_size))
-                        if settings.single_solve:
-                            for i in range(best_score, max_size + 1):
-                                generator.prune_size(i)
-
-                    if (not settings.noisy) and fp3 == 0 and fn3 == 0:
-                        settings.solution_found = True
-                        settings.max_literals = hypothesis_size - 1
-                        min_coverage = settings.min_coverage = 2
-
-                        if size >= settings.max_literals:
-                            print('POOPER')
-                            return
-
-                        for i in range(hypothesis_size, max_size + 1):
-                            generator.prune_size(i)
+                    for i in range(hypothesis_size, settings.max_size + 1):
+                        generator.prune_size(i)
 
             # BUILD CONSTRAINTS
             if add_spec and (not pruned_more_general) and (not add_redund2):
