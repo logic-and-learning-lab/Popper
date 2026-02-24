@@ -8,7 +8,7 @@ from . combine import Combiner
 
 class CombineHelper:
 
-    def __init__(self, settings, tester, state, to_combine):
+    def __init__(self, settings, tester, state):
         self.settings = settings
         self.tester = tester
         self.state = state
@@ -24,7 +24,7 @@ class CombineHelper:
         self.scores = {}
 
         self.combiner = self.load_solver()
-        self.to_combine = to_combine
+        self.to_combine = set()
 
         self.uncovered = ones(self.tester.num_pos)
 
