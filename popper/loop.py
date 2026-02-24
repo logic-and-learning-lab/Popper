@@ -354,7 +354,7 @@ def popper(settings, tester, bkcons):
 
 
             # COMBINE
-            new_hypothesis_result = combine_helper.combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed,add_gen, tp, fp, fn, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention)
+            new_hypothesis_result = combine_helper.combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed,add_gen, tp, fp, fn, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention, size_change)
 
             if new_hypothesis_result is None:
                 pass
