@@ -108,7 +108,7 @@ def popper(settings, tester, bkcons):
         # BUILD CONSTRAINTS
         new_cons_, subsumed, noisy_subsumed, add_gen, pruned_more_general = build_constraints(
             settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer,
-            prog, prog_size, num_pos, num_neg, is_recursive, has_invention, too_few_tp,
+            prog, prog_size, is_recursive, has_invention, too_few_tp,
             too_many_fp, seen_hyp_spec, seen_hyp_gen, combine_helper, test_result)
         new_cons.extend(new_cons_)
 
@@ -197,12 +197,13 @@ def explain_none_functional(settings, tester, prog):
     return new_cons
 
 def build_constraints(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer,
-                prog, prog_size, num_pos, num_neg, is_recursive, has_invention, too_few_tp, too_many_fp, seen_hyp_spec, seen_hyp_gen, combine_helper, test_result):
+                prog, prog_size, is_recursive, has_invention, too_few_tp, too_many_fp, seen_hyp_spec, seen_hyp_gen, combine_helper, test_result):
 
     min_coverage = settings.min_coverage
     pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
     inconsistent = test_result.inconsistent
     mdl = test_result.mdl
+    num_pos, num_neg = tester.num_pos, tester.num_neg
     tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
 
     new_cons = []
