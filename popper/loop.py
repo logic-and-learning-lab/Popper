@@ -28,8 +28,9 @@ def popper(settings, tester, bkcons):
     allsatcore_finder = AllSatCoreFinder(settings, tester)
     subsumer = SubsumeChecker(settings, tester, state)
     num_pos, num_neg = tester.num_pos, tester.num_neg
-    combine_helper = CombineHelper(settings, tester, state)
+
     generator = load_generator(settings, bkcons)
+    combine_helper = CombineHelper(settings, tester, state, generator)
 
     settings.min_coverage = 1
     settings.max_size = (1 + settings.max_body) * settings.max_rules
@@ -134,7 +135,9 @@ def popper(settings, tester, bkcons):
                 settings.max_literals = settings.best_mdl - 1
                 new_cons.extend(build_constraints_previous_hypotheses(settings.best_mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
                 if settings.single_solve:
-                    for i in range(best_score, settings.max_size + 1):
+                    # for i in range(best_score, settings.max_size + 1):
+                        # generator.prune_size(i)
+                    for i in range(settings.max_literals+1, 1000):
                         generator.prune_size(i)
 
             if (not settings.noisy) and fp3 == 0 and fn3 == 0:
@@ -146,8 +149,11 @@ def popper(settings, tester, bkcons):
                     print('POOPER')
                     return
 
-                for i in range(hypothesis_size, settings.max_size + 1):
+                for i in range(settings.max_literals+1, 1000):
                     generator.prune_size(i)
+
+                # for i in range(hypothesis_size, settings.max_size + 1):
+                    # generator.prune_size(i)
 
         # CONSTRAIN
         with settings.stats.duration('constrain'):

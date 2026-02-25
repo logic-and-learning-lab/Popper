@@ -8,10 +8,11 @@ from . combine import Combiner
 
 class CombineHelper:
 
-    def __init__(self, settings, tester, state):
+    def __init__(self, settings, tester, state, generator):
         self.settings = settings
         self.tester = tester
         self.state = state
+        self.generator = generator
         self.covered_by_pos = defaultdict(set)
         self.covered_by_neg = defaultdict(set)
 
@@ -68,8 +69,11 @@ class CombineHelper:
                     self.settings.max_literals = hypothesis_size - 1
                     min_coverage = self.settings.min_coverage = 2
 
-                    for i in range(self.settings.max_literals + 1, self.settings.max_size + 1):
-                        print('MOO_generator.prune_size', i)
+                    for i in range(self.settings.max_literals+1, 1000):
+                        self.generator.prune_size(i)
+
+                    # for i in range(self.settings.max_literals + 1, self.settings.max_size + 1):
+                        # print('MOO_generator.prune_size', i)
                         # generator.prune_size(i)
 
                 call_combine = not self.uncovered.any()
