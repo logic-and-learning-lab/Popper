@@ -88,16 +88,18 @@ def popper(settings, tester, bkcons):
         # TEST
         with settings.stats.duration('test'):
             if settings.noisy:
-                pos_covered, neg_covered, inconsistent, too_few_tp, too_many_fp = tester.test_prog_noisy(prog, prog_size)
+                test_result, too_few_tp, too_many_fp = tester.test_prog_noisy(prog, prog_size)
             else:
-                pos_covered, inconsistent = tester.test_prog(prog)
+                test_result = tester.test_prog(prog)
                 too_few_tp, too_many_fp = False, False
-                neg_covered = None
 
-        tp = pos_covered.count(1)
-        fn = num_pos - tp
-        fp = None
-        tn = None
+        pos_covered = test_result.pos_covered
+        neg_covered = test_result.neg_covered
+        inconsistent = test_result.inconsistent
+        tp = test_result.tp
+        fn = test_result.fn
+        fp = test_result.fp
+        tn = test_result.tn
         mdl = None
 
         # if non-separable program covers all examples, stop
@@ -111,10 +113,8 @@ def popper(settings, tester, bkcons):
         if settings.noisy and not too_few_tp:
             fp = neg_covered.count(1)
             tn = num_neg - fp
-            score = (tp, fn, tn, fp)
             mdl = mdl_score(fn, fp, prog_size)
             if mdl < settings.best_mdl:
-                # HORRIBLE
                 conf_matrix = (tp, fn, tn, fp)
                 update_best_hypothesis(settings, state, prog, prog_size, conf_matrix, combine_helper)
                 new_cons.extend(build_constraints_previous_hypotheses(mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
@@ -130,7 +130,7 @@ def popper(settings, tester, bkcons):
         # COMBINE
         new_hypothesis_result = combine_helper.combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention, size_change)
 
-        # IF NEW BETTER HYPOTHESIS
+        # IF NEW HYPOTHESIS
         if new_hypothesis_result is not None:
             new_hypothesis, hypothesis_size, conf_matrix = new_hypothesis_result
             update_best_hypothesis(settings, state, new_hypothesis, hypothesis_size, conf_matrix, combine_helper)

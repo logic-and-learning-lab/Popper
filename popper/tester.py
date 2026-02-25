@@ -11,12 +11,12 @@ from collections import defaultdict
 from itertools import product
 from typing import NamedTuple
 
+# should be immutable
 class TestResult(NamedTuple):
     tp: int
     fn: int
     tn: int
     fp: int
-    size: int
     pos_covered : frozenbitarray
     neg_covered : frozenbitarray
     inconsistent: bool
@@ -119,7 +119,12 @@ class Tester():
                 too_few_tp = True
                 # neg_covered
 
-        return pos_covered, neg_covered, inconsistent, too_few_tp, too_many_fp
+        # return pos_covered, neg_covered, inconsistent, too_few_tp, too_many_fp
+
+
+
+        tp = pos_covered.count(1)
+        return TestResult(tp=tp, fn=self.num_pos-tp, tn=None, fp=None, pos_covered=pos_covered, neg_covered=neg_covered, inconsistent=inconsistent), too_few_tp, too_many_fp
 
 
     def test_prog(self, prog):
@@ -165,7 +170,29 @@ class Tester():
                 inconsistent = bool_query(q)
 
         self.cached_pos_covered[hash(prog)] = pos_covered
-        return pos_covered, inconsistent
+        # return pos_covered, inconsistent
+        tp = pos_covered.count(1)
+        return TestResult(tp=tp, fn=self.num_pos-tp, tn=None, fp=None, pos_covered=pos_covered, neg_covered=None, inconsistent=inconsistent)
+
+
+        # too_few_tp, too_many_fp = False, False
+        # neg_covered = None
+
+
+        # fn = num_pos - tp
+        # fp = None
+        # tn = None
+        # mdl = None
+
+        # class TestResult(NamedTuple):
+        # tp: int
+        # fn: int
+        # tn: int
+        # fp: int
+        # size: int
+        # pos_covered : frozenbitarray
+        # neg_covered : frozenbitarray
+        # inconsistent: bool
 
     def test_prog_all(self, prog):
 
