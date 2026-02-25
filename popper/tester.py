@@ -4,7 +4,7 @@ from importlib import resources
 from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
-from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal, Literal
+from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal, Literal, mdl_score
 from bitarray import bitarray, frozenbitarray
 from bitarray.util import ones
 from collections import defaultdict
@@ -20,6 +20,7 @@ class TestResult(NamedTuple):
     pos_covered : frozenbitarray
     neg_covered : frozenbitarray
     inconsistent: bool
+    mdl: int = None
 
 def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
@@ -121,11 +122,16 @@ class Tester():
 
         # return pos_covered, neg_covered, inconsistent, too_few_tp, too_many_fp
 
-
-
         tp = pos_covered.count(1)
-        return TestResult(tp=tp, fn=self.num_pos-tp, tn=None, fp=None, pos_covered=pos_covered, neg_covered=neg_covered, inconsistent=inconsistent), too_few_tp, too_many_fp
+        fn=self.num_pos-tp
 
+        if too_few_tp:
+            return TestResult(tp=tp, fn=fn, tn=None, fp=None, pos_covered=pos_covered, neg_covered=neg_covered, inconsistent=inconsistent), too_few_tp, too_many_fp
+        else:
+            fp = neg_covered.count(1)
+            tn = self.num_neg - fp
+            mdl = mdl_score(fn, fp, prog_size)
+            return TestResult(tp=tp, fn=fn, tn=tn, fp=fp, pos_covered=pos_covered, neg_covered=neg_covered, inconsistent=inconsistent, mdl=mdl), too_few_tp, too_many_fp
 
     def test_prog(self, prog):
 

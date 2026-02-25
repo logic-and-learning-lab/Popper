@@ -100,7 +100,7 @@ def popper(settings, tester, bkcons):
         fn = test_result.fn
         fp = test_result.fp
         tn = test_result.tn
-        mdl = None
+        mdl = test_result.mdl
 
         # if non-separable program covers all examples, stop
         if not inconsistent and tp == num_pos and not too_few_tp:
@@ -111,9 +111,6 @@ def popper(settings, tester, bkcons):
         new_cons = []
 
         if settings.noisy and not too_few_tp:
-            fp = neg_covered.count(1)
-            tn = num_neg - fp
-            mdl = mdl_score(fn, fp, prog_size)
             if mdl < settings.best_mdl:
                 conf_matrix = (tp, fn, tn, fp)
                 update_best_hypothesis(settings, state, prog, prog_size, conf_matrix, combine_helper)
