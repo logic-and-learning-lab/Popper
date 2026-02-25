@@ -13,7 +13,6 @@ from . state import SearchState
 from . combine_helper import CombineHelper
 
 def load_generator(settings, bkcons):
-    # generator that builds programs
     if settings.single_solve:
         from .gen2 import Generator
     elif settings.max_rules == 2 and not settings.pi_enabled:
@@ -26,14 +25,19 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
     settings.best_prog_score = conf_matrix
     settings.best_prog_size = hypothesis_size
     settings.solution = hypothesis
+    settings.print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
+    tp, fn, tn, fp = conf_matrix
 
     if settings.noisy:
-        (tp, fn, tn, fp) = conf_matrix
         mdl = mdl_score(fn, fp, hypothesis_size)
         # DROP!!!
         combine_helper.combiner.best_cost = mdl
         settings.best_mdl = mdl
         settings.max_literals = mdl - 1
+    elif fp == 0 and fn == 0:
+        settings.solution_found = True
+        settings.max_literals = hypothesis_size - 1
+        settings.min_coverage = 2
 
 def popper(settings, tester, bkcons):
     state = SearchState()
@@ -41,7 +45,6 @@ def popper(settings, tester, bkcons):
     allsatcore_finder = AllSatCoreFinder(settings, tester)
     subsumer = SubsumeChecker(settings, tester, state)
     num_pos, num_neg = tester.num_pos, tester.num_neg
-
     generator = load_generator(settings, bkcons)
     combine_helper = CombineHelper(settings, tester, state, generator)
 
@@ -114,14 +117,6 @@ def popper(settings, tester, bkcons):
                 # HORRIBLE
                 conf_matrix = (tp, fn, tn, fp)
                 update_best_hypothesis(settings, state, prog, prog_size, conf_matrix, combine_helper)
-                # combine_helper.combiner.best_cost = mdl
-                # settings.best_prog_score = score
-                # settings.best_prog_size = prog_size
-                # settings.solution = prog
-                # settings.best_mdl = mdl
-                # settings.max_literals = mdl - 1
-
-                # settings.print_incomplete_solution2(prog, prog_size, conf_matrix)
                 new_cons.extend(build_constraints_previous_hypotheses(mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
 
         # BUILD CONSTRAINTS
@@ -135,41 +130,18 @@ def popper(settings, tester, bkcons):
         # COMBINE
         new_hypothesis_result = combine_helper.combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention, size_change)
 
+        # IF NEW BETTER HYPOTHESIS
         if new_hypothesis_result is not None:
             new_hypothesis, hypothesis_size, conf_matrix = new_hypothesis_result
-            tp3, fn3, tn3, fp3 = conf_matrix
             update_best_hypothesis(settings, state, new_hypothesis, hypothesis_size, conf_matrix, combine_helper)
-            # settings.best_prog_score = conf_matrix
-            # settings.best_prog_size = hypothesis_size
-            # settings.solution = new_hypothesis
-            # settings.print_incomplete_solution2(new_hypothesis, hypothesis_size, conf_matrix)
 
             if settings.noisy:
-                best_score = mdl_score(fn3, fp3, hypothesis_size)
-                # assert(best_score < settings.best_mdl)
-                # settings.best_mdl = best_score
-                # settings.max_literals = settings.best_mdl - 1
                 new_cons.extend(build_constraints_previous_hypotheses(settings.best_mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
-                if settings.single_solve:
-                    # for i in range(best_score, settings.max_size + 1):
-                        # generator.prune_size(i)
-                    for i in range(settings.max_literals+1, 1000):
-                        generator.prune_size(i)
 
-            if (not settings.noisy) and fp3 == 0 and fn3 == 0:
-                settings.solution_found = True
-                settings.max_literals = hypothesis_size - 1
-                settings.min_coverage = 2
-
-                if prog_size >= settings.max_literals:
-                    print('POOPER')
-                    return
-
+            # PRUNE BIGGER SPACES
+            if (settings.noisy and settings.single_solve) or (not settings.noisy and settings.solution_found):
                 for i in range(settings.max_literals+1, 1000):
                     generator.prune_size(i)
-
-                # for i in range(hypothesis_size, settings.max_size + 1):
-                    # generator.prune_size(i)
 
         # CONSTRAIN
         with settings.stats.duration('constrain'):
@@ -186,11 +158,9 @@ def popper(settings, tester, bkcons):
         if is_new_solution_found is not None:
             assert(False)
             new_hypothesis, hypothesis_size, conf_matrix = is_new_solution_found
-            tp4, fn4, tn4, fp4 = conf_matrix
             settings.best_prog_score = conf_matrix
             settings.best_prog_size = hypothesis_size
             settings.solution = new_hypothesis
-            best_score = mdl_score(fn4, fp4, hypothesis_size)
             settings.print_incomplete_solution2(new_hypothesis, hypothesis_size, conf_matrix)
 
     # assert len(combine_helper.to_combine) == 0
@@ -240,7 +210,6 @@ def explain_none_functional(settings, tester, prog):
                 new_cons.append((Constraint.GENERALISATION, subprog))
 
     return new_cons
-
 
 def build_constraints(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer,
                 prog, prog_size, tp, fn, fp, tn, num_pos, num_neg,
