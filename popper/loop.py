@@ -12,14 +12,7 @@ from . subsume import SubsumeChecker
 from . state import SearchState
 from . combine_helper import CombineHelper
 
-def popper(settings, tester, bkcons):
-    state = SearchState()
-    unsatcore_finder = UnsatCoreFinder(settings, tester)
-    allsatcore_finder = AllSatCoreFinder(settings, tester)
-    subsumer = SubsumeChecker(settings, tester, state)
-    num_pos, num_neg = tester.num_pos, tester.num_neg
-    combine_helper = CombineHelper(settings, tester, state)
-
+def load_generator(settings, bkcons):
     # generator that builds programs
     if settings.single_solve:
         from .gen2 import Generator
@@ -27,7 +20,20 @@ def popper(settings, tester, bkcons):
         from .gen3 import Generator
     else:
         from .generate import Generator
-    generator = Generator(settings, bkcons)
+    return Generator(settings, bkcons)
+
+def popper(settings, tester, bkcons):
+    state = SearchState()
+    unsatcore_finder = UnsatCoreFinder(settings, tester)
+    allsatcore_finder = AllSatCoreFinder(settings, tester)
+    subsumer = SubsumeChecker(settings, tester, state)
+    num_pos, num_neg = tester.num_pos, tester.num_neg
+    combine_helper = CombineHelper(settings, tester, state)
+    generator = load_generator(settings, bkcons)
+
+    settings.min_coverage = 1
+    settings.max_size = (1 + settings.max_body) * settings.max_rules
+    seen_hyp_spec = seen_hyp_gen = None, None
 
     if settings.noisy:
         settings.best_prog_score = (0, num_pos, num_neg, 0)
@@ -35,161 +41,137 @@ def popper(settings, tester, bkcons):
         # save hypotheses for which we pruned spec / gen from a certain size only, once we update the best mdl score, we can prune spec / gen from a better size for some of these
         seen_hyp_spec, seen_hyp_gen = defaultdict(list), defaultdict(list)
         settings.max_size = min((1 + settings.max_body) * settings.max_rules, num_pos)
-    else:
-        settings.max_size = (1 + settings.max_body) * settings.max_rules
-        seen_hyp_spec = seen_hyp_gen = None, None
 
     last_size = None
-    min_coverage = settings.min_coverage = 1
 
-    for size in range(2, settings.max_size + 1):
-        if size > settings.max_literals:
-            continue
+    # GENERATE PROGRAMS
+    for prog in generator.get_prog():
 
-        with settings.stats.duration('init'):
-            generator.update_solver(size)
+        prog_size = calc_prog_size(prog)
+        is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
+        has_invention = settings.pi_enabled and prog_has_invention(prog)
 
-        while True:
-            size_change = False
+        settings.stats.total_programs += 1
 
-            # GENERATE A PROGRAM
-            with settings.stats.duration('generate'):
-                prog = generator.get_prog()
-                if prog is None:
-                    break
+        # HORRIBLE HACK DUE TO PROLOG MEMORY LEAK
+        if settings.stats.total_programs % 10000 == 0:
+            tester.janus_clear_cache()
 
-            new_cons = []
-            prog_size = calc_prog_size(prog)
-            is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
-            has_invention = settings.pi_enabled and prog_has_invention(prog)
+        settings.logger.debug(f'Program {settings.stats.total_programs}:')
+        settings.logger.debug(format_prog(prog))
 
-            settings.stats.total_programs += 1
-            if settings.stats.total_programs % 10000 == 0:
-                tester.janus_clear_cache()
-
-            if settings.debug:
-                settings.logger.debug(f'Program {settings.stats.total_programs}:')
-                settings.logger.debug(format_prog(prog))
-
-            if last_size is None or prog_size != last_size:
-                size_change = True
-                last_size = prog_size
-                settings.search_depth = prog_size
+        size_change = False
+        if last_size is None or prog_size != last_size:
+            size_change = True
+            last_size = prog_size
+            settings.search_depth = prog_size
+            if settings.single_solve:
                 settings.logger.info(f'Generating programs of size: {prog_size}')
 
-            # TEST
-            with settings.stats.duration('test'):
-                if settings.noisy:
-                    pos_covered, neg_covered, inconsistent, too_few_tp, too_many_fp = tester.test_prog_noisy(prog, prog_size)
-                else:
-                    pos_covered, inconsistent = tester.test_prog(prog)
-                    too_few_tp, too_many_fp = False, False
-                    neg_covered = None
+        # TEST
+        with settings.stats.duration('test'):
+            if settings.noisy:
+                pos_covered, neg_covered, inconsistent, too_few_tp, too_many_fp = tester.test_prog_noisy(prog, prog_size)
+            else:
+                pos_covered, inconsistent = tester.test_prog(prog)
+                too_few_tp, too_many_fp = False, False
+                neg_covered = None
 
-            tp = pos_covered.count(1)
-            fn = num_pos - tp
-            fp = None
-            tn = None
-            mdl = None
+        tp = pos_covered.count(1)
+        fn = num_pos - tp
+        fp = None
+        tn = None
+        mdl = None
 
-            # if non-separable program covers all examples, stop
-            if not inconsistent and tp == num_pos and not too_few_tp:
-                settings.solution = prog
-                settings.best_prog_score = (num_pos, 0, num_neg, 0)
-                return
-
-            if settings.noisy and not too_few_tp:
-                fp = neg_covered.count(1)
-                tn = num_neg - fp
-                score = (tp, fn, tn, fp)
-                mdl = mdl_score(fn, fp, prog_size)
-                if mdl < settings.best_mdl:
-                    # HORRIBLE
-                    combine_helper.combiner.best_cost = mdl
-                    settings.best_prog_score = score
-                    settings.best_prog_size = prog_size
-                    settings.solution = prog
-                    settings.best_mdl = mdl
-                    settings.max_literals = mdl - 1
-                    conf_matrix = (tp, fn, tn, fp)
-                    settings.print_incomplete_solution2(prog, prog_size, conf_matrix)
-                    new_cons.extend(build_constraints_previous_hypotheses(mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
-
-            # BUILD CONSTRAINTS
-            new_cons_, subsumed, noisy_subsumed, add_gen, pruned_more_general = build_constraints(
-                settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer,
-                prog, prog_size, tp, fn, fp, tn, num_pos, num_neg,
-                is_recursive, has_invention, inconsistent, too_few_tp,
-                too_many_fp, min_coverage, seen_hyp_spec, seen_hyp_gen, mdl, combine_helper, pos_covered, neg_covered)
-            new_cons.extend(new_cons_)
-
-            # COMBINE
-            new_hypothesis_result = combine_helper.combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention, size_change)
-
-            if new_hypothesis_result is not None:
-                new_hypothesis, hypothesis_size, conf_matrix = new_hypothesis_result
-                tp3, fn3, tn3, fp3 = conf_matrix
-                settings.best_prog_score = conf_matrix
-                settings.best_prog_size = hypothesis_size
-                settings.solution = new_hypothesis
-                settings.print_incomplete_solution2(new_hypothesis, hypothesis_size, conf_matrix)
-
-                if settings.noisy:
-                    best_score = mdl_score(fn3, fp3, hypothesis_size)
-                    assert(best_score < settings.best_mdl)
-                    settings.best_mdl = best_score
-                    settings.max_literals = settings.best_mdl - 1
-                    new_cons.extend(build_constraints_previous_hypotheses(settings.best_mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
-                    if settings.single_solve:
-                        for i in range(best_score, settings.max_size + 1):
-                            generator.prune_size(i)
-
-                if (not settings.noisy) and fp3 == 0 and fn3 == 0:
-                    settings.solution_found = True
-                    settings.max_literals = hypothesis_size - 1
-                    min_coverage = settings.min_coverage = 2
-
-                    if size >= settings.max_literals:
-                        print('POOPER')
-                        return
-
-                    for i in range(hypothesis_size, settings.max_size + 1):
-                        generator.prune_size(i)
-
-            # CONSTRAIN
-            with settings.stats.duration('constrain'):
-                generator.constrain(new_cons)
-
-        # last combine stage
-        if combine_helper.to_combine:
-            settings.last_combine_stage = True
-            with settings.stats.duration('combine'):
-                is_new_solution_found = combine_helper.combiner.update_best_prog(combine_helper.to_combine)
-            combine_helper.to_combine.clear()
-
-            if is_new_solution_found is not None:
-                new_hypothesis, hypothesis_size, conf_matrix = is_new_solution_found
-                tp4, fn4, tn4, fp4 = conf_matrix
-                settings.best_prog_score = conf_matrix
-                settings.best_prog_size = hypothesis_size
-                settings.solution = new_hypothesis
-                best_score = mdl_score(fn4, fp4, hypothesis_size)
-                settings.print_incomplete_solution2(new_hypothesis, hypothesis_size, conf_matrix)
-
-                if settings.noisy:
-                    assert(best_score < settings.best_mdl)
-
-                if (not settings.noisy) and fp4 == 0 and fn4 == 0:
-                    settings.solution_found = True
-                    settings.max_literals = hypothesis_size - 1
-                    min_coverage = settings.min_coverage = 2
-                    if size >= settings.max_literals:
-                        assert False
-
-        if settings.single_solve:
+        # if non-separable program covers all examples, stop
+        if not inconsistent and tp == num_pos and not too_few_tp:
+            settings.solution = prog
+            settings.best_prog_score = (num_pos, 0, num_neg, 0)
             return
 
-    assert len(combine_helper.to_combine) == 0
+        new_cons = []
+
+        if settings.noisy and not too_few_tp:
+            fp = neg_covered.count(1)
+            tn = num_neg - fp
+            score = (tp, fn, tn, fp)
+            mdl = mdl_score(fn, fp, prog_size)
+            if mdl < settings.best_mdl:
+                # HORRIBLE
+                combine_helper.combiner.best_cost = mdl
+                settings.best_prog_score = score
+                settings.best_prog_size = prog_size
+                settings.solution = prog
+                settings.best_mdl = mdl
+                settings.max_literals = mdl - 1
+                conf_matrix = (tp, fn, tn, fp)
+                settings.print_incomplete_solution2(prog, prog_size, conf_matrix)
+                new_cons.extend(build_constraints_previous_hypotheses(mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
+
+        # BUILD CONSTRAINTS
+        new_cons_, subsumed, noisy_subsumed, add_gen, pruned_more_general = build_constraints(
+            settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer,
+            prog, prog_size, tp, fn, fp, tn, num_pos, num_neg,
+            is_recursive, has_invention, inconsistent, too_few_tp,
+            too_many_fp, settings.min_coverage, seen_hyp_spec, seen_hyp_gen, mdl, combine_helper, pos_covered, neg_covered)
+        new_cons.extend(new_cons_)
+
+        # COMBINE
+        new_hypothesis_result = combine_helper.combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention, size_change)
+
+        if new_hypothesis_result is not None:
+            new_hypothesis, hypothesis_size, conf_matrix = new_hypothesis_result
+            tp3, fn3, tn3, fp3 = conf_matrix
+            settings.best_prog_score = conf_matrix
+            settings.best_prog_size = hypothesis_size
+            settings.solution = new_hypothesis
+            settings.print_incomplete_solution2(new_hypothesis, hypothesis_size, conf_matrix)
+
+            if settings.noisy:
+                best_score = mdl_score(fn3, fp3, hypothesis_size)
+                assert(best_score < settings.best_mdl)
+                settings.best_mdl = best_score
+                settings.max_literals = settings.best_mdl - 1
+                new_cons.extend(build_constraints_previous_hypotheses(settings.best_mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
+                if settings.single_solve:
+                    for i in range(best_score, settings.max_size + 1):
+                        generator.prune_size(i)
+
+            if (not settings.noisy) and fp3 == 0 and fn3 == 0:
+                settings.solution_found = True
+                settings.max_literals = hypothesis_size - 1
+                settings.min_coverage = 2
+
+                if prog_size >= settings.max_literals:
+                    print('POOPER')
+                    return
+
+                for i in range(hypothesis_size, settings.max_size + 1):
+                    generator.prune_size(i)
+
+        # CONSTRAIN
+        with settings.stats.duration('constrain'):
+            generator.constrain(new_cons)
+
+    # last combine stage
+    if combine_helper.to_combine:
+        print('COMBINE2')
+        settings.last_combine_stage = True
+        with settings.stats.duration('combine'):
+            is_new_solution_found = combine_helper.combiner.update_best_prog(combine_helper.to_combine)
+        combine_helper.to_combine.clear()
+
+        if is_new_solution_found is not None:
+            assert(False)
+            new_hypothesis, hypothesis_size, conf_matrix = is_new_solution_found
+            tp4, fn4, tn4, fp4 = conf_matrix
+            settings.best_prog_score = conf_matrix
+            settings.best_prog_size = hypothesis_size
+            settings.solution = new_hypothesis
+            best_score = mdl_score(fn4, fp4, hypothesis_size)
+            settings.print_incomplete_solution2(new_hypothesis, hypothesis_size, conf_matrix)
+
+    # assert len(combine_helper.to_combine) == 0
 
 def learn_solution(settings):
     t1 = time.time()

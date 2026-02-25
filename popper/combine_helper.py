@@ -41,6 +41,11 @@ class CombineHelper:
         call_combine = call_combine and (self.settings.noisy or self.settings.solution_found)
         call_combine = call_combine and (len(self.to_combine) >= self.settings.batch_size or size_change)
 
+        if self.settings.recursion_enabled:
+            call_combine = len(self.to_combine) > 0
+
+        # print('call_combine', call_combine, 'len(self.to_combine)', len(self.to_combine), size_change)
+
         if add_to_combiner and (not self.settings.noisy) and (not self.settings.solution_found) and (not self.settings.recursion_enabled):
             if any_and(self.uncovered, pos_covered):
                 if self.settings.solution:
@@ -74,6 +79,7 @@ class CombineHelper:
                 self.filter_combine_programs(self.to_combine)
 
             with self.settings.stats.duration('combine'):
+                # print('COMBINE1')
                 is_new_solution_found = self.combiner.update_best_prog(self.to_combine)
 
             # to_combine = set()

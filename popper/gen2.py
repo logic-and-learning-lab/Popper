@@ -170,18 +170,21 @@ class Generator:
         solver.ground([('base', [])])
         self.solver = solver
 
-    def update_solver(self, size):
-        # not used when learning programs without pi or recursion
-        pass
-
     def get_prog(self):
-        if self.handle is None:
-            self.handle = iter(self.solver.solve(yield_ = True))
-        self.model = next(self.handle, None)
-        if self.model is None:
-            return None
+        while True:
+            with self.settings.stats.duration('generate'):
+                if self.handle is None:
+                    # Ensures compatibility if the handle was cleared
+                    self.handle = iter(self.solver.solve(yield_ = True))
 
-        return self.parse_model_single_rule(self.model.symbols(shown = True))
+                self.model = next(self.handle, None)
+                if self.model is None:
+                    break
+
+                atoms = self.model.symbols(shown=True)
+                prog = self.parse_model_single_rule(atoms)
+
+            yield prog
 
     def parse_model_single_rule(self, model):
         settings = self.settings
