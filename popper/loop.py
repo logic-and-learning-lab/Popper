@@ -39,6 +39,24 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
         settings.max_literals = hypothesis_size - 1
         settings.min_coverage = 2
 
+def do_test(settings, tester, prog, prog_size):
+    if settings.noisy:
+        test_result, too_few_tp, too_many_fp = tester.test_prog_noisy(prog, prog_size)
+    else:
+        test_result = tester.test_prog(prog)
+        too_few_tp, too_many_fp = False, False
+    return test_result, too_few_tp, too_many_fp
+
+def check_size_change(settings, state, prog_size):
+    size_change = False
+    if state.last_size is None or prog_size != state.last_size:
+        size_change = True
+        state.last_size = prog_size
+        settings.search_depth = prog_size
+        if settings.single_solve:
+            settings.logger.info(f'Generating programs of size: {prog_size}')
+    return size_change
+
 def popper(settings, tester, bkcons):
     state = SearchState()
     unsatcore_finder = UnsatCoreFinder(settings, tester)
@@ -59,8 +77,6 @@ def popper(settings, tester, bkcons):
         seen_hyp_spec, seen_hyp_gen = defaultdict(list), defaultdict(list)
         settings.max_size = min((1 + settings.max_body) * settings.max_rules, num_pos)
 
-    last_size = None
-
     # GENERATE PROGRAMS
     for prog in generator.get_prog():
 
@@ -77,23 +93,17 @@ def popper(settings, tester, bkcons):
         settings.logger.debug(f'Program {settings.stats.total_programs}:')
         settings.logger.debug(format_prog(prog))
 
-        size_change = False
-        if last_size is None or prog_size != last_size:
-            size_change = True
-            last_size = prog_size
-            settings.search_depth = prog_size
-            if settings.single_solve:
-                settings.logger.info(f'Generating programs of size: {prog_size}')
+        size_change = check_size_change(settings, state, prog_size)
 
         # TEST
         with settings.stats.duration('test'):
-            if settings.noisy:
-                test_result, too_few_tp, too_many_fp = tester.test_prog_noisy(prog, prog_size)
-            else:
-                test_result = tester.test_prog(prog)
-                too_few_tp, too_many_fp = False, False
+            test_result, too_few_tp, too_many_fp = do_test(settings, tester, prog, prog_size)
 
         # if non-separable program covers all examples, stop
+        if not test_result.inconsistent and test_result.tp == num_pos:
+            assert(too_few_tp):
+
+        # if non-separable program is perfect, stop
         if not test_result.inconsistent and test_result.tp == num_pos and not too_few_tp:
             settings.solution = prog
             settings.best_prog_score = (num_pos, 0, num_neg, 0)
