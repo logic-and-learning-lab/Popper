@@ -22,7 +22,8 @@ class TestResult(NamedTuple):
     inconsistent: bool
     conf_matrix: tuple
     mdl: int = None
-
+    too_few_tp: bool = False   # Added : bool
+    too_many_fp: bool = False  # Added : bool
 
 def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
@@ -131,13 +132,13 @@ class Tester():
             tn=None
             fp=None
             conf_matrix = (tp, fn, tn, fp)
-            return TestResult(tp=tp, fn=fn, tn=tn, fp=fp, pos_covered=pos_covered, neg_covered=neg_covered, inconsistent=inconsistent, conf_matrix=conf_matrix), too_few_tp, too_many_fp
+            return TestResult(tp=tp, fn=fn, tn=tn, fp=fp, pos_covered=pos_covered, neg_covered=neg_covered, inconsistent=inconsistent, conf_matrix=conf_matrix, too_few_tp=too_few_tp, too_many_fp=too_many_fp)
         else:
             fp = neg_covered.count(1)
             tn = self.num_neg - fp
             mdl = mdl_score(fn, fp, prog_size)
             conf_matrix = (tp, fn, tn, fp)
-            return TestResult(tp=tp, fn=fn, tn=tn, fp=fp, pos_covered=pos_covered, neg_covered=neg_covered, inconsistent=inconsistent, mdl=mdl, conf_matrix=conf_matrix), too_few_tp, too_many_fp
+            return TestResult(tp=tp, fn=fn, tn=tn, fp=fp, pos_covered=pos_covered, neg_covered=neg_covered, inconsistent=inconsistent, mdl=mdl, conf_matrix=conf_matrix, too_few_tp=too_few_tp, too_many_fp=too_many_fp)
 
     def test_prog(self, prog):
 

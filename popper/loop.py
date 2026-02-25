@@ -39,14 +39,6 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
         settings.max_literals = hypothesis_size - 1
         settings.min_coverage = 2
 
-def do_test(settings, tester, prog, prog_size):
-    if settings.noisy:
-        test_result, too_few_tp, too_many_fp = tester.test_prog_noisy(prog, prog_size)
-    else:
-        test_result = tester.test_prog(prog)
-        too_few_tp, too_many_fp = False, False
-    return test_result, too_few_tp, too_many_fp
-
 def check_size_change(settings, state, prog_size):
     size_change = False
     if state.last_size is None or prog_size != state.last_size:
@@ -56,6 +48,11 @@ def check_size_change(settings, state, prog_size):
         if settings.single_solve:
             settings.logger.info(f'Generating programs of size: {prog_size}')
     return size_change
+
+def clear_prolog_cache(settings, tester):
+    # HORRIBLE HACK DUE TO PROLOG MEMORY LEAK
+    if settings.stats.total_programs % 10000 == 0:
+        tester.janus_clear_cache()
 
 def popper(settings, tester, bkcons):
     state = SearchState()
@@ -83,12 +80,9 @@ def popper(settings, tester, bkcons):
         prog_size = calc_prog_size(prog)
         is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
         has_invention = settings.pi_enabled and prog_has_invention(prog)
-
         settings.stats.total_programs += 1
 
-        # HORRIBLE HACK DUE TO PROLOG MEMORY LEAK
-        if settings.stats.total_programs % 10000 == 0:
-            tester.janus_clear_cache()
+        clear_prolog_cache(settings, tester)
 
         settings.logger.debug(f'Program {settings.stats.total_programs}:')
         settings.logger.debug(format_prog(prog))
@@ -97,15 +91,17 @@ def popper(settings, tester, bkcons):
 
         # TEST
         with settings.stats.duration('test'):
-            test_result, too_few_tp, too_many_fp = do_test(settings, tester, prog, prog_size)
-
+            if settings.noisy:
+                test_result = tester.test_prog_noisy(prog, prog_size)
+            else:
+                test_result = tester.test_prog(prog)
+            too_few_tp, too_many_fp = test_result.too_few_tp, test_result.too_many_fp
 
         if not test_result.inconsistent and test_result.tp == num_pos:
             assert(not too_few_tp)
             # ADD BELOW IF IT FAILS
 
         # if non-separable program is perfect, stop
-        # if not test_result.inconsistent and test_result.tp == num_pos and not too_few_tp:
         if not test_result.inconsistent and test_result.tp == num_pos:
             settings.solution = prog
             settings.best_prog_score = (num_pos, 0, num_neg, 0)
@@ -114,27 +110,29 @@ def popper(settings, tester, bkcons):
         if too_few_tp:
             assert(test_result.mdl is None)
 
+        new_cons = []
+
+        # if non-separable program has better mdl score, update best prog
         if settings.noisy and test_result.mdl is not None and test_result.mdl < settings.best_mdl:
             update_best_hypothesis(settings, state, prog, prog_size, test_result.conf_matrix, combine_helper)
+            # AC: TRY TO REFACTOR OUT
             new_cons = build_constraints_previous_hypotheses(test_result.mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen)
-        else:
-            new_cons = []
 
         # BUILD CONSTRAINTS
         new_cons_, subsumed, noisy_subsumed, add_gen, pruned_more_general = build_constraints(
             settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer,
-            prog, prog_size, is_recursive, has_invention, too_few_tp,
-            too_many_fp, seen_hyp_spec, seen_hyp_gen, combine_helper, test_result)
+            prog, prog_size, is_recursive, has_invention, seen_hyp_spec, seen_hyp_gen, combine_helper, test_result)
         new_cons.extend(new_cons_)
 
         # COMBINE
-        new_hypothesis_result = combine_helper.combine(prog, prog_size, test_result, subsumed, noisy_subsumed, add_gen, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention, size_change)
+        new_hypothesis_result = combine_helper.combine(prog, prog_size, test_result, subsumed,noisy_subsumed, add_gen, pruned_more_general, is_recursive, has_invention, size_change)
 
         # IF NEW HYPOTHESIS
         if new_hypothesis_result is not None:
             new_hypothesis, hypothesis_size, conf_matrix = new_hypothesis_result
             update_best_hypothesis(settings, state, new_hypothesis, hypothesis_size, conf_matrix, combine_helper)
 
+            # AC: TRY TO REFACTOR OUT
             if settings.noisy:
                 new_cons.extend(build_constraints_previous_hypotheses(settings.best_mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
 
@@ -152,16 +150,17 @@ def popper(settings, tester, bkcons):
         # print('COMBINE2')
         settings.last_combine_stage = True
         with settings.stats.duration('combine'):
-            is_new_solution_found = combine_helper.combiner.update_best_prog(combine_helper.to_combine)
-        combine_helper.to_combine.clear()
+            new_hypothesis_result = combine_helper.combiner.update_best_prog(combine_helper.to_combine)
+        assert(new_hypothesis_result is None)
+        # combine_helper.to_combine.clear()
 
-        if is_new_solution_found is not None:
-            assert(False)
-            new_hypothesis, hypothesis_size, conf_matrix = is_new_solution_found
-            settings.best_prog_score = conf_matrix
-            settings.best_prog_size = hypothesis_size
-            settings.solution = new_hypothesis
-            settings.print_incomplete_solution2(new_hypothesis, hypothesis_size, conf_matrix)
+        # if is_new_solution_found is not None:
+            # assert(False)
+            # new_hypothesis, hypothesis_size, conf_matrix = is_new_solution_found
+            # settings.best_prog_score = conf_matrix
+            # settings.best_prog_size = hypothesis_size
+            # settings.solution = new_hypothesis
+            # settings.print_incomplete_solution2(new_hypothesis, hypothesis_size, conf_matrix)
 
     # assert len(combine_helper.to_combine) == 0
 
@@ -211,13 +210,13 @@ def explain_none_functional(settings, tester, prog):
 
     return new_cons
 
-def build_constraints(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer,
-                prog, prog_size, is_recursive, has_invention, too_few_tp, too_many_fp, seen_hyp_spec, seen_hyp_gen, combine_helper, test_result):
+def build_constraints(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, is_recursive, has_invention, seen_hyp_spec, seen_hyp_gen, combine_helper, test_result):
 
     min_coverage = settings.min_coverage
     pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
     inconsistent = test_result.inconsistent
     mdl = test_result.mdl
+    too_few_tp, too_many_fp = test_result.too_few_tp, test_result.too_many_fp
     num_pos, num_neg = tester.num_pos, tester.num_neg
     tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
 

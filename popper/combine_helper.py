@@ -30,13 +30,14 @@ class CombineHelper:
         self.uncovered = ones(self.tester.num_pos)
 
 
-    def combine(self, prog, prog_size, test_result, subsumed, noisy_subsumed,add_gen, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention, size_change):
+    def combine(self, prog, prog_size, test_result, subsumed, noisy_subsumed,add_gen, pruned_more_general, is_recursive, has_invention, size_change):
 
         tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
         pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
         inconsistent = test_result.inconsistent
+        too_few_tp, too_many_fp = test_result.too_few_tp, test_result.too_many_fp
 
-        add_to_combiner = self.decide_whether_to_combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention)
+        add_to_combiner = self.decide_whether_to_combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention)
 
         if add_to_combiner:
             self.to_combine.add(hash(prog))
@@ -100,9 +101,9 @@ class CombineHelper:
             #     new_hypothesis, conf_matrix = is_new_solution_found
 
 
-    def decide_whether_to_combine(self, prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed,add_gen, tp, fp, fn, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention):
+    def decide_whether_to_combine(self, prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed,add_gen, tp, fp, fn, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention):
         add_to_combiner = False
-        if self.settings.noisy and (not skipped) and (not skip_early_neg) and (not is_recursive) and (not has_invention) and tp > prog_size + fp and fp + prog_size < self.settings.best_mdl and (not noisy_subsumed):
+        if self.settings.noisy and (not too_few_tp) and (not too_many_fp) and (not is_recursive) and (not has_invention) and tp > prog_size + fp and fp + prog_size < self.settings.best_mdl and (not noisy_subsumed):
             local_delete = set()
             ignore_this_prog = (pos_covered, neg_covered) in self.state.success_sets_noise
 
