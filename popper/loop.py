@@ -93,39 +93,27 @@ def popper(settings, tester, bkcons):
                 test_result = tester.test_prog(prog)
                 too_few_tp, too_many_fp = False, False
 
-        pos_covered = test_result.pos_covered
-        neg_covered = test_result.neg_covered
-        inconsistent = test_result.inconsistent
-        tp = test_result.tp
-        fn = test_result.fn
-        fp = test_result.fp
-        tn = test_result.tn
-        mdl = test_result.mdl
-
         # if non-separable program covers all examples, stop
-        if not inconsistent and tp == num_pos and not too_few_tp:
+        if not test_result.inconsistent and test_result.tp == num_pos and not too_few_tp:
             settings.solution = prog
             settings.best_prog_score = (num_pos, 0, num_neg, 0)
             return
 
-        new_cons = []
-
-        if settings.noisy and not too_few_tp:
-            if mdl < settings.best_mdl:
-                conf_matrix = (tp, fn, tn, fp)
-                update_best_hypothesis(settings, state, prog, prog_size, conf_matrix, combine_helper)
-                new_cons.extend(build_constraints_previous_hypotheses(mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
+        if settings.noisy and not too_few_tp and test_result.mdl < settings.best_mdl:
+            update_best_hypothesis(settings, state, prog, prog_size, test_result.conf_matrix, combine_helper)
+            new_cons = build_constraints_previous_hypotheses(test_result.mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen)
+        else:
+            new_cons = []
 
         # BUILD CONSTRAINTS
         new_cons_, subsumed, noisy_subsumed, add_gen, pruned_more_general = build_constraints(
             settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer,
-            prog, prog_size, tp, fn, fp, tn, num_pos, num_neg,
-            is_recursive, has_invention, inconsistent, too_few_tp,
-            too_many_fp, settings.min_coverage, seen_hyp_spec, seen_hyp_gen, mdl, combine_helper, pos_covered, neg_covered)
+            prog, prog_size, num_pos, num_neg, is_recursive, has_invention, too_few_tp,
+            too_many_fp, settings.min_coverage, seen_hyp_spec, seen_hyp_gen, combine_helper, test_result)
         new_cons.extend(new_cons_)
 
         # COMBINE
-        new_hypothesis_result = combine_helper.combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention, size_change)
+        new_hypothesis_result = combine_helper.combine(prog, prog_size, test_result, subsumed, noisy_subsumed, add_gen, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention, size_change)
 
         # IF NEW HYPOTHESIS
         if new_hypothesis_result is not None:
@@ -146,7 +134,7 @@ def popper(settings, tester, bkcons):
 
     # last combine stage
     if combine_helper.to_combine:
-        print('COMBINE2')
+        # print('COMBINE2')
         settings.last_combine_stage = True
         with settings.stats.duration('combine'):
             is_new_solution_found = combine_helper.combiner.update_best_prog(combine_helper.to_combine)
@@ -209,9 +197,12 @@ def explain_none_functional(settings, tester, prog):
     return new_cons
 
 def build_constraints(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer,
-                prog, prog_size, tp, fn, fp, tn, num_pos, num_neg,
-                is_recursive, has_invention, inconsistent, too_few_tp,
-                too_many_fp, min_coverage, seen_hyp_spec, seen_hyp_gen, mdl, combine_helper, pos_covered, neg_covered):
+                prog, prog_size, num_pos, num_neg, is_recursive, has_invention, too_few_tp, too_many_fp, min_coverage, seen_hyp_spec, seen_hyp_gen, combine_helper, test_result):
+
+    pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
+    inconsistent = test_result.inconsistent
+    mdl = test_result.mdl
+    tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
 
     new_cons = []
     pruned_sub_inconsistent = pruned_more_general = False

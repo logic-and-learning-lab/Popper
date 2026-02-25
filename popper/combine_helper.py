@@ -30,8 +30,12 @@ class CombineHelper:
         self.uncovered = ones(self.tester.num_pos)
 
 
-    def combine(self, prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed,add_gen, tp, fp, fn, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention, size_change):
+    def combine(self, prog, prog_size, test_result, subsumed, noisy_subsumed,add_gen, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention, size_change):
 
+        tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
+
+        pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
+        inconsistent = test_result.inconsistent
 
         add_to_combiner = self.decide_whether_to_combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, skipped, skip_early_neg, is_recursive, has_invention)
 

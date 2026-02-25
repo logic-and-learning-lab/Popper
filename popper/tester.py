@@ -20,7 +20,9 @@ class TestResult(NamedTuple):
     pos_covered : frozenbitarray
     neg_covered : frozenbitarray
     inconsistent: bool
+    conf_matrix: tuple
     mdl: int = None
+
 
 def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
@@ -126,12 +128,16 @@ class Tester():
         fn=self.num_pos-tp
 
         if too_few_tp:
-            return TestResult(tp=tp, fn=fn, tn=None, fp=None, pos_covered=pos_covered, neg_covered=neg_covered, inconsistent=inconsistent), too_few_tp, too_many_fp
+            tn=None
+            fp=None
+            conf_matrix = (tp, fn, tn, fp)
+            return TestResult(tp=tp, fn=fn, tn=tn, fp=fp, pos_covered=pos_covered, neg_covered=neg_covered, inconsistent=inconsistent, conf_matrix=conf_matrix), too_few_tp, too_many_fp
         else:
             fp = neg_covered.count(1)
             tn = self.num_neg - fp
             mdl = mdl_score(fn, fp, prog_size)
-            return TestResult(tp=tp, fn=fn, tn=tn, fp=fp, pos_covered=pos_covered, neg_covered=neg_covered, inconsistent=inconsistent, mdl=mdl), too_few_tp, too_many_fp
+            conf_matrix = (tp, fn, tn, fp)
+            return TestResult(tp=tp, fn=fn, tn=tn, fp=fp, pos_covered=pos_covered, neg_covered=neg_covered, inconsistent=inconsistent, mdl=mdl, conf_matrix=conf_matrix), too_few_tp, too_many_fp
 
     def test_prog(self, prog):
 
@@ -178,7 +184,12 @@ class Tester():
         self.cached_pos_covered[hash(prog)] = pos_covered
         # return pos_covered, inconsistent
         tp = pos_covered.count(1)
-        return TestResult(tp=tp, fn=self.num_pos-tp, tn=None, fp=None, pos_covered=pos_covered, neg_covered=None, inconsistent=inconsistent)
+        fn = self.num_pos-tp
+        tn=None
+        fp=None
+        conf_matrix = (tp, fn, tn, fp)
+
+        return TestResult(tp=tp, fn=fn, tn=tn, fp=fp, pos_covered=pos_covered, neg_covered=None, inconsistent=inconsistent, conf_matrix=conf_matrix)
 
 
         # too_few_tp, too_many_fp = False, False
