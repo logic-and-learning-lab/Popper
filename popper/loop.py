@@ -99,17 +99,22 @@ def popper(settings, tester, bkcons):
         with settings.stats.duration('test'):
             test_result, too_few_tp, too_many_fp = do_test(settings, tester, prog, prog_size)
 
-        # if non-separable program covers all examples, stop
+
         if not test_result.inconsistent and test_result.tp == num_pos:
-            assert(too_few_tp):
+            assert(not too_few_tp)
+            # ADD BELOW IF IT FAILS
 
         # if non-separable program is perfect, stop
-        if not test_result.inconsistent and test_result.tp == num_pos and not too_few_tp:
+        # if not test_result.inconsistent and test_result.tp == num_pos and not too_few_tp:
+        if not test_result.inconsistent and test_result.tp == num_pos:
             settings.solution = prog
             settings.best_prog_score = (num_pos, 0, num_neg, 0)
             return
 
-        if settings.noisy and not too_few_tp and test_result.mdl < settings.best_mdl:
+        if too_few_tp:
+            assert(test_result.mdl is None)
+
+        if settings.noisy and test_result.mdl is not None and test_result.mdl < settings.best_mdl:
             update_best_hypothesis(settings, state, prog, prog_size, test_result.conf_matrix, combine_helper)
             new_cons = build_constraints_previous_hypotheses(test_result.mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen)
         else:
