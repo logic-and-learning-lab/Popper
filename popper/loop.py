@@ -22,6 +22,19 @@ def load_generator(settings, bkcons):
         from .generate import Generator
     return Generator(settings, bkcons)
 
+def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix, combine_helper):
+    settings.best_prog_score = conf_matrix
+    settings.best_prog_size = hypothesis_size
+    settings.solution = hypothesis
+
+    if settings.noisy:
+        (tp, fn, tn, fp) = conf_matrix
+        mdl = mdl_score(fn, fp, hypothesis_size)
+        # DROP!!!
+        combine_helper.combiner.best_cost = mdl
+        settings.best_mdl = mdl
+        settings.max_literals = mdl - 1
+
 def popper(settings, tester, bkcons):
     state = SearchState()
     unsatcore_finder = UnsatCoreFinder(settings, tester)
@@ -99,14 +112,16 @@ def popper(settings, tester, bkcons):
             mdl = mdl_score(fn, fp, prog_size)
             if mdl < settings.best_mdl:
                 # HORRIBLE
-                combine_helper.combiner.best_cost = mdl
-                settings.best_prog_score = score
-                settings.best_prog_size = prog_size
-                settings.solution = prog
-                settings.best_mdl = mdl
-                settings.max_literals = mdl - 1
                 conf_matrix = (tp, fn, tn, fp)
-                settings.print_incomplete_solution2(prog, prog_size, conf_matrix)
+                update_best_hypothesis(settings, state, prog, prog_size, conf_matrix, combine_helper)
+                # combine_helper.combiner.best_cost = mdl
+                # settings.best_prog_score = score
+                # settings.best_prog_size = prog_size
+                # settings.solution = prog
+                # settings.best_mdl = mdl
+                # settings.max_literals = mdl - 1
+
+                # settings.print_incomplete_solution2(prog, prog_size, conf_matrix)
                 new_cons.extend(build_constraints_previous_hypotheses(mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
 
         # BUILD CONSTRAINTS
@@ -123,16 +138,17 @@ def popper(settings, tester, bkcons):
         if new_hypothesis_result is not None:
             new_hypothesis, hypothesis_size, conf_matrix = new_hypothesis_result
             tp3, fn3, tn3, fp3 = conf_matrix
-            settings.best_prog_score = conf_matrix
-            settings.best_prog_size = hypothesis_size
-            settings.solution = new_hypothesis
-            settings.print_incomplete_solution2(new_hypothesis, hypothesis_size, conf_matrix)
+            update_best_hypothesis(settings, state, new_hypothesis, hypothesis_size, conf_matrix, combine_helper)
+            # settings.best_prog_score = conf_matrix
+            # settings.best_prog_size = hypothesis_size
+            # settings.solution = new_hypothesis
+            # settings.print_incomplete_solution2(new_hypothesis, hypothesis_size, conf_matrix)
 
             if settings.noisy:
                 best_score = mdl_score(fn3, fp3, hypothesis_size)
-                assert(best_score < settings.best_mdl)
-                settings.best_mdl = best_score
-                settings.max_literals = settings.best_mdl - 1
+                # assert(best_score < settings.best_mdl)
+                # settings.best_mdl = best_score
+                # settings.max_literals = settings.best_mdl - 1
                 new_cons.extend(build_constraints_previous_hypotheses(settings.best_mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
                 if settings.single_solve:
                     # for i in range(best_score, settings.max_size + 1):

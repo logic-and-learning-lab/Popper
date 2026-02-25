@@ -247,9 +247,10 @@ class Generator:
     def get_prog(self):
 
         for size in range(2, self.settings.max_size + 1):
-            self.settings.logger.info(f'Generating programs of size: {size}')
             if size > self.settings.max_literals:
                 continue
+
+            self.settings.logger.info(f'Generating programs of size: {size}')
 
             self.current_size = size
 

@@ -164,6 +164,7 @@ class Generator:
         for size in range(2, self.settings.max_size + 1):
             if size > self.settings.max_literals:
                 continue
+            # print(settings.max_literals)
             self.settings.logger.info(f'Generating programs of size: {size}')
             self.current_size = size
 
