@@ -1,9 +1,6 @@
 import time
-from collections import defaultdict
-from bitarray.util import subset, any_and, ones
-from functools import cache
-from itertools import chain, combinations, permutations
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations
+from bitarray.util import subset
+from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, remap_variables, format_prog
 from . tester import Tester
 from . bkcons import get_bk_cons
 from . unsat import UnsatCoreFinder
