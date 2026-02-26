@@ -31,7 +31,7 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
     if settings.noisy:
         mdl = mdl_score(fn, fp, hypothesis_size)
         # DROP!!!
-        combine_helper.combiner.best_cost = mdl
+        combine_helper.best_cost = mdl
         settings.best_mdl = mdl
         settings.max_literals = mdl - 1
     elif fp == 0 and fn == 0:
@@ -144,7 +144,7 @@ def popper(settings, tester, bkcons):
 
     # LAST COMBINE STAGE
     with settings.stats.duration('combine'):
-        combine_result = combine_helper.combiner.update_best_prog(combine_helper.to_combine, last_combine_stage=True)
+        combine_result = combine_helper.update_best_prog(combine_helper.to_combine, last_combine_stage=True)
     if combine_result:
         new_hypothesis, hypothesis_size, conf_matrix = combine_result
         settings.solution = new_hypothesis
@@ -275,7 +275,7 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
         if inconsistent:
             add_gen = True
             if is_recursive:
-                combine_helper.combiner.add_inconsistent(prog)
+                combine_helper.add_inconsistent(prog)
                 cons_ = frozenset(explain_inconsistent(tester, prog))
                 new_cons.extend(cons_)
                 pruned_sub_inconsistent = len(cons_) > 0
@@ -440,7 +440,7 @@ def build_constraints_previous_hypotheses(score, best_size, num_pos, num_neg, st
                 spec_size = score - mdl + num_pos + best_size
                 if spec_size <= size:
                     to_delete.append([prog, tp, fn, tn, fp, size])
-                print('SPEC', format_prog(prog), score, best_size, spec_size)
+                # print('SPEC', format_prog(prog), score, best_size, spec_size)
                 cons.append((Constraint.SPECIALISATION, prog, spec_size))
         for to_del in to_delete:
             seen_hyp_spec[k].remove(to_del)
@@ -454,7 +454,7 @@ def build_constraints_previous_hypotheses(score, best_size, num_pos, num_neg, st
                 gen_size = score - mdl + num_neg + best_size
                 if gen_size <= size:
                     to_delete.append([prog, tp, fn, tn, fp, size])
-                print('GEN', format_prog(prog), score, best_size, gen_size)
+                # print('GEN', format_prog(prog), score, best_size, gen_size)
                 cons.append((Constraint.GENERALISATION, prog, gen_size))
         for to_del in to_delete:
             seen_hyp_gen[k].remove(to_del)
