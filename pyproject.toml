@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
   { name="Andrew Cropper", email="andrew.cropper@helsinki.fi" }
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
   "clingo",
   "bitarray",
@@ -14,15 +14,16 @@ dependencies = [
   "python-sat"
 ]
 
-# [project.scripts]
-# popper-ilp = "popper:main"
+[project.scripts]
+# This makes 'popper' work in your terminal again
+popper = "popper.loop:main"
 
-# [tool.setuptools.packages.find]
-# where = ["."]
-# include = ["popper*"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["popper*"]
 
-# [tool.setuptools.package-data]
-# popper = ["lp/*.pl"]
+[tool.setuptools.package-data]
+popper = ["lp/*.pl"]
 
-# [tool.uv]
-# package = true
+[tool.uv]
+package = true
