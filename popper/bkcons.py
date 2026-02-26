@@ -3,6 +3,8 @@ import clingo.script
 import numbers
 import operator
 import time
+from pebble import ProcessPool
+from concurrent.futures import TimeoutError
 from . util import rule_is_recursive, format_rule, Constraint, order_prog, Literal, suppress_stdout_stderr
 from clingo import Function, Number, Tuple_
 from collections import defaultdict
@@ -1138,7 +1140,6 @@ def get_bk_cons(settings, tester):
         bkcons.extend(recalls)
 
     if settings.datalog:
-
         xs = deduce_non_singletons(settings)
         if settings.showcons:
             for x in xs:
@@ -1156,24 +1157,19 @@ def get_bk_cons(settings, tester):
     if not settings.datalog:
         settings.logger.debug(f'Loading recalls FAILURE')
     else:
-        import signal
-
-        def handler(signum, frame):
-            raise TimeoutError()
-
-        settings.logger.debug(f'Loading bkcons')
         xs = []
+        timeout = min(settings.timeout, settings.bkcons_timeout)
         with settings.stats.duration('bkcons'):
-            signal.signal(signal.SIGALRM, handler)
-            signal.alarm(settings.bkcons_timeout)
-            try:
-                xs = deduce_bk_cons(settings, tester)
-            except TimeoutError as _exc:
-                settings.logger.debug(f'Loading bkcons FAILURE')
-            finally:
-                signal.alarm(0)
+            with ProcessPool(max_workers=1) as pool:
+                future = pool.schedule(deduce_bk_cons, args=(settings, tester), timeout=timeout)
+                try:
+                    xs = future.result()
+                except TimeoutError:
+                    settings.logger.info(f'Loading bkcons FAILURE: Task exceeded {timeout}')
+                    xs = []
+        bkcons.extend(xs)
         if settings.showcons:
             for x in sorted(xs):
                 print('BKCON', x)
-        bkcons.extend(xs)
+
     return bkcons

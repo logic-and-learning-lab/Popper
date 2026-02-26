@@ -11,7 +11,8 @@ dependencies = [
   "clingo",
   "bitarray",
   "janus_swi",
-  "python-sat"
+  "python-sat",
+  "pebble"
 ]
 
 [project.scripts]
