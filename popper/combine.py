@@ -283,8 +283,9 @@ class Combiner:
 
     def update_best_prog(self, new_progs, last_combine_stage=False):
 
-
         self.saved_progs.update(new_progs)
+        if not self.saved_progs:
+            return
 
         new_solution, cost = self.find_combination(last_combine_stage)
 

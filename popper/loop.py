@@ -396,7 +396,6 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
     # return new_cons
     return new_cons, subsumed, noisy_subsumed, add_gen, pruned_more_general
 
-
 # given a program with more than one rule, look for inconsistent subrules/subprograms
 def explain_inconsistent(tester, prog):
     base = []
