@@ -30,7 +30,7 @@ class CombineHelper:
         self.uncovered = ones(self.tester.num_pos)
 
 
-    def combine(self, prog, prog_size, test_result, subsumed, noisy_subsumed,add_gen, pruned_more_general, is_recursive, has_invention, size_change):
+    def combine(self, prog, prog_size, test_result, subsumed, noisy_subsumed,add_gen, pruned_more_general, is_recursive, has_invention, size_change, last_combine_stage=False):
 
         tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
         pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
@@ -88,7 +88,7 @@ class CombineHelper:
 
             with self.settings.stats.duration('combine'):
                 # print('COMBINE1')
-                is_new_solution_found = self.combiner.update_best_prog(self.to_combine)
+                is_new_solution_found = self.combiner.update_best_prog(self.to_combine, last_combine_stage=last_combine_stage)
 
             # to_combine = set()
             self.to_combine.clear()
@@ -302,6 +302,6 @@ class CombineHelper:
                 exit()
 
         # TODO: temporary config, need to be modified
-        self.settings.last_combine_stage = False
+        # self.settings.last_combine_stage = False
 
         return Combiner(self.settings, self.tester, self.coverage_pos, self.coverage_neg, self.prog_lookup)

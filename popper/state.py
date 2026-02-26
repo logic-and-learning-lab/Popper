@@ -15,3 +15,9 @@ class SearchState:
     success_sets_noise = {}
 
     last_size = None
+
+
+    # TOREMOVE
+    # save hypotheses for which we pruned spec / gen from a certain size only, once we update the best mdl score, we can prune spec / gen from a better size for some of these
+    seen_hyp_spec, seen_hyp_gen = defaultdict(list), defaultdict(list)
+    # seen_hyp_spec = seen_hyp_gen = None, None

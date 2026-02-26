@@ -23,7 +23,8 @@ class Combiner:
     def add_inconsistent(self, prog_hash):
         self.inconsistent.add(prog_hash)
 
-    def find_combination(self, timeout):
+    def find_combination(self, last_combine_stage=False):
+        timeout = self.settings.maxsat_timeout
         encoding = []
 
         rulehash_to_id = {}
@@ -215,12 +216,12 @@ class Combiner:
             model_inconsistent = False
 
             if not self.settings.lex:
-                if timeout is None or self.settings.last_combine_stage:
+                if timeout is None or last_combine_stage:
                     cost, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights, self.settings)
                 else:
                     cost, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, self.settings, timeout)
             else:
-                if timeout is None or self.settings.last_combine_stage:
+                if timeout is None or last_combine_stage:
                     cost, model = maxsat.exact_lex_solve(encoding, soft_lit_groups, weights, self.settings)
                 else:
                     cost, model = maxsat.anytime_lex_solve(encoding, soft_lit_groups, weights, self.settings, timeout)
@@ -280,13 +281,12 @@ class Combiner:
             return best_prog, (best_fn, best_fp, best_size)
         return best_prog, best_fn + best_fp + best_size
 
-    def update_best_prog(self, new_progs, timeout=None):
-        if timeout is None:
-            timeout = self.settings.maxsat_timeout
+    def update_best_prog(self, new_progs, last_combine_stage=False):
+
 
         self.saved_progs.update(new_progs)
 
-        new_solution, cost = self.find_combination(timeout)
+        new_solution, cost = self.find_combination(last_combine_stage)
 
         if len(new_solution) == 0:
             return None

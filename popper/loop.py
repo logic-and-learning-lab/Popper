@@ -65,13 +65,10 @@ def popper(settings, tester, bkcons):
 
     settings.min_coverage = 1
     settings.max_size = (1 + settings.max_body) * settings.max_rules
-    seen_hyp_spec = seen_hyp_gen = None, None
 
     if settings.noisy:
         settings.best_prog_score = (0, num_pos, num_neg, 0)
         settings.best_mdl = num_pos
-        # save hypotheses for which we pruned spec / gen from a certain size only, once we update the best mdl score, we can prune spec / gen from a better size for some of these
-        seen_hyp_spec, seen_hyp_gen = defaultdict(list), defaultdict(list)
         settings.max_size = min((1 + settings.max_body) * settings.max_rules, num_pos)
 
     # GENERATE PROGRAMS
@@ -116,25 +113,25 @@ def popper(settings, tester, bkcons):
         if settings.noisy and test_result.mdl is not None and test_result.mdl < settings.best_mdl:
             update_best_hypothesis(settings, state, prog, prog_size, test_result.conf_matrix, combine_helper)
             # AC: TRY TO REFACTOR OUT
-            new_cons = build_constraints_previous_hypotheses(test_result.mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen)
+            new_cons = build_constraints_previous_hypotheses(test_result.mdl, prog_size, num_pos, num_neg, state)
 
         # BUILD CONSTRAINTS
         new_cons_, subsumed, noisy_subsumed, add_gen, pruned_more_general = build_constraints(
             settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer,
-            prog, prog_size, is_recursive, has_invention, seen_hyp_spec, seen_hyp_gen, combine_helper, test_result)
+            prog, prog_size, is_recursive, has_invention, combine_helper, test_result)
         new_cons.extend(new_cons_)
 
         # COMBINE
-        new_hypothesis_result = combine_helper.combine(prog, prog_size, test_result, subsumed,noisy_subsumed, add_gen, pruned_more_general, is_recursive, has_invention, size_change)
+        combine_result = combine_helper.combine(prog, prog_size, test_result, subsumed,noisy_subsumed, add_gen, pruned_more_general, is_recursive, has_invention, size_change)
 
         # IF NEW HYPOTHESIS
-        if new_hypothesis_result is not None:
-            new_hypothesis, hypothesis_size, conf_matrix = new_hypothesis_result
+        if combine_result:
+            new_hypothesis, hypothesis_size, conf_matrix = combine_result
             update_best_hypothesis(settings, state, new_hypothesis, hypothesis_size, conf_matrix, combine_helper)
 
             # AC: TRY TO REFACTOR OUT
             if settings.noisy:
-                new_cons.extend(build_constraints_previous_hypotheses(settings.best_mdl, prog_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen))
+                new_cons.extend(build_constraints_previous_hypotheses(settings.best_mdl, prog_size, num_pos, num_neg, state))
 
             # PRUNE BIGGER SPACES
             if (settings.noisy and settings.single_solve) or (not settings.noisy and settings.solution_found):
@@ -145,24 +142,13 @@ def popper(settings, tester, bkcons):
         with settings.stats.duration('constrain'):
             generator.constrain(new_cons)
 
-    # last combine stage
-    if combine_helper.to_combine:
-        # print('COMBINE2')
-        settings.last_combine_stage = True
-        with settings.stats.duration('combine'):
-            new_hypothesis_result = combine_helper.combiner.update_best_prog(combine_helper.to_combine)
-        assert(new_hypothesis_result is None)
-        # combine_helper.to_combine.clear()
-
-        # if is_new_solution_found is not None:
-            # assert(False)
-            # new_hypothesis, hypothesis_size, conf_matrix = is_new_solution_found
-            # settings.best_prog_score = conf_matrix
-            # settings.best_prog_size = hypothesis_size
-            # settings.solution = new_hypothesis
-            # settings.print_incomplete_solution2(new_hypothesis, hypothesis_size, conf_matrix)
-
-    # assert len(combine_helper.to_combine) == 0
+    # LAST COMBINE STAGE
+    with settings.stats.duration('combine'):
+        combine_result = combine_helper.combiner.update_best_prog(combine_helper.to_combine, last_combine_stage=True)
+    if combine_result:
+        new_hypothesis, hypothesis_size, conf_matrix = combine_result
+        settings.solution = new_hypothesis
+        settings.best_prog_score = conf_matrix
 
 def learn_solution(settings):
     t1 = time.time()
@@ -210,7 +196,7 @@ def explain_none_functional(settings, tester, prog):
 
     return new_cons
 
-def build_constraints(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, is_recursive, has_invention, seen_hyp_spec, seen_hyp_gen, combine_helper, test_result):
+def build_constraints(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, is_recursive, has_invention, combine_helper, test_result):
 
     min_coverage = settings.min_coverage
     pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
@@ -219,6 +205,8 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
     too_few_tp, too_many_fp = test_result.too_few_tp, test_result.too_many_fp
     num_pos, num_neg = tester.num_pos, tester.num_neg
     tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
+
+    seen_hyp_spec, seen_hyp_gen = state.seen_hyp_spec, state.seen_hyp_gen
 
     new_cons = []
     pruned_sub_inconsistent = pruned_more_general = False
@@ -380,6 +368,7 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
             if spec_size <= settings.max_literals and ((is_recursive or has_invention or spec_size <= settings.max_body)):
                 new_cons.append((Constraint.SPECIALISATION, prog, spec_size))
                 seen_hyp_spec[fp + prog_size + mdl].append([prog, tp, fn, tn, fp, prog_size])
+                # print('seen_hyp_spec', format_prog(prog), fp, prog_size, mdl)
 
     if add_gen and (not pruned_sub_inconsistent):
         if settings.noisy or settings.recursion_enabled or settings.pi_enabled:
@@ -393,6 +382,7 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
         if gen_size <= settings.max_literals and (settings.recursion_enabled or settings.pi_enabled) and (not pruned_more_general):
             new_cons.append((Constraint.GENERALISATION, prog, gen_size))
             seen_hyp_gen[fn + prog_size + mdl].append([prog, tp, fn, tn, fp, prog_size])
+            # print('seen_hyp_gen', format_prog(prog), fn, prog_size, mdl)
 
     if add_redund1 and (not pruned_more_general):
         new_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, prog))
@@ -434,8 +424,10 @@ def explain_inconsistent(tester, prog):
                 yield (Constraint.GENERALISATION, subprog)
 
 
-def build_constraints_previous_hypotheses(score, best_size, num_pos, num_neg, seen_hyp_spec, seen_hyp_gen):
+def build_constraints_previous_hypotheses(score, best_size, num_pos, num_neg, state):
     cons = []
+
+    seen_hyp_spec, seen_hyp_gen = state.seen_hyp_spec, state.seen_hyp_gen
 
     if seen_hyp_spec is None or seen_hyp_gen is None:
         return cons
@@ -449,7 +441,7 @@ def build_constraints_previous_hypotheses(score, best_size, num_pos, num_neg, se
                 spec_size = score - mdl + num_pos + best_size
                 if spec_size <= size:
                     to_delete.append([prog, tp, fn, tn, fp, size])
-                # print('SPEC', format_prog(prog), score, best_size, spec_size)
+                print('SPEC', format_prog(prog), score, best_size, spec_size)
                 cons.append((Constraint.SPECIALISATION, prog, spec_size))
         for to_del in to_delete:
             seen_hyp_spec[k].remove(to_del)
@@ -463,7 +455,7 @@ def build_constraints_previous_hypotheses(score, best_size, num_pos, num_neg, se
                 gen_size = score - mdl + num_neg + best_size
                 if gen_size <= size:
                     to_delete.append([prog, tp, fn, tn, fp, size])
-                # print('GEN', format_prog(prog), score, best_size, gen_size)
+                print('GEN', format_prog(prog), score, best_size, gen_size)
                 cons.append((Constraint.GENERALISATION, prog, gen_size))
         for to_del in to_delete:
             seen_hyp_gen[k].remove(to_del)
