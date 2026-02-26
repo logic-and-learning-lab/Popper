@@ -1,0 +1,28 @@
+[project]
+name = "popper"
+version = "4.2.0"
+description = "Popper"
+readme = "README.md"
+authors = [
+  { name="Andrew Cropper", email="andrew.cropper@helsinki.fi" }
+]
+requires-python = ">=3.14"
+dependencies = [
+  "clingo",
+  "bitarray",
+  "janus_swi",
+  "python-sat"
+]
+
+# [project.scripts]
+# popper-ilp = "popper:main"
+
+# [tool.setuptools.packages.find]
+# where = ["."]
+# include = ["popper*"]
+
+# [tool.setuptools.package-data]
+# popper = ["lp/*.pl"]
+
+# [tool.uv]
+# package = true
