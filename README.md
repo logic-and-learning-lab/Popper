@@ -1,11 +1,11 @@
 
-# Popper
+### Popper
 
 Popper is an [inductive logic programming](https://arxiv.org/pdf/2008.07912.pdf) system. Popper learns logical rules from examples and background knowledge.
 
-If you have any questions, ask us on [Discord](https://discord.gg/Rv5mQCayAp) or email [Andrew Cropper](mailto:andrew.cropper@helsinki.fi).
+Ask questions us on [Discord](https://discord.gg/Rv5mQCayAp) or email [Andrew Cropper](mailto:andrew.cropper@helsinki.fi).
 
-If you use Popper, please cite the paper [Learning programs by learning from failures](https://arxiv.org/abs/2005.02259) (MLJ 2021).
+If you use Popper, please cite the paper [learning programs by learning from failures](https://arxiv.org/abs/2005.02259) (MLJ 2021).
 
 
 **Requirements**
