@@ -155,7 +155,9 @@ def learn_solution(settings):
         tester = Tester(settings)
     bkcons = get_bk_cons(settings, tester)
     time_so_far = time.time()-t1
-    timeout(settings, popper, (settings, tester, bkcons), timeout_duration=int(settings.timeout-time_so_far),)
+    timeout_duration = int(settings.timeout-time_so_far)
+    timeout_duration = max(timeout_duration, 1)
+    timeout(settings, popper, (settings, tester, bkcons), timeout_duration=timeout_duration,)
     return settings.solution, settings.best_prog_score, settings.stats
 
 def explain_none_functional(settings, tester, prog):
