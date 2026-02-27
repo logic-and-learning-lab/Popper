@@ -160,41 +160,6 @@ def learn_solution(settings):
     timeout(settings, popper, (settings, tester, bkcons), timeout_duration=timeout_duration,)
     return settings.solution, settings.best_prog_score, settings.stats
 
-def explain_none_functional(settings, tester, prog):
-    new_cons = []
-
-    if len(prog) == 1:
-        return new_cons
-
-    base = []
-    rec = []
-    for rule in prog:
-        if rule_is_recursive(rule):
-            rec.append(rule)
-        else:
-            base.append(rule)
-
-    pruned_subprog = False
-    for rule in base:
-        subprog = frozenset([rule])
-        if tester.is_non_functional(subprog):
-            new_cons.append((Constraint.GENERALISATION, subprog))
-            pruned_subprog = True
-
-    if pruned_subprog:
-        return new_cons
-
-    if len(rec) == 1:
-        return new_cons
-
-    for r1 in base:
-        for r2 in rec:
-            subprog = frozenset([r1,r2])
-            if tester.is_non_functional(subprog):
-                new_cons.append((Constraint.GENERALISATION, subprog))
-
-    return new_cons
-
 def build_constraints(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, is_recursive, has_invention, combine_helper, test_result):
 
     min_coverage = settings.min_coverage
@@ -281,14 +246,14 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
         else:
             neg_covered = frozenset()
 
-        if not inconsistent and settings.functional_test and tp > 0 and not pruned_more_general:
-            if tester.is_non_functional(prog):
-                add_gen = True
-                add_spec = False
-                inconsistent = True
-                with settings.stats.duration('explain_none_functional'):
-                    cons_ = explain_none_functional(settings, tester, prog)
-                    new_cons.extend(cons_)
+        # if not inconsistent and settings.functional_test and tp > 0 and not pruned_more_general:
+        #     if tester.is_non_functional(prog):
+        #         add_gen = True
+        #         add_spec = False
+        #         inconsistent = True
+        #         with settings.stats.duration('explain_none_functional'):
+        #             cons_ = explain_none_functional(settings, tester, prog)
+        #             new_cons.extend(cons_)
 
     if settings.noisy:
         if tp <= prog_size:
@@ -459,3 +424,39 @@ def build_constraints_previous_hypotheses(score, best_size, num_pos, num_neg, st
             seen_hyp_gen[k].remove(to_del)
 
     return cons
+
+
+# def explain_none_functional(settings, tester, prog):
+#     new_cons = []
+
+#     if len(prog) == 1:
+#         return new_cons
+
+#     base = []
+#     rec = []
+#     for rule in prog:
+#         if rule_is_recursive(rule):
+#             rec.append(rule)
+#         else:
+#             base.append(rule)
+
+#     pruned_subprog = False
+#     for rule in base:
+#         subprog = frozenset([rule])
+#         if tester.is_non_functional(subprog):
+#             new_cons.append((Constraint.GENERALISATION, subprog))
+#             pruned_subprog = True
+
+#     if pruned_subprog:
+#         return new_cons
+
+#     if len(rec) == 1:
+#         return new_cons
+
+#     for r1 in base:
+#         for r2 in rec:
+#             subprog = frozenset([r1,r2])
+#             if tester.is_non_functional(subprog):
+#                 new_cons.append((Constraint.GENERALISATION, subprog))
+
+#     return new_cons
