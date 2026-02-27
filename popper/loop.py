@@ -28,7 +28,7 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
     if settings.noisy:
         mdl = mdl_score(fn, fp, hypothesis_size)
         # DROP!!!
-        combine_helper.best_cost = mdl
+        # combine_helper.best_cost = mdl
         settings.best_mdl = mdl
         settings.max_literals = mdl - 1
     elif fp == 0 and fn == 0:

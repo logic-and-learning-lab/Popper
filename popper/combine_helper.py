@@ -39,7 +39,8 @@ class CombineHelper:
 
         self.uncovered = ones(self.tester.num_pos)
 
-        self.best_cost = None
+        # self.best_cost = None
+        # BEST COST = SIZE WHEN NO NOISE OR MDL WHEN NOISE
         self.saved_progs = set()
         self.inconsistent = set()
 
@@ -65,8 +66,7 @@ class CombineHelper:
         if self.settings.recursion_enabled:
             call_combine = len(self.to_combine) > 0
 
-        # print('call_combine', call_combine, 'len(self.to_combine)', len(self.to_combine), size_change)
-
+        combine_result1 = None
         if add_to_combiner and (not self.settings.noisy) and (not self.settings.solution_found) and (not self.settings.recursion_enabled):
             if any_and(self.uncovered, pos_covered):
                 if self.settings.solution:
@@ -75,26 +75,12 @@ class CombineHelper:
                     self.settings.solution = prog
                 self.uncovered = self.uncovered & ~pos_covered
                 tp2 = self.tester.num_pos - self.uncovered.count(1)
-                fn2 = self.uncovered.count(1)
-                tn2 = self.tester.num_neg
-                fp2 = 0
                 hypothesis_size = calc_prog_size(self.settings.solution)
-                self.settings.best_prog_score = (tp2, fn2, tn2, fp2)
+                self.settings.best_prog_score = (tp2, self.uncovered.count(1), self.tester.num_neg, 0)
                 self.settings.best_prog_size = hypothesis_size
-                conf_matrix = (tp2, fn2, tn2, fp2)
-                self.settings.print_incomplete_solution2(self.settings.solution, hypothesis_size, conf_matrix)
-
+                combine_result1 = self.settings.solution, hypothesis_size, self.settings.best_prog_score
                 if not self.uncovered.any():
-                    self.settings.solution_found = True
                     self.settings.max_literals = hypothesis_size - 1
-                    min_coverage = self.settings.min_coverage = 2
-
-                    for i in range(self.settings.max_literals+1, 1000):
-                        self.generator.prune_size(i)
-
-                    # for i in range(self.settings.max_literals + 1, self.settings.max_size + 1):
-                        # print('MOO_generator.prune_size', i)
-                        # generator.prune_size(i)
 
                 call_combine = not self.uncovered.any()
 
@@ -103,19 +89,13 @@ class CombineHelper:
                 self.filter_combine_programs(self.to_combine)
 
             with self.settings.stats.duration('combine'):
-                # print('COMBINE1')
-                is_new_solution_found = self.update_best_prog(self.to_combine, last_combine_stage=last_combine_stage)
+                combine_result2 = self.update_best_prog(self.to_combine, last_combine_stage=last_combine_stage)
 
-            # to_combine = set()
             self.to_combine.clear()
 
-            return is_new_solution_found
-
-            # new_hypothesis_found = is_new_solution_found is not None
-
-            # if new_hypothesis_found:
-            #     new_hypothesis, conf_matrix = is_new_solution_found
-
+            if combine_result2:
+                return combine_result2
+        return combine_result1
 
     def decide_whether_to_combine(self, prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed,add_gen, tp, fp, fn, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention):
         add_to_combiner = False
@@ -326,6 +306,12 @@ class CombineHelper:
         self.inconsistent.add(prog_hash)
 
     def find_combination(self, last_combine_stage=False):
+        # print('')
+        # print(f'lex:{self.settings.lex}')
+        # print(f'best_mdl:{self.settings.best_mdl}')
+        # print(f'best_prog_score:{self.settings.best_prog_score}')
+        # print(f'best_prog_size:{self.settings.best_prog_size}')
+
         timeout = self.settings.maxsat_timeout
         encoding = []
 
@@ -454,6 +440,7 @@ class CombineHelper:
                 if rule_var[rule_id] is not None:
                     rule_soft_lits.append(-rule_var[rule_id])
                     weights.append(ruleid_to_size[rule_id])
+
             if self.settings.best_prog_score:
                 if fn_ == 0:
                     for i in pos_index:
@@ -580,7 +567,8 @@ class CombineHelper:
 
         best_prog = [ruleid_to_rule[k] for k in best_prog]
         if self.settings.lex:
-            return best_prog, (best_fn, best_fp, best_size)
+            # return best_prog, (best_fn, best_fp, best_size)
+            return best_prog, best_size
         return best_prog, best_fn + best_fp + best_size
 
     def update_best_prog(self, new_progs, last_combine_stage=False):
@@ -594,12 +582,14 @@ class CombineHelper:
         if len(new_solution) == 0:
             return None
 
-        if self.best_cost is None:
-            self.best_cost = cost
-        elif cost >= self.best_cost:
-            return None
-
-        self.best_cost = cost
+        if self.settings.noisy:
+            if cost > self.settings.best_mdl:
+                assert(False)
+                return None
+        else:
+            if cost > self.settings.best_prog_size:
+                assert(False)
+                return None
 
         new_solution = reduce_prog(new_solution)
         pos_covered, neg_covered = self.tester.test_prog_all(new_solution)
