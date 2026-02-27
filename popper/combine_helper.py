@@ -25,27 +25,16 @@ class CombineHelper:
         self.generator = generator
         self.covered_by_pos = defaultdict(set)
         self.covered_by_neg = defaultdict(set)
-
-        # program_hash -> coverage (bit_arrary)
         self.coverage_pos = {}
         self.coverage_neg = {}
-
         self.cached_prog_size = {}
         self.prog_lookup = {}
         self.scores = {}
-
-
         self.to_combine = set()
-
         self.uncovered = ones(self.tester.num_pos)
-
-        # self.best_cost = None
-        # BEST COST = SIZE WHEN NO NOISE OR MDL WHEN NOISE
         self.saved_progs = set()
         self.inconsistent = set()
-
         self.load_solver()
-
 
     def combine(self, prog, prog_size, test_result, subsumed, noisy_subsumed,add_gen, pruned_more_general, is_recursive, has_invention, size_change, last_combine_stage=False):
 
@@ -68,20 +57,16 @@ class CombineHelper:
 
         combine_result1 = None
         if add_to_combiner and (not self.settings.noisy) and (not self.settings.solution_found) and (not self.settings.recursion_enabled):
+
             if any_and(self.uncovered, pos_covered):
                 if self.settings.solution:
-                    self.settings.solution = self.settings.solution | prog
+                    tmp = self.settings.solution | prog
                 else:
-                    self.settings.solution = prog
+                    tmp = prog
                 self.uncovered = self.uncovered & ~pos_covered
                 tp2 = self.tester.num_pos - self.uncovered.count(1)
-                hypothesis_size = calc_prog_size(self.settings.solution)
-                self.settings.best_prog_score = (tp2, self.uncovered.count(1), self.tester.num_neg, 0)
-                self.settings.best_prog_size = hypothesis_size
-                combine_result1 = self.settings.solution, hypothesis_size, self.settings.best_prog_score
-                if not self.uncovered.any():
-                    self.settings.max_literals = hypothesis_size - 1
-
+                hypothesis_size = calc_prog_size(tmp)
+                combine_result1 = tmp, hypothesis_size, (tp2, self.uncovered.count(1), self.tester.num_neg, 0)
                 call_combine = not self.uncovered.any()
 
         if call_combine:
@@ -586,10 +571,10 @@ class CombineHelper:
             if cost > self.settings.best_mdl:
                 assert(False)
                 return None
-        else:
-            if cost > self.settings.best_prog_size:
-                assert(False)
-                return None
+        elif self.settings.solution_found and cost > self.settings.best_prog_size:
+            print(cost, self.settings.best_prog_size, self.settings.solution_found)
+            assert(False)
+            return None
 
         new_solution = reduce_prog(new_solution)
         pos_covered, neg_covered = self.tester.test_prog_all(new_solution)
