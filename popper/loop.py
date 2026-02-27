@@ -27,8 +27,6 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
 
     if settings.noisy:
         mdl = mdl_score(fn, fp, hypothesis_size)
-        # DROP!!!
-        # combine_helper.best_cost = mdl
         settings.best_mdl = mdl
         settings.max_literals = mdl - 1
     elif fp == 0 and fn == 0:
@@ -61,12 +59,10 @@ def popper(settings, tester, bkcons):
     combine_helper = CombineHelper(settings, tester, state, generator)
 
     settings.min_coverage = 1
-    settings.max_size = (1 + settings.max_body) * settings.max_rules
 
     if settings.noisy:
         settings.best_prog_score = (0, num_pos, num_neg, 0)
         settings.best_mdl = num_pos
-        settings.max_size = min((1 + settings.max_body) * settings.max_rules, num_pos)
 
     # GENERATE PROGRAMS
     for prog in generator.get_prog():

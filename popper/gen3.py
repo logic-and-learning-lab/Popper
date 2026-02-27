@@ -160,46 +160,32 @@ class Generator:
     # generate.py
 
     def get_prog(self):
-
-        for size in range(2, self.settings.max_size + 1):
+        size = 0
+        while True:
             if size > self.settings.max_literals:
                 continue
-            # print(settings.max_literals)
             self.settings.logger.info(f'Generating programs of size: {size}')
             self.current_size = size
-
             with self.settings.stats.duration('init'):
                 self.update_solver(size)
+            size += 1
 
             while True:
                 with self.settings.stats.duration('generate'):
                     if self.handle is None:
-                        # Ensures compatibility if the handle was cleared
                         self.handle = iter(self.solver.solve(yield_ = True))
-
-                    # print('HERE')
-
                     self.model = next(self.handle, None)
-
-
                     if self.model is None:
                         break
-
                     atoms = self.model.symbols(shown=True)
-                    # print(atoms)
-
                     if self.settings.single_solve:
-                        prog = self.parse_model_single_rule(atoms)
+                        assert(False)
+                        yield self.parse_model_single_rule(atoms)
                     elif self.settings.pi_enabled:
-                        prog = self.parse_model_pi(atoms)
+                        assert(False)
+                        yield self.parse_model_pi(atoms)
                     else:
-                        prog = self.parse_model_recursion(atoms)
-
-                    # Yield the generated program
-                    yield prog
-
-            # Yield None to signal to loop.py that the current size has finished generating
-            # yield None
+                        yield self.parse_model_recursion(atoms)
 
     def gen_symbol(self, literal, backend):
         sign, pred, args = literal
