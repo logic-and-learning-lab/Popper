@@ -46,6 +46,10 @@ class CombineHelper:
         add_to_combiner = self.decide_whether_to_combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention)
 
         if add_to_combiner:
+            # MOVE SOMEWHERE ELSE LATER
+            if self.settings.min_size is None:
+                self.settings.min_size = prog_size
+
             self.to_combine.add(hash(prog))
 
         call_combine = len(self.to_combine) > 0
@@ -173,8 +177,7 @@ class CombineHelper:
                             continue
                         self.state.paired_success_sets[s + prog_size].add(p | pos_covered)
 
-        elif not self.settings.noisy:
-            if (not inconsistent) and (not subsumed) and (not add_gen) and tp > 0 and (not pruned_more_general):
+        elif not self.settings.noisy and (not inconsistent) and (not subsumed) and (not add_gen) and tp > 0 and (not pruned_more_general):
                 add_to_combiner = True
 
                 if not self.settings.recursion_enabled:
@@ -211,8 +214,6 @@ class CombineHelper:
                         continue
                     self.state.paired_success_sets[s + prog_size].add(p | pos_covered)
 
-                if self.settings.min_size is None:
-                    self.settings.min_size = prog_size
 
         return add_to_combiner
 

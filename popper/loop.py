@@ -70,6 +70,7 @@ def popper(settings, tester, bkcons):
         prog_size = calc_prog_size(prog)
         is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
         has_invention = settings.pi_enabled and prog_has_invention(prog)
+
         settings.stats.total_programs += 1
 
         clear_prolog_cache(settings, tester)
@@ -89,16 +90,14 @@ def popper(settings, tester, bkcons):
 
         if not test_result.inconsistent and test_result.tp == num_pos:
             assert(not too_few_tp)
-            # ADD BELOW IF IT FAILS
+        if too_few_tp:
+            assert(test_result.mdl is None)
 
         # if non-separable program is perfect, stop
         if not test_result.inconsistent and test_result.tp == num_pos:
             settings.solution = prog
             settings.best_prog_score = (num_pos, 0, num_neg, 0)
             return
-
-        if too_few_tp:
-            assert(test_result.mdl is None)
 
         new_cons = []
 
@@ -115,7 +114,8 @@ def popper(settings, tester, bkcons):
         new_cons.extend(new_cons_)
 
         # COMBINE
-        combine_result = combine_helper.combine(prog, prog_size, test_result, subsumed,noisy_subsumed, add_gen, pruned_more_general, is_recursive, has_invention, size_change)
+        with settings.stats.duration('combine'):
+            combine_result = combine_helper.combine(prog, prog_size, test_result, subsumed, noisy_subsumed, add_gen, pruned_more_general, is_recursive, has_invention, size_change)
 
         # IF NEW HYPOTHESIS
         if combine_result:
