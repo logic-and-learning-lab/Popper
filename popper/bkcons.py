@@ -735,6 +735,11 @@ def deduce_bk_cons(settings, tester):
                 if atom.name == 'prop':
                     out.add(str(atom))
     xs = [x + '.' for x in out]
+
+    if settings.showcons:
+        for x in sorted(xs):
+            print('BKCON', x)
+
     return xs + new_cons
 
 
@@ -1168,8 +1173,5 @@ def get_bk_cons(settings, tester):
                     settings.logger.info(f'Loading bkcons FAILURE: Task exceeded {timeout}')
                     xs = []
         bkcons.extend(xs)
-        if settings.showcons:
-            for x in sorted(xs):
-                print('BKCON', x)
 
     return bkcons

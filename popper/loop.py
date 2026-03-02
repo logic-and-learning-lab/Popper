@@ -40,8 +40,7 @@ def check_size_change(settings, state, prog_size):
         size_change = True
         state.last_size = prog_size
         settings.search_depth = prog_size
-        if settings.single_solve:
-            settings.logger.info(f'Generating programs of size: {prog_size}')
+        settings.logger.info(f'Generating hypotheses of size: {prog_size}')
     return size_change
 
 def clear_prolog_cache(settings, tester):

@@ -19,7 +19,7 @@ clingo.script.enable_python()
 
 TIMEOUT=1200
 EVAL_TIMEOUT=0.001
-MAX_LITERALS=40
+MAX_LITERALS=100
 MAX_SOLUTIONS=1
 CLINGO_ARGS=''
 MAX_RULES=2
@@ -49,17 +49,17 @@ def parse_args():
     parser.add_argument('--noisy', default=False, action='store_true', help='tell Popper that there is noise')
     # parser.add_argument('--bkcons', default=False, action='store_true', help='deduce background constraints from Datalog background (EXPERIMENTAL!)')
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {TIMEOUT})')
-    parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help=f'Maximum number of literals allowed in program (default: {MAX_LITERALS})')
     parser.add_argument('--max-body', type=int, default=None, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
     parser.add_argument('--max-vars', type=int, default=None, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
+    parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help=f'Maximum number of literals allowed in program (default: {MAX_LITERALS})')
     parser.add_argument('--max-rules', type=int, default=None, help=f'Maximum number of rules allowed in a recursive program (default: {MAX_RULES})')
-    parser.add_argument('--eval-timeout', type=float, default=EVAL_TIMEOUT, help=f'Prolog evaluation timeout in seconds (default: {EVAL_TIMEOUT})')
+    # parser.add_argument('--eval-timeout', type=float, default=EVAL_TIMEOUT, help=f'Prolog evaluation timeout in seconds (default: {EVAL_TIMEOUT})')
     parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
     parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--showcons', default=False, action='store_true', help='Show constraints deduced during the search')
-    parser.add_argument('--solver', default='rc2', choices=['rc2', 'uwr', 'wmaxcdcl'], help='Select a solver for the combine stage (default: rc2)')
-    parser.add_argument('--anytime-solver', default=None, choices=['wmaxcdcl', 'nuwls'], help='Select an anytime MaxSAT solver (default: None)')
+    parser.add_argument('--solver', default='rc2', choices=['rc2', 'uwr'], help='Select a solver for the combine stage (default: rc2)')
+    parser.add_argument('--anytime-solver', default=None, choices=['nuwls'], help='Select an anytime MaxSAT solver (default: None)')
     parser.add_argument('--anytime-timeout', type=int, default=ANYTIME_TIMEOUT, help=f'Maximum timeout (seconds) for each anytime MaxSAT call (default: {ANYTIME_TIMEOUT})')
     parser.add_argument('--batch-size', type=int, default=BATCH_SIZE, help=f'Combine batch size (default: {BATCH_SIZE})')
     # parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
@@ -235,7 +235,7 @@ class Settings:
             # bkcons = args.bkcons
             max_literals = args.max_literals
             timeout = args.timeout
-            eval_timeout = args.eval_timeout
+            eval_timeout = EVAL_TIMEOUT
             max_examples = MAX_EXAMPLES
             max_body = args.max_body
             max_vars = args.max_vars
@@ -267,7 +267,7 @@ class Settings:
                 return super().format(record)
 
         formatter = SecondsFormatter(
-            "%(elapsed_secs).1f s %(levelname)s: %(message)s"
+            "%(elapsed_secs).1fs %(message)s"
         )
 
         handler = logging.StreamHandler()
