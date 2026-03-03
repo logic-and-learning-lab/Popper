@@ -166,12 +166,12 @@ class Generator:
                 continue
             # self.settings.logger.info(f'Generating programs of size: {size}')
             self.current_size = size
-            with self.settings.stats.duration('init'):
+            with stats.duration('init'):
                 self.update_solver(size)
             size += 1
 
             while True:
-                with self.settings.stats.duration('generate'):
+                with stats.duration('generate'):
                     if self.handle is None:
                         self.handle = iter(self.solver.solve(yield_ = True))
                     self.model = next(self.handle, None)

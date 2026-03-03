@@ -4,7 +4,7 @@ import clingo.script
 import signal
 import argparse
 import os
-import logging
+from . import logger
 from itertools import permutations, chain, combinations
 from collections import defaultdict
 from typing import NamedTuple
@@ -47,13 +47,11 @@ def parse_args():
 
     parser.add_argument('kbpath', help='Path to files to learn from')
     parser.add_argument('--noisy', default=False, action='store_true', help='tell Popper that there is noise')
-    # parser.add_argument('--bkcons', default=False, action='store_true', help='deduce background constraints from Datalog background (EXPERIMENTAL!)')
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {TIMEOUT})')
     parser.add_argument('--max-body', type=int, default=None, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
     parser.add_argument('--max-vars', type=int, default=None, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
     parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help=f'Maximum number of literals allowed in program (default: {MAX_LITERALS})')
     parser.add_argument('--max-rules', type=int, default=None, help=f'Maximum number of rules allowed in a recursive program (default: {MAX_RULES})')
-    # parser.add_argument('--eval-timeout', type=float, default=EVAL_TIMEOUT, help=f'Prolog evaluation timeout in seconds (default: {EVAL_TIMEOUT})')
     parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
     parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
@@ -62,11 +60,6 @@ def parse_args():
     parser.add_argument('--anytime-solver', default=None, choices=['nuwls'], help='Select an anytime MaxSAT solver (default: None)')
     parser.add_argument('--anytime-timeout', type=int, default=ANYTIME_TIMEOUT, help=f'Maximum timeout (seconds) for each anytime MaxSAT call (default: {ANYTIME_TIMEOUT})')
     parser.add_argument('--batch-size', type=int, default=BATCH_SIZE, help=f'Combine batch size (default: {BATCH_SIZE})')
-    # parser.add_argument('--functional-test', default=False, action='store_true', help='Run functional test')
-    # parser.add_argument('--datalog', default=False, action='store_true', help='EXPERIMENTAL FEATURE: use recall to order literals in rules')
-    # parser.add_argument('--no-bias', default=False, action='store_true', help='EXPERIMENTAL FEATURE: do not use language bias')
-    # parser.add_argument('--order-space', default=False, action='store_true', help='EXPERIMENTAL FEATURE: search space ordered by size')
-
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
@@ -83,11 +76,11 @@ def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
     try:
         result = func(*args, **kwargs)
     except TimeoutError as _exc:
-        settings.logger.warn(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
+        logger.warn(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
         return result
     except AttributeError as moo:
         if '_SolveEventHandler' in str(moo):
-            settings.logger.warn(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
+            logger.warn(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
             return result
         raise moo
     finally:
@@ -100,58 +93,6 @@ def load_kbpath(kbpath):
         full_filename = os.path.join(kbpath, filename)
         return full_filename.replace('\\', '\\\\') if os.name == 'nt' else full_filename
     return fix_path("bk.pl"), fix_path("exs.pl"), fix_path("bias.pl")
-
-class Stats:
-    def __init__(self, info = False, debug = False):
-        self.exec_start = perf_counter()
-        self.total_programs = 0
-        self.durations = {}
-
-    def total_exec_time(self):
-        return perf_counter() - self.exec_start
-
-    def show(self):
-        message = f'Num. programs: {self.total_programs}\n'
-        total_op_time = sum(summary.total for summary in self.duration_summary())
-
-        for summary in self.duration_summary():
-            percentage = int((summary.total/total_op_time)*100)
-            message += f'{summary.operation}:\n\tCalled: {summary.called} times \t ' + \
-                       f'Total: {summary.total:0.2f} \t Mean: {summary.mean:0.4f} \t ' + \
-                       f'Max: {summary.maximum:0.3f} \t Percentage: {percentage}%\n'
-        message += f'Total operation time: {total_op_time:0.2f}s\n'
-        message += f'Total execution time: {self.total_exec_time():0.2f}s'
-        print(message)
-        return message
-
-    def duration_summary(self):
-        summary = []
-        stats = sorted(self.durations.items(), key = lambda x: sum(x[1]), reverse=True)
-        for operation, durations in stats:
-            called = len(durations)
-            total = sum(durations)
-            mean = sum(durations)/len(durations)
-            maximum = max(durations)
-            summary.append(DurationSummary(operation.title(), called, total, mean, maximum))
-        return summary
-
-    @contextmanager
-    def duration(self, operation):
-        start = perf_counter()
-        try:
-            yield
-        finally:
-            end = perf_counter()
-            duration = end - start
-
-            if operation not in self.durations:
-                self.durations[operation] = [duration]
-            else:
-                self.durations[operation].append(duration)
-
-
-# def format_prog2(prog):
-    # return '\n'.join(format_rule(order_rule2(rule)) for rule in order_prog(prog))
 
 def format_literal(literal):
     pred, args = literal
@@ -258,42 +199,11 @@ class Settings:
                 self.bk_file = bk_file
                 self.bias_file = bias_file
 
-        # self.tmp_cache = set()
-        self.logger = logging.getLogger("popper")
-
-        class SecondsFormatter(logging.Formatter):
-            def format(self, record):
-                record.elapsed_secs = record.relativeCreated / 1000.0
-                return super().format(record)
-
-        formatter = SecondsFormatter(
-            "%(elapsed_secs).1fs %(message)s"
-        )
-
-        handler = logging.StreamHandler()
-        handler.setFormatter(formatter)
-
-        self.logger = logging.getLogger("popper")
-        self.logger.addHandler(handler)
-
-
-        if quiet:
-            pass
-        elif debug:
-            log_level = logging.DEBUG
-            self.logger.setLevel(logging.DEBUG)
-        elif info:
-            log_level = logging.INFO
-            self.logger.setLevel(logging.INFO)
-
         self.info = info
         self.debug = debug
-        self.stats = Stats(info=info, debug=debug)
-        self.stats.logger = self.logger
         self.show_stats = show_stats
         self.showcons = showcons
         self.max_literals = max_literals
-        # self.functional_test = functional_test
         self.timeout = timeout
         self.eval_timeout = eval_timeout
         self.max_examples = max_examples
@@ -347,8 +257,6 @@ class Settings:
         for x in solver.symbolic_atoms.by_signature('non_datalog', arity=0):
             self.non_datalog_flag = True
 
-
-
         # read directions from bias file when there is no PI
         # if not self.pi_enabled:
         self.directions = directions = defaultdict(dict)
@@ -363,7 +271,6 @@ class Settings:
                 elif y == 'out':
                     arg_dir = '-'
                 directions[pred][i] = arg_dir
-
 
         self.max_arity = 0
         for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
@@ -482,9 +389,9 @@ class Settings:
 
         self.single_solve = not (self.recursion_enabled or self.pi_enabled)
 
-        self.logger.debug(f'Max rules: {self.max_rules}')
-        self.logger.debug(f'Max vars: {self.max_vars}')
-        self.logger.debug(f'Max body: {self.max_body}')
+        logger.debug(f'Max rules: {self.max_rules}')
+        logger.debug(f'Max vars: {self.max_vars}')
+        logger.debug(f'Max body: {self.max_body}')
 
         self.single_solve = not (self.recursion_enabled or self.pi_enabled)
 
@@ -494,15 +401,15 @@ class Settings:
     # def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
     def print_incomplete_solution2(self, prog, size, conf_matrix):
         tp, fn, tn, fp = conf_matrix
-        self.logger.info('*'*20)
-        self.logger.info('New best hypothesis:')
+        logger.info('*'*20)
+        logger.info('New best hypothesis:')
         if self.noisy:
-            self.logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} mdl:{size+fn+fp}')
+            logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} mdl:{size+fn+fp}')
         else:
-            self.logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size}')
+            logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size}')
         for rule in order_prog(prog):
-            self.logger.info(format_rule(self.order_rule(rule)))
-        self.logger.info('*'*20)
+            logger.info(format_rule(self.order_rule(rule)))
+        logger.info('*'*20)
 
     def print_prog_score(self, prog, score):
         tp, fn, tn, fp = score

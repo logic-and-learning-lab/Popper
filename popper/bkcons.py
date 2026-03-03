@@ -13,6 +13,8 @@ from pysat.card import *
 from pysat.formula import CNF
 from pysat.solvers import Solver
 clingo.script.enable_python()
+from . import logger
+from . import stats
 
 tmp_map = {}
 for i in range(1,20):
@@ -1122,7 +1124,7 @@ def deduce_non_singletons(settings):
 def get_bk_cons(settings, tester):
     bkcons = []
 
-    with settings.stats.duration('find_pointless_relations'):
+    with stats.duration('find_pointless_relations'):
         pointless = settings.pointless = tester.find_pointless_relations()
 
     for p,a in pointless:
@@ -1131,8 +1133,8 @@ def get_bk_cons(settings, tester):
         settings.body_preds.remove((p,a))
 
     # if settings.datalog:
-    settings.logger.debug(f'Loading recalls')
-    with settings.stats.duration('recalls'):
+    logger.debug(f'Loading recalls')
+    with stats.duration('recalls'):
         recalls = deduce_recalls(settings)
 
     if recalls == None:
@@ -1160,17 +1162,17 @@ def get_bk_cons(settings, tester):
 
 
     if not settings.datalog:
-        settings.logger.debug(f'Loading recalls FAILURE')
+        logger.debug(f'Loading recalls FAILURE')
     else:
         xs = []
         timeout = min(settings.timeout, settings.bkcons_timeout)
-        with settings.stats.duration('bkcons'):
+        with stats.duration('bkcons'):
             with ProcessPool(max_workers=1) as pool:
                 future = pool.schedule(deduce_bk_cons, args=(settings, tester), timeout=timeout)
                 try:
                     xs = future.result()
                 except TimeoutError:
-                    settings.logger.info(f'Loading bkcons FAILURE: Task exceeded {timeout}')
+                    logger.info(f'Loading bkcons FAILURE: Task exceeded {timeout}')
                     xs = []
         bkcons.extend(xs)
 

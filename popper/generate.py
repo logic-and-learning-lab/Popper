@@ -251,12 +251,12 @@ class Generator:
                 continue
             # self.settings.logger.info(f'Generating programs of size: {size}')
             self.current_size = size
-            with self.settings.stats.duration('init'):
+            with stats.duration('init'):
                 self.update_solver(size)
             size += 1
 
             while True:
-                with self.settings.stats.duration('generate'):
+                with stats.duration('generate'):
                     if self.handle is None:
                         self.handle = iter(self.solver.solve(yield_ = True))
 
@@ -635,7 +635,7 @@ class Generator:
                 nogood.append(x)
             nogoods.append(nogood)
 
-        # with self.settings.stats.duration('constrain_clingo'):
+        # with stats.duration('constrain_clingo'):
         for x in nogoods:
             model.context.add_nogood(x)
 

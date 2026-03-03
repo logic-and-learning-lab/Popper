@@ -7,6 +7,7 @@ from importlib import resources
 from . util import Constraint, Literal
 from clingo import Function, Number, Tuple_
 from itertools import permutations
+from . import stats
 
 def arg_to_symbol(arg):
     if isinstance(arg, tuple):
@@ -172,7 +173,7 @@ class Generator:
 
     def get_prog(self):
         while True:
-            with self.settings.stats.duration('generate'):
+            with stats.duration('generate'):
                 if self.handle is None:
                     # Ensures compatibility if the handle was cleared
                     self.handle = iter(self.solver.solve(yield_ = True))

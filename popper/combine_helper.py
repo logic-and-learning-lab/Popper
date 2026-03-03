@@ -5,6 +5,7 @@ from . import maxsat
 from pysat.formula import IDPool
 import time
 import bitarray
+from . import stats
 
 POS_EXAMPLE_WEIGHT = 1
 NEG_EXAMPLE_WEIGHT = 1
@@ -77,7 +78,7 @@ class CombineHelper:
             if self.settings.noisy:
                 self.filter_combine_programs(self.to_combine)
 
-            with self.settings.stats.duration('combine'):
+            with stats.duration('combine'):
                 combine_result2 = self.update_best_prog(self.to_combine, last_combine_stage=last_combine_stage)
 
             self.to_combine.clear()
@@ -244,7 +245,7 @@ class CombineHelper:
             exit()
 
         self.settings.maxsat_timeout = None
-        self.settings.stats.maxsat_calls = 0
+        # stats.maxsat_calls = 0
 
         if self.settings.solver == 'rc2':
             self.settings.exact_maxsat_solver = 'rc2'

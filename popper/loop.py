@@ -8,6 +8,8 @@ from . allsat import AllSatCoreFinder
 from . subsume import SubsumeChecker
 from . state import SearchState
 from . combine_helper import CombineHelper
+from . import logger
+from . import stats
 
 def load_generator(settings, bkcons):
     if settings.single_solve:
@@ -40,12 +42,12 @@ def check_size_change(settings, state, prog_size):
         size_change = True
         state.last_size = prog_size
         settings.search_depth = prog_size
-        settings.logger.info(f'Generating hypotheses of size: {prog_size}')
+        logger.info(f'Generating hypotheses of size: {prog_size}')
     return size_change
 
 def clear_prolog_cache(settings, tester):
     # HORRIBLE HACK DUE TO PROLOG MEMORY LEAK
-    if settings.stats.total_programs % 10000 == 0:
+    if stats.stats.total_programs % 10000 == 0:
         tester.janus_clear_cache()
 
 def popper(settings, tester, bkcons):
@@ -70,17 +72,17 @@ def popper(settings, tester, bkcons):
         is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
         has_invention = settings.pi_enabled and prog_has_invention(prog)
 
-        settings.stats.total_programs += 1
+        stats.stats.total_programs += 1
 
         clear_prolog_cache(settings, tester)
 
-        settings.logger.debug(f'Program {settings.stats.total_programs}:')
-        settings.logger.debug(format_prog(prog))
+        logger.debug(f'Program {stats.stats.total_programs}:')
+        logger.debug(format_prog(prog))
 
         size_change = check_size_change(settings, state, prog_size)
 
         # TEST
-        with settings.stats.duration('test'):
+        with stats.duration('test'):
             if settings.noisy:
                 test_result = tester.test_prog_noisy(prog, prog_size)
             else:
@@ -113,7 +115,7 @@ def popper(settings, tester, bkcons):
         new_cons.extend(new_cons_)
 
         # COMBINE
-        with settings.stats.duration('combine'):
+        with stats.duration('combine'):
             combine_result = combine_helper.combine(prog, prog_size, test_result, subsumed, noisy_subsumed, add_gen, pruned_more_general, is_recursive, has_invention, size_change)
 
         # IF NEW HYPOTHESIS
@@ -131,11 +133,11 @@ def popper(settings, tester, bkcons):
                     generator.prune_size(i)
 
         # CONSTRAIN
-        with settings.stats.duration('constrain'):
+        with stats.duration('constrain'):
             generator.constrain(new_cons)
 
     # LAST COMBINE STAGE
-    with settings.stats.duration('combine'):
+    with stats.duration('combine'):
         combine_result = combine_helper.update_best_prog(combine_helper.to_combine, last_combine_stage=True)
     if combine_result:
         new_hypothesis, hypothesis_size, conf_matrix = combine_result
@@ -146,14 +148,14 @@ def learn_solution(settings):
     t1 = time.time()
     settings.nonoise = not settings.noisy
     settings.solution_found = False
-    with settings.stats.duration('load data'):
+    with stats.duration('load data'):
         tester = Tester(settings)
     bkcons = get_bk_cons(settings, tester)
     time_so_far = time.time()-t1
     timeout_duration = int(settings.timeout-time_so_far)
     timeout_duration = max(timeout_duration, 1)
     timeout(settings, popper, (settings, tester, bkcons), timeout_duration=timeout_duration,)
-    return settings.solution, settings.best_prog_score, settings.stats
+    return settings.solution, settings.best_prog_score, stats
 
 def build_constraints(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, is_recursive, has_invention, combine_helper, test_result):
 
@@ -193,13 +195,13 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
     # if the program does not cover any positive examples, check whether it has an unsat core
     if not has_invention:
         if tp < min_coverage or (settings.noisy and tp <= prog_size):
-            with settings.stats.duration('find mucs'):
+            with stats.duration('find mucs'):
                 cons_ = tuple(unsatcore_finder.explain_incomplete(prog))
                 new_cons.extend(cons_)
                 pruned_more_general = len(cons_) > 0
 
     if tp > 0 and state.success_sets and (not settings.noisy or (settings.noisy and fp == 0)):
-        with settings.stats.duration('check subsumed and covers_too_few'):
+        with stats.duration('check subsumed and covers_too_few'):
             subsumed = pos_covered in state.success_sets or any(subset(pos_covered, xs) for xs in state.success_sets)
             subsumed_by_two = (not subsumed) and subsumer.check_subsumed_by_two(pos_covered, prog_size)
             covers_too_few = (not subsumed) and (not subsumed_by_two) and (not settings.noisy) and subsumer.check_covers_too_few(prog_size, pos_covered)
@@ -210,7 +212,7 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
 
     if (not settings.noisy) and (not has_invention) and (not is_recursive) and (subsumed or subsumed_by_two or covers_too_few):
         subsumed_progs = []
-        with settings.stats.duration('find most general subsumed/covers_too_few'):
+        with stats.duration('find most general subsumed/covers_too_few'):
             subsumed_progs = subsumer.subsumed_or_covers_too_few(prog, seen=set())
         pruned_more_general = len(subsumed_progs) > 0
 
@@ -246,7 +248,7 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
         #         add_gen = True
         #         add_spec = False
         #         inconsistent = True
-        #         with settings.stats.duration('explain_none_functional'):
+        #         with stats.duration('explain_none_functional'):
         #             cons_ = explain_none_functional(settings, tester, prog)
         #             new_cons.extend(cons_)
 
@@ -291,7 +293,7 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
     if settings.max_rules > 2 and is_recursive:
         new_cons.append((Constraint.TMP_ANDY, prog))
 
-    with settings.stats.duration('check_reducible1'):
+    with stats.duration('check_reducible1'):
         xs, pruned_smaller = allsatcore_finder.check_redundant_literal(prog)
         if pruned_smaller:
             pruned_more_general = True
@@ -304,7 +306,7 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
 
     # REDUCIBLE_2 (negative reducible)
     if (not add_spec) and (not pruned_more_general) and settings.datalog and (not settings.recursion_enabled) and num_neg > 0:
-        with settings.stats.duration('check_reducible2'):
+        with stats.duration('check_reducible2'):
             bad_prog = allsatcore_finder.check_neg_reducible(prog)
             if bad_prog:
                 add_spec = True
