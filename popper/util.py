@@ -10,6 +10,7 @@ from collections import defaultdict
 from typing import NamedTuple
 from time import perf_counter
 from contextlib import contextmanager
+import logging
 
 class Literal(NamedTuple):
     predicate: str
@@ -30,9 +31,6 @@ BATCH_SIZE=1000
 ANYTIME_TIMEOUT=10
 BKCONS_TIMEOUT=10
 
-
-savings=0
-
 class Constraint:
     GENERALISATION = 1
     SPECIALISATION = 2
@@ -50,16 +48,11 @@ def parse_args():
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {TIMEOUT})')
     parser.add_argument('--max-body', type=int, default=None, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
     parser.add_argument('--max-vars', type=int, default=None, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
-    parser.add_argument('--max-literals', type=int, default=MAX_LITERALS, help=f'Maximum number of literals allowed in program (default: {MAX_LITERALS})')
-    parser.add_argument('--max-rules', type=int, default=None, help=f'Maximum number of rules allowed in a recursive program (default: {MAX_RULES})')
     parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
     parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--showcons', default=False, action='store_true', help='Show constraints deduced during the search')
-    parser.add_argument('--solver', default='rc2', choices=['rc2', 'uwr'], help='Select a solver for the combine stage (default: rc2)')
     parser.add_argument('--anytime-solver', default=None, choices=['nuwls'], help='Select an anytime MaxSAT solver (default: None)')
-    parser.add_argument('--anytime-timeout', type=int, default=ANYTIME_TIMEOUT, help=f'Maximum timeout (seconds) for each anytime MaxSAT call (default: {ANYTIME_TIMEOUT})')
-    parser.add_argument('--batch-size', type=int, default=BATCH_SIZE, help=f'Combine batch size (default: {BATCH_SIZE})')
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
@@ -152,66 +145,37 @@ def rule_is_invented(rule):
 def mdl_score(fn, fp, size):
     return fn + fp + size
 
-class DurationSummary:
-    def __init__(self, operation, called, total, mean, maximum):
-        self.operation = operation
-        self.called = called
-        self.total = total
-        self.mean = mean
-        self.maximum = maximum
-
 def flatten(xs):
     return [item for sublist in xs for item in sublist]
 
 class Settings:
-    def __init__(self, cmd_line=False, info=True, debug=False, show_stats=True, max_literals=MAX_LITERALS, timeout=TIMEOUT, quiet=False, eval_timeout=EVAL_TIMEOUT, max_examples=MAX_EXAMPLES, max_body=None, max_rules=None, max_vars=None, kbpath=False, ex_file=False, bk_file=False, bias_file=False, showcons=False, no_bias=False, order_space=False, noisy=False, batch_size=BATCH_SIZE, solver='rc2', anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT):
 
-        if cmd_line:
-            args = parse_args()
-            self.bk_file, self.ex_file, self.bias_file = load_kbpath(args.kbpath)
-            self.path = args.kbpath
-            quiet = args.quiet
-            debug = args.debug
-            show_stats = args.stats
-            # bkcons = args.bkcons
-            max_literals = args.max_literals
-            timeout = args.timeout
-            eval_timeout = EVAL_TIMEOUT
-            max_examples = MAX_EXAMPLES
-            max_body = args.max_body
-            max_vars = args.max_vars
-            max_rules = args.max_rules
-            # functional_test = args.functional_test
-            # datalog = args.datalog
-            showcons = args.showcons
-            # no_bias = args.no_bias
-            # order_space = args.order_space
-            noisy = args.noisy
-            batch_size = args.batch_size
-            solver = args.solver
-            anytime_solver = args.anytime_solver
-            anytime_timeout = args.anytime_timeout
-        else:
-            if kbpath:
-                self.bk_file, self.ex_file, self.bias_file = load_kbpath(kbpath)
-            else:
-                self.ex_file = ex_file
-                self.bk_file = bk_file
-                self.bias_file = bias_file
+    @classmethod
+    def from_args(cls):
+        args = parse_args() # Your existing argparse function
+        bk, ex, bias = load_kbpath(args.kbpath)
+        conf = vars(args)
+        conf.update({'bk_file': bk, 'ex_file': ex, 'bias_file': bias})
+        settings = cls(**conf)
+        return settings
+
+    def __init__(self, cmd_line=False, info=True, debug=False, stats=True, timeout=TIMEOUT, quiet=False, max_body=None, max_vars=None, ex_file=None, bk_file=None, bias_file=None, showcons=False, noisy=False, anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT, kbpath=None):
+
+        self.ex_file = ex_file
+        self.bk_file = bk_file
+        self.bias_file = bias_file
 
         self.info = info
         self.debug = debug
-        self.show_stats = show_stats
+        self.show_stats = stats
         self.showcons = showcons
-        self.max_literals = max_literals
+        self.max_literals = MAX_LITERALS
         self.timeout = timeout
-        self.eval_timeout = eval_timeout
-        self.max_examples = max_examples
+        self.eval_timeout = EVAL_TIMEOUT
+        self.max_examples = MAX_EXAMPLES
         self.max_body = max_body
         self.max_vars = max_vars
-        self.max_rules = max_rules
-        self.no_bias = no_bias
-        self.order_space = order_space
+        self.max_rules = MAX_RULES
         self.noisy = noisy
 
         if noisy:
@@ -219,7 +183,14 @@ class Settings:
         else:
             self.batch_size = 1
 
-        self.solver = solver
+        if quiet:
+            pass
+        elif debug:
+            logger.setLevel(logging.DEBUG)
+        elif info:
+            logger.setLevel(logging.INFO)
+
+        self.solver = 'rc2'
         self.anytime_solver = anytime_solver
         self.anytime_timeout = anytime_timeout
         self.bkcons_timeout = BKCONS_TIMEOUT
@@ -318,11 +289,6 @@ class Settings:
                     exit()
                 # self.body_modes[pred] = tuple(directions[pred][i] for i in range(arity))
 
-
-        # TODO: EVENTUALLY
-
-        # print(directions)
-
         self.cached_atom_args = {}
         for i in range(1, self.max_arity+1):
             for args in permutations(range(0, self.max_vars), i):
@@ -352,12 +318,6 @@ class Settings:
                     self.literal_inputs[(pred, args)] = frozenset(arg for i, arg in enumerate(args) if directions[pred][i] == '+')
                     self.literal_outputs[(pred, args)] = frozenset(arg for i, arg in enumerate(args) if directions[pred][i] == '-')
 
-        # for k, vs in self.literal_inputs.items():
-            # print(k, vs)
-        # print('head_inputs', head_inputs)
-        # print('head_outputs', head_outputs)
-        # exit()
-
         pred = self.head_literal.predicate
         arity = len(self.head_literal.arguments)
 
@@ -375,7 +335,6 @@ class Settings:
 
         self.head_types, self.body_types = load_types(self)
 
-
         if len(self.body_types) > 0 or not self.head_types is None:
             if self.head_types is None:
                 print('WARNING: MISSING HEAD TYPE')
@@ -385,20 +344,14 @@ class Settings:
                     print(f'WARNING: MISSING BODY TYPE FOR {p}')
                     # exit()
 
-
-
         self.single_solve = not (self.recursion_enabled or self.pi_enabled)
 
         logger.debug(f'Max rules: {self.max_rules}')
         logger.debug(f'Max vars: {self.max_vars}')
         logger.debug(f'Max body: {self.max_body}')
 
-        self.single_solve = not (self.recursion_enabled or self.pi_enabled)
-
-
         self.min_size = None
 
-    # def print_incomplete_solution2(self, prog, tp, fn, tn, fp, size):
     def print_incomplete_solution2(self, prog, size, conf_matrix):
         tp, fn, tn, fp = conf_matrix
         logger.info('*'*20)
@@ -629,77 +582,6 @@ def load_types(settings):
 
     return head_types, body_types
 
-# def bias_order(settings, max_size):
-
-#     if not (settings.no_bias or settings.order_space):
-#         return [(size_literals, settings.max_vars, settings.max_rules, None) for size_literals in range(1, max_size+1)]
-
-#     # if settings.search_order is None:
-#     ret = []
-#     predicates = len(settings.body_preds) + 1
-#     arity = settings.max_arity
-#     min_rules = settings.max_rules
-#     if settings.no_bias:
-#         min_rules = 1
-#     for size_rules in range(min_rules, settings.max_rules+1):
-#         max_size = (1 + settings.max_body) * size_rules
-#         for size_literals in range(1, max_size+1):
-#             # print(size_literals)
-#             minimum_vars = settings.max_vars
-#             if settings.no_bias:
-#                 minimum_vars = 1
-#             for size_vars in range(minimum_vars, settings.max_vars+1):
-#                 # FG We should not search for configurations with more variables than the possible variables for the number of litereals considered
-#                 # There must be at least one variable repeated, otherwise all the literals are disconnected
-#                 max_possible_vars = (size_literals * arity) - 1
-#                 # print(f'size_literals:{size_literals} size_vars:{size_vars} size_rules:{size_rules} max_possible_vars:{max_possible_vars}')
-#                 if size_vars > max_possible_vars:
-#                     break
-
-#                 hspace = comb(predicates * pow(size_vars, arity), size_literals)
-
-#                 # AC @ FG: handy code to skip pointless unsat calls
-#                 if hspace == 0:
-#                     continue
-#                 if size_rules > 1 and size_literals < 5:
-#                     continue
-#                 ret.append((size_literals, size_vars, size_rules, hspace))
-
-#     if settings.order_space:
-#         ret.sort(key=lambda tup: (tup[3],tup[0]))
-
-#     #for x in ret:
-#     #    print(x)
-
-#     settings.search_order = ret
-#     return settings.search_order
-
-# def is_headless(prog):
-#     return any(head is None for head, body in prog)
-
-# @cache
-# def head_connected(rule):
-#     head, body = rule
-#     _head_pred, head_args = head
-#     head_connected_vars = set(head_args)
-#     body_literals = set(body)
-
-#     if not any(x in head_connected_vars for _pred, args in body for x in args):
-#         return False
-
-#     while body_literals:
-#         changed = False
-#         for literal in body_literals:
-#             pred, args = literal
-#             if any (x in head_connected_vars for x in args):
-#                 head_connected_vars.update(args)
-#                 body_literals = body_literals.difference({literal})
-#                 changed = True
-#         if changed == False and body_literals:
-#             return False
-
-#     return True
-
 import os
 # AC: I do not know what this code below really does, but it works
 class suppress_stdout_stderr(object):
@@ -845,7 +727,6 @@ def non_empty_powerset(iterable):
     s = tuple(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
 
-
 def generalisations(prog, allow_headless=True, recursive=False):
 
     if len(prog) == 1:
@@ -877,3 +758,4 @@ def generalisations(prog, allow_headless=True, recursive=False):
             for new_subrule in generalisations([subrule], allow_headless=False, recursive=recursive):
                 new_prog = prog[:i] + new_subrule + prog[i+1:]
                 yield new_prog
+

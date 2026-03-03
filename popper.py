@@ -4,7 +4,8 @@ from popper.util import Settings
 from popper.loop import learn_solution
 
 if __name__ == '__main__':
-    settings = Settings(cmd_line=True)
+    # settings = Settings(cmd_line=True)
+    settings = Settings.from_args()
     prog, score, stats = learn_solution(settings)
     if prog != None:
         settings.print_prog_score(prog, score)
