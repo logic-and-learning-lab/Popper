@@ -1,4 +1,4 @@
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations
+from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions
 
 class UnsatCoreFinder:
     def __init__(self, settings, tester):
@@ -128,7 +128,7 @@ class UnsatCoreFinder:
             if not head and not connected(body):
                 return False
 
-            if not self.settings.has_valid_directions(rule):
+            if not has_valid_directions(self.settings, rule):
                 return False
 
         if len(prog) == 1:

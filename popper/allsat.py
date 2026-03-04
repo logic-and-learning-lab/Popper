@@ -1,4 +1,4 @@
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations
+from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions
 from itertools import chain, combinations, permutations
 
 class AllSatCoreFinder:
@@ -71,7 +71,7 @@ class AllSatCoreFinder:
         if any(seen_body.issubset(body) for seen_body in allsat1):
             return out
 
-        if not self.settings.has_valid_directions((None, body)):
+        if not has_valid_directions(self.settings, (None, body)):
             return out
 
         if not self.tester.is_literal_redundant(body, literal):
@@ -126,7 +126,7 @@ class AllSatCoreFinder:
                 new_rule = (head, body_)
                 new_prog = frozenset([new_rule])
 
-                if not self.settings.has_valid_directions(new_rule):
+                if not has_valid_directions(self.settings, new_rule):
                     continue
 
                 if self.tester.is_neg_reducible(body_, literal):

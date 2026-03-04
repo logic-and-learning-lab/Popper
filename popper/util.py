@@ -17,8 +17,6 @@ class Literal(NamedTuple):
     predicate: str
     arguments: tuple
 
-clingo.script.enable_python()
-
 TIMEOUT=1200
 EVAL_TIMEOUT=0.001
 MAX_LITERALS=100
@@ -47,8 +45,8 @@ def parse_args():
     parser.add_argument('kbpath', help='Path to files to learn from')
     parser.add_argument('--noisy', default=False, action='store_true', help='tell Popper that there is noise')
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {TIMEOUT})')
-    parser.add_argument('--max-body', type=int, default=None, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
-    parser.add_argument('--max-vars', type=int, default=None, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
+    parser.add_argument('--max-body', type=int, default=MAX_BODY, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
+    parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
     parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
     parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
@@ -64,7 +62,6 @@ def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
     def handler(signum, frame):
         raise TimeoutError()
 
-    # set the timeout handler
     signal.signal(signal.SIGALRM, handler)
     signal.alarm(timeout_duration)
     try:
@@ -153,52 +150,51 @@ class Settings:
 
     @classmethod
     def from_args(cls):
-        args = parse_args() # Your existing argparse function
+        args = parse_args() #
         bk, ex, bias = load_kbpath(args.kbpath)
         conf = vars(args)
         conf.update({'bk_file': bk, 'ex_file': ex, 'bias_file': bias})
-        settings = cls(**conf)
+        settings = Settings(**conf)
         return settings
 
-    def __init__(self, cmd_line=False, info=True, debug=False, stats=True, timeout=TIMEOUT, quiet=False, max_body=None, max_vars=None, ex_file=None, bk_file=None, bias_file=None, showcons=False, noisy=False, anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT, kbpath=None):
+    def __init__(self, cmd_line=False, info=True, debug=False, stats=True, timeout=TIMEOUT, quiet=False, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, showcons=False, noisy=False, anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT, kbpath=None):
 
-        self.ex_file = ex_file
-        self.bk_file = bk_file
+        self.anytime_solver = anytime_solver
+        self.anytime_timeout = anytime_timeout
+        self.best_prog_score = None
         self.bias_file = bias_file
-
-        self.info = info
+        self.bk_file = bk_file
+        self.bkcons_timeout = BKCONS_TIMEOUT
         self.debug = debug
+        self.eval_timeout = EVAL_TIMEOUT
+        self.ex_file = ex_file
+        self.has_directions = False
+        self.info = info
+        self.max_body = max_body
+        self.max_examples = MAX_EXAMPLES
+        self.max_literals = MAX_LITERALS
+        self.max_rules = MAX_RULES
+        self.max_vars = max_vars
+        self.noisy = noisy
+        self.non_datalog_flag = False
+        self.pi_enabled = False
+        self.recall = {}
+        self.recursion_enabled = False
         self.show_stats = stats
         self.showcons = showcons
-        self.max_literals = MAX_LITERALS
+        self.solution = None
+        self.solver = 'rc2'
         self.timeout = timeout
-        self.eval_timeout = EVAL_TIMEOUT
-        self.max_examples = MAX_EXAMPLES
-        self.max_body = max_body
-        self.max_vars = max_vars
-        self.max_rules = MAX_RULES
-        self.noisy = noisy
 
         if noisy:
             self.batch_size = 20000
         else:
             self.batch_size = 1
 
-        if quiet:
-            pass
-        elif debug:
+        if debug:
             logger.setLevel(logging.DEBUG)
         elif info:
             logger.setLevel(logging.INFO)
-
-        self.solver = 'rc2'
-        self.anytime_solver = anytime_solver
-        self.anytime_timeout = anytime_timeout
-        self.bkcons_timeout = BKCONS_TIMEOUT
-
-        self.recall = {}
-        self.solution = None
-        self.best_prog_score = None
 
         solver = clingo.Control(['-Wnone'])
         with open(self.bias_file) as f:
@@ -215,24 +211,20 @@ class Settings:
         solver.ground([('bias', [])])
 
         # determine whether recursion enabled
-        self.recursion_enabled = False
         for x in solver.symbolic_atoms.by_signature('enable_recursion', arity=0):
             self.recursion_enabled = True
 
         # determine whether pi enabled
-        self.pi_enabled = False
         for x in solver.symbolic_atoms.by_signature('enable_pi', arity=0):
             self.pi_enabled = True
 
         # determine whether non_datalog flag is enabled
-        self.non_datalog_flag = False
         for x in solver.symbolic_atoms.by_signature('non_datalog', arity=0):
             self.non_datalog_flag = True
 
         # read directions from bias file when there is no PI
-        # if not self.pi_enabled:
         self.directions = directions = defaultdict(dict)
-        self.has_directions = False
+
         for x in solver.symbolic_atoms.by_signature('direction', arity=2):
             self.has_directions = True
             pred = x.symbol.arguments[0].name
@@ -252,27 +244,14 @@ class Settings:
             head_args = tuple(range(head_arity))
             self.head_literal = Literal(head_pred, head_args)
 
-        if self.max_body is None:
-            for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
-                self.max_body = x.symbol.arguments[0].number
+        for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
+            self.max_body = x.symbol.arguments[0].number
 
-        if self.max_body is None:
-            self.max_body = MAX_BODY
+        for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
+            self.max_vars = x.symbol.arguments[0].number
 
-        if self.max_vars is None:
-            for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
-                self.max_vars = x.symbol.arguments[0].number
-        if self.max_vars is None:
-            self.max_vars = MAX_VARS
-
-        if self.max_rules is None:
-            for x in solver.symbolic_atoms.by_signature('max_clauses', arity=1):
-                self.max_rules = x.symbol.arguments[0].number
-        if self.max_rules is None:
-            if self.pi_enabled or self.recursion_enabled:
-                self.max_rules = MAX_RULES
-            else:
-                self.max_rules = 1
+        for x in solver.symbolic_atoms.by_signature('max_clauses', arity=1):
+            self.max_rules = x.symbol.arguments[0].number
 
         # find all body preds
         self.body_preds = set()
@@ -334,7 +313,19 @@ class Settings:
             else:
                 self.max_rules = 1
 
-        self.head_types, self.body_types = load_types(self)
+        for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
+            head_pred = x.symbol.arguments[0].name
+            head_arity = x.symbol.arguments[1].number
+
+        self.head_types = None
+        self.body_types = {}
+        for x in solver.symbolic_atoms.by_signature('type', arity=2):
+            pred = x.symbol.arguments[0].name
+            xs = [y.name for y in x.symbol.arguments[1].arguments]
+            if pred == head_pred:
+                self.head_types = xs
+            else:
+                self.body_types[pred] = xs
 
         if len(self.body_types) > 0 or not self.head_types is None:
             if self.head_types is None:
@@ -352,238 +343,6 @@ class Settings:
         logger.debug(f'Max body: {self.max_body}')
 
         self.min_size = None
-
-    def print_incomplete_solution2(self, prog, size, conf_matrix):
-        tp, fn, tn, fp = conf_matrix
-        logger.info('*'*20)
-        logger.info('New best hypothesis:')
-        if self.noisy:
-            logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} mdl:{size+fn+fp}')
-        else:
-            logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size}')
-        for rule in order_prog(prog):
-            logger.info(format_rule(self.order_rule(rule)))
-        logger.info('*'*20)
-
-    def print_prog_score(self, prog, score):
-        tp, fn, tn, fp = score
-        size = calc_prog_size(prog)
-        precision = 'n/a'
-        if (tp+fp) > 0:
-            precision = f'{tp / (tp+fp):0.2f}'
-        recall = 'n/a'
-        if (tp+fn) > 0:
-            recall = f'{tp / (tp+fn):0.2f}'
-        print('*'*10 + ' SOLUTION ' + '*'*10)
-        if self.noisy:
-            print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size} MDL:{size+fn+fp}')
-        else:
-          print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
-        # print(self.format_prog(order_prog(prog)))
-        for rule in order_prog(prog):
-            print(format_rule(self.order_rule(rule)))
-        # print(self.format_prog(order_prog(prog)))
-        print('*'*30)
-
-    def order_rule(self, rule):
-        head, body = rule
-
-        if self.pi_enabled:
-            return rule
-
-        if self.datalog:
-            return order_rule_datalog(head, frozenset(body))
-
-        if not self.has_directions:
-            return rule
-
-
-        ordered_body = []
-        grounded_variables = set()
-
-        if head:
-            head_pred, head_args = head
-            head_inputs = self.literal_inputs[(head_pred, head_args)]
-            if head_inputs == []:
-                return rule
-            grounded_variables.update(head_inputs)
-
-        body_literals = set(body)
-
-
-        while body_literals:
-            selected_literal = None
-            for literal in body_literals:
-                pred, args = literal
-                literal_outputs = self.literal_outputs[(pred, args)]
-
-                if len(literal_outputs) == len(args):
-                    selected_literal = literal
-                    break
-
-                literal_inputs = self.literal_inputs[(pred, args)]
-                if not literal_inputs.issubset(grounded_variables):
-                    continue
-
-                if head and pred != head.predicate:
-                    # find the first ground non-recursive body literal and stop
-                    selected_literal = literal
-                    break
-                elif selected_literal == None:
-                    # otherwise use the recursive body literal
-                    selected_literal = literal
-
-            if selected_literal == None:
-                message = f'{selected_literal} in clause {format_rule(rule)} could not be grounded'
-                raise ValueError(message)
-
-            ordered_body.append(selected_literal)
-            pred, args = selected_literal
-            selected_literal_outputs = self.literal_outputs[(pred, args)]
-            grounded_variables = grounded_variables.union(selected_literal_outputs)
-            body_literals = body_literals.difference({selected_literal})
-
-        return head, tuple(ordered_body)
-
-    # def order_rule_datalog(self, head, body):
-
-    #     ordered_body = []
-    #     seen_vars = set()
-
-    #     if head:
-    #         seen_vars.update(head.arguments)
-    #         recursive_literals = set(literal for literal in body if literal.predicate == head.predicate)
-    #     else:
-    #         recursive_literals = set()
-
-    #     body_literals = set(body) - recursive_literals
-
-    #     while body_literals:
-    #         selected_literal = None
-    #         for literal in body_literals:
-    #             if set(literal.arguments).issubset(seen_vars):
-    #                 selected_literal = literal
-    #                 break
-
-    #         if selected_literal == None:
-    #             selected_literal = min(body_literals, key=lambda x: self.tmp_score_(seen_vars, x))
-
-    #         ordered_body.append(selected_literal)
-    #         seen_vars.update(selected_literal.arguments)
-    #         body_literals.remove(selected_literal)
-
-    #     return head, tuple(ordered_body) + tuple(recursive_literals)
-
-    # def tmp_score_(self, seen_vars, literal):
-    #     pred, args = literal
-    #     x = asda[pred, tuple(1 if x in seen_vars else 0 for x in args)]
-    #     y = self.recall[pred, tuple(1 if x in seen_vars else 0 for x in args)]
-    #     return self.recall[pred, tuple(1 if x in seen_vars else 0 for x in args)]
-
-    def has_valid_directions(self, rule):
-        if self.has_directions:
-            return self.has_valid_directions_(rule)
-        return True
-
-    @cache
-    def has_valid_directions_(self,rule):
-        head, body = rule
-
-        if head:
-            head_pred, head_args = head
-            head_inputs = self.literal_inputs[(head_pred, head_args)]
-            if len(head_inputs) == 0:
-                return True
-
-            grounded_variables = head_inputs
-            body_literals = set(body)
-
-            while body_literals:
-                selected_literal = None
-                for literal in body_literals:
-                    pred, args = literal
-                    literal_inputs = self.literal_inputs[(pred, args)]
-                    if not literal_inputs.issubset(grounded_variables):
-                        continue
-                    if pred != head_pred:
-                        selected_literal = literal
-                        break
-                    elif selected_literal is None:
-                        selected_literal = literal
-
-                if selected_literal is None:
-                    return False
-
-                pred, args = selected_literal
-                selected_literal_outputs = self.literal_outputs[(pred, args)]
-                grounded_variables = grounded_variables.union(selected_literal_outputs)
-                body_literals = body_literals.difference({selected_literal})
-            return True
-
-        # headless
-        if all(len(self.literal_inputs[(pred, args)]) == 0 for pred, args in body):
-            return True
-
-        body_literals = set(body)
-        grounded_variables = set()
-
-        while body_literals:
-            selected_literal = None
-            for literal in body_literals:
-                pred, args = literal
-                literal_outputs = self.literal_outputs[(pred, args)]
-                if len(literal_outputs) == len(literal.arguments):
-                    selected_literal = literal
-                    break
-                literal_inputs = self.literal_inputs[(pred, args)]
-                if literal_inputs.issubset(grounded_variables):
-                    selected_literal = literal
-                    break
-
-            if selected_literal is None:
-                return False
-
-            grounded_variables = grounded_variables.union(selected_literal.arguments)
-            body_literals = body_literals.difference({selected_literal})
-
-        return True
-
-# def non_empty_powerset(iterable):
-#     s = tuple(iterable)
-#     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
-
-# def non_empty_subset(iterable):
-#     s = tuple(iterable)
-#     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)))
-
-def load_types(settings):
-    enc = """
-#defined clause/1.
-#defined clause_var/2.
-#defined var_type/3."""
-    # solver = clingo.Control()
-    solver = clingo.Control(['-Wnone'])
-    with open(settings.bias_file) as f:
-        solver.add('bias', [], f.read())
-    solver.add('bias', [], enc)
-    solver.ground([('bias', [])])
-
-    for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
-        head_pred = x.symbol.arguments[0].name
-        head_arity = x.symbol.arguments[1].number
-
-    head_types = None
-    body_types = {}
-    for x in solver.symbolic_atoms.by_signature('type', arity=2):
-        pred = x.symbol.arguments[0].name
-        # xs = (str(t) for t in )
-        xs = [y.name for y in x.symbol.arguments[1].arguments]
-        if pred == head_pred:
-            head_types = xs
-        else:
-            body_types[pred] = xs
-
-    return head_types, body_types
 
 import os
 # AC: I do not know what this code below really does, but it works
@@ -654,7 +413,6 @@ def remap_variables(rule):
 
     head_vars = frozenset(head.arguments) if head else frozenset()
 
-
     next_var = len(head_vars)
     lookup = {i:i for i in head_vars}
 
@@ -673,7 +431,6 @@ def remap_variables(rule):
 
 def format_prog(prog):
     return '\n'.join(format_rule(rule) for rule in prog)
-
 
 # TODO: THIS CHECK IS NOT COMPLETE
 # IT DOES NOT ACCOUNT FOR VARIABLE RENAMING
@@ -792,4 +549,162 @@ def order_rule_datalog(head, body):
 
 def tmp_score_(seen_vars, literal):
     pred, args = literal
+    # GLOBAL VARIABLE SHITSHOW
     return recalls[pred, tuple(1 if x in seen_vars else 0 for x in args)]
+
+def order_rule(settings, rule):
+    head, body = rule
+
+    if settings.pi_enabled:
+        return rule
+
+    if settings.datalog:
+        return order_rule_datalog(head, frozenset(body))
+
+    if not settings.has_directions:
+        return rule
+
+    ordered_body = []
+    grounded_variables = set()
+
+    if head:
+        head_pred, head_args = head
+        head_inputs = settings.literal_inputs[(head_pred, head_args)]
+        if head_inputs == []:
+            return rule
+        grounded_variables.update(head_inputs)
+
+    body_literals = set(body)
+
+
+    while body_literals:
+        selected_literal = None
+        for literal in body_literals:
+            pred, args = literal
+            literal_outputs = settings.literal_outputs[(pred, args)]
+
+            if len(literal_outputs) == len(args):
+                selected_literal = literal
+                break
+
+            literal_inputs = settings.literal_inputs[(pred, args)]
+            if not literal_inputs.issubset(grounded_variables):
+                continue
+
+            if head and pred != head.predicate:
+                # find the first ground non-recursive body literal and stop
+                selected_literal = literal
+                break
+            elif selected_literal == None:
+                # otherwise use the recursive body literal
+                selected_literal = literal
+
+        if selected_literal == None:
+            message = f'{selected_literal} in clause {format_rule(rule)} could not be grounded'
+            raise ValueError(message)
+
+        ordered_body.append(selected_literal)
+        pred, args = selected_literal
+        selected_literal_outputs = settings.literal_outputs[(pred, args)]
+        grounded_variables = grounded_variables.union(selected_literal_outputs)
+        body_literals = body_literals.difference({selected_literal})
+
+    return head, tuple(ordered_body)
+
+def print_incomplete_solution2(settings, prog, size, conf_matrix):
+    tp, fn, tn, fp = conf_matrix
+    logger.info('*'*20)
+    logger.info('New best hypothesis:')
+    if settings.noisy:
+        logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} mdl:{size+fn+fp}')
+    else:
+        logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size}')
+    for rule in order_prog(prog):
+        logger.info(format_rule(order_rule(settings, rule)))
+    logger.info('*'*20)
+
+def print_prog_score(settings, prog, score):
+    tp, fn, tn, fp = score
+    size = calc_prog_size(prog)
+    precision = 'n/a'
+    if (tp+fp) > 0:
+        precision = f'{tp / (tp+fp):0.2f}'
+    recall = 'n/a'
+    if (tp+fn) > 0:
+        recall = f'{tp / (tp+fn):0.2f}'
+    print('*'*10 + ' SOLUTION ' + '*'*10)
+    if settings.noisy:
+        print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size} MDL:{size+fn+fp}')
+    else:
+      print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
+    for rule in order_prog(prog):
+        print(format_rule(order_rule(settings, rule)))
+    print('*'*30)
+
+def has_valid_directions(settings, rule):
+    if settings.has_directions:
+        return has_valid_directions_(settings, rule)
+    return True
+
+@cache
+def has_valid_directions_(settings, rule):
+    head, body = rule
+
+    if head:
+        head_pred, head_args = head
+        head_inputs = settings.literal_inputs[(head_pred, head_args)]
+        if len(head_inputs) == 0:
+            return True
+
+        grounded_variables = head_inputs
+        body_literals = set(body)
+
+        while body_literals:
+            selected_literal = None
+            for literal in body_literals:
+                pred, args = literal
+                literal_inputs = settings.literal_inputs[(pred, args)]
+                if not literal_inputs.issubset(grounded_variables):
+                    continue
+                if pred != head_pred:
+                    selected_literal = literal
+                    break
+                elif selected_literal is None:
+                    selected_literal = literal
+
+            if selected_literal is None:
+                return False
+
+            pred, args = selected_literal
+            selected_literal_outputs = settings.literal_outputs[(pred, args)]
+            grounded_variables = grounded_variables.union(selected_literal_outputs)
+            body_literals = body_literals.difference({selected_literal})
+        return True
+
+    # headless
+    if all(len(settings.literal_inputs[(pred, args)]) == 0 for pred, args in body):
+        return True
+
+    body_literals = set(body)
+    grounded_variables = set()
+
+    while body_literals:
+        selected_literal = None
+        for literal in body_literals:
+            pred, args = literal
+            literal_outputs = settings.literal_outputs[(pred, args)]
+            if len(literal_outputs) == len(literal.arguments):
+                selected_literal = literal
+                break
+            literal_inputs = settings.literal_inputs[(pred, args)]
+            if literal_inputs.issubset(grounded_variables):
+                selected_literal = literal
+                break
+
+        if selected_literal is None:
+            return False
+
+        grounded_variables = grounded_variables.union(selected_literal.arguments)
+        body_literals = body_literals.difference({selected_literal})
+
+    return True

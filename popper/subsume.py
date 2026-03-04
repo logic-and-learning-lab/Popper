@@ -1,4 +1,4 @@
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations
+from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions
 from bitarray.util import subset, any_and, ones
 from itertools import chain, combinations, permutations
 class SubsumeChecker:
@@ -52,7 +52,7 @@ class SubsumeChecker:
                 out.update(xs)
                 continue
 
-            if not self.settings.has_valid_directions(new_rule):
+            if not has_valid_directions(self.settings, new_rule):
                 xs = self.subsumed_or_covers_too_few(new_prog, seen)
                 out.update(xs)
                 continue

@@ -4,7 +4,7 @@ from importlib import resources
 from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
-from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal, Literal, mdl_score
+from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal, Literal, mdl_score, order_rule
 from bitarray import bitarray, frozenbitarray
 from bitarray.util import ones
 from collections import defaultdict
@@ -86,14 +86,14 @@ class Tester():
 
     def parse_single_rule(self, prog):
         rule = next(iter(prog))
-        head, ordered_body = self.settings.order_rule(rule)
+        head, ordered_body = order_rule(self.settings, rule)
         atom_str = format_literal_janus(head)
         body_str = ','.join(format_literal_janus(literal) for literal in ordered_body)
         return atom_str, body_str
 
     @cache
     def parse_body(self, body):
-        _, ordered_body = self.settings.order_rule((None, body))
+        _, ordered_body = order_rule(self.settings, (None, body))
         body_str = ','.join(format_literal_janus(literal) for literal in ordered_body)
         return body_str
 
@@ -180,7 +180,7 @@ class Tester():
                     q = f'neg_index(_ID, {atom_str}), {body_str}'
                 else:
                     head, body = next(iter(prog))
-                    head, ordered_body = self.settings.order_rule((None, body | self.neg_literal_set))
+                    head, ordered_body = order_rule(self.settings, (None, body | self.neg_literal_set))
                     q = ','.join(format_literal_janus(literal) for literal in ordered_body)
                 inconsistent = bool_query(q)
 
@@ -311,7 +311,7 @@ class Tester():
 
     @cache
     def parse_rule_for_recursion(self, rule):
-        return format_rule(self.settings.order_rule(rule))[:-1]
+        return format_rule(order_rule(self.settings, rule))[:-1]
 
     @contextmanager
     def using(self, prog):
@@ -411,7 +411,7 @@ class Tester():
 
     def is_neg_reducible(self, body, literal):
         # AC: we do not cache as we can never see body + neg_literal again
-        head, ordered_body = self.settings.order_rule((None, body | self.neg_literal_set))
+        head, ordered_body = order_rule(self.settings, (None, body | self.neg_literal_set))
         body_str = ','.join(format_literal_janus(literal) for literal in ordered_body)
         literal_str = format_literal_janus(literal)
         q = f'{body_str}, \\+ {literal_str}'

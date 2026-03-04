@@ -1,6 +1,6 @@
 import time
 from bitarray.util import subset
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, remap_variables, format_prog
+from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, remap_variables, format_prog, print_incomplete_solution2
 from . tester import Tester
 from . bkcons import get_bk_cons
 from . unsat import UnsatCoreFinder
@@ -24,7 +24,7 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
     settings.best_prog_score = conf_matrix
     settings.best_prog_size = hypothesis_size
     settings.solution = hypothesis
-    settings.print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
+    print_incomplete_solution2(settings, hypothesis, hypothesis_size, conf_matrix)
     tp, fn, tn, fp = conf_matrix
 
     if settings.noisy:
