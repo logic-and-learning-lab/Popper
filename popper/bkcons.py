@@ -15,6 +15,7 @@ from pysat.solvers import Solver
 clingo.script.enable_python()
 from . import logger
 from . import stats
+from . recalls import recalls
 
 tmp_map = {}
 for i in range(1,20):
@@ -803,7 +804,8 @@ def deduce_recalls(settings):
             all_recalls[(pred, args)] = recall
 
     # settings.recall = all_recalls
-    settings.recall = settings.recall | all_recalls
+    # settings.recall = settings.recall | all_recalls
+    recalls.update(all_recalls)
 
     # for k, v in sorted(settings.recall.items()):
         # print(k ,v)
@@ -1124,8 +1126,7 @@ def deduce_non_singletons(settings):
 def get_bk_cons(settings, tester):
     bkcons = []
 
-    with stats.duration('find_pointless_relations'):
-        pointless = settings.pointless = tester.find_pointless_relations()
+    pointless = settings.pointless = tester.find_pointless_relations()
 
     for p,a in pointless:
         if settings.showcons:

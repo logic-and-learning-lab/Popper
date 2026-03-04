@@ -1,11 +1,11 @@
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations
 from itertools import chain, combinations, permutations
+
 class AllSatCoreFinder:
     def __init__(self, settings, tester):
         self.settings = settings
         self.tester = tester
         self.seen_allsat = set()
-
 
     def check_redundant_literal(self, prog):
         if len(prog) > 1:

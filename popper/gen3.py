@@ -13,6 +13,7 @@ from . util import rule_is_recursive, Constraint, Literal
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
+from . import stats
 
 DEFAULT_HEURISTIC = """
 #heuristic size(N). [1000-N,true]

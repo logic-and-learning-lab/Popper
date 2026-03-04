@@ -10,6 +10,7 @@ from bitarray.util import ones
 from collections import defaultdict
 from itertools import product
 from typing import NamedTuple
+from . recalls import recalls
 
 # should be immutable
 class TestResult(NamedTuple):
@@ -64,7 +65,8 @@ class Tester():
 
         if atoms:
             try:
-                settings.recall = settings.recall | deduce_neg_example_recalls(settings, atoms)
+                # settings.recall = settings.recall | deduce_neg_example_recalls(settings, atoms)
+                recalls.update(deduce_neg_example_recalls(settings, atoms))
             except Exception as e:
                 print(e)
 

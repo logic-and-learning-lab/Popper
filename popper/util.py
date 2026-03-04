@@ -10,6 +10,7 @@ from collections import defaultdict
 from typing import NamedTuple
 from time import perf_counter
 from contextlib import contextmanager
+from . recalls import recalls
 import logging
 
 class Literal(NamedTuple):
@@ -391,7 +392,7 @@ class Settings:
             return rule
 
         if self.datalog:
-            return self.order_rule_datalog(head, frozenset(body))
+            return order_rule_datalog(head, frozenset(body))
 
         if not self.has_directions:
             return rule
@@ -444,38 +445,40 @@ class Settings:
 
         return head, tuple(ordered_body)
 
-    def order_rule_datalog(self, head, body):
+    # def order_rule_datalog(self, head, body):
 
-        ordered_body = []
-        seen_vars = set()
+    #     ordered_body = []
+    #     seen_vars = set()
 
-        if head:
-            seen_vars.update(head.arguments)
-            recursive_literals = set(literal for literal in body if literal.predicate == head.predicate)
-        else:
-            recursive_literals = set()
+    #     if head:
+    #         seen_vars.update(head.arguments)
+    #         recursive_literals = set(literal for literal in body if literal.predicate == head.predicate)
+    #     else:
+    #         recursive_literals = set()
 
-        body_literals = set(body) - recursive_literals
+    #     body_literals = set(body) - recursive_literals
 
-        while body_literals:
-            selected_literal = None
-            for literal in body_literals:
-                if set(literal.arguments).issubset(seen_vars):
-                    selected_literal = literal
-                    break
+    #     while body_literals:
+    #         selected_literal = None
+    #         for literal in body_literals:
+    #             if set(literal.arguments).issubset(seen_vars):
+    #                 selected_literal = literal
+    #                 break
 
-            if selected_literal == None:
-                selected_literal = min(body_literals, key=lambda x: self.tmp_score_(seen_vars, x))
+    #         if selected_literal == None:
+    #             selected_literal = min(body_literals, key=lambda x: self.tmp_score_(seen_vars, x))
 
-            ordered_body.append(selected_literal)
-            seen_vars.update(selected_literal.arguments)
-            body_literals.remove(selected_literal)
+    #         ordered_body.append(selected_literal)
+    #         seen_vars.update(selected_literal.arguments)
+    #         body_literals.remove(selected_literal)
 
-        return head, tuple(ordered_body) + tuple(recursive_literals)
+    #     return head, tuple(ordered_body) + tuple(recursive_literals)
 
-    def tmp_score_(self, seen_vars, literal):
-        pred, args = literal
-        return self.recall[pred, tuple(1 if x in seen_vars else 0 for x in args)]
+    # def tmp_score_(self, seen_vars, literal):
+    #     pred, args = literal
+    #     x = asda[pred, tuple(1 if x in seen_vars else 0 for x in args)]
+    #     y = self.recall[pred, tuple(1 if x in seen_vars else 0 for x in args)]
+    #     return self.recall[pred, tuple(1 if x in seen_vars else 0 for x in args)]
 
     def has_valid_directions(self, rule):
         if self.has_directions:
@@ -759,3 +762,34 @@ def generalisations(prog, allow_headless=True, recursive=False):
                 new_prog = prog[:i] + new_subrule + prog[i+1:]
                 yield new_prog
 
+def order_rule_datalog(head, body):
+    ordered_body = []
+    seen_vars = set()
+
+    if head:
+        seen_vars.update(head.arguments)
+        recursive_literals = set(literal for literal in body if literal.predicate == head.predicate)
+    else:
+        recursive_literals = set()
+
+    body_literals = set(body) - recursive_literals
+
+    while body_literals:
+        selected_literal = None
+        for literal in body_literals:
+            if set(literal.arguments).issubset(seen_vars):
+                selected_literal = literal
+                break
+
+        if selected_literal == None:
+            selected_literal = min(body_literals, key=lambda x: tmp_score_(seen_vars, x))
+
+        ordered_body.append(selected_literal)
+        seen_vars.update(selected_literal.arguments)
+        body_literals.remove(selected_literal)
+
+    return head, tuple(ordered_body) + tuple(recursive_literals)
+
+def tmp_score_(seen_vars, literal):
+    pred, args = literal
+    return recalls[pred, tuple(1 if x in seen_vars else 0 for x in args)]
