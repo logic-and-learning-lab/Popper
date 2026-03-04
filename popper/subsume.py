@@ -10,7 +10,6 @@ class SubsumeChecker:
         self.tmp = {}
         self.pruned2 = set()
 
-
     def subsumed_or_covers_too_few(self, prog, seen=None):
         if seen is None:
             seen = set()
@@ -52,7 +51,7 @@ class SubsumeChecker:
                 out.update(xs)
                 continue
 
-            if not has_valid_directions(self.settings, new_rule):
+            if not has_valid_directions(new_rule):
                 xs = self.subsumed_or_covers_too_few(new_prog, seen)
                 out.update(xs)
                 continue

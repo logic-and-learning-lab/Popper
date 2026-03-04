@@ -128,7 +128,7 @@ class UnsatCoreFinder:
             if not head and not connected(body):
                 return False
 
-            if not has_valid_directions(self.settings, rule):
+            if not has_valid_directions(rule):
                 return False
 
         if len(prog) == 1:

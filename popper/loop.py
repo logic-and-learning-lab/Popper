@@ -24,7 +24,7 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
     settings.best_prog_score = conf_matrix
     settings.best_prog_size = hypothesis_size
     settings.solution = hypothesis
-    print_incomplete_solution2(settings, hypothesis, hypothesis_size, conf_matrix)
+    print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
     tp, fn, tn, fp = conf_matrix
 
     if settings.noisy:

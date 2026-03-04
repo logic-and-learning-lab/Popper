@@ -8,8 +8,6 @@ from . import logger
 from itertools import permutations, chain, combinations
 from collections import defaultdict
 from typing import NamedTuple
-from time import perf_counter
-from contextlib import contextmanager
 from . recalls import recalls
 import logging
 
@@ -41,7 +39,6 @@ class Constraint:
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper is an ILP system based on learning from failures')
-
     parser.add_argument('kbpath', help='Path to files to learn from')
     parser.add_argument('--noisy', default=False, action='store_true', help='tell Popper that there is noise')
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {TIMEOUT})')
@@ -145,6 +142,8 @@ def mdl_score(fn, fp, size):
 
 def flatten(xs):
     return [item for sublist in xs for item in sublist]
+
+settings = None
 
 class Settings:
 
@@ -343,6 +342,13 @@ class Settings:
         logger.debug(f'Max body: {self.max_body}')
 
         self.min_size = None
+
+def init_settings(in_settings=None):
+    global settings
+    assert(settings is None)
+    if in_settings is None:
+        settings = Settings.from_args()
+    return settings
 
 import os
 # AC: I do not know what this code below really does, but it works
@@ -552,7 +558,7 @@ def tmp_score_(seen_vars, literal):
     # GLOBAL VARIABLE SHITSHOW
     return recalls[pred, tuple(1 if x in seen_vars else 0 for x in args)]
 
-def order_rule(settings, rule):
+def order_rule(rule):
     head, body = rule
 
     if settings.pi_enabled:
@@ -575,7 +581,6 @@ def order_rule(settings, rule):
         grounded_variables.update(head_inputs)
 
     body_literals = set(body)
-
 
     while body_literals:
         selected_literal = None
@@ -611,7 +616,7 @@ def order_rule(settings, rule):
 
     return head, tuple(ordered_body)
 
-def print_incomplete_solution2(settings, prog, size, conf_matrix):
+def print_incomplete_solution2(prog, size, conf_matrix):
     tp, fn, tn, fp = conf_matrix
     logger.info('*'*20)
     logger.info('New best hypothesis:')
@@ -620,10 +625,10 @@ def print_incomplete_solution2(settings, prog, size, conf_matrix):
     else:
         logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size}')
     for rule in order_prog(prog):
-        logger.info(format_rule(order_rule(settings, rule)))
+        logger.info(format_rule(order_rule(rule)))
     logger.info('*'*20)
 
-def print_prog_score(settings, prog, score):
+def print_prog_score(prog, score):
     tp, fn, tn, fp = score
     size = calc_prog_size(prog)
     precision = 'n/a'
@@ -638,16 +643,16 @@ def print_prog_score(settings, prog, score):
     else:
       print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
     for rule in order_prog(prog):
-        print(format_rule(order_rule(settings, rule)))
+        print(format_rule(order_rule(rule)))
     print('*'*30)
 
-def has_valid_directions(settings, rule):
+def has_valid_directions(rule):
     if settings.has_directions:
-        return has_valid_directions_(settings, rule)
+        return has_valid_directions_(rule)
     return True
 
 @cache
-def has_valid_directions_(settings, rule):
+def has_valid_directions_(rule):
     head, body = rule
 
     if head:

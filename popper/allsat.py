@@ -71,7 +71,7 @@ class AllSatCoreFinder:
         if any(seen_body.issubset(body) for seen_body in allsat1):
             return out
 
-        if not has_valid_directions(self.settings, (None, body)):
+        if not has_valid_directions((None, body)):
             return out
 
         if not self.tester.is_literal_redundant(body, literal):
@@ -126,7 +126,7 @@ class AllSatCoreFinder:
                 new_rule = (head, body_)
                 new_prog = frozenset([new_rule])
 
-                if not has_valid_directions(self.settings, new_rule):
+                if not has_valid_directions(new_rule):
                     continue
 
                 if self.tester.is_neg_reducible(body_, literal):
