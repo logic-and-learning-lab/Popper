@@ -114,9 +114,9 @@ class Tester():
             # assert(tp == tp_)
             if tp > prog_size:
                 # maximum size of specialisations allowed
-                test_at_most_k_neg1 = min([settings.max_body-(prog_size-1), settings.max_literals-prog_size])
+                test_at_most_k_neg1 = min([settings.max_body-(prog_size-1), self.state.max_literals-prog_size])
                 # conditions which determine whether a program can be part of a solution
-                test_at_most_k_neg2 = min([settings.best_mdl - prog_size, tp-prog_size])
+                test_at_most_k_neg2 = min([self.state.best_hypothesis_mdl - prog_size, tp-prog_size])
                 test_at_most_k_neg = max([test_at_most_k_neg1, test_at_most_k_neg2])
                 neg_covered = self.test_single_rule_neg_at_most_k(prog, test_at_most_k_neg)
                 if neg_covered.count(1) == test_at_most_k_neg:

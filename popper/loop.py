@@ -11,37 +11,36 @@ from . combine_helper import CombineHelper
 from . import logger
 from . import stats
 
-def load_generator(settings, bkcons):
+def load_generator(settings, state, bkcons):
     if settings.single_solve:
         from .gen2 import Generator
     elif settings.max_rules == 2 and not settings.pi_enabled:
         from .gen3 import Generator
     else:
         from .generate import Generator
-    return Generator(settings, bkcons)
+    return Generator(settings, state, bkcons)
 
 def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix, combine_helper):
     state.best_hypothesis_score = conf_matrix
     state.best_hypothesis_size = hypothesis_size
     state.best_hypothesis = hypothesis
     print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
-    tp, fn, tn, fp = conf_matrix
+    _, fn, _, fp = conf_matrix
 
     if settings.noisy:
         mdl = mdl_score(fn, fp, hypothesis_size)
-        settings.best_mdl = mdl
-        settings.max_literals = mdl - 1
+        state.best_hypothesis_mdl = mdl
+        state.max_literals = mdl - 1
     elif fp == 0 and fn == 0:
         state.solution_found = True
-        settings.max_literals = hypothesis_size - 1
+        state.max_literals = hypothesis_size - 1
         state.min_pos_coverage = 2
 
 def check_size_change(settings, state, prog_size):
     size_change = False
-    if state.last_size is None or prog_size != state.last_size:
+    if state.search_depth is None or prog_size != state.search_depth:
         size_change = True
-        state.last_size = prog_size
-        settings.search_depth = prog_size
+        state.search_depth = prog_size
         logger.info(f'Generating hypotheses of size: {prog_size}')
     return size_change
 
@@ -50,12 +49,12 @@ def popper(settings, tester, state, bkcons):
     allsatcore_finder = AllSatCoreFinder(settings, tester)
     subsumer = SubsumeChecker(settings, tester, state)
     num_pos, num_neg = tester.num_pos, tester.num_neg
-    generator = load_generator(settings, bkcons)
+    generator = load_generator(settings, state, bkcons)
     combine_helper = CombineHelper(settings, tester, state, generator)
 
     if settings.noisy:
         state.best_hypothesis_score = (0, num_pos, num_neg, 0)
-        settings.best_mdl = num_pos
+        state.best_hypothesis_mdl = num_pos
 
     # GENERATE PROGRAMS
     for prog in generator.get_prog():
@@ -97,7 +96,7 @@ def popper(settings, tester, state, bkcons):
         new_cons = []
 
         # if non-separable program has better mdl score, update best prog
-        if settings.noisy and test_result.mdl is not None and test_result.mdl < settings.best_mdl:
+        if settings.noisy and test_result.mdl is not None and test_result.mdl < state.best_hypothesis_mdl:
             update_best_hypothesis(settings, state, prog, prog_size, test_result.conf_matrix, combine_helper)
             # AC: TRY TO REFACTOR OUT
             new_cons = build_constraints_previous_hypotheses(test_result.mdl, prog_size, num_pos, num_neg, state)
@@ -119,11 +118,11 @@ def popper(settings, tester, state, bkcons):
 
             # AC: TRY TO REFACTOR OUT
             if settings.noisy:
-                new_cons.extend(build_constraints_previous_hypotheses(settings.best_mdl, prog_size, num_pos, num_neg, state))
+                new_cons.extend(build_constraints_previous_hypotheses(state.best_hypothesis_mdl, prog_size, num_pos, num_neg, state))
 
             # PRUNE BIGGER SPACES
             if (settings.noisy and settings.single_solve) or (not settings.noisy and state.solution_found):
-                for i in range(settings.max_literals+1, 1000):
+                for i in range(state.max_literals+1, 1000):
                     generator.prune_size(i)
 
         # CONSTRAIN
@@ -250,22 +249,22 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
             spec_size_ = min([tp, fp + prog_size])
             if spec_size_ <= prog_size:
                 add_spec = True
-            elif len(prog) == 1 and spec_size_ < settings.max_body + 1 and spec_size_ < settings.max_literals:
+            elif len(prog) == 1 and spec_size_ < settings.max_body + 1 and spec_size_ < state.max_literals:
                 spec_size = spec_size_
-            elif len(prog) > 1 and spec_size_ < settings.max_literals:
+            elif len(prog) > 1 and spec_size_ < state.max_literals:
                 spec_size = spec_size_
 
         if too_few_tp or too_many_fp:
             gen_size_ = fn + prog_size
             if gen_size_ <= prog_size:
                 add_gen = True
-            if gen_size_ < settings.max_literals:
+            if gen_size_ < state.max_literals:
                 gen_size = gen_size_
         else:
-            gen_size_ = min([fn + prog_size, num_pos - fp, settings.best_mdl - mdl + num_pos + prog_size])
+            gen_size_ = min([fn + prog_size, num_pos - fp, state.best_hypothesis_mdl - mdl + num_pos + prog_size])
             if gen_size_ <= prog_size:
                 add_gen = True
-            if gen_size_ < settings.max_literals:
+            if gen_size_ < state.max_literals:
                 gen_size = gen_size_
 
     # remove generalisations of programs with redundant literals
@@ -316,7 +315,7 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
 
     if not too_few_tp:
         if settings.noisy and (not add_spec) and spec_size and (not pruned_more_general):
-            if spec_size <= settings.max_literals and ((is_recursive or has_invention or spec_size <= settings.max_body)):
+            if spec_size <= state.max_literals and ((is_recursive or has_invention or spec_size <= settings.max_body)):
                 new_cons.append((Constraint.SPECIALISATION, prog, spec_size))
                 seen_hyp_spec[fp + prog_size + mdl].append([prog, tp, fn, tn, fp, prog_size])
                 # print('seen_hyp_spec', format_prog(prog), fp, prog_size, mdl)
@@ -330,7 +329,7 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
                 new_cons.append((Constraint.GENERALISATION, prog))
 
     if settings.noisy and (not add_gen) and gen_size and (not pruned_sub_inconsistent):
-        if gen_size <= settings.max_literals and (settings.recursion_enabled or settings.pi_enabled) and (not pruned_more_general):
+        if gen_size <= state.max_literals and (settings.recursion_enabled or settings.pi_enabled) and (not pruned_more_general):
             new_cons.append((Constraint.GENERALISATION, prog, gen_size))
             seen_hyp_gen[fn + prog_size + mdl].append([prog, tp, fn, tn, fp, prog_size])
             # print('seen_hyp_gen', format_prog(prog), fn, prog_size, mdl)

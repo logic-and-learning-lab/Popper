@@ -89,7 +89,7 @@ class CombineHelper:
 
     def decide_whether_to_combine(self, prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed,add_gen, tp, fp, fn, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention):
         add_to_combiner = False
-        if self.settings.noisy and (not too_few_tp) and (not too_many_fp) and (not is_recursive) and (not has_invention) and tp > prog_size + fp and fp + prog_size < self.settings.best_mdl and (not noisy_subsumed):
+        if self.settings.noisy and (not too_few_tp) and (not too_many_fp) and (not is_recursive) and (not has_invention) and tp > prog_size + fp and fp + prog_size < self.state.best_hypothesis_mdl and (not noisy_subsumed):
             local_delete = set()
             ignore_this_prog = (pos_covered, neg_covered) in self.state.success_sets_noise
 
@@ -221,7 +221,7 @@ class CombineHelper:
     def filter_combine_programs(self, to_combine_set):
         xs = self.saved_progs | to_combine_set
         min_sz = min(self.cached_prog_size[prog] for prog in xs)
-        must_beat = self.settings.best_mdl - min_sz
+        must_beat = self.state.best_hypothesis_mdl - min_sz
 
         to_delete = set()
         for prog_hash in xs:
@@ -263,7 +263,7 @@ class CombineHelper:
             self.settings.lex = False
         else:
             self.settings.lex = True
-            self.settings.best_mdl = False
+            self.state.best_hypothesis_mdl = False
             self.settings.lex_via_weights = False
 
         if self.settings.debug:
@@ -295,7 +295,7 @@ class CombineHelper:
     def find_combination(self, last_combine_stage=False):
         # print('')
         # print(f'lex:{self.settings.lex}')
-        # print(f'best_mdl:{self.settings.best_mdl}')
+        # print(f'best_mdl:{self.state.best_hypothesis_mdl}')
         # print(f'best_prog_score:{self.state.best_hypothesis_score}')
         # print(f'best_prog_size:{self.state.best_hypothesis_size}')
 
@@ -484,8 +484,8 @@ class CombineHelper:
         best_fn = False
         best_size = False
 
-        if self.settings.best_mdl:
-            mdl_ = self.settings.best_mdl
+        if self.state.best_hypothesis_mdl:
+            mdl_ = self.state.best_hypothesis_mdl
 
         while True:
             model_found = False
@@ -570,7 +570,7 @@ class CombineHelper:
             return None
 
         if self.settings.noisy:
-            if cost > self.settings.best_mdl:
+            if cost > self.state.best_hypothesis_mdl:
                 assert(False)
                 return None
         elif self.state.solution_found and cost > self.state.best_hypothesis_size:

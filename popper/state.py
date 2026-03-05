@@ -1,4 +1,3 @@
-
 from collections import defaultdict
 import time
 
@@ -16,7 +15,7 @@ class SearchState:
     # (pos_covered_bit_array, neg_covered_bitarray) -> prog_size
     success_sets_noise = {}
 
-    last_size = None
+    search_depth = None
 
     # save hypotheses for which we pruned spec / gen from a certain size only, once we update the best mdl score, we can prune spec / gen from a better size for some of these
     seen_hyp_spec, seen_hyp_gen = defaultdict(list), defaultdict(list)
@@ -25,11 +24,12 @@ class SearchState:
     best_hypothesis = None
     best_hypothesis_size = None
     best_hypothesis_score = None
+    best_hypothesis_mdl = None
     solution_found = False
-
 
     min_pos_coverage = 1
 
+    max_literals=1000
 
     start_time = None
 

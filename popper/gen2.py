@@ -32,8 +32,8 @@ program_size_at_least(M):- size(N), program_bounds(M), M <= N.
 
 class Generator:
 
-    def __init__(self, settings, bkcons=[]):
-        self.savings = 0
+    def __init__(self, settings, state, bkcons=[]):
+        self.state = state
         self.settings = settings
         self.cached_clingo_atoms = {}
         self.handle = None
@@ -147,8 +147,8 @@ class Generator:
                     encoding.append(f'direction_({pred}, {i}, out).')
 
         max_size = (1 + settings.max_body) * settings.max_rules
-        if settings.max_literals < max_size:
-            encoding.append(f'custom_max_size({settings.max_literals}).')
+        # if state.max_literals < max_size:
+            # encoding.append(f'custom_max_size({state.max_literals}).')
 
         if settings.noisy:
             encoding.append(NOISY_ENCODING)

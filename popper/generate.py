@@ -77,8 +77,8 @@ def build_rule_literals(rule, rule_var, pi=False):
 
 class Generator:
 
-    def __init__(self, settings, bkcons=[]):
-        self.savings = 0
+    def __init__(self, settings, state, bkcons=[]):
+        self.state = state
         self.settings = settings
         self.seen_handles = set()
         self.assigned = {}
@@ -149,8 +149,8 @@ class Generator:
         #             encoding.append(f'direction_({pred}, {i}, out).')
 
         max_size = (1 + settings.max_body) * settings.max_rules
-        if settings.max_literals < max_size:
-            encoding.append(f'custom_max_size({settings.max_literals}).')
+        # if state.max_literals < max_size:
+            # encoding.append(f'custom_max_size({state.max_literals}).')
 
         if settings.pi_enabled:
             encoding.append(f'#show head_literal/4.')
@@ -247,7 +247,7 @@ class Generator:
     def get_prog(self):
         size = 0
         while True:
-            if size > self.settings.max_literals:
+            if size > self.state.max_literals:
                 continue
             # self.settings.logger.info(f'Generating programs of size: {size}')
             self.current_size = size

@@ -17,14 +17,9 @@ class Literal(NamedTuple):
 
 TIMEOUT=1200
 EVAL_TIMEOUT=0.001
-MAX_LITERALS=100
-MAX_SOLUTIONS=1
-CLINGO_ARGS=''
 MAX_RULES=2
 MAX_VARS=6
 MAX_BODY=6
-MAX_EXAMPLES=10000
-BATCH_SIZE=1000
 ANYTIME_TIMEOUT=10
 BKCONS_TIMEOUT=10
 
@@ -161,7 +156,6 @@ class Settings:
 
         self.anytime_solver = anytime_solver
         self.anytime_timeout = anytime_timeout
-        self.best_prog_score = None
         self.bias_file = bias_file
         self.bk_file = bk_file
         self.bkcons_timeout = BKCONS_TIMEOUT
@@ -171,8 +165,6 @@ class Settings:
         self.has_directions = False
         self.info = info
         self.max_body = max_body
-        self.max_examples = MAX_EXAMPLES
-        self.max_literals = MAX_LITERALS
         self.max_rules = MAX_RULES
         self.max_vars = max_vars
         self.noisy = noisy
@@ -182,7 +174,6 @@ class Settings:
         self.recursion_enabled = False
         self.show_stats = stats
         self.showcons = showcons
-        self.solution = None
         self.solver = 'rc2'
         self.timeout = timeout
 

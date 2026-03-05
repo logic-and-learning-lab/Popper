@@ -121,7 +121,7 @@ class SubsumeChecker:
             if v:
                 return True
 
-        k2 = hash((prog_size, pos_covered, self.settings.max_literals, self.settings.search_depth))
+        k2 = hash((prog_size, pos_covered, self.state.max_literals, self.state.search_depth))
         if k2 in self.tmp:
             return self.tmp[k2]
 
@@ -137,7 +137,7 @@ class SubsumeChecker:
         if len_pos_covered == self.tester.num_pos:
             return False
 
-        max_literals = self.settings.max_literals
+        max_literals = self.state.max_literals
 
         # MAX RULES = 1
         if (prog_size + self.settings.min_size) > max_literals:
@@ -146,7 +146,7 @@ class SubsumeChecker:
         # MAX RULES = 2
         if (prog_size + (self.settings.min_size * 2)) > max_literals:
             space_remaining = max_literals - prog_size
-            if space_remaining > self.settings.search_depth:
+            if space_remaining > self.state.search_depth:
                 return False
 
             uncovered = self.tester.pos_examples_ & ~pos_covered
@@ -161,7 +161,7 @@ class SubsumeChecker:
         if (prog_size + (self.settings.min_size * 3)) > max_literals:
             space_remaining = max_literals - prog_size
 
-            if space_remaining - self.settings.min_size > self.settings.search_depth:
+            if space_remaining - self.settings.min_size > self.state.search_depth:
                 return False
 
             uncovered = self.tester.pos_examples_ & ~pos_covered
@@ -192,7 +192,7 @@ class SubsumeChecker:
             space_remaining = max_literals - prog_size
             space_remaining -= (self.settings.min_size * 2)
 
-            if space_remaining > self.settings.search_depth:
+            if space_remaining > self.state.search_depth:
                 return False
 
             missing = self.tester.pos_examples_ & ~pos_covered
