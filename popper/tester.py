@@ -12,6 +12,9 @@ from itertools import product
 from typing import NamedTuple
 from . recalls import recalls
 
+# MAXIMUM TESTING TIME FOR A RECURSIVE HYPOTHESIS
+EVAL_TIMEOUT=0.001
+
 # should be immutable
 class TestResult(NamedTuple):
     tp: int
@@ -80,7 +83,7 @@ class Tester():
         self.cached_inconsistent = {}
 
         if self.settings.recursion_enabled:
-            query_once(f'assert(timeout({self.settings.eval_timeout})), fail')
+            query_once(f'assert(timeout({EVAL_TIMEOUT=0.001})), fail')
 
     def janus_clear_cache(self):
         return query_once('retractall(janus:py_call_cache(_String,_Input,_TV,_M,_Goal,_Dict,_Truth,_OutVars))')

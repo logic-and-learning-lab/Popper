@@ -48,8 +48,8 @@ class CombineHelper:
 
         if add_to_combiner:
             # MOVE SOMEWHERE ELSE LATER
-            if self.settings.min_size is None:
-                self.settings.min_size = prog_size
+            if self.state.min_size is None:
+                self.state.min_size = prog_size
 
             self.to_combine.add(hash(prog))
 

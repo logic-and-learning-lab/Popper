@@ -36,7 +36,7 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
         state.max_literals = hypothesis_size - 1
         state.min_pos_coverage = 2
 
-def check_size_change(settings, state, prog_size):
+def check_size_change(state, prog_size):
     size_change = False
     if state.search_depth is None or prog_size != state.search_depth:
         size_change = True
@@ -48,9 +48,9 @@ def popper(settings, tester, state, bkcons):
     unsatcore_finder = UnsatCoreFinder(settings, tester)
     allsatcore_finder = AllSatCoreFinder(settings, tester)
     subsumer = SubsumeChecker(settings, tester, state)
-    num_pos, num_neg = tester.num_pos, tester.num_neg
     generator = load_generator(settings, state, bkcons)
     combine_helper = CombineHelper(settings, tester, state, generator)
+    num_pos, num_neg = tester.num_pos, tester.num_neg
 
     if settings.noisy:
         state.best_hypothesis_score = (0, num_pos, num_neg, 0)
@@ -72,7 +72,7 @@ def popper(settings, tester, state, bkcons):
         logger.debug(f'Program {stats.stats.total_programs}:')
         logger.debug(format_prog(prog))
 
-        size_change = check_size_change(settings, state, prog_size)
+        size_change = check_size_change(state, prog_size)
 
         # TEST
         with stats.duration('test'):
@@ -80,14 +80,8 @@ def popper(settings, tester, state, bkcons):
                 test_result = tester.test_prog_noisy(prog, prog_size)
             else:
                 test_result = tester.test_prog(prog)
-            too_few_tp, too_many_fp = test_result.too_few_tp, test_result.too_many_fp
 
-        if not test_result.inconsistent and test_result.tp == num_pos:
-            assert(not too_few_tp)
-        if too_few_tp:
-            assert(test_result.mdl is None)
-
-        # if non-separable program is perfect, stop
+        # if non-separable hypothesis is perfect, stop
         if not test_result.inconsistent and test_result.tp == num_pos:
             state.best_hypothesis = prog
             state.best_hypothesis_score = (num_pos, 0, num_neg, 0)
@@ -95,7 +89,7 @@ def popper(settings, tester, state, bkcons):
 
         new_cons = []
 
-        # if non-separable program has better mdl score, update best prog
+        # if non-separable hypothesis has better mdl score, update best prog
         if settings.noisy and test_result.mdl is not None and test_result.mdl < state.best_hypothesis_mdl:
             update_best_hypothesis(settings, state, prog, prog_size, test_result.conf_matrix, combine_helper)
             # AC: TRY TO REFACTOR OUT

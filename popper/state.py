@@ -29,6 +29,8 @@ class SearchState:
 
     min_pos_coverage = 1
 
+    min_size = None
+
     max_literals=1000
 
     start_time = None

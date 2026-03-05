@@ -16,7 +16,6 @@ class Literal(NamedTuple):
     arguments: tuple
 
 TIMEOUT=1200
-EVAL_TIMEOUT=0.001
 MAX_RULES=2
 MAX_VARS=6
 MAX_BODY=6
@@ -141,6 +140,14 @@ def flatten(xs):
 
 settings = None
 
+def get_body_preds(solver):
+    body_preds_ = set()
+    for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
+        pred = x.symbol.arguments[0].name
+        arity = x.symbol.arguments[1].number
+        body_preds_.add((pred, arity))
+    return frozenset(body_preds_)
+
 class Settings:
 
     @classmethod
@@ -160,7 +167,6 @@ class Settings:
         self.bk_file = bk_file
         self.bkcons_timeout = BKCONS_TIMEOUT
         self.debug = debug
-        self.eval_timeout = EVAL_TIMEOUT
         self.ex_file = ex_file
         self.has_directions = False
         self.info = info
@@ -170,7 +176,6 @@ class Settings:
         self.noisy = noisy
         self.non_datalog_flag = False
         self.pi_enabled = False
-        self.recall = {}
         self.recursion_enabled = False
         self.show_stats = stats
         self.showcons = showcons
@@ -201,19 +206,15 @@ class Settings:
         """)
         solver.ground([('bias', [])])
 
-        # determine whether recursion enabled
         for x in solver.symbolic_atoms.by_signature('enable_recursion', arity=0):
             self.recursion_enabled = True
 
-        # determine whether pi enabled
         for x in solver.symbolic_atoms.by_signature('enable_pi', arity=0):
             self.pi_enabled = True
 
-        # determine whether non_datalog flag is enabled
         for x in solver.symbolic_atoms.by_signature('non_datalog', arity=0):
             self.non_datalog_flag = True
 
-        # read directions from bias file when there is no PI
         self.directions = directions = defaultdict(dict)
 
         for x in solver.symbolic_atoms.by_signature('direction', arity=2):
@@ -227,9 +228,9 @@ class Settings:
                     arg_dir = '-'
                 directions[pred][i] = arg_dir
 
-        self.max_arity = 0
+        max_arity = 0
         for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
-            self.max_arity = max(self.max_arity, x.symbol.arguments[1].number)
+            max_arity = max(max_arity, x.symbol.arguments[1].number)
             head_pred = x.symbol.arguments[0].name
             head_arity = x.symbol.arguments[1].number
             head_args = tuple(range(head_arity))
@@ -241,16 +242,12 @@ class Settings:
         for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
             self.max_vars = x.symbol.arguments[0].number
 
-        for x in solver.symbolic_atoms.by_signature('max_clauses', arity=1):
-            self.max_rules = x.symbol.arguments[0].number
+        if self.recursion_enabled or self.pi_enabled:
+            for x in solver.symbolic_atoms.by_signature('max_clauses', arity=1):
+                self.max_rules = x.symbol.arguments[0].number
 
-        # find all body preds
-        self.body_preds = set()
-        for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
-            pred = x.symbol.arguments[0].name
-            arity = x.symbol.arguments[1].number
-            self.body_preds.add((pred, arity))
-            self.max_arity = max(self.max_arity, arity)
+        self.body_preds = get_body_preds(solver)
+        max_arity = max(max_arity, max(arity for (pred, arity) in self.body_preds))
 
         # check that directions are all given
         if self.has_directions:
@@ -258,15 +255,7 @@ class Settings:
                 if len(directions[pred]) != arity:
                     print(f'ERROR: missing directions for {pred}/{arity}')
                     exit()
-                # self.body_modes[pred] = tuple(directions[pred][i] for i in range(arity))
 
-        self.cached_atom_args = {}
-        for i in range(1, self.max_arity+1):
-            for args in permutations(range(0, self.max_vars), i):
-                k = tuple(clingo.Number(x) for x in args)
-                self.cached_atom_args[k] = args
-
-        self.cached_literals = {}
         self.literal_inputs = {}
         self.literal_outputs = {}
 
@@ -279,6 +268,13 @@ class Settings:
                 self.literal_inputs[(head_pred, head_args)] = head_inputs
                 self.literal_outputs[(head_pred, head_args)] = head_outputs
 
+        self.cached_atom_args = {}
+        for i in range(1, max_arity+1):
+            for args in permutations(range(0, self.max_vars), i):
+                k = tuple(clingo.Number(x) for x in args)
+                self.cached_atom_args[k] = args
+
+        self.cached_literals = {}
         for pred, arity in self.body_preds:
             for k, args in self.cached_atom_args.items():
                 if len(args) != arity:
@@ -298,16 +294,6 @@ class Settings:
             literal = Literal(pred, args)
             self.cached_literals[(pred, k)] = literal
 
-        if self.max_rules == None:
-            if self.recursion_enabled or self.pi_enabled:
-                self.max_rules = max_rules
-            else:
-                self.max_rules = 1
-
-        for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
-            head_pred = x.symbol.arguments[0].name
-            head_arity = x.symbol.arguments[1].number
-
         self.head_types = None
         self.body_types = {}
         for x in solver.symbolic_atoms.by_signature('type', arity=2):
@@ -321,19 +307,17 @@ class Settings:
         if len(self.body_types) > 0 or not self.head_types is None:
             if self.head_types is None:
                 print('WARNING: MISSING HEAD TYPE')
-                # exit()
+                exit()
             for p,a in self.body_preds:
                 if p not in self.body_types:
                     print(f'WARNING: MISSING BODY TYPE FOR {p}')
-                    # exit()
+                    exit()
 
         self.single_solve = not (self.recursion_enabled or self.pi_enabled)
 
         logger.debug(f'Max rules: {self.max_rules}')
         logger.debug(f'Max vars: {self.max_vars}')
         logger.debug(f'Max body: {self.max_body}')
-
-        self.min_size = None
 
 def init_settings(in_settings=None):
     global settings

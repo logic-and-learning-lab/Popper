@@ -100,10 +100,9 @@ class SubsumeChecker:
         return False
 
     def check_subsumed_by_two_v2(self, prog_size, prog2_size, pos_covered, pos_covered2):
-        # nonlocal self.settings.min_size
         space = prog2_size - prog_size
 
-        if space < self.settings.min_size:
+        if space < self.state.min_size:
             return False
         uncovered = pos_covered2 & ~pos_covered
 
@@ -132,7 +131,7 @@ class SubsumeChecker:
         return v
 
     def check_covers_too_few_(self, prog_size, pos_covered):
-        # nonlocal self.settings.min_size
+        # nonlocal self.state.min_size
         len_pos_covered = pos_covered.count(1)
         if len_pos_covered == self.tester.num_pos:
             return False
@@ -140,11 +139,11 @@ class SubsumeChecker:
         max_literals = self.state.max_literals
 
         # MAX RULES = 1
-        if (prog_size + self.settings.min_size) > max_literals:
+        if (prog_size + self.state.min_size) > max_literals:
             return True
 
         # MAX RULES = 2
-        if (prog_size + (self.settings.min_size * 2)) > max_literals:
+        if (prog_size + (self.state.min_size * 2)) > max_literals:
             space_remaining = max_literals - prog_size
             if space_remaining > self.state.search_depth:
                 return False
@@ -158,10 +157,10 @@ class SubsumeChecker:
             return True
 
         # MAX RULES = 3
-        if (prog_size + (self.settings.min_size * 3)) > max_literals:
+        if (prog_size + (self.state.min_size * 3)) > max_literals:
             space_remaining = max_literals - prog_size
 
-            if space_remaining - self.settings.min_size > self.state.search_depth:
+            if space_remaining - self.state.min_size > self.state.search_depth:
                 return False
 
             uncovered = self.tester.pos_examples_ & ~pos_covered
@@ -176,7 +175,7 @@ class SubsumeChecker:
                 if subset(uncovered, pos_covered2):
                     return False
                 space_remaining_ = space_remaining - size2
-                if space_remaining_ < self.settings.min_size:
+                if space_remaining_ < self.state.min_size:
                     continue
                 uncovered2 = uncovered & ~pos_covered2
                 for j in range(i + 1, n):
@@ -188,9 +187,9 @@ class SubsumeChecker:
             return True
 
         # MAX RULES = 4
-        if prog_size + (self.settings.min_size * 4) > max_literals:
+        if prog_size + (self.state.min_size * 4) > max_literals:
             space_remaining = max_literals - prog_size
-            space_remaining -= (self.settings.min_size * 2)
+            space_remaining -= (self.state.min_size * 2)
 
             if space_remaining > self.state.search_depth:
                 return False
@@ -210,7 +209,7 @@ class SubsumeChecker:
                 if subset(missing, pos_covered2):
                     return False
                 space_remaining_ = space_remaining - size2
-                if space_remaining_ < self.settings.min_size:
+                if space_remaining_ < self.state.min_size:
                     continue
                 missing2 = missing & ~pos_covered2
                 for j in range(i + 1, n):
@@ -220,7 +219,7 @@ class SubsumeChecker:
                     if subset(missing2, pos_covered3):
                         return False
                     space_remaining__ = space_remaining_ - size3
-                    if space_remaining__ < self.settings.min_size:
+                    if space_remaining__ < self.state.min_size:
                         continue
                     missing3 = missing2 & ~pos_covered3
                     for k in range(j + 1, n):
