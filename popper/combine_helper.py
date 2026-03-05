@@ -54,18 +54,18 @@ class CombineHelper:
             self.to_combine.add(hash(prog))
 
         call_combine = len(self.to_combine) > 0
-        call_combine = call_combine and (self.settings.noisy or self.settings.solution_found)
+        call_combine = call_combine and (self.settings.noisy or self.state.solution_found)
         call_combine = call_combine and (len(self.to_combine) >= self.settings.batch_size or size_change)
 
         if self.settings.recursion_enabled:
             call_combine = len(self.to_combine) > 0
 
         combine_result1 = None
-        if add_to_combiner and (not self.settings.noisy) and (not self.settings.solution_found) and (not self.settings.recursion_enabled):
+        if add_to_combiner and (not self.settings.noisy) and (not self.state.solution_found) and (not self.settings.recursion_enabled):
 
             if any_and(self.uncovered, pos_covered):
-                if self.settings.solution:
-                    tmp = self.settings.solution | prog
+                if self.state.best_hypothesis:
+                    tmp = self.state.best_hypothesis | prog
                 else:
                     tmp = prog
                 self.uncovered = self.uncovered & ~pos_covered
@@ -296,8 +296,8 @@ class CombineHelper:
         # print('')
         # print(f'lex:{self.settings.lex}')
         # print(f'best_mdl:{self.settings.best_mdl}')
-        # print(f'best_prog_score:{self.settings.best_prog_score}')
-        # print(f'best_prog_size:{self.settings.best_prog_size}')
+        # print(f'best_prog_score:{self.state.best_hypothesis_score}')
+        # print(f'best_prog_size:{self.state.best_hypothesis_size}')
 
         timeout = self.settings.maxsat_timeout
         encoding = []
@@ -416,9 +416,9 @@ class CombineHelper:
         soft_clauses = []
         weights = []
 
-        if self.settings.best_prog_score:
-            tp_, fn_, tn_, fp_ = self.settings.best_prog_score
-            size_ = self.settings.best_prog_size
+        if self.state.best_hypothesis_score:
+            tp_, fn_, tn_, fp_ = self.state.best_hypothesis_score
+            size_ = self.state.best_hypothesis_size
 
         if self.settings.lex:
             soft_lit_groups = []
@@ -428,12 +428,12 @@ class CombineHelper:
                     rule_soft_lits.append(-rule_var[rule_id])
                     weights.append(ruleid_to_size[rule_id])
 
-            if self.settings.best_prog_score:
+            if self.state.best_hypothesis_score:
                 if fn_ == 0:
                     for i in pos_index:
                         encoding.append([pos_example_covered_var[i]])
                     if fp_ == 0:
-                        if not self.settings.nonoise:
+                        if self.settings.noisy:
                             for i in neg_index:
                                 encoding.append([-neg_example_covered_var[i]])
                         soft_lit_groups = [[lit for lit in rule_soft_lits]]
@@ -442,12 +442,12 @@ class CombineHelper:
                         soft_lit_groups.append([lit for lit in rule_soft_lits])
                 else:
                     soft_lit_groups = [[pos_example_covered_var[i] for i in pos_index]]
-                    if not self.settings.nonoise:
+                    if self.settings.noisy:
                         soft_lit_groups.append([-neg_example_covered_var[i] for i in neg_index])
                     soft_lit_groups.append([lit for lit in rule_soft_lits])
             else:
                 soft_lit_groups = [[pos_example_covered_var[i] for i in pos_index]]
-                if not self.settings.nonoise:
+                if self.settings.noisy:
                     soft_lit_groups.append([-neg_example_covered_var[i] for i in neg_index])
                 soft_lit_groups.append([lit for lit in rule_soft_lits])
         else:
@@ -458,7 +458,7 @@ class CombineHelper:
             for i in pos_index:
                 soft_clauses.append([pos_example_covered_var[i]])
                 weights.append(POS_EXAMPLE_WEIGHT)
-            if not self.settings.nonoise:
+            if self.settings.noisy:
                 for i in neg_index:
                     soft_clauses.append([-neg_example_covered_var[i]])
                     weights.append(NEG_EXAMPLE_WEIGHT)
@@ -508,16 +508,16 @@ class CombineHelper:
 
             fn = sum(1 for i in pos_index if model[pos_example_covered_var[i]-1] < 0)
             fp = 0
-            if not self.settings.nonoise:
+            if self.settings.noisy:
                 fp = sum(1 for i in neg_index if model[neg_example_covered_var[i]-1] > 0)
             size = sum([ruleid_to_size[rule_id] for rule_id in ruleid_to_size if model[rule_var[rule_id]-1] > 0])
 
             if self.settings.lex:
-                if self.settings.best_prog_score:
+                if self.state.best_hypothesis_score:
                     if fn_ < fn or (fn_ == fn and fp_ < fp) or (fn_ == fn and fp_ == fp and size_ <= size):
                         break
             else:
-                if self.settings.best_prog_score:
+                if self.state.best_hypothesis_score:
                     if mdl_ <= POS_EXAMPLE_WEIGHT * fn + NEG_EXAMPLE_WEIGHT * fp + size:
                         break
 
@@ -573,8 +573,8 @@ class CombineHelper:
             if cost > self.settings.best_mdl:
                 assert(False)
                 return None
-        elif self.settings.solution_found and cost > self.settings.best_prog_size:
-            print(cost, self.settings.best_prog_size, self.settings.solution_found)
+        elif self.state.solution_found and cost > self.state.best_hypothesis_size:
+            print(cost, self.state.best_hypothesis_size, self.state.solution_found)
             assert(False)
             return None
 

@@ -52,6 +52,7 @@ def parse_args():
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
+    timeout_duration = max(timeout_duration, 1)
     result = None
     class TimeoutError(Exception):
         pass

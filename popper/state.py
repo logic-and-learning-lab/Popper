@@ -1,4 +1,6 @@
+
 from collections import defaultdict
+import time
 
 class SearchState:
     # def __init__(self):
@@ -23,3 +25,18 @@ class SearchState:
     best_hypothesis = None
     best_hypothesis_size = None
     best_hypothesis_score = None
+    solution_found = False
+
+
+    min_pos_coverage = 1
+
+
+    start_time = None
+
+    def start_time(self):
+        self.start_time = time.time()
+
+    def time_remaining(self, timeout):
+        time_now = time.time()
+        time_spent = time_now - self.start_time
+        return max(int(timeout-time_spent), 1)

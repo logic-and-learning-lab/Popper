@@ -35,8 +35,9 @@ def bool_query(query):
 
 class Tester():
 
-    def __init__(self, settings):
+    def __init__(self, settings, state):
         self.settings = settings
+        self.state = state
 
         bk_pl_path = self.settings.bk_file
         exs_pl_path = self.settings.ex_file
@@ -374,12 +375,12 @@ class Tester():
                 q = f'succeeds_k_times({new_head},({ordered_body}),K)'
                 return query_once(q, {'K':calc_rule_size(rule)})['truth']
             else:
-                if self.settings.min_coverage == 1:
+                if self.state.min_pos_coverage == 1:
                     q = f'{new_head},{ordered_body}'
                     return bool_query(q)
                 else:
                     q = f'succeeds_k_times({new_head},({ordered_body}),K)'
-                    return query_once(q, {'K':self.settings.min_coverage})['truth']
+                    return query_once(q, {'K':self.state.min_pos_coverage})['truth']
         else:
             with self.using(prog):
                 if self.settings.noisy:

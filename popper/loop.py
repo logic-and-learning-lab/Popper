@@ -21,9 +21,9 @@ def load_generator(settings, bkcons):
     return Generator(settings, bkcons)
 
 def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix, combine_helper):
-    settings.best_prog_score = conf_matrix
-    settings.best_prog_size = hypothesis_size
-    settings.solution = hypothesis
+    state.best_hypothesis_score = conf_matrix
+    state.best_hypothesis_size = hypothesis_size
+    state.best_hypothesis = hypothesis
     print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
     tp, fn, tn, fp = conf_matrix
 
@@ -32,9 +32,9 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
         settings.best_mdl = mdl
         settings.max_literals = mdl - 1
     elif fp == 0 and fn == 0:
-        settings.solution_found = True
+        state.solution_found = True
         settings.max_literals = hypothesis_size - 1
-        settings.min_coverage = 2
+        state.min_pos_coverage = 2
 
 def check_size_change(settings, state, prog_size):
     size_change = False
@@ -45,13 +45,7 @@ def check_size_change(settings, state, prog_size):
         logger.info(f'Generating hypotheses of size: {prog_size}')
     return size_change
 
-def clear_prolog_cache(settings, tester):
-    # HORRIBLE HACK DUE TO PROLOG MEMORY LEAK
-    if stats.stats.total_programs % 10000 == 0:
-        tester.janus_clear_cache()
-
-def popper(settings, tester, bkcons):
-    state = SearchState()
+def popper(settings, tester, state, bkcons):
     unsatcore_finder = UnsatCoreFinder(settings, tester)
     allsatcore_finder = AllSatCoreFinder(settings, tester)
     subsumer = SubsumeChecker(settings, tester, state)
@@ -59,10 +53,8 @@ def popper(settings, tester, bkcons):
     generator = load_generator(settings, bkcons)
     combine_helper = CombineHelper(settings, tester, state, generator)
 
-    settings.min_coverage = 1
-
     if settings.noisy:
-        settings.best_prog_score = (0, num_pos, num_neg, 0)
+        state.best_hypothesis_score = (0, num_pos, num_neg, 0)
         settings.best_mdl = num_pos
 
     # GENERATE PROGRAMS
@@ -74,7 +66,9 @@ def popper(settings, tester, bkcons):
 
         stats.stats.total_programs += 1
 
-        clear_prolog_cache(settings, tester)
+        # HORRIBLE HACK DUE TO PROLOG MEMORY LEAK
+        if stats.stats.total_programs % 10000 == 0:
+            tester.janus_clear_cache()
 
         logger.debug(f'Program {stats.stats.total_programs}:')
         logger.debug(format_prog(prog))
@@ -96,8 +90,8 @@ def popper(settings, tester, bkcons):
 
         # if non-separable program is perfect, stop
         if not test_result.inconsistent and test_result.tp == num_pos:
-            settings.solution = prog
-            settings.best_prog_score = (num_pos, 0, num_neg, 0)
+            state.best_hypothesis = prog
+            state.best_hypothesis_score = (num_pos, 0, num_neg, 0)
             return
 
         new_cons = []
@@ -128,7 +122,7 @@ def popper(settings, tester, bkcons):
                 new_cons.extend(build_constraints_previous_hypotheses(settings.best_mdl, prog_size, num_pos, num_neg, state))
 
             # PRUNE BIGGER SPACES
-            if (settings.noisy and settings.single_solve) or (not settings.noisy and settings.solution_found):
+            if (settings.noisy and settings.single_solve) or (not settings.noisy and state.solution_found):
                 for i in range(settings.max_literals+1, 1000):
                     generator.prune_size(i)
 
@@ -141,25 +135,21 @@ def popper(settings, tester, bkcons):
         combine_result = combine_helper.update_best_prog(combine_helper.to_combine, last_combine_stage=True)
     if combine_result:
         new_hypothesis, hypothesis_size, conf_matrix = combine_result
-        settings.solution = new_hypothesis
-        settings.best_prog_score = conf_matrix
+        state.best_hypothesis = new_hypothesis
+        state.best_hypothesis_score = conf_matrix
 
 def learn_solution(settings):
-    t1 = time.time()
-    settings.nonoise = not settings.noisy
-    settings.solution_found = False
+    state = SearchState()
+    state.start_time()
     with stats.duration('load data'):
-        tester = Tester(settings)
+        tester = Tester(settings, state)
     bkcons = get_bk_cons(settings, tester)
-    time_so_far = time.time()-t1
-    timeout_duration = int(settings.timeout-time_so_far)
-    timeout_duration = max(timeout_duration, 1)
-    timeout(settings, popper, (settings, tester, bkcons), timeout_duration=timeout_duration,)
-    return settings.solution, settings.best_prog_score, stats
+    timeout(settings, popper, (settings, tester, state, bkcons), timeout_duration=state.time_remaining(settings.timeout),)
+    return state.best_hypothesis, state.best_hypothesis_score, stats
 
 def build_constraints(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, is_recursive, has_invention, combine_helper, test_result):
 
-    min_coverage = settings.min_coverage
+    min_coverage = state.min_pos_coverage
     pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
     inconsistent = test_result.inconsistent
     mdl = test_result.mdl
