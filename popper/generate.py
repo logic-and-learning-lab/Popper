@@ -102,6 +102,54 @@ class Generator:
         # TODO: dunno
         self.new_ground_cons = set()
 
+        encoding = self.build_encoding(bkcons, settings)
+
+        # with open('ENCODING-GEN.pl', 'w') as f:
+            # f.write(encoding)
+
+        solver = self.init_solver(encoding)
+        self.solver = solver
+
+    def init_solver(self, encoding):
+        solve_arg = [] if self.settings.num_cores == 1 \
+            else [f"--parallel-mode={self.settings.num_cores}"]
+        if self.settings.single_solve:
+            solver = clingo.Control(['--heuristic=Domain', '-Wnone'] + solve_arg)
+        else:
+            solver = clingo.Control(['-Wnone'] + solve_arg)
+            NUM_OF_LITERALS = """
+            %%% External atom for number of literals in the program %%%%%
+            #external size_in_literals(n).
+            :-
+                size_in_literals(n),
+                #sum{K+1,Clause : body_size(Clause,K)} != n.
+            """
+            solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
+
+            if self.settings.no_bias:
+                NUM_OF_VARS = """
+                %%% External atom for number of variables in the program %%%%%
+                #external size_in_vars(v).
+                :-
+                    size_in_vars(v),
+                    #max{V : clause_var(_,V)} != v - 1.
+                """
+                solver.add('number_of_vars', ['v'], NUM_OF_VARS)
+
+                NUM_OF_RULES = """
+                %%% External atom for number of rules in the program %%%%%
+                #external size_in_rules(r).
+                :-
+                    size_in_rules(r),
+                    #max{R : clause(R)} != r - 1.
+                """
+                solver.add('number_of_rules', ['r'], NUM_OF_RULES)
+        solver.configuration.solve.models = 0
+        solver.add('base', [], encoding)
+        solver.ground([('base', [])])
+        return solver
+
+    def build_encoding(self, bkcons, settings):
         encoding = []
         alan = resources.files(__package__).joinpath("lp/alan-old.pl").read_text()
         # alan = resources.files(__package__).joinpath("lp/alan.pl").read_text()
@@ -1061,7 +1109,11 @@ class Generator:
 
         # print('ASDASDA')
         # solver = clingo.Control()
-        solver = clingo.Control(['-Wnone'])
+        # solver = clingo.Control(['-Wnone'])
+        if self.settings.num_cores == 1:
+            solver = clingo.Control(['-Wnone'])
+        else:
+            solver = clingo.Control(['-Wnone', f"--parallel-mode={self.settings.num_cores}"])
         # solver = clingo.Control(["-t4"])
         # ask for all models
         solver.configuration.solve.models = 0
