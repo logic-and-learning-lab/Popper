@@ -146,7 +146,7 @@ def get_body_preds(solver):
         pred = x.symbol.arguments[0].name
         arity = x.symbol.arguments[1].number
         body_preds_.add((pred, arity))
-    return frozenset(body_preds_)
+    return set(body_preds_)
 
 class Settings:
 
