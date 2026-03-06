@@ -713,13 +713,10 @@ def deduce_bk_cons(settings, tester):
 
             encoding.append(f'type({p},{types}).')
 
-
-    encoding = '\n'.join(encoding)
-    # print(encoding)
-    # with open('bkcons-encoding.pl', 'w') as f:
-        # f.write(encoding)
-    # exit()
-    solver = clingo.Control(['-Wnone'])
+    encoding = '\n'.join(encoding_list)
+    solve_arg = [] if settings.num_cores == 1 \
+        else [f"--parallel-mode={settings.num_cores}"]
+    solver = clingo.Control(['-Wnone'] + solve_arg)
     solver.add('base', [], encoding)
     solver.ground([('base', [])])
     out = set()
@@ -745,11 +742,13 @@ def deduce_recalls(settings):
     counts = {}
     counts_all = {}
 
+    solve_arg = [] if settings.num_cores == 1 \
+        else [f"--parallel-mode={settings.num_cores}"]
     try:
 
         with open(settings.bk_file) as f:
             bk = f.read()
-        solver = clingo.Control(['-Wnone'])
+        solver = clingo.Control(['-Wnone'] + solve_arg)
         with suppress_stdout_stderr():
             solver.add('base', [], bk)
             solver.ground([('base', [])])
@@ -842,7 +841,9 @@ def deduce_type_cons(settings):
 
     with open(settings.bk_file) as f:
         bk = f.read()
-    solver = clingo.Control(['-Wnone'])
+    solve_arg = [] if settings.num_cores == 1 \
+        else [f"--parallel-mode={settings.num_cores}"]
+    solver = clingo.Control(['-Wnone'] + solve_arg)
     solver.add('base', [], bk)
     solver.ground([('base', [])])
 
@@ -1008,8 +1009,10 @@ def deduce_non_singletons(settings):
     # with open('TOTAL', 'w') as f:
         # f.write(encoding)
 
-    solver = clingo.Control(['-Wnone'])
-    solver.add('base', [], encoding)
+    solve_arg = [] if settings.num_cores == 1 \
+        else [f"--parallel-mode={settings.num_cores}"]
+    solver = clingo.Control(['-Wnone'] + solve_arg)
+    solver.add('base', [], encoding_str)
     solver.ground([('base', [])])
 
     cons = []

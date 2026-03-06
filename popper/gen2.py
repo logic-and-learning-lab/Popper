@@ -38,6 +38,19 @@ class Generator:
         self.handle = None
         self.pruned_sizes = set()
 
+        solver = self.init_solver(encoding)
+        self.solver = solver
+
+    def init_solver(self, encoding) -> clingo.Control:
+        solve_arg = [] if self.settings.num_cores == 1 \
+            else [f"--parallel-mode={self.settings.num_cores}"]
+        solver = clingo.Control(['--heuristic=Domain', '-Wnone'] + solve_arg)
+        solver.configuration.solve.models = 0
+        solver.add('base', [], encoding)
+        solver.ground([('base', [])])
+        return solver
+
+    def build_encoding(self, bkcons, settings):
         encoding = []
         alan = resources.files(__package__).joinpath("lp/alan.pl").read_text()
         encoding.append(alan)
