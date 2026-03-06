@@ -630,62 +630,56 @@ def has_valid_directions(rule):
 @cache
 def has_valid_directions_(rule):
     head, body = rule
-
-    if head:
-        head_pred, head_args = head
-        head_inputs = settings.literal_inputs[(head_pred, head_args)]
-        if len(head_inputs) == 0:
-            return True
-
-        grounded_variables = head_inputs
-        body_literals = set(body)
-
-        while body_literals:
-            selected_literal = None
-            for literal in body_literals:
-                pred, args = literal
-                literal_inputs = settings.literal_inputs[(pred, args)]
-                if not literal_inputs.issubset(grounded_variables):
-                    continue
-                if pred != head_pred:
-                    selected_literal = literal
-                    break
-                elif selected_literal is None:
-                    selected_literal = literal
-
-            if selected_literal is None:
-                return False
-
-            pred, args = selected_literal
-            selected_literal_outputs = settings.literal_outputs[(pred, args)]
-            grounded_variables = grounded_variables.union(selected_literal_outputs)
-            body_literals = body_literals.difference({selected_literal})
-        return True
-
-    # headless
-    if all(len(settings.literal_inputs[(pred, args)]) == 0 for pred, args in body):
-        return True
+    lit_inputs = settings.literal_inputs
+    lit_outputs = settings.literal_outputs
 
     body_literals = set(body)
-    grounded_variables = set()
 
+    # ---- INITIAL GROUNDED VARS ----
+    if head:
+        head_pred, head_args = head
+        grounded = lit_inputs[(head_pred, head_args)]
+        if not grounded:
+            return True
+    else:
+        if all(not lit_inputs[(p, a)] for p, a in body):
+            return True
+        grounded = set()
+
+    # ---- MAIN LOOP ----
     while body_literals:
-        selected_literal = None
+        selected = None
+
         for literal in body_literals:
             pred, args = literal
-            literal_outputs = settings.literal_outputs[(pred, args)]
-            if len(literal_outputs) == len(literal.arguments):
-                selected_literal = literal
-                break
-            literal_inputs = settings.literal_inputs[(pred, args)]
-            if literal_inputs.issubset(grounded_variables):
-                selected_literal = literal
-                break
+            inputs = lit_inputs[(pred, args)]
+            outputs = lit_outputs[(pred, args)]
 
-        if selected_literal is None:
+            if head:
+                if not inputs.issubset(grounded):
+                    continue
+                if pred != head_pred:
+                    selected = literal
+                    break
+                if selected is None:
+                    selected = literal
+            else:
+                if outputs == set(args):
+                    selected = literal
+                    break
+                if inputs.issubset(grounded):
+                    selected = literal
+                    break
+
+        if selected is None:
             return False
 
-        grounded_variables = grounded_variables.union(selected_literal.arguments)
-        body_literals = body_literals.difference({selected_literal})
+        pred, args = selected
+        if head:
+            grounded |= lit_outputs[(pred, args)]
+        else:
+            grounded |= set(args)
+
+        body_literals.remove(selected)
 
     return True

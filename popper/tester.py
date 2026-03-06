@@ -83,7 +83,7 @@ class Tester():
         self.cached_inconsistent = {}
 
         if self.settings.recursion_enabled:
-            query_once(f'assert(timeout({EVAL_TIMEOUT=0.001})), fail')
+            query_once(f'assert(timeout({EVAL_TIMEOUT})), fail')
 
     def janus_clear_cache(self):
         return query_once('retractall(janus:py_call_cache(_String,_Input,_TV,_M,_Goal,_Dict,_Truth,_OutVars))')

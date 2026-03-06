@@ -126,6 +126,7 @@ def popper(settings, tester, state, bkcons):
     # LAST COMBINE STAGE
     with stats.duration('combine'):
         combine_result = combine_helper.update_best_prog(combine_helper.to_combine, last_combine_stage=True)
+    
     if combine_result:
         new_hypothesis, hypothesis_size, conf_matrix = combine_result
         state.best_hypothesis = new_hypothesis
