@@ -6,6 +6,7 @@ from pysat.formula import IDPool
 import time
 import bitarray
 from . import stats
+from . import logger
 
 POS_EXAMPLE_WEIGHT = 1
 NEG_EXAMPLE_WEIGHT = 1
@@ -238,7 +239,7 @@ class CombineHelper:
 
     def load_solver(self):
         if self.settings.debug:
-            self.settings.logger.debug(f'Load exact solver: {self.settings.solver}')
+            logger.debug(f'Load exact solver: {self.settings.solver}')
 
         if self.settings.solver not in ['rc2', 'uwr', 'wmaxcdcl']:
             print('INVALID SOLVER')
@@ -267,7 +268,7 @@ class CombineHelper:
             self.settings.lex_via_weights = False
 
         if self.settings.debug:
-            self.settings.logger.debug(f'Load anytime solver:{self.settings.anytime_solver}')
+            logger.debug(f'Load anytime solver:{self.settings.anytime_solver}')
 
         if self.settings.anytime_solver in ['wmaxcdcl', 'nuwls']:
             self.settings.maxsat_timeout = self.settings.anytime_timeout

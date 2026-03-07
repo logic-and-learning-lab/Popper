@@ -14,6 +14,8 @@ clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
 import dataclasses
+from . import logger
+from . import stats
 
 @dataclasses.dataclass(frozen=True)
 class Var:
@@ -184,15 +186,6 @@ class Generator:
                 # """
 
                 # encoding.append(HSPACE_HEURISTIC)
-            elif settings.no_bias:
-                DEFAULT_HEURISTIC = """
-                size_vars(V):- #count{K : clause_var(_,K)} == V.
-                size_rules(R):- #count{K : clause(K)} == R.
-                #heuristic size_rules(R). [1500-R@30,true]
-                #heuristic size(N). [1000-N@20,true]
-                #heuristic size_vars(V). [500-V@10,true]
-                """
-                encoding.append(DEFAULT_HEURISTIC)
             else:
                 DEFAULT_HEURISTIC = """
                 #heuristic size(N). [1000-N,true]
@@ -216,27 +209,6 @@ class Generator:
                 #sum{K+1,Clause : body_size(Clause,K)} != n.
             """
             solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
-
-            if self.settings.no_bias:
-                NUM_OF_VARS = """
-                %%% External atom for number of variables in the program %%%%%
-                #external size_in_vars(v).
-                :-
-                    size_in_vars(v),
-                    #max{V : clause_var(_,V)} != v - 1.
-                """
-                solver.add('number_of_vars', ['v'], NUM_OF_VARS)
-
-                NUM_OF_RULES = """
-                %%% External atom for number of rules in the program %%%%%
-                #external size_in_rules(r).
-                :-
-                    size_in_rules(r),
-                    #max{R : clause(R)} != r - 1.
-                """
-                solver.add('number_of_rules', ['r'], NUM_OF_RULES)
-
-
 
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
@@ -415,9 +387,6 @@ class Generator:
             new_body = frozenset((True, pred, args) for pred, args in body)
             to_add.append((new_head, new_body))
 
-
-        if self.settings.no_bias:
-            self.bad_handles = []
         for handle in self.bad_handles:
             # print(handle)
             # if we know that rule_xyz is bad

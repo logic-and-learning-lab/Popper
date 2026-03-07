@@ -142,25 +142,21 @@ def learn_solution(settings):
     return state.best_hypothesis, state.best_hypothesis_score, stats
 
 def build_constraints(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, is_recursive, has_invention, combine_helper, test_result):
-
-    min_coverage = state.min_pos_coverage
     pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
     inconsistent = test_result.inconsistent
     mdl = test_result.mdl
     too_few_tp, too_many_fp = test_result.too_few_tp, test_result.too_many_fp
     num_pos, num_neg = tester.num_pos, tester.num_neg
     tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
-
     seen_hyp_spec, seen_hyp_gen = state.seen_hyp_spec, state.seen_hyp_gen
-
     new_cons = []
     pruned_sub_inconsistent = pruned_more_general = False
     add_spec = add_gen = add_redund1 = add_redund2 = False
     subsumed = subsumed_by_two = covers_too_few = noisy_subsumed = False
     spec_size = gen_size = None
 
-    # if it does not cover any example, prune specialisations
-    if tp == 0:
+    # if it does not cover enough example, prune specialisations
+    if tp < state.min_pos_coverage:
         add_spec = True
         # if recursion and no PI, apply redundancy constraints
         if settings.recursion_enabled:
@@ -177,45 +173,46 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
         add_gen = True
 
     # if the program does not cover any positive examples, check whether it has an unsat core
-    if not has_invention:
-        if tp < min_coverage or (settings.noisy and tp <= prog_size):
-            with stats.duration('find mucs'):
-                cons_ = tuple(unsatcore_finder.explain_incomplete(prog))
-                new_cons.extend(cons_)
-                pruned_more_general = len(cons_) > 0
+    if not has_invention and tp < state.min_pos_coverage or (settings.noisy and tp <= prog_size):
+        with stats.duration('find mucs'):
+            cons_ = tuple(unsatcore_finder.explain_incomplete(prog))
+            new_cons.extend(cons_)
+            pruned_more_general = len(cons_) > 0
 
     if tp > 0 and state.success_sets and (not settings.noisy or (settings.noisy and fp == 0)):
         with stats.duration('check subsumed and covers_too_few'):
             subsumed = pos_covered in state.success_sets or any(subset(pos_covered, xs) for xs in state.success_sets)
-            subsumed_by_two = (not subsumed) and subsumer.check_subsumed_by_two(pos_covered, prog_size)
-            covers_too_few = (not subsumed) and (not subsumed_by_two) and (not settings.noisy) and subsumer.check_covers_too_few(prog_size, pos_covered)
+            subsumed_by_two = not subsumed and subsumer.check_subsumed_by_two(pos_covered, prog_size)
+            covers_too_few = not subsumed and not subsumed_by_two and not settings.noisy and subsumer.check_covers_too_few(prog_size, pos_covered)
 
-        if subsumed or subsumed_by_two or covers_too_few:
-            add_spec = True
-            noisy_subsumed = True
+    if subsumed or subsumed_by_two or covers_too_few:
+        add_spec = True
+        noisy_subsumed = True
 
-    if (not settings.noisy) and (not has_invention) and (not is_recursive) and (subsumed or subsumed_by_two or covers_too_few):
-        subsumed_progs = []
-        with stats.duration('find most general subsumed/covers_too_few'):
-            subsumed_progs = subsumer.subsumed_or_covers_too_few(prog, seen=set())
-        pruned_more_general = len(subsumed_progs) > 0
+        if not settings.noisy and not has_invention and not is_recursive:
+            subsumed_progs = []
+            with stats.duration('find most general subsumed/covers_too_few'):
+                subsumed_progs = subsumer.subsumed_or_covers_too_few(prog, seen=set())
+            a = pruned_more_general
+            pruned_more_general = len(subsumed_progs) > 0
 
-        if settings.showcons and not pruned_more_general:
-            if subsumed:
-                print('\t', 'SUBSUMED:', '\t', format_prog(prog))
-            elif subsumed_by_two:
-                print('\t', 'SUBSUMED BY TWO:', '\t', format_prog(prog))
-            elif covers_too_few:
-                print('\t', 'COVERS TOO FEW:', '\t', format_prog(prog))
+            if a:
+                assert(pruned_more_general)
 
-        for subsumed_prog, message in subsumed_progs:
-            if settings.showcons:
-                print('\t', message, '\t', format_prog(prog))
-            subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog)
-            new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
+            if settings.showcons and not pruned_more_general:
+                if subsumed:
+                    print('\t', 'SUBSUMED:', '\t', format_prog(prog))
+                elif subsumed_by_two:
+                    print('\t', 'SUBSUMED BY TWO:', '\t', format_prog(prog))
+                elif covers_too_few:
+                    print('\t', 'COVERS TOO FEW:', '\t', format_prog(prog))
 
+            for subsumed_prog, message in subsumed_progs:
+                if settings.showcons:
+                    print('\t', message, '\t', format_prog(prog))
+                subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog)
+                new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
-    # print(not settings.noisy, not pruned_more_general)
     if not settings.noisy and not pruned_more_general:
         if inconsistent:
             add_gen = True
@@ -288,8 +285,11 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
                     print('\t', 'REDUCIBLE_1:', '\t', ','.join(format_literal(literal) for literal in x))
                 new_cons.append((Constraint.UNSAT, x))
 
+    if pruned_more_general:
+        assert(add_spec)
+
     # REDUCIBLE_2 (negative reducible)
-    if (not add_spec) and (not pruned_more_general) and settings.datalog and (not settings.recursion_enabled) and num_neg > 0:
+    if not add_spec and not pruned_more_general and settings.datalog and not settings.recursion_enabled and num_neg > 0:
         with stats.duration('check_reducible2'):
             bad_prog = allsatcore_finder.check_neg_reducible(prog)
             if bad_prog:
@@ -299,23 +299,17 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
                     print('\t', 'REDUCIBLE_2:', '\t', format_prog(bad_prog))
                 new_cons.append((Constraint.SPECIALISATION, bad_prog))
 
-    # must cover minimum number of examples
-    if (not add_spec) and (not pruned_more_general):
-        if tp < min_coverage:
-            add_spec = True
+    tmp_a = len(new_cons)
 
     # BUILD CONSTRAINTS
-    if add_spec and (not pruned_more_general) and (not add_redund2):
+    if add_spec and not pruned_more_general and not add_redund2:
         new_cons.append((Constraint.SPECIALISATION, prog))
 
-    if not too_few_tp:
-        if settings.noisy and (not add_spec) and spec_size and (not pruned_more_general):
-            if spec_size <= state.max_literals and ((is_recursive or has_invention or spec_size <= settings.max_body)):
-                new_cons.append((Constraint.SPECIALISATION, prog, spec_size))
-                seen_hyp_spec[fp + prog_size + mdl].append([prog, tp, fn, tn, fp, prog_size])
-                # print('seen_hyp_spec', format_prog(prog), fp, prog_size, mdl)
+    if not too_few_tp and settings.noisy and not add_spec and spec_size and not pruned_more_general and spec_size <= state.max_literals and (is_recursive or has_invention or spec_size <= settings.max_body):
+        new_cons.append((Constraint.SPECIALISATION, prog, spec_size))
+        seen_hyp_spec[fp + prog_size + mdl].append([prog, tp, fn, tn, fp, prog_size])
 
-    if add_gen and (not pruned_sub_inconsistent):
+    if add_gen and not pruned_sub_inconsistent:
         if settings.noisy or settings.recursion_enabled or settings.pi_enabled:
             if not pruned_more_general:
                 new_cons.append((Constraint.GENERALISATION, prog))
@@ -323,23 +317,29 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
             if not add_spec:
                 new_cons.append((Constraint.GENERALISATION, prog))
 
-    if settings.noisy and (not add_gen) and gen_size and (not pruned_sub_inconsistent):
+    if settings.noisy and not add_gen and gen_size and not pruned_sub_inconsistent:
         if gen_size <= state.max_literals and (settings.recursion_enabled or settings.pi_enabled) and (not pruned_more_general):
             new_cons.append((Constraint.GENERALISATION, prog, gen_size))
             seen_hyp_gen[fn + prog_size + mdl].append([prog, tp, fn, tn, fp, prog_size])
             # print('seen_hyp_gen', format_prog(prog), fn, prog_size, mdl)
 
-    if add_redund1 and (not pruned_more_general):
+    if add_redund1 and not pruned_more_general:
         new_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, prog))
 
-    if add_redund2 and (not pruned_more_general):
+    if add_redund2 and not pruned_more_general:
         new_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, prog))
 
-    if settings.noisy and (not add_spec) and (not add_gen):
+    if settings.noisy and not add_spec and not add_gen:
         new_cons.append((Constraint.BANISH, prog))
 
-    # return new_cons
+    tmp_b = len(new_cons)
+
+    if pruned_more_general:
+        assert(tmp_a == tmp_b)
+
+    # AC: TODO IMPORTANT REMOVE SUBSUMED CONSTRAINTS
     return new_cons, subsumed, noisy_subsumed, add_gen, pruned_more_general
+
 
 # given a program with more than one rule, look for inconsistent subrules/subprograms
 def explain_inconsistent(tester, prog):
