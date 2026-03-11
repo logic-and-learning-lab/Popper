@@ -135,30 +135,21 @@ def build_constraints(settings, generator, tester, state, unsatcore_finder, alls
     return build_constraints_noiseless(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result)
 
 def build_constraints_noiseless(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result):
-    inconsistent = test_result.inconsistent
-    num_pos, num_neg = tester.num_pos, tester.num_neg
-    tp = test_result.tp
     new_cons = []
     pruned_sub_inconsistent = pruned_more_general = False
     add_spec = add_gen = add_redund1 = add_redund2 = False
-    subsumed = subsumed_by_two = covers_too_few = False
     is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
     has_invention = settings.pi_enabled and prog_has_invention(prog)
-
     add_to_combiner_ = True
-
-    # if hypothesis is consistent, prune specialisations
-    if not inconsistent:
-        add_spec = True
+    tp = test_result.tp
 
     # if hypothesis covers all positive examples prune generalisations
-    if tp == num_pos:
+    if tp == tester.num_pos:
         add_gen = True
 
     # if hypothesis does not cover enough example, prune specialisations
     if tp < state.min_pos_coverage:
         add_spec = True
-
         add_to_combiner_ = False
 
         # if recursion and no PI, apply redundancy constraints
@@ -207,8 +198,8 @@ def build_constraints_noiseless(settings, generator, tester, state, unsatcore_fi
                     subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog)
                     new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
-
-    if inconsistent:
+    # if hypothesis is inconsistent, prune generalisations and do not add to the combiner
+    if test_result.inconsistent:
         add_to_combiner_ = False
         add_gen = True
         if not pruned_more_general and is_recursive:
@@ -216,6 +207,9 @@ def build_constraints_noiseless(settings, generator, tester, state, unsatcore_fi
             cons_ = frozenset(explain_inconsistent(tester, prog))
             new_cons.extend(cons_)
             pruned_sub_inconsistent = len(cons_) > 0
+    else:
+        # if hypothesis is consistent, prune specialisations
+        add_spec = True
 
     # remove generalisations of programs with redundant literals
     if is_recursive:
@@ -244,9 +238,8 @@ def build_constraints_noiseless(settings, generator, tester, state, unsatcore_fi
                     print('\t', 'REDUCIBLE_1:', '\t', ','.join(format_literal(literal) for literal in x))
                 new_cons.append((Constraint.UNSAT, x))
 
-
     # REDUCIBLE_2 (negative reducible)
-    if not add_spec and not pruned_more_general and settings.datalog and not settings.recursion_enabled and num_neg > 0:
+    if not add_spec and not pruned_more_general and settings.datalog and not settings.recursion_enabled and tester.num_neg > 0:
         with stats.duration('check_reducible2'):
             bad_prog = allsatcore_finder.check_neg_reducible(prog)
             if bad_prog:
@@ -258,27 +251,27 @@ def build_constraints_noiseless(settings, generator, tester, state, unsatcore_fi
                 new_cons.append((Constraint.SPECIALISATION, bad_prog))
 
     # BUILD CONSTRAINTS
-    if add_spec and not pruned_more_general and not add_redund2:
-        new_cons.append((Constraint.SPECIALISATION, prog))
-
     if add_gen and not pruned_sub_inconsistent:
         if settings.recursion_enabled or settings.pi_enabled:
             if not pruned_more_general:
                 new_cons.append((Constraint.GENERALISATION, prog))
-        else:
-            if not add_spec:
-                new_cons.append((Constraint.GENERALISATION, prog))
+        elif not add_spec:
+            new_cons.append((Constraint.GENERALISATION, prog))
 
-    if add_redund1 and not pruned_more_general:
-        new_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, prog))
+    if not pruned_more_general:
+        if add_spec and not add_redund2:
+            new_cons.append((Constraint.SPECIALISATION, prog))
 
-    if add_redund2 and not pruned_more_general:
-        new_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, prog))
+        if add_redund1:
+            new_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, prog))
 
-    add_to_combiner = not inconsistent and not subsumed and not add_gen and tp > 0 and not pruned_more_general
-    assert(add_to_combiner_ == add_to_combiner)
+        if add_redund2:
+            new_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, prog))
 
-    return new_cons, add_to_combiner
+    # add_to_combiner = not test_result.inconsistent and not subsumed and not add_gen and tp > 0 and not pruned_more_general
+    # assert(add_to_combiner_ == add_to_combiner)
+
+    return new_cons, add_to_combiner_
 
 
 def build_constraints_noisy(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result):
