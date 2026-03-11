@@ -16,7 +16,6 @@ class Literal(NamedTuple):
     arguments: tuple
 
 TIMEOUT=1200
-MAX_RULES=2
 MAX_VARS=6
 MAX_BODY=6
 ANYTIME_TIMEOUT=10
@@ -171,7 +170,6 @@ class Settings:
         self.has_directions = False
         self.info = info
         self.max_body = max_body
-        self.max_rules = MAX_RULES
         self.max_vars = max_vars
         self.noisy = noisy
         self.non_datalog_flag = False
@@ -242,9 +240,13 @@ class Settings:
         for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
             self.max_vars = x.symbol.arguments[0].number
 
+
         if self.recursion_enabled or self.pi_enabled:
+            self.max_rules = 2
             for x in solver.symbolic_atoms.by_signature('max_clauses', arity=1):
                 self.max_rules = x.symbol.arguments[0].number
+        else:
+            self.max_rules = 1
 
         self.body_preds = get_body_preds(solver)
         max_arity = max(max_arity, max(arity for (pred, arity) in self.body_preds))
