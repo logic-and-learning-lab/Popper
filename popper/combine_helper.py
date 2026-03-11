@@ -1,30 +1,22 @@
 # code originally written by Andreas Niskanen (andreas.niskanen@helsinki.fi)
-from . util import calc_prog_size, reduce_prog, prog_is_recursive, prog_has_invention, calc_rule_size, rule_is_recursive, format_prog
+from . util import reduce_prog, calc_rule_size
 from collections import defaultdict
 from . import maxsat
 from pysat.formula import IDPool
-import time
-import bitarray
 from . import stats
 from . import logger
+from bitarray.util import subset, any_and, ones
+from . util import format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations
 
 POS_EXAMPLE_WEIGHT = 1
 NEG_EXAMPLE_WEIGHT = 1
 
-import time
-from collections import defaultdict
-from bitarray.util import subset, any_and, ones
-from functools import cache
-from itertools import chain, combinations, permutations
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations
-
 class CombineHelper:
 
-    def __init__(self, settings, tester, state, generator):
+    def __init__(self, settings, tester, state):
         self.settings = settings
         self.tester = tester
         self.state = state
-        self.generator = generator
         self.covered_by_pos = defaultdict(set)
         self.covered_by_neg = defaultdict(set)
         self.coverage_pos = {}
@@ -492,7 +484,6 @@ class CombineHelper:
 
         while True:
             model_found = False
-            model_inconsistent = False
 
             if not self.settings.lex:
                 if timeout is None or last_combine_stage:
@@ -525,7 +516,6 @@ class CombineHelper:
                         break
 
             model_found = True
-            model_incomplete = False
 
             rules = [rule_id for rule_id in ruleid_to_rule if model[rule_var[rule_id]-1] > 0]
             model_prog = [ruleid_to_rule[k] for k in rules]
@@ -542,8 +532,7 @@ class CombineHelper:
                     print("ERROR: Combining rec or pi programs not supported with MDL objective. Exiting.")
                     assert(False)
 
-                model_inconsistent = self.tester.test_prog_inconsistent(model_prog)
-                if not model_inconsistent:
+                if not self.tester.test_prog_inconsistent(model_prog):
                     best_prog = rules
                     best_fp = fp
                     best_fn = fn

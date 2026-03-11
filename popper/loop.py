@@ -1,4 +1,3 @@
-import time
 from bitarray.util import subset
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, remap_variables, format_prog, print_incomplete_solution2
 from . tester import Tester
@@ -49,7 +48,7 @@ def popper(settings, tester, state, bkcons):
     allsatcore_finder = AllSatCoreFinder(settings, tester)
     subsumer = SubsumeChecker(settings, tester, state)
     generator = load_generator(settings, state, bkcons)
-    combine_helper = CombineHelper(settings, tester, state, generator)
+    combine_helper = CombineHelper(settings, tester, state)
     num_pos, num_neg = tester.num_pos, tester.num_neg
 
     if settings.noisy:
@@ -88,7 +87,7 @@ def popper(settings, tester, state, bkcons):
             update_best_hypothesis(settings, state, prog, prog_size, test_result.conf_matrix)
 
         # BUILD CONSTRAINTS
-        new_cons, add_to_combiner = build_constraints(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result)
+        new_cons, add_to_combiner = build_constraints(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result)
 
         size_change = check_size_change(state, prog_size)
 
@@ -129,12 +128,12 @@ def learn_solution(settings):
     timeout(settings, popper, (settings, tester, state, bkcons), timeout_duration=state.time_remaining(settings.timeout),)
     return state.best_hypothesis, state.best_hypothesis_score, stats
 
-def build_constraints(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result):
+def build_constraints(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result):
     if settings.noisy:
-        return build_constraints_noisy(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result)
-    return build_constraints_noiseless(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result)
+        return build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result)
+    return build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result)
 
-def build_constraints_noiseless(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result):
+def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result):
     new_cons = []
     pruned_sub_inconsistent = pruned_more_general = False
     add_spec = add_gen = add_redund1 = add_redund2 = False
@@ -211,7 +210,7 @@ def build_constraints_noiseless(settings, generator, tester, state, unsatcore_fi
         # if hypothesis is consistent, prune specialisations
         add_spec = True
 
-    # remove generalisations of programs with redundant literals
+    # prune generalisations of rules with redundant literals
     if is_recursive:
         for rule in prog:
             if rule_is_recursive(rule) and settings.max_rules == 2:
@@ -272,19 +271,18 @@ def build_constraints_noiseless(settings, generator, tester, state, unsatcore_fi
 
     return new_cons, add_to_combiner_
 
-
-def build_constraints_noisy(settings, generator, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result):
-    pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
+def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result):
+    pos_covered = test_result.pos_covered
     inconsistent = test_result.inconsistent
     mdl = test_result.mdl
     too_few_tp, too_many_fp = test_result.too_few_tp, test_result.too_many_fp
     num_pos, num_neg = tester.num_pos, tester.num_neg
-    tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
+    tp, fn, fp, tn = test_result.tp, test_result.fn, test_result.fp, test_result.tn
     seen_hyp_spec, seen_hyp_gen = state.seen_hyp_spec, state.seen_hyp_gen
     new_cons = []
-    pruned_sub_inconsistent = pruned_more_general = False
+    pruned_more_general = False
     add_spec = add_gen = add_redund1 = add_redund2 = False
-    subsumed = subsumed_by_two = covers_too_few = noisy_subsumed = False
+    noisy_subsumed = False
     spec_size = gen_size = None
     is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
     has_invention = settings.pi_enabled and prog_has_invention(prog)
@@ -378,9 +376,6 @@ def build_constraints_noisy(settings, generator, tester, state, unsatcore_finder
                     print('\t', 'REDUCIBLE_1:', '\t', ','.join(format_literal(literal) for literal in x))
                 new_cons.append((Constraint.UNSAT, x))
 
-    if pruned_more_general:
-        assert(add_spec)
-
     # REDUCIBLE_2 (negative reducible)
     if not add_spec and not pruned_more_general and settings.datalog and not settings.recursion_enabled and num_neg > 0:
         with stats.duration('check_reducible2'):
@@ -392,31 +387,29 @@ def build_constraints_noisy(settings, generator, tester, state, unsatcore_finder
                     print('\t', 'REDUCIBLE_2:', '\t', format_prog(bad_prog))
                 new_cons.append((Constraint.SPECIALISATION, bad_prog))
 
-    tmp_a = len(new_cons)
-
     # BUILD CONSTRAINTS
-    if add_spec and not pruned_more_general and not add_redund2:
-        new_cons.append((Constraint.SPECIALISATION, prog))
+    if not pruned_more_general:
 
-    if not too_few_tp and not add_spec and spec_size and not pruned_more_general and spec_size <= state.max_literals and (is_recursive or has_invention or spec_size <= settings.max_body):
-        new_cons.append((Constraint.SPECIALISATION, prog, spec_size))
-        seen_hyp_spec[fp + prog_size + mdl].append([prog, tp, fn, tn, fp, prog_size])
+        if add_spec and not add_redund2:
+            new_cons.append((Constraint.SPECIALISATION, prog))
 
-    if add_gen and not pruned_sub_inconsistent:
-        if not pruned_more_general:
-            new_cons.append((Constraint.GENERALISATION, prog))
+        if not too_few_tp and not add_spec and spec_size and spec_size <= state.max_literals and (is_recursive or has_invention or spec_size <= settings.max_body):
+            new_cons.append((Constraint.SPECIALISATION, prog, spec_size))
+            seen_hyp_spec[fp + prog_size + mdl].append([prog, tp, fn, tn, fp, prog_size])
 
-    if not add_gen and gen_size and not pruned_sub_inconsistent:
-        if gen_size <= state.max_literals and (settings.recursion_enabled or settings.pi_enabled) and (not pruned_more_general):
+        if not add_gen and gen_size and gen_size <= state.max_literals and (settings.recursion_enabled or settings.pi_enabled):
             new_cons.append((Constraint.GENERALISATION, prog, gen_size))
             seen_hyp_gen[fn + prog_size + mdl].append([prog, tp, fn, tn, fp, prog_size])
             # print('seen_hyp_gen', format_prog(prog), fn, prog_size, mdl)
 
-    if add_redund1 and not pruned_more_general:
-        new_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, prog))
+        if add_gen:
+            new_cons.append((Constraint.GENERALISATION, prog))
 
-    if add_redund2 and not pruned_more_general:
-        new_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, prog))
+        if add_redund1:
+            new_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, prog))
+
+        if add_redund2:
+            new_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, prog))
 
     if not add_spec and not add_gen:
         new_cons.append((Constraint.BANISH, prog))
@@ -452,7 +445,6 @@ def explain_inconsistent(tester, prog):
             subprog = frozenset([r1, r2])
             if tester.test_prog_inconsistent(subprog):
                 yield (Constraint.GENERALISATION, subprog)
-
 
 def build_constraints_previous_hypotheses(score, best_size, num_pos, num_neg, state):
     cons = []
