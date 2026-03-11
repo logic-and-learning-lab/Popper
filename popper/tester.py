@@ -259,6 +259,26 @@ class Tester():
         pos_covered = frozenbitarray(pos_covered_bits)
         return pos_covered
 
+
+
+    def test_prog_neg(self, prog):
+
+        if len(prog) == 1:
+            atom_str, body_str = self.parse_single_rule(prog)
+            neg_covered = []
+            if self.num_neg > 0:
+                q = f'findall(_ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
+                neg_covered = query_once(q)['S']
+        else:
+            with self.using(prog):
+                res = query_once(f'neg_covered(S2)')
+            neg_covered = res['S2']
+        neg_covered_bits = bitarray(self.num_neg)
+        neg_covered_bits[neg_covered] = 1
+        neg_covered = frozenbitarray(neg_covered_bits)
+
+        return neg_covered
+
     def test_prog_inconsistent(self, prog):
         if self.num_neg == 0:
             return False

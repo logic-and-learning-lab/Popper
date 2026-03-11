@@ -1,4 +1,12 @@
-# code originally written by Andreas Niskanen (andreas.niskanen@helsinki.fi)
+# Code and ideas from the papers:
+
+# Andrew Cropper, Céline Hocquette:
+# Learning Logic Programs by Combining Programs. ECAI 2023: 501-508
+
+# Céline Hocquette, Andreas Niskanen, Matti Järvisalo, Andrew Cropper:
+# Learning MDL Logic Programs from Noisy Data. AAAI 2024: 10553-10561
+
+# maxsat code originally written by Andreas Niskanen (andreas.niskanen@helsinki.fi)
 from collections import defaultdict
 from . import maxsat
 from pysat.formula import IDPool
@@ -46,43 +54,39 @@ class CombineHelper:
         # temp store of hypothesis hashes until we need call combine
         self.to_combine = set()
 
-        # tracks uncovered positive examples when there is no noise
-        self.uncovered = ones(self.tester.num_pos)
-
         self.inconsistent = set()
 
         self.load_solver()
 
-
-    def combine(self, prog, prog_size, test_result, size_change, add_to_combiner_, last_combine_stage=False):
-        add_to_combiner = add_to_combiner_ and self.decide_whether_to_combine(prog, prog_size, test_result)
+    def combine(self, prog, prog_size, test_result, size_change, add_to_combiner, last_combine_stage=False):
+        add_to_combiner = add_to_combiner and self.decide_whether_to_combine(prog, prog_size, test_result)
+        state = self.state
 
         if add_to_combiner:
             # MOVE SOMEWHERE ELSE LATER
-            if self.state.min_size is None:
-                self.state.min_size = prog_size
+            if state.min_size is None:
+                state.min_size = prog_size
             self.to_combine.add(hash(prog))
 
-        call_combine = len(self.to_combine) > 0 and (self.settings.noisy or self.state.solution_found) and (len(self.to_combine) >= self.settings.batch_size or size_change)
-
-        if self.settings.recursion_enabled:
-            # why?
-            call_combine = len(self.to_combine) > 0
+        call_combine = len(self.to_combine) > 0 and (self.settings.noisy or state.solution_found) and (len(self.to_combine) >= self.settings.batch_size or size_change)
 
         combine_result1 = None
-        if add_to_combiner and not self.settings.noisy and not self.state.solution_found and not self.settings.recursion_enabled:
+        if self.settings.recursion_enabled:
+            call_combine = len(self.to_combine) > 0
+        elif add_to_combiner and not self.settings.noisy and not state.solution_found:
             pos_covered = test_result.pos_covered
 
-            if any_and(self.uncovered, pos_covered):
-                if self.state.best_hypothesis:
-                    tmp = self.state.best_hypothesis | prog
+            if any_and(state.uncovered, pos_covered):
+                if state.best_hypothesis:
+                    tmp = state.best_hypothesis | prog
                 else:
                     tmp = prog
-                self.uncovered = self.uncovered & ~pos_covered
-                tp2 = self.tester.num_pos - self.uncovered.count(1)
+                state.uncovered &= ~pos_covered
+                fn = state.uncovered.count(1)
+                tp = self.tester.num_pos - fn
                 hypothesis_size = calc_prog_size(tmp)
-                combine_result1 = tmp, hypothesis_size, (tp2, self.uncovered.count(1), self.tester.num_neg, 0)
-                call_combine = not self.uncovered.any()
+                combine_result1 = tmp, hypothesis_size, (tp, fn, self.tester.num_neg, 0)
+                call_combine = fn == 0
 
         if call_combine:
             if self.settings.noisy:
@@ -256,7 +260,7 @@ class CombineHelper:
         if self.settings.debug:
             logger.debug(f'Load exact solver: {self.settings.solver}')
 
-        if self.settings.solver not in ['rc2', 'uwr', 'wmaxcdcl']:
+        if self.settings.solver not in ['rc2', 'uwr']:
             print('INVALID SOLVER')
             exit()
 
@@ -270,10 +274,6 @@ class CombineHelper:
             self.settings.exact_maxsat_solver='uwrmaxsat'
             self.settings.exact_maxsat_solver_params="-v0 -no-sat -no-bin -m -bm"
             self.settings.old_format = False
-        else:
-            self.settings.exact_maxsat_solver='wmaxcdcl'
-            self.settings.exact_maxsat_solver_params=""
-            self.settings.old_format = True
 
         if self.settings.noisy:
             self.settings.lex = False
@@ -285,25 +285,15 @@ class CombineHelper:
         if self.settings.debug:
             logger.debug(f'Load anytime solver:{self.settings.anytime_solver}')
 
-        if self.settings.anytime_solver in ['wmaxcdcl', 'nuwls']:
+        if self.settings.anytime_solver in ['nuwls']:
             self.settings.maxsat_timeout = self.settings.anytime_timeout
-            if self.settings.anytime_solver == 'wmaxcdcl':
-                self.settings.anytime_maxsat_solver = 'wmaxcdcl'
-                self.settings.anytime_maxsat_solver_params = ""
-                self.settings.anytime_maxsat_solver_signal = 10
-                self.settings.old_format = True
-            elif self.settings.anytime_solver == 'nuwls':
+            if self.settings.anytime_solver == 'nuwls':
                 self.settings.anytime_maxsat_solver = 'NuWLS-c'
                 self.settings.anytime_maxsat_solver_params = ""
                 self.settings.anytime_maxsat_solver_signal = 15
             else:
                 print('INVALID ANYTIME SOLVER')
                 exit()
-
-        # TODO: temporary config, need to be modified
-        # self.settings.last_combine_stage = False
-
-        # return Combiner(self.settings, self.tester, self.coverage_pos, self.coverage_neg, self.prog_lookup)
 
     def add_inconsistent(self, prog_hash):
         self.inconsistent.add(prog_hash)

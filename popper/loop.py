@@ -1,4 +1,4 @@
-from bitarray.util import subset
+from bitarray.util import subset, ones
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, remap_variables, format_prog, print_incomplete_solution2
 from . tester import Tester
 from . bkcons import get_bk_cons
@@ -6,6 +6,7 @@ from . unsat import UnsatCoreFinder
 from . allsat import AllSatCoreFinder
 from . subsume import SubsumeChecker
 from . state import SearchState
+from . joiner import Joiner
 from . combine_helper import CombineHelper
 from . import logger
 from . import stats
@@ -49,6 +50,7 @@ def popper(settings, tester, state, bkcons):
     subsumer = SubsumeChecker(settings, tester, state)
     generator = load_generator(settings, state, bkcons)
     combine_helper = CombineHelper(settings, tester, state)
+    joiner = Joiner(settings, tester, state)
     num_pos, num_neg = tester.num_pos, tester.num_neg
 
     if settings.noisy:
@@ -91,6 +93,11 @@ def popper(settings, tester, state, bkcons):
 
         size_change = check_size_change(state, prog_size)
 
+        # JOINER
+        if True or settings.join:
+            with stats.duration('join'):
+                join_result = joiner.join(prog, prog_size, test_result, size_change, add_to_combiner)
+
         # COMBINE
         with stats.duration('combine'):
             combine_result = combine_helper.combine(prog, prog_size, test_result, size_change, add_to_combiner)
@@ -124,6 +131,8 @@ def learn_solution(settings):
     state.start_time()
     with stats.duration('load data'):
         tester = Tester(settings, state)
+    # nasty
+    state.uncovered = ones(tester.num_pos)
     bkcons = get_bk_cons(settings, tester)
     timeout(settings, popper, (settings, tester, state, bkcons), timeout_duration=state.time_remaining(settings.timeout),)
     return state.best_hypothesis, state.best_hypothesis_score, stats

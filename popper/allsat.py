@@ -1,3 +1,7 @@
+# Code and idea from the paper:
+# Andrew Cropper, David M. Cerna:
+# Efficient rule induction by ignoring pointless rules. AAAI 2026.
+
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions, settings
 from itertools import chain, combinations, permutations
 

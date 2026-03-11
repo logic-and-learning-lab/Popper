@@ -2,7 +2,6 @@ from collections import defaultdict
 import time
 
 class SearchState:
-    # def __init__(self):
     # pos_covered_bit_array -> prog_size+prog_size2
     # it only maintains success sets for pairs of programs where fp = 0
     paired_success_sets = defaultdict(set)
@@ -19,7 +18,6 @@ class SearchState:
 
     # save hypotheses for which we pruned spec / gen from a certain size only, once we update the best mdl score, we can prune spec / gen from a better size for some of these
     seen_hyp_spec, seen_hyp_gen = defaultdict(list), defaultdict(list)
-
 
     best_hypothesis = None
     best_hypothesis_size = None

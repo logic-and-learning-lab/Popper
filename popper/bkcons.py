@@ -1,3 +1,10 @@
+# Code and idea from the papers:
+# Andrew Cropper, Céline Hocquette:
+# Learning Logic Programs by Discovering Where Not to Search. AAAI 2023: 6289-6296
+
+# Andrew Cropper, Filipe Gouveia, David M. Cerna:
+# Honey, I shrunk the hypothesis space (through logical preprocessing). CoRR abs/2506.06739 (2025)
+
 import clingo
 import clingo.script
 import numbers

@@ -1,3 +1,8 @@
+# Code and idea from the paper:
+# Andrew Cropper, Céline Hocquette:
+# Learning Logic Programs by Finding Minimal Unsatisfiable Subprograms. ECAI 2024: 4295-4302
+
+
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions
 
 class UnsatCoreFinder:

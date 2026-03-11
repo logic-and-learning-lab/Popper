@@ -12,7 +12,8 @@ dependencies = [
   "bitarray",
   "janus_swi",
   "python-sat",
-  "pebble"
+  "pebble",
+  "pypblib"
 ]
 
 [project.scripts]
