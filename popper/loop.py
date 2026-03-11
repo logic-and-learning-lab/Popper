@@ -416,8 +416,6 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
 
     add_to_combiner = (not too_few_tp) and (not too_many_fp) and (not is_recursive) and (not has_invention) and tp > prog_size + fp and fp + prog_size < state.best_hypothesis_mdl and (not noisy_subsumed)
 
-    # AC: TODO IMPORTANT REMOVE SUBSUMED CONSTRAINTS
-    # return new_cons, subsumed, noisy_subsumed, add_gen, pruned_more_general, add_to_combiner
     return new_cons, add_to_combiner
 
 # given a program with more than one rule, look for inconsistent subrules/subprograms

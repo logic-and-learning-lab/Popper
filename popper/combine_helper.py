@@ -1,12 +1,11 @@
 # code originally written by Andreas Niskanen (andreas.niskanen@helsinki.fi)
-from . util import reduce_prog, calc_rule_size
 from collections import defaultdict
 from . import maxsat
 from pysat.formula import IDPool
 from . import stats
 from . import logger
 from bitarray.util import subset, any_and, ones
-from . util import format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations
+from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size
 
 POS_EXAMPLE_WEIGHT = 1
 NEG_EXAMPLE_WEIGHT = 1
@@ -17,34 +16,57 @@ class CombineHelper:
         self.settings = settings
         self.tester = tester
         self.state = state
+
+        # a positive example is covered by a hypothesis_hash
         self.covered_by_pos = defaultdict(set)
+
+        # a negative example is covered by a hypothesis_hash
         self.covered_by_neg = defaultdict(set)
+
+        # maps hypothesis_hash:int -> pos_covered:bitarray
         self.coverage_pos = {}
+
+        # maps hypothesis_hash:int -> neg_covered:bitarray
         self.coverage_neg = {}
+
+        # maps hypothesis_hash:int -> hypothesis_size:int
         self.cached_prog_size = {}
+
+        # maps hypothesis_hash:int -> hypothesis
         self.prog_lookup = {}
+
+        # dunno
         self.scores = {}
-        self.to_combine = set()
-        self.uncovered = ones(self.tester.num_pos)
+
+        # stores hypothesis hashes that can be added to the combiner
+        # @AC, why this and prog_lookup?
+        # prog_lookup.keys() == self.saved_progs?
         self.saved_progs = set()
+
+        # temp store of hypothesis hashes until we need call combine
+        self.to_combine = set()
+
+        # tracks uncovered positive examples when there is no noise
+        self.uncovered = ones(self.tester.num_pos)
+
         self.inconsistent = set()
+
         self.load_solver()
 
+
     def combine(self, prog, prog_size, test_result, size_change, add_to_combiner_, last_combine_stage=False):
-        add_to_combiner = self.decide_whether_to_combine(prog, prog_size, test_result, add_to_combiner_)
+        add_to_combiner = add_to_combiner_ and self.decide_whether_to_combine(prog, prog_size, test_result)
 
         if add_to_combiner:
             # MOVE SOMEWHERE ELSE LATER
             if self.state.min_size is None:
                 self.state.min_size = prog_size
-
             self.to_combine.add(hash(prog))
 
-        call_combine = len(self.to_combine) > 0
-        call_combine = call_combine and (self.settings.noisy or self.state.solution_found)
-        call_combine = call_combine and (len(self.to_combine) >= self.settings.batch_size or size_change)
+        call_combine = len(self.to_combine) > 0 and (self.settings.noisy or self.state.solution_found) and (len(self.to_combine) >= self.settings.batch_size or size_change)
 
         if self.settings.recursion_enabled:
+            # why?
             call_combine = len(self.to_combine) > 0
 
         combine_result1 = None
@@ -75,17 +97,52 @@ class CombineHelper:
                 return combine_result2
         return combine_result1
 
-    def decide_whether_to_combine(self, prog, prog_size, test_result, add_to_combiner_):
-        tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
+    def decide_whether_to_combine(self, prog, prog_size, test_result):
         pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
-        inconsistent = test_result.inconsistent
 
-        if not add_to_combiner_:
-            return False
+        if not self.settings.noisy:
 
-        add_to_combiner = False
+            if not self.settings.recursion_enabled:
+                to_delete = []
+                for pos_covered2, prog_size2 in self.state.success_sets.items():
+                    if prog_size > prog_size2:
+                        continue
+                    if subset(pos_covered2, pos_covered):
+                        to_delete.append(self.state.success_sets_aux[pos_covered2])
+
+                for prog2_hash in to_delete:
+                    pos_covered2 = self.coverage_pos[prog2_hash]
+                    if prog2_hash in self.to_combine:
+                        self.to_combine.remove(prog2_hash)
+                    elif prog2_hash in self.saved_progs:
+                        self.saved_progs.remove(prog2_hash)
+                    else:
+                        assert False
+                    del self.state.success_sets[pos_covered2]
+                    del self.state.success_sets_aux[pos_covered2]
+                    del self.coverage_pos[prog2_hash]
+                    del self.coverage_neg[prog2_hash]
+                    del self.prog_lookup[prog2_hash]
+
+            k = hash(prog)
+            self.state.success_sets[pos_covered] = prog_size
+            self.state.success_sets_aux[pos_covered] = k
+            self.coverage_pos[k] = pos_covered
+            self.coverage_neg[k] = neg_covered
+            self.prog_lookup[k] = prog
+
+            for p, s in self.state.success_sets.items():
+                if p == pos_covered:
+                    continue
+                self.state.paired_success_sets[s + prog_size].add(p | pos_covered)
+
+            return True
 
         if self.settings.noisy:
+
+            tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
+            inconsistent = test_result.inconsistent
+
             local_delete = set()
             ignore_this_prog = (pos_covered, neg_covered) in self.state.success_sets_noise
 
@@ -174,44 +231,8 @@ class CombineHelper:
                             continue
                         self.state.paired_success_sets[s + prog_size].add(p | pos_covered)
 
-        elif not self.settings.noisy:
-            add_to_combiner = True
 
-            if not self.settings.recursion_enabled:
-                to_delete = []
-                for pos_covered2, prog_size2 in self.state.success_sets.items():
-                    if prog_size > prog_size2:
-                        continue
-                    if subset(pos_covered2, pos_covered):
-                        to_delete.append(self.state.success_sets_aux[pos_covered2])
-
-                for prog2_hash in to_delete:
-                    pos_covered2 = self.coverage_pos[prog2_hash]
-                    if prog2_hash in self.to_combine:
-                        self.to_combine.remove(prog2_hash)
-                    elif prog2_hash in self.saved_progs:
-                        self.saved_progs.remove(prog2_hash)
-                    else:
-                        assert False
-                    del self.state.success_sets[pos_covered2]
-                    del self.state.success_sets_aux[pos_covered2]
-                    del self.coverage_pos[prog2_hash]
-                    del self.coverage_neg[prog2_hash]
-                    del self.prog_lookup[prog2_hash]
-
-            k = hash(prog)
-            self.state.success_sets[pos_covered] = prog_size
-            self.state.success_sets_aux[pos_covered] = k
-            self.coverage_pos[k] = pos_covered
-            self.coverage_neg[k] = neg_covered
-            self.prog_lookup[k] = prog
-
-            for p, s in self.state.success_sets.items():
-                if p == pos_covered:
-                    continue
-                self.state.paired_success_sets[s + prog_size].add(p | pos_covered)
-
-        return add_to_combiner
+            return not ignore_this_prog
 
     def filter_combine_programs(self, to_combine_set):
         xs = self.saved_progs | to_combine_set
