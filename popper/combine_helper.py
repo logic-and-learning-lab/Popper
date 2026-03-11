@@ -38,14 +38,8 @@ class CombineHelper:
         self.inconsistent = set()
         self.load_solver()
 
-    def combine(self, prog, prog_size, test_result, subsumed, noisy_subsumed,add_gen, pruned_more_general, is_recursive, has_invention, size_change, last_combine_stage=False):
-
-        tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
-        pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
-        inconsistent = test_result.inconsistent
-        too_few_tp, too_many_fp = test_result.too_few_tp, test_result.too_many_fp
-
-        add_to_combiner = self.decide_whether_to_combine(prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed, add_gen, tp, fp, fn, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention)
+    def combine(self, prog, prog_size, test_result, size_change, add_to_combiner_, last_combine_stage=False):
+        add_to_combiner = self.decide_whether_to_combine(prog, prog_size, test_result, add_to_combiner_)
 
         if add_to_combiner:
             # MOVE SOMEWHERE ELSE LATER
@@ -62,7 +56,8 @@ class CombineHelper:
             call_combine = len(self.to_combine) > 0
 
         combine_result1 = None
-        if add_to_combiner and (not self.settings.noisy) and (not self.state.solution_found) and (not self.settings.recursion_enabled):
+        if add_to_combiner and not self.settings.noisy and not self.state.solution_found and not self.settings.recursion_enabled:
+            pos_covered = test_result.pos_covered
 
             if any_and(self.uncovered, pos_covered):
                 if self.state.best_hypothesis:
@@ -88,9 +83,17 @@ class CombineHelper:
                 return combine_result2
         return combine_result1
 
-    def decide_whether_to_combine(self, prog, prog_size, pos_covered, neg_covered, inconsistent, subsumed, noisy_subsumed,add_gen, tp, fp, fn, pruned_more_general, too_few_tp, too_many_fp, is_recursive, has_invention):
+    def decide_whether_to_combine(self, prog, prog_size, test_result, add_to_combiner_):
+        tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
+        pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
+        inconsistent = test_result.inconsistent
+
+        if not add_to_combiner_:
+            return False
+
         add_to_combiner = False
-        if self.settings.noisy and (not too_few_tp) and (not too_many_fp) and (not is_recursive) and (not has_invention) and tp > prog_size + fp and fp + prog_size < self.state.best_hypothesis_mdl and (not noisy_subsumed):
+
+        if self.settings.noisy:
             local_delete = set()
             ignore_this_prog = (pos_covered, neg_covered) in self.state.success_sets_noise
 
@@ -179,43 +182,42 @@ class CombineHelper:
                             continue
                         self.state.paired_success_sets[s + prog_size].add(p | pos_covered)
 
-        elif not self.settings.noisy and (not inconsistent) and (not subsumed) and (not add_gen) and tp > 0 and (not pruned_more_general):
-                add_to_combiner = True
+        elif not self.settings.noisy:
+            add_to_combiner = True
 
-                if not self.settings.recursion_enabled:
-                    to_delete = []
-                    for pos_covered2, prog_size2 in self.state.success_sets.items():
-                        if prog_size > prog_size2:
-                            continue
-                        if subset(pos_covered2, pos_covered):
-                            to_delete.append(self.state.success_sets_aux[pos_covered2])
-
-                    for prog2_hash in to_delete:
-                        pos_covered2 = self.coverage_pos[prog2_hash]
-                        if prog2_hash in self.to_combine:
-                            self.to_combine.remove(prog2_hash)
-                        elif prog2_hash in self.saved_progs:
-                            self.saved_progs.remove(prog2_hash)
-                        else:
-                            assert False
-                        del self.state.success_sets[pos_covered2]
-                        del self.state.success_sets_aux[pos_covered2]
-                        del self.coverage_pos[prog2_hash]
-                        del self.coverage_neg[prog2_hash]
-                        del self.prog_lookup[prog2_hash]
-
-                k = hash(prog)
-                self.state.success_sets[pos_covered] = prog_size
-                self.state.success_sets_aux[pos_covered] = k
-                self.coverage_pos[k] = pos_covered
-                self.coverage_neg[k] = neg_covered
-                self.prog_lookup[k] = prog
-
-                for p, s in self.state.success_sets.items():
-                    if p == pos_covered:
+            if not self.settings.recursion_enabled:
+                to_delete = []
+                for pos_covered2, prog_size2 in self.state.success_sets.items():
+                    if prog_size > prog_size2:
                         continue
-                    self.state.paired_success_sets[s + prog_size].add(p | pos_covered)
+                    if subset(pos_covered2, pos_covered):
+                        to_delete.append(self.state.success_sets_aux[pos_covered2])
 
+                for prog2_hash in to_delete:
+                    pos_covered2 = self.coverage_pos[prog2_hash]
+                    if prog2_hash in self.to_combine:
+                        self.to_combine.remove(prog2_hash)
+                    elif prog2_hash in self.saved_progs:
+                        self.saved_progs.remove(prog2_hash)
+                    else:
+                        assert False
+                    del self.state.success_sets[pos_covered2]
+                    del self.state.success_sets_aux[pos_covered2]
+                    del self.coverage_pos[prog2_hash]
+                    del self.coverage_neg[prog2_hash]
+                    del self.prog_lookup[prog2_hash]
+
+            k = hash(prog)
+            self.state.success_sets[pos_covered] = prog_size
+            self.state.success_sets_aux[pos_covered] = k
+            self.coverage_pos[k] = pos_covered
+            self.coverage_neg[k] = neg_covered
+            self.prog_lookup[k] = prog
+
+            for p, s in self.state.success_sets.items():
+                if p == pos_covered:
+                    continue
+                self.state.paired_success_sets[s + prog_size].add(p | pos_covered)
 
         return add_to_combiner
 
