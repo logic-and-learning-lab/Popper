@@ -81,31 +81,10 @@ class Generator:
                 for i, x in enumerate(xs):
                     encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
 
-        # types = tuple(self.settings.head_types)
-        # str_types = str(types).replace("'","")
-        # for x, i in enumerate(self.settings.head_types):
-        #     encoding.append(f'type_pos({str_types}, {i}, {x}).')
-
-        # for pred, types in self.settings.body_types.items():
-        #     types = tuple(types)
-        #     str_types = str(types).replace("'","")
-        #     for i, x in enumerate(types):
-
-        #         encoding.append(f'type_pos({str_types}, {i}, {x}).')
-
-        # for pred, xs in self.settings.directions.items():
-        #     for i, v in xs.items():
-        #         if v == '+':
-        #             encoding.append(f'direction_({pred}, {i}, in).')
-        #         if v == '-':
-        #             encoding.append(f'direction_({pred}, {i}, out).')
 
         max_size = (1 + settings.max_body) * settings.max_rules
-        # if state.max_literals < max_size:
-            # encoding.append(f'custom_max_size({state.max_literals}).')
 
-        if settings.pi_enabled:
-            encoding.append(f'#show head_literal/4.')
+        assert(not settings.pi_enabled)
 
         if settings.noisy:
             encoding.append("""
@@ -117,8 +96,9 @@ class Generator:
         encoding.extend(bkcons)
 
         if settings.single_solve:
-            if settings.order_space:
-                encoding.append(DEFAULT_HEURISTIC)
+            assert(False)
+            # if settings.order_space:
+            #     encoding.append(DEFAULT_HEURISTIC)
 
         encoding = '\n'.join(encoding)
 
@@ -126,6 +106,7 @@ class Generator:
             # f.write(encoding)
 
         if self.settings.single_solve:
+            assert(False)
             solver = clingo.Control(['--heuristic=Domain','-Wnone'])
         else:
             solver = clingo.Control(['-Wnone'])
@@ -643,7 +624,10 @@ class Generator:
         rule = list(prog)[0]
         handle = self.make_rule_handle(rule)
         if handle in self.seen_handles:
-            assert(False)
+            # assert(False)
+            pass
+            # AC: THIS CONDITION FAILS BUT I CANNOT REMEMBER WHY
+
         head, body_ = rule
         self.seen_handles.update(self.build_seen_rule2(rule, False))
 

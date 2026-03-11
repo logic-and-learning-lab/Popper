@@ -5,7 +5,6 @@
 %% zendo(V0):- piece(V0,V1),contact(V1,V2),size(V2,V3),large(V3),blue(V2).
 %% zendo(V0):- piece(V0,V1),red(V1),coord1(V1,V2),piece(V0,V3),blue(V3),coord1(V3,V2).
 
-
 head_pred(zendo,1).
 body_pred(piece,2).
 body_pred(contact,2).
@@ -39,30 +38,6 @@ type(upright,(piece,)).
 type(lhs,(piece,)).
 type(rhs,(piece,)).
 type(strange,(piece,)).
-
-% directions specify which are arguments are input and which are output
-% monadic predicates have a single input argument: they hold if a property is true given an input
-% the dyadic predicates size/2, coord1/2, and coord2/2 have an input and an output: they return as output
-% an attribute of the input
-% the dyadic predicates piece/2, and contact/2 have an input and an output: they return as output
-% an object in relation with the input
-
-direction(zendo,(in,)).
-direction(piece,(in,out)).
-direction(contact,(in,out)).
-direction(coord1,(in,out)).
-direction(coord2,(in,out)).
-direction(size,(in,out)).
-direction(blue,(in,)).
-direction(green,(in,)).
-direction(red,(in,)).
-direction(small,(in,)).
-direction(medium,(in,)).
-direction(large,(in,)).
-direction(upright,(in,)).
-direction(lhs,(in,)).
-direction(rhs,(in,)).
-direction(strange,(in,)).
 
 :-
     clause(C),
