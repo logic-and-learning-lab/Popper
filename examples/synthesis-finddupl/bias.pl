@@ -3,7 +3,7 @@
 %% f(V0,V1):- tail(V0,V2),f(V2,V1).
 
 enable_recursion.
-max_vars(4). % make the example a little quicker to run
+max_vars(5). % make the example a little quicker to run
 
 head_pred(f,2).
 body_pred(head,2).
