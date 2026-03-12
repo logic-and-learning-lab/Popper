@@ -36,7 +36,6 @@ class Generator:
         self.state = state
         self.settings = settings
         self.cached_clingo_atoms = {}
-        self.handle = None
         self.pruned_sizes = set()
 
         encoding = []
@@ -172,31 +171,24 @@ class Generator:
         self.solver = solver
 
     def get_prog(self):
+        handle = iter(self.solver.solve(yield_=True))
+        head = self.settings.head_literal
+        cached_literals = self.settings.cached_literals
+        gen_timer = stats.duration('generate')
+
         while True:
-            with stats.duration('generate'):
-                if self.handle is None:
-                    # Ensures compatibility if the handle was cleared
-                    self.handle = iter(self.solver.solve(yield_ = True))
-
-                self.model = next(self.handle, None)
-                if self.model is None:
-                    break
-
-                atoms = self.model.symbols(shown=True)
-                prog = self.parse_model_single_rule(atoms)
-
-            yield prog
-
-    def parse_model_single_rule(self, model):
-        settings = self.settings
-        head = settings.head_literal
-        body = set()
-        cached_literals = settings.cached_literals
-        for atom in model:
-            args = atom.arguments
-            body.add(cached_literals[args[1].name, tuple(args[3].arguments)])
-        rule = head, frozenset(body)
-        return frozenset({rule})
+            with gen_timer:
+                model = next(handle, None)
+                if model is None:
+                    return
+                self.model = model
+                atoms = model.symbols(shown=True)
+                body = frozenset(
+                    cached_literals[atom.arguments[1].name, tuple(atom.arguments[3].arguments)]
+                    for atom in model.symbols(shown=True)
+                )
+                rule = (head, body)
+            yield frozenset({rule})
 
     def prune_size(self, size):
         if size in self.pruned_sizes:
@@ -232,9 +224,8 @@ class Generator:
         tmp = self.model.context.add_nogood
         cached_clingo_atoms = self.cached_clingo_atoms
 
+        # @AC: precompute these
         for ground_body in new_ground_cons:
-
-            # print(', '.join(sorted(map(str,ground_body))))
             nogood = []
             for sign, pred, args in ground_body:
                 k = hash((sign, pred, args))

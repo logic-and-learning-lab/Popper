@@ -94,7 +94,7 @@ def popper(settings, tester, state, bkcons):
         size_change = check_size_change(state, prog_size)
 
         # JOINER
-        if True or settings.join:
+        if False:
             with stats.duration('join'):
                 join_result = joiner.join(prog, prog_size, test_result, size_change, add_to_combiner)
 

@@ -1,13 +1,20 @@
 from time import perf_counter
-from contextlib import contextmanager
-from typing import NamedTuple
 
-class DurationSummary(NamedTuple):
-    operation: str
-    called: int
-    total: float
-    mean: float
-    maximum: float
+class _Timer:
+    __slots__ = ['s', 'start']
+
+    def __init__(self, stat_list):
+        self.s = stat_list  # Points directly to the [called, total, max] list
+
+    def __enter__(self):
+        self.start = perf_counter()
+
+    def __exit__(self, *_):
+        d = perf_counter() - self.start
+        self.s[0] += 1             # called
+        self.s[1] += d             # total
+        if d > self.s[2]:          # max
+            self.s[2] = d
 
 class Stats:
     def __init__(self):
@@ -15,44 +22,35 @@ class Stats:
         self.total_programs = 0
         self.durations = {}
 
-    def total_exec_time(self):
-        return perf_counter() - self.exec_start
-
-    @contextmanager
     def duration(self, operation):
-        start = perf_counter()
-        try:
-            yield
-        finally:
-            duration = perf_counter() - start
-            if operation not in self.durations:
-                self.durations[operation] = []
-            self.durations[operation].append(duration)
+        # Create the [called, total, max] list once, then pass its reference
+        if operation not in self.durations:
+            self.durations[operation] = [0, 0.0, 0.0]
+        return _Timer(self.durations[operation])
 
     def show(self):
-        message = f'Num. programs: {self.total_programs}\n'
-        total_op_time = sum(summary.total for summary in self.duration_summary())
+        total_exec = perf_counter() - self.exec_start
+        total_op = sum(stat[1] for stat in self.durations.values())
 
-        for summary in self.duration_summary():
-            percentage = int((summary.total/total_op_time)*100)
-            message += f'{summary.operation}:\n\tCalled: {summary.called} times \t ' + \
-                       f'Total: {summary.total:0.2f} \t Mean: {summary.mean:0.4f} \t ' + \
-                       f'Max: {summary.maximum:0.3f} \t Percentage: {percentage}%\n'
-        message += f'Total operation time: {total_op_time:0.2f}s\n'
-        message += f'Total execution time: {self.total_exec_time():0.2f}s'
+        lines = [f'Num. programs: {self.total_programs}']
+
+        # Sort by total time descending
+        for op, (called, total, maximum) in sorted(self.durations.items(), key=lambda x: x[1][1], reverse=True):
+            mean = total / called if called else 0
+            pct = int((total / total_op) * 100) if total_op else 0
+
+            lines.append(
+                f'{op.title()}:\n \t Called: {called} times \t'
+                f'Total: {total:.2f} \t Mean: {mean:.4f}\t'
+                f'Max: {maximum:.3f} \t Percentage: {pct}%'
+            )
+
+        lines.append(f'Total operation time: {total_op:.2f}s')
+        lines.append(f'Total execution time: {total_exec:.2f}s')
+
+        message = '\n'.join(lines)
         print(message)
         return message
-
-    def duration_summary(self):
-        summary = []
-        stats = sorted(self.durations.items(), key = lambda x: sum(x[1]), reverse=True)
-        for operation, durations in stats:
-            called = len(durations)
-            total = sum(durations)
-            mean = sum(durations)/len(durations)
-            maximum = max(durations)
-            summary.append(DurationSummary(operation.title(), called, total, mean, maximum))
-        return summary
 
 stats = Stats()
 duration = stats.duration
