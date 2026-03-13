@@ -66,8 +66,9 @@ def popper(settings, tester, state, bkcons):
         if stats.stats.total_programs % 10000 == 0:
             tester.janus_clear_cache()
 
-        logger.debug(f'Program {stats.stats.total_programs}:')
-        logger.debug(format_prog(prog))
+        if settings.debug:
+            logger.debug(f'Program {stats.stats.total_programs}:')
+            logger.debug(format_prog(prog))
 
         prog_size = calc_prog_size(prog)
 

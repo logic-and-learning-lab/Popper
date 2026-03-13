@@ -200,34 +200,27 @@ class Generator:
         self.model.context.add_nogood(size_con)
 
     def constrain(self, tmp_new_cons):
-        new_ground_cons = set()
+        new_ground_cons = []
 
         for xs in tmp_new_cons:
             con_type = xs[0]
             con_prog = xs[1]
+            con_size = xs[2] if self.settings.noisy and len(xs) > 2 else None
 
-            if con_type == Constraint.GENERALISATION or con_type == Constraint.BANISH:
-                con_size = None
-                if self.settings.noisy and len(xs)>2:
-                    con_size = xs[2]
-                # print('gen', con_type)
-                ground_rules2 = tuple(self.build_generalisation_constraint3(con_prog, con_size))
-                new_ground_cons.update(ground_rules2)
-            elif con_type == Constraint.SPECIALISATION:
-                con_size = None
-                if self.settings.noisy and len(xs)>2:
-                    con_size = xs[2]
-                ground_rules2 = tuple(self.build_specialisation_constraint3(con_prog, con_size))
-                new_ground_cons.update(ground_rules2)
-            elif con_type == Constraint.UNSAT:
-                cons_ = self.unsat_constraint2(con_prog)
-                new_ground_cons.update(cons_)
+            match con_type:
+                case Constraint.GENERALISATION | Constraint.BANISH:
+                    cons = self.build_generalisation_constraint3(con_prog, con_size)
+                case Constraint.SPECIALISATION:
+                    cons = self.build_specialisation_constraint3(con_prog, con_size)
+                case Constraint.UNSAT:
+                    cons = self.unsat_constraint2(con_prog)
 
-        tmp = self.model.context.add_nogood
+            new_ground_cons.extend(cons)
+
+        add_nogood = self.model.context.add_nogood
         cached_clingo_atoms = self.cached_clingo_atoms
 
-        # @AC: precompute these
-        for ground_body in new_ground_cons:
+        for ground_body in set(new_ground_cons):
             nogood = []
             for sign, pred, args in ground_body:
                 k = hash((sign, pred, args))
@@ -237,7 +230,7 @@ class Generator:
                     x = (atom_to_symbol(pred, args), sign)
                     cached_clingo_atoms[k] = x
                 nogood.append(x)
-            tmp(nogood)
+            add_nogood(nogood)
 
     def unsat_constraint2(self, body):
         # if no types, remap variables
