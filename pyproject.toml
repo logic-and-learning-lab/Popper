@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
   { name="Andrew Cropper", email="andrew.cropper@helsinki.fi" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
   "clingo",
   "bitarray",
@@ -29,3 +29,8 @@ popper = ["lp/*.pl"]
 
 [tool.uv]
 package = true
+
+[dependency-groups]
+dev = [
+    "line-profiler>=5.0.2",
+]

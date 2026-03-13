@@ -1,3 +1,4 @@
+# @AC: I think it would be more efficient if the solver just returns an int for each possible body literal
 import time
 import re
 import clingo
@@ -182,12 +183,13 @@ class Generator:
                 if model is None:
                     return
                 self.model = model
-                atoms = model.symbols(shown=True)
-                body = frozenset(
-                    cached_literals[atom.arguments[1].name, tuple(atom.arguments[3].arguments)]
-                    for atom in model.symbols(shown=True)
-                )
-                rule = (head, body)
+                body = []
+                for atom in model.symbols(shown=True):
+                    args = atom.arguments
+                    atom_args = tuple(args[3].arguments)
+                    atom = cached_literals[args[1].name, atom_args]
+                    body.append(atom)
+                rule = head, frozenset(body)
             yield frozenset({rule})
 
     def prune_size(self, size):
