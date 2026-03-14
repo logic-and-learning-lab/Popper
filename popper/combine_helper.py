@@ -93,7 +93,7 @@ class CombineHelper:
                 self.filter_combine_programs(self.to_combine)
 
             with stats.duration('combine'):
-                combine_result2 = self.update_best_prog(self.to_combine, last_combine_stage=last_combine_stage)
+                combine_result2 = self.update_best_prog(last_combine_stage=last_combine_stage)
 
             self.to_combine.clear()
 
@@ -561,7 +561,8 @@ class CombineHelper:
             return best_prog, best_size
         return best_prog, best_fn + best_fp + best_size
 
-    def update_best_prog(self, new_progs, last_combine_stage=False):
+    def update_best_prog(self, last_combine_stage=False):
+        new_progs = self.to_combine
 
         self.saved_progs.update(new_progs)
         if not self.saved_progs:

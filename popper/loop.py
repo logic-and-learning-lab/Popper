@@ -51,9 +51,10 @@ def popper(settings, tester, state, bkcons):
     combine_helper = CombineHelper(settings, tester, state)
     joiner = Joiner(settings, tester, state)
     num_pos, num_neg = tester.num_pos, tester.num_neg
+    noisy = settings.noisy
 
     # initialise components depending on cost function
-    if settings.noisy:
+    if noisy:
         state.best_hypothesis_score = (0, num_pos, num_neg, 0)
         state.best_hypothesis_mdl = num_pos
         build_constraints = build_constraints_noisy
@@ -104,11 +105,11 @@ def popper(settings, tester, state, bkcons):
             update_best_hypothesis(settings, state, *combine_result)
 
             # AC: TRY TO REFACTOR OUT
-            if settings.noisy:
-                cons.extend(build_constraints_previous_hypotheses(state.best_hypothesis_mdl, prog_size, num_pos, num_neg, state))
+            if noisy:
+                cons.extend(build_cons_previous_hypotheses(state.best_hypothesis_mdl, prog_size, num_pos, num_neg, state))
 
             # PRUNE BIGGER SPACES
-            if (settings.noisy and settings.single_solve) or (not settings.noisy and state.solution_found):
+            if (noisy and settings.single_solve) or (not noisy and state.solution_found):
                 for i in range(state.max_literals+1, 1000):
                     generator.prune_size(i)
 
@@ -118,7 +119,7 @@ def popper(settings, tester, state, bkcons):
 
     # LAST COMBINE STAGE
     with stats.duration('combine'):
-        combine_result = combine_helper.update_best_prog(combine_helper.to_combine, last_combine_stage=True)
+        combine_result = combine_helper.update_best_prog(last_combine_stage=True)
 
     if combine_result:
         update_best_hypothesis(settings, state, *combine_result)
@@ -132,7 +133,7 @@ def learn_solution(settings):
     state.uncovered = ones(tester.num_pos)
     bkcons = get_bk_cons(settings, tester)
     timeout(settings, popper, (settings, tester, state, bkcons), timeout_duration=state.time_remaining(settings.timeout),)
-    return state.best_hypothesis, state.best_hypothesis_score, stats
+    return state.best_hypothesis, state.best_hypothesis_score
 
 def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result):
     new_cons = []
@@ -262,7 +263,7 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
     # if non-separable hypothesis has better mdl score, update best prog
     if test_result.mdl is not None and test_result.mdl < state.best_hypothesis_mdl:
         update_best_hypothesis(settings, state, prog, prog_size, test_result.conf_matrix)
-        new_cons.extend(build_constraints_previous_hypotheses(test_result.mdl, prog_size, num_pos, num_neg, state))
+        new_cons.extend(build_cons_previous_hypotheses(test_result.mdl, prog_size, num_pos, num_neg, state))
 
     # if it does not cover enough example, prune specialisations
     if tp < state.min_pos_coverage:
@@ -444,7 +445,7 @@ def check_redundant_literals(settings, allsatcore_finder, prog, add_spec, pruned
     return new_cons, add_spec, pruned_more_general, add_to_combiner_
 
 
-def build_constraints_previous_hypotheses(score, best_size, num_pos, num_neg, state):
+def build_cons_previous_hypotheses(score, best_size, num_pos, num_neg, state):
     # code is a mess, check with CH what it all means
     cons = []
 
