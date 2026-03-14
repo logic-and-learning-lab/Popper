@@ -58,11 +58,11 @@ def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
     try:
         result = func(*args, **kwargs)
     except TimeoutError as _exc:
-        logger.warn(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
+        logger.warning(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
         return result
     except AttributeError as moo:
         if '_SolveEventHandler' in str(moo):
-            logger.warn(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
+            logger.warning(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
             return result
         raise moo
     finally:

@@ -199,28 +199,28 @@ class Generator:
         size_con = [(atom_to_symbol("size", (size,)), True)]
         self.model.context.add_nogood(size_con)
 
-    def constrain(self, tmp_new_cons):
-        new_ground_cons = []
+    def constrain(self, cons):
+        all_ground_cons = []
 
-        for xs in tmp_new_cons:
+        for xs in cons:
             con_type = xs[0]
             con_prog = xs[1]
             con_size = xs[2] if self.settings.noisy and len(xs) > 2 else None
 
             match con_type:
                 case Constraint.GENERALISATION | Constraint.BANISH:
-                    cons = self.build_generalisation_constraint3(con_prog, con_size)
+                    ground_cons = self.build_generalisation_constraint3(con_prog, con_size)
                 case Constraint.SPECIALISATION:
-                    cons = self.build_specialisation_constraint3(con_prog, con_size)
+                    ground_cons = self.build_specialisation_constraint3(con_prog, con_size)
                 case Constraint.UNSAT:
-                    cons = self.unsat_constraint2(con_prog)
+                    ground_cons = self.unsat_constraint2(con_prog)
 
-            new_ground_cons.extend(cons)
+            all_ground_cons.extend(ground_cons)
 
         add_nogood = self.model.context.add_nogood
         cached_clingo_atoms = self.cached_clingo_atoms
 
-        for ground_body in set(new_ground_cons):
+        for ground_body in set(all_ground_cons):
             nogood = []
             for sign, pred, args in ground_body:
                 k = hash((sign, pred, args))

@@ -53,9 +53,20 @@ def popper(settings, tester, state, bkcons):
     joiner = Joiner(settings, tester, state)
     num_pos, num_neg = tester.num_pos, tester.num_neg
 
+    # if settings.noisy:
+        # state.best_hypothesis_score = (0, num_pos, num_neg, 0)
+        # state.best_hypothesis_mdl = num_pos
+
+
+    # initialise components depending on cost function
     if settings.noisy:
         state.best_hypothesis_score = (0, num_pos, num_neg, 0)
         state.best_hypothesis_mdl = num_pos
+        build_constraints = build_constraints_noisy
+        test_prog = tester.test_prog_noisy
+    else:
+        build_constraints = build_constraints_noiseless
+        test_prog = tester.test_prog
 
     # GENERATE PROGRAMS
     for prog in generator.get_prog():
