@@ -57,7 +57,6 @@ def popper(settings, tester, state, bkcons):
         # state.best_hypothesis_score = (0, num_pos, num_neg, 0)
         # state.best_hypothesis_mdl = num_pos
 
-
     # initialise components depending on cost function
     if settings.noisy:
         state.best_hypothesis_score = (0, num_pos, num_neg, 0)
@@ -85,10 +84,7 @@ def popper(settings, tester, state, bkcons):
 
         # TEST
         with stats.duration('test'):
-            if settings.noisy:
-                test_result = tester.test_prog_noisy(prog, prog_size)
-            else:
-                test_result = tester.test_prog(prog)
+            test_result = test_prog(prog, prog_size)
 
         # if non-separable hypothesis is perfect, stop
         if not test_result.inconsistent and test_result.tp == num_pos:
@@ -111,8 +107,7 @@ def popper(settings, tester, state, bkcons):
                 join_result = joiner.join(prog, prog_size, test_result, size_change, add_to_combiner)
 
         # COMBINE
-        with stats.duration('combine'):
-            combine_result = combine_helper.combine(prog, prog_size, test_result, size_change, add_to_combiner)
+        combine_result = combine_helper.combine(prog, prog_size, test_result, size_change, add_to_combiner)
 
         # IF NEW HYPOTHESIS
         if combine_result:

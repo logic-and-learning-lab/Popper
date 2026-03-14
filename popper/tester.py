@@ -146,7 +146,7 @@ class Tester():
             conf_matrix = (tp, fn, tn, fp)
             return TestResult(tp=tp, fn=fn, tn=tn, fp=fp, pos_covered=pos_covered, neg_covered=neg_covered, inconsistent=inconsistent, mdl=mdl, conf_matrix=conf_matrix, too_few_tp=too_few_tp, too_many_fp=too_many_fp)
 
-    def test_prog(self, prog):
+    def test_prog(self, prog, prog_size=None):
 
         if self.settings.recursion_enabled or self.settings.pi_enabled:
 
