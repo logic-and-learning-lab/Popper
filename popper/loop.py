@@ -37,12 +37,11 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
         state.min_pos_coverage = 2
 
 def check_size_change(state, prog_size):
-    size_change = False
-    if state.search_depth is None or prog_size != state.search_depth:
-        size_change = True
-        state.search_depth = prog_size
-        logger.info(f'Generating hypotheses of size: {prog_size}')
-    return size_change
+    if state.search_depth == prog_size:
+        return False
+    state.search_depth = prog_size
+    logger.info(f'Generating hypotheses of size: {prog_size}')
+    return True
 
 def popper(settings, tester, state, bkcons):
     unsatcore_finder = UnsatCoreFinder(settings, tester)
@@ -77,6 +76,7 @@ def popper(settings, tester, state, bkcons):
             logger.debug(format_prog(prog))
 
         prog_size = calc_prog_size(prog)
+        size_change = check_size_change(state, prog_size)
 
         # TEST
         with stats.duration('test'):
@@ -88,14 +88,8 @@ def popper(settings, tester, state, bkcons):
             state.best_hypothesis_score = (num_pos, 0, num_neg, 0)
             return
 
-        # if non-separable hypothesis has better mdl score, update best hypothesis
-        if settings.noisy and test_result.mdl is not None and test_result.mdl < state.best_hypothesis_mdl:
-            update_best_hypothesis(settings, state, prog, prog_size, test_result.conf_matrix)
-
         # BUILD CONSTRAINTS
-        new_cons, add_to_combiner = build_constraints(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result)
-
-        size_change = check_size_change(state, prog_size)
+        cons, add_to_combiner = build_constraints(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result)
 
         # JOINER
         if False:
@@ -111,7 +105,7 @@ def popper(settings, tester, state, bkcons):
 
             # AC: TRY TO REFACTOR OUT
             if settings.noisy:
-                new_cons.extend(build_constraints_previous_hypotheses(state.best_hypothesis_mdl, prog_size, num_pos, num_neg, state))
+                cons.extend(build_constraints_previous_hypotheses(state.best_hypothesis_mdl, prog_size, num_pos, num_neg, state))
 
             # PRUNE BIGGER SPACES
             if (settings.noisy and settings.single_solve) or (not settings.noisy and state.solution_found):
@@ -120,12 +114,12 @@ def popper(settings, tester, state, bkcons):
 
         # CONSTRAIN
         with stats.duration('constrain'):
-            generator.constrain(new_cons)
+            generator.constrain(cons)
 
     # LAST COMBINE STAGE
     with stats.duration('combine'):
         combine_result = combine_helper.update_best_prog(combine_helper.to_combine, last_combine_stage=True)
-    
+
     if combine_result:
         update_best_hypothesis(settings, state, *combine_result)
 
@@ -148,6 +142,7 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
     has_invention = settings.pi_enabled and prog_has_invention(prog)
     add_to_combiner_ = True
     tp = test_result.tp
+    has_neg = tester.num_neg > 0
 
     # if hypothesis covers all positive examples prune generalisations (generalisations are variants in the case of no recursion)
     if tp == tester.num_pos:
@@ -185,7 +180,6 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
             add_to_combiner_ = False
 
             if not has_invention and not is_recursive:
-                subsumed_progs = []
                 with stats.duration('find most general subsumed/covers_too_few'):
                     subsumed_progs = subsumer.subsumed_or_covers_too_few(prog, seen=set())
                 pruned_more_general = len(subsumed_progs) > 0
@@ -221,34 +215,13 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
     if is_recursive:
         rec_cons, rec_add_gen = check_recursive_redundancy(settings, tester, prog)
         new_cons.extend(rec_cons)
-        add_gen = add_gen and rec_add_gen
+        add_gen = add_gen or rec_add_gen
 
-    # check whether a rule contains an implied literal, .e.g even(A) -> int(A)
-    # https://arxiv.org/pdf/2502.01232
-    with stats.duration('check_reducible1'):
-        xs, pruned_smaller = allsatcore_finder.check_redundant_literal(prog)
-        if pruned_smaller:
-            pruned_more_general = True
-        if xs:
-            add_to_combiner_ = False
-            add_spec = True
-            for x in xs:
-                if settings.showcons:
-                    print('\t', 'REDUCIBLE_1:', '\t', ','.join(format_literal(literal) for literal in x))
-                new_cons.append((Constraint.UNSAT, x))
-
-    # check whether a rule contains an indiscriminate literal
-    # https://arxiv.org/pdf/2502.01232
-    if not add_spec and not pruned_more_general and settings.datalog and not settings.recursion_enabled and tester.num_neg > 0:
-        with stats.duration('check_reducible2'):
-            bad_prog = allsatcore_finder.check_neg_reducible(prog)
-            if bad_prog:
-                add_to_combiner_ = False
-                add_spec = True
-                pruned_more_general = True
-                if settings.showcons:
-                    print('\t', 'REDUCIBLE_2:', '\t', format_prog(bad_prog))
-                new_cons.append((Constraint.SPECIALISATION, bad_prog))
+    con_set, add_spec_, pruned_more_general_, add_to_combiner__ = check_redundant_literals(settings, allsatcore_finder, prog, add_spec, pruned_more_general, has_neg)
+    new_cons.extend(con_set)
+    add_spec = add_spec or add_spec_
+    pruned_more_general = pruned_more_general or pruned_more_general_
+    add_to_combiner_ = add_to_combiner_ and add_to_combiner__
 
     # BUILD CONSTRAINTS
     if not pruned_more_general:
@@ -284,6 +257,7 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
     spec_size = gen_size = None
     is_recursive = settings.recursion_enabled and prog_is_recursive(prog)
     has_invention = settings.pi_enabled and prog_has_invention(prog)
+    has_neg = tester.num_neg > 0
 
     # if non-separable hypothesis has better mdl score, update best prog
     if test_result.mdl is not None and test_result.mdl < state.best_hypothesis_mdl:
@@ -308,7 +282,7 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
         add_gen = True
 
     # if the program does not cover any positive examples, check whether it has an unsat core
-    if not has_invention and tp < state.min_pos_coverage or tp <= prog_size:
+    if not has_invention and (tp < state.min_pos_coverage or tp <= prog_size):
         with stats.duration('find mucs'):
             cons_ = tuple(unsatcore_finder.explain_incomplete(prog))
             new_cons.extend(cons_)
@@ -352,29 +326,12 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
     if is_recursive:
         rec_cons, rec_add_gen = check_recursive_redundancy(settings, tester, prog)
         new_cons.extend(rec_cons)
-        add_gen = add_gen and rec_add_gen
+        add_gen = add_gen or rec_add_gen
 
-    with stats.duration('check_reducible1'):
-        xs, pruned_smaller = allsatcore_finder.check_redundant_literal(prog)
-        if pruned_smaller:
-            pruned_more_general = True
-        if xs:
-            add_spec = True
-            for x in xs:
-                if settings.showcons:
-                    print('\t', 'REDUCIBLE_1:', '\t', ','.join(format_literal(literal) for literal in x))
-                new_cons.append((Constraint.UNSAT, x))
-
-    # REDUCIBLE_2 (negative reducible)
-    if not add_spec and not pruned_more_general and settings.datalog and not settings.recursion_enabled and num_neg > 0:
-        with stats.duration('check_reducible2'):
-            bad_prog = allsatcore_finder.check_neg_reducible(prog)
-            if bad_prog:
-                add_spec = True
-                pruned_more_general = True
-                if settings.showcons:
-                    print('\t', 'REDUCIBLE_2:', '\t', format_prog(bad_prog))
-                new_cons.append((Constraint.SPECIALISATION, bad_prog))
+    con_set, add_spec_, pruned_more_general_, _ = check_redundant_literals(settings, allsatcore_finder, prog, add_spec, pruned_more_general, has_neg)
+    new_cons.extend(con_set)
+    add_spec = add_spec or add_spec_
+    pruned_more_general = pruned_more_general or pruned_more_general_
 
     # BUILD CONSTRAINTS
     if not pruned_more_general:
@@ -447,12 +404,48 @@ def check_recursive_redundancy(settings, tester, prog):
                 print('\t', format_rule(rule), '\t', 'has_redundant_literal')
 
     # remove a subset of theta-subsumed rules when learning recursive programs with more than two rules
-    if settings.max_rules > 2 and is_recursive:
+    if settings.max_rules > 2:
         new_cons.append((Constraint.TMP_ANDY, prog))
 
     return new_cons, add_gen
 
+def check_redundant_literals(settings, allsatcore_finder, prog, add_spec, pruned_more_general, has_neg):
+    # check whether a rule contains an implied literal, .e.g even(A) -> int(A)
+    # https://arxiv.org/pdf/2502.01232
+
+    # IGNORE FOR NOISY TASSKS
+    new_cons = []
+    add_to_combiner_ = True
+    with stats.duration('check_reducible1'):
+        xs, pruned_smaller = allsatcore_finder.check_redundant_literal(prog)
+        if pruned_smaller:
+            pruned_more_general = True
+        if xs:
+            add_to_combiner_ = False
+            add_spec = True
+            for x in xs:
+                if settings.showcons:
+                    print('\t', 'REDUCIBLE_1:', '\t', ','.join(format_literal(literal) for literal in x))
+                new_cons.append((Constraint.UNSAT, x))
+
+    # check whether a rule contains an indiscriminate literal
+    # https://arxiv.org/pdf/2502.01232
+    if not add_spec and not pruned_more_general and settings.datalog and not settings.recursion_enabled and has_neg:
+        with stats.duration('check_reducible2'):
+            bad_prog = allsatcore_finder.check_neg_reducible(prog)
+            if bad_prog:
+                add_to_combiner_ = False
+                add_spec = True
+                pruned_more_general = True
+                if settings.showcons:
+                    print('\t', 'REDUCIBLE_2:', '\t', format_prog(bad_prog))
+                new_cons.append((Constraint.SPECIALISATION, bad_prog))
+
+    return new_cons, add_spec, pruned_more_general, add_to_combiner_
+
+
 def build_constraints_previous_hypotheses(score, best_size, num_pos, num_neg, state):
+    # code is a mess, check with CH what it all means
     cons = []
 
     seen_hyp_spec, seen_hyp_gen = state.seen_hyp_spec, state.seen_hyp_gen
