@@ -53,10 +53,6 @@ def popper(settings, tester, state, bkcons):
     joiner = Joiner(settings, tester, state)
     num_pos, num_neg = tester.num_pos, tester.num_neg
 
-    # if settings.noisy:
-        # state.best_hypothesis_score = (0, num_pos, num_neg, 0)
-        # state.best_hypothesis_mdl = num_pos
-
     # initialise components depending on cost function
     if settings.noisy:
         state.best_hypothesis_score = (0, num_pos, num_neg, 0)
@@ -144,11 +140,6 @@ def learn_solution(settings):
     timeout(settings, popper, (settings, tester, state, bkcons), timeout_duration=state.time_remaining(settings.timeout),)
     return state.best_hypothesis, state.best_hypothesis_score, stats
 
-def build_constraints(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result):
-    if settings.noisy:
-        return build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result)
-    return build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result)
-
 def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result):
     new_cons = []
     pruned_sub_inconsistent = pruned_more_general = False
@@ -228,18 +219,9 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
 
     # prune generalisations of rules with redundant literals
     if is_recursive:
-        for rule in prog:
-            if rule_is_recursive(rule) and settings.max_rules == 2:
-                continue
-            if tester.has_redundant_literal(frozenset([rule])):
-                add_gen = True
-                new_cons.append((Constraint.GENERALISATION, [rule]))
-                if settings.showcons:
-                    print('\t', format_rule(rule), '\t', 'has_redundant_literal')
-
-        # @AC: WTF IS THIS?
-        if settings.max_rules > 2:
-            new_cons.append((Constraint.TMP_ANDY, prog))
+        rec_cons, rec_add_gen = check_recursive_redundancy(settings, tester, prog)
+        new_cons.extend(rec_cons)
+        add_gen = add_gen and rec_add_gen
 
     # check whether a rule contains an implied literal, .e.g even(A) -> int(A)
     # https://arxiv.org/pdf/2502.01232
@@ -366,20 +348,11 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
         if gen_size_ < state.max_literals:
             gen_size = gen_size_
 
-    # remove generalisations of programs with redundant literals
+    # prune generalisations of rules with redundant literals
     if is_recursive:
-        for rule in prog:
-            if rule_is_recursive(rule) and settings.max_rules == 2:
-                continue
-            if tester.has_redundant_literal(frozenset([rule])):
-                add_gen = True
-                new_cons.append((Constraint.GENERALISATION, [rule]))
-                if settings.showcons:
-                    print('\t', format_rule(rule), '\t', 'has_redundant_literal')
-
-    # remove a subset of theta-subsumed rules when learning recursive programs with more than two rules
-    if settings.max_rules > 2 and is_recursive:
-        new_cons.append((Constraint.TMP_ANDY, prog))
+        rec_cons, rec_add_gen = check_recursive_redundancy(settings, tester, prog)
+        new_cons.extend(rec_cons)
+        add_gen = add_gen and rec_add_gen
 
     with stats.duration('check_reducible1'):
         xs, pruned_smaller = allsatcore_finder.check_redundant_literal(prog)
@@ -459,6 +432,25 @@ def explain_inconsistent(tester, prog):
             subprog = frozenset([r1, r2])
             if tester.test_prog_inconsistent(subprog):
                 yield (Constraint.GENERALISATION, subprog)
+
+def check_recursive_redundancy(settings, tester, prog):
+    new_cons = []
+    add_gen = False
+
+    for rule in prog:
+        if rule_is_recursive(rule) and settings.max_rules == 2:
+            continue
+        if tester.has_redundant_literal(frozenset([rule])):
+            add_gen = True
+            new_cons.append((Constraint.GENERALISATION, [rule]))
+            if settings.showcons:
+                print('\t', format_rule(rule), '\t', 'has_redundant_literal')
+
+    # remove a subset of theta-subsumed rules when learning recursive programs with more than two rules
+    if settings.max_rules > 2 and is_recursive:
+        new_cons.append((Constraint.TMP_ANDY, prog))
+
+    return new_cons, add_gen
 
 def build_constraints_previous_hypotheses(score, best_size, num_pos, num_neg, state):
     cons = []
