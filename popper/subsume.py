@@ -131,102 +131,114 @@ class SubsumeChecker:
         return v
 
     def check_covers_too_few_(self, prog_size, pos_covered):
-        # nonlocal self.state.min_size
+        num_pos = self.tester.num_pos
+
         len_pos_covered = pos_covered.count(1)
-        if len_pos_covered == self.tester.num_pos:
+
+        if len_pos_covered == num_pos:
             return False
 
         max_literals = self.state.max_literals
 
-        # MAX RULES = 1
-        if (prog_size + self.state.min_size) > max_literals:
+        # if new prog can be used with a new unseen prog, return False
+        space_remaining = max_literals - prog_size
+        if space_remaining >= self.state.search_depth:
+            return False
+
+        min_size = self.state.min_size
+        max_additional_rules = (max_literals-prog_size) // min_size
+
+        # MAX TOTAL RULES = 1
+        # if this prog + the minimum size prog is too big then this prog must be used in a single rule hypothesis
+        if max_additional_rules == 0:
+            # if so, this prog must cover all the positive examples
+            # print('new1')
             return True
 
-        # MAX RULES = 2
-        if (prog_size + (self.state.min_size * 2)) > max_literals:
-            space_remaining = max_literals - prog_size
-            if space_remaining > self.state.search_depth:
-                return False
+        # check which examples this prog does not cover
+        uncovered = self.tester.pos_examples_ & ~pos_covered
 
-            uncovered = self.tester.pos_examples_ & ~pos_covered
-            for pos_covered2, size2 in self.state.success_sets.items():
-                if size2 > space_remaining:
-                    continue
-                if subset(uncovered, pos_covered2):
-                    return False
-            return True
+        success_sets = sorted(self.state.success_sets.items(), key=lambda x: x[1])
 
-        # MAX RULES = 3
-        if (prog_size + (self.state.min_size * 3)) > max_literals:
-            space_remaining = max_literals - prog_size
-
-            if space_remaining - self.state.min_size > self.state.search_depth:
-                return False
-
-            uncovered = self.tester.pos_examples_ & ~pos_covered
-            self.state.success_sets_sorted = sorted(((pos_covered_, size) for (pos_covered_, size) in self.state.success_sets.items()),
-                                         key=lambda x: x[1])
-            n = len(self.state.success_sets_sorted)
-
-            for i in range(n):
-                pos_covered2, size2 = self.state.success_sets_sorted[i]
+        # MAX TOTAL RULES = 2
+        # this prog must be used with an existing prog
+        if max_additional_rules == 1:
+            for pos_covered2, size2 in success_sets:
                 if size2 > space_remaining:
                     break
                 if subset(uncovered, pos_covered2):
                     return False
-                space_remaining_ = space_remaining - size2
-                if space_remaining_ < self.state.min_size:
+            # if no prog exists, return true
+            # print('new2')
+            return True
+
+
+        # MAX TOTAL RULES = 3
+        # this prog must be used with 1 or 2 existing progs
+        if max_additional_rules == 2:
+            # success_sets = sorted(((pos_covered_, size) for (pos_covered_, size) in self.state.success_sets.items()), key=lambda x: x[1])
+            n = len(success_sets)
+
+            for i in range(n):
+                pos_covered2, size2 = success_sets[i]
+                if size2 > space_remaining:
+                    break
+
+                # if not (uncovered & pos_covered2):
+                #     print('asda price3')
+                #     continue
+
+                if subset(uncovered, pos_covered2):
+                    return False
+                space_remaining_ = space_remaining-size2
+                if space_remaining_ < min_size:
                     continue
                 uncovered2 = uncovered & ~pos_covered2
-                for j in range(i + 1, n):
-                    pos_covered3, size3 = self.state.success_sets_sorted[j]
+                for j in range(i+1, n):
+                    pos_covered3, size3 = success_sets[j]
                     if size3 > space_remaining_:
                         break
                     if subset(uncovered2, pos_covered3):
                         return False
+            # print('new3')
             return True
 
-        # MAX RULES = 4
-        if prog_size + (self.state.min_size * 4) > max_literals:
-            space_remaining = max_literals - prog_size
-            space_remaining -= (self.state.min_size * 2)
-
-            if space_remaining > self.state.search_depth:
-                return False
-
-            missing = self.tester.pos_examples_ & ~pos_covered
-
-            self.state.success_sets_sorted = sorted(((pos_covered_, size) for (pos_covered_, size) in self.state.success_sets.items()),
-                                         key=lambda x: x[1])
-            space_remaining = max_literals - prog_size
-
-            n = len(self.state.success_sets_sorted)
+        # MAX TOTAL RULES = 4
+        # this prog must be used with 1 or 2 or 3 existing progs
+        elif max_additional_rules == 3:
+            # success_sets = sorted(((pos_covered_, size) for (pos_covered_, size) in self.state.success_sets.items()), key=lambda x: x[1])
+            n = len(success_sets)
 
             for i in range(n):
-                pos_covered2, size2 = self.state.success_sets_sorted[i]
+                pos_covered2, size2 = success_sets[i]
                 if size2 > space_remaining:
                     break
-                if subset(missing, pos_covered2):
+
+                # if not (uncovered & pos_covered2):
+                #     print('asda price4')
+                #     continue
+
+                if subset(uncovered, pos_covered2):
                     return False
-                space_remaining_ = space_remaining - size2
-                if space_remaining_ < self.state.min_size:
+                space_remaining_ = space_remaining-size2
+                if space_remaining_ < min_size:
                     continue
-                missing2 = missing & ~pos_covered2
-                for j in range(i + 1, n):
-                    pos_covered3, size3 = self.state.success_sets_sorted[j]
+                uncovered2 = uncovered & ~pos_covered2
+                for j in range(i+1, n):
+                    pos_covered3, size3 = success_sets[j]
                     if size3 > space_remaining_:
                         break
-                    if subset(missing2, pos_covered3):
+                    if subset(uncovered2, pos_covered3):
                         return False
-                    space_remaining__ = space_remaining_ - size3
-                    if space_remaining__ < self.state.min_size:
+                    space_remaining__ = space_remaining_-size3
+                    if space_remaining__ < min_size:
                         continue
-                    missing3 = missing2 & ~pos_covered3
-                    for k in range(j + 1, n):
-                        pos_covered4, size4 = self.state.success_sets_sorted[k]
+                    uncovered3 = uncovered2 & ~pos_covered3
+                    for k in range(j+1, n):
+                        pos_covered4, size4 = success_sets[k]
                         if size4 > space_remaining__:
                             break
-                        if subset(missing3, pos_covered4):
+                        if subset(uncovered3, pos_covered4):
                             return False
             return True
 
