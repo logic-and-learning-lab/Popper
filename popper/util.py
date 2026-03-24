@@ -234,12 +234,13 @@ class Settings:
             head_args = tuple(range(head_arity))
             self.head_literal = Literal(head_pred, head_args)
 
-        for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
-            self.max_body = x.symbol.arguments[0].number
+        if self.max_body == MAX_BODY:
+            for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
+                self.max_body = x.symbol.arguments[0].number
 
-        for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
-            self.max_vars = x.symbol.arguments[0].number
-
+        if self.max_vars == MAX_VARS:
+            for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
+                self.max_vars = x.symbol.arguments[0].number
 
         if self.recursion_enabled or self.pi_enabled:
             self.max_rules = 2
