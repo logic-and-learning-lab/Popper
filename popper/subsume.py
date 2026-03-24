@@ -91,7 +91,7 @@ class SubsumeChecker:
         return out
 
     def check_subsumed_by_two(self, pos_covered, prog_size):
-        for i in range(2, prog_size + 2):
+        for i in range(2, prog_size + 1):
             if pos_covered in self.state.paired_success_sets[i]:
                 return True
             for x in self.state.paired_success_sets[i]:
