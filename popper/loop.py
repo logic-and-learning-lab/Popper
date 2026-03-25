@@ -7,7 +7,7 @@ from . allsat import AllSatCoreFinder
 from . subsume import SubsumeChecker
 from . state import SearchState
 from . joiner import Joiner
-from . combine_helper import CombineHelper
+
 from . import logger
 from . import stats
 
@@ -19,6 +19,14 @@ def load_generator(settings, state, bkcons):
     else:
         from .generate import Generator
     return Generator(settings, state, bkcons)
+
+def load_combiner(settings, tester, state):
+    if settings.noisy:
+        from . combiner_mdl import CombinerMDL
+        return CombinerMDL(settings, tester, state)
+    else:
+        from . combiner_size import CombinerSize
+        return CombinerSize(settings, tester, state)
 
 def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix):
     state.best_hypothesis_score = conf_matrix
@@ -48,7 +56,7 @@ def popper(settings, tester, state, bkcons):
     allsatcore_finder = AllSatCoreFinder(settings, tester)
     subsumer = SubsumeChecker(settings, tester, state)
     generator = load_generator(settings, state, bkcons)
-    combine_helper = CombineHelper(settings, tester, state)
+    combine_helper = load_combiner(settings, tester, state)
     joiner = Joiner(settings, tester, state)
     num_pos, num_neg = tester.num_pos, tester.num_neg
     noisy = settings.noisy

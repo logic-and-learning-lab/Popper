@@ -9,7 +9,6 @@ class SearchState:
     # pos_covered_bit_array -> prog_size
     # it only maintains success sets for programs where fp = 0
     success_sets = {}
-    success_sets_aux = {}
 
     # (pos_covered_bit_array, neg_covered_bitarray) -> prog_size
     success_sets_noise = {}
