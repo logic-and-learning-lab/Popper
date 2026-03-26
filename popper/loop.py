@@ -29,10 +29,14 @@ def load_combiner(settings, tester, state):
         return CombinerSize(settings, tester, state)
 
 def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix):
+    if hypothesis != state.best_hypothesis and conf_matrix != state.best_hypothesis_score:
+        print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
+    else:
+        print('skip')
     state.best_hypothesis_score = conf_matrix
     state.best_hypothesis_size = hypothesis_size
     state.best_hypothesis = hypothesis
-    print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
+    # print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
     _, fn, _, fp = conf_matrix
 
     if settings.noisy:

@@ -18,8 +18,9 @@ class Literal(NamedTuple):
 TIMEOUT=1200
 MAX_VARS=6
 MAX_BODY=10
-ANYTIME_TIMEOUT=10
+ANYTIME_TIMEOUT=5
 BKCONS_TIMEOUT=10
+BATCH_SIZE=1000
 
 class Constraint:
     GENERALISATION = 1
@@ -41,7 +42,7 @@ def parse_args():
     parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
     parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--showcons', default=False, action='store_true', help='Show constraints deduced during the search')
-    parser.add_argument('--anytime-solver', default=None, choices=['nuwls'], help='Select an anytime MaxSAT solver (default: None)')
+    parser.add_argument('--nuwls', default=False, action='store_true', help='use nuwls solver (default: None)')
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
@@ -158,9 +159,9 @@ class Settings:
         settings = Settings(**conf)
         return settings
 
-    def __init__(self, cmd_line=False, info=True, debug=False, stats=True, timeout=TIMEOUT, quiet=False, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, showcons=False, noisy=False, anytime_solver=None, anytime_timeout=ANYTIME_TIMEOUT, kbpath=None):
+    def __init__(self, cmd_line=False, info=True, debug=False, stats=True, timeout=TIMEOUT, quiet=False, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, showcons=False, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, kbpath=None):
 
-        self.anytime_solver = anytime_solver
+        self.nuwls = nuwls
         self.anytime_timeout = anytime_timeout
         self.bias_file = bias_file
         self.bk_file = bk_file
@@ -181,7 +182,7 @@ class Settings:
         self.timeout = timeout
 
         if noisy:
-            self.batch_size = 20000
+            self.batch_size = BATCH_SIZE
         else:
             self.batch_size = 1
 

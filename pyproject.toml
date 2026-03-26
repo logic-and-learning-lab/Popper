@@ -13,7 +13,8 @@ dependencies = [
   "janus_swi",
   "python-sat",
   "pebble",
-  "pypblib"
+  "pypblib",
+  "ortools>=9.15.6755",
 ]
 
 [project.scripts]

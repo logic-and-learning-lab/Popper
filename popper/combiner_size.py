@@ -6,8 +6,9 @@
 # Céline Hocquette, Andreas Niskanen, Matti Järvisalo, Andrew Cropper:
 # Learning MDL Logic Programs from Noisy Data. AAAI 2024: 10553-10561
 
-# maxsat code originally written by Andreas Niskanen (andreas.niskanen@helsinki.fi)
+import time
 from collections import defaultdict
+from ortools.sat.python import cp_model
 from . import maxsat
 from pysat.formula import IDPool
 import itertools
@@ -48,7 +49,7 @@ class CombinerSize:
 
         self.inconsistent = set()
 
-        self.load_solver()
+        # self.load_solver()
 
     def combine(self, prog, prog_size, test_result, size_change, add_to_combiner, last_combine_stage=False):
         state = self.state
@@ -129,45 +130,12 @@ class CombinerSize:
             del self.coverage_pos[prog2_hash]
             del self.prog_lookup[prog2_hash]
 
-    def load_solver(self):
-        if self.settings.debug:
-            logger.debug(f'Load exact solver: {self.settings.solver}')
-
-        if self.settings.solver not in ['rc2', 'uwr']:
-            print('INVALID SOLVER')
-            exit()
-
-        self.settings.maxsat_timeout = None
-
-        if self.settings.solver == 'rc2':
-            self.settings.exact_maxsat_solver = 'rc2'
-            self.settings.old_format = False
-        elif self.settings.solver == 'uwr':
-            self.settings.exact_maxsat_solver='uwrmaxsat'
-            self.settings.exact_maxsat_solver_params="-v0 -no-sat -no-bin -m -bm"
-            self.settings.old_format = False
-
-        self.settings.lex = True
-        self.settings.lex_via_weights = False
-
-        if self.settings.debug:
-            logger.debug(f'Load anytime solver:{self.settings.anytime_solver}')
-
-        if self.settings.anytime_solver in ['nuwls']:
-            self.settings.maxsat_timeout = self.settings.anytime_timeout
-            if self.settings.anytime_solver == 'nuwls':
-                self.settings.anytime_maxsat_solver = 'NuWLS-c'
-                self.settings.anytime_maxsat_solver_params = ""
-                self.settings.anytime_maxsat_solver_signal = 15
-            else:
-                print('INVALID ANYTIME SOLVER')
-                exit()
-
     def add_inconsistent(self, prog_hash):
         self.inconsistent.add(prog_hash)
 
-    def find_combination_norec(self, last_combine_stage=False):
+    def find_combination_norec_maxsat(self, last_combine_stage=False):
         encoding = []
+
         ruleid_to_rule = {}
         ruleid_to_size = {}
 
@@ -181,7 +149,6 @@ class CombinerSize:
         for k, prog_hash in enumerate(self.saved_progs, start=1):
             prog = self.prog_lookup[prog_hash]
             rule = next(iter(prog))
-
             size = calc_rule_size(rule)
             ruleid_to_rule[k] = rule
             ruleid_to_size[k] = size
@@ -197,25 +164,27 @@ class CombinerSize:
         # HARD CONSTRAINT: Force the solver to cover every positive example
         for ex in range(self.tester.num_pos):
             cov_clause = rules_covering_pos_example.get(ex)
-            if not cov_clause:
-                return [], False  # Trivially UNSAT: An example is completely uncovered
-            encoding.append(cov_clause)
+
+            # Optimisation: If only one rule covers this example, it's essential.
+            if len(cov_clause) == 1:
+                encoding.append([cov_clause[0]])
+            else:
+                encoding.append(cov_clause)
 
         # SOFT CONSTRAINT: Minimise the total size of the selected rules
-        soft_lit_groups = [rule_soft_lits]
+        # The base solver expects a list of clauses, so we wrap each literal in a list
+        soft_clauses = [[lit] for lit in rule_soft_lits]
 
-        timeout = self.settings.maxsat_timeout
-
-        if timeout is None or last_combine_stage:
-            _, model = maxsat.exact_lex_solve(encoding, soft_lit_groups, weights, self.settings)
+        if last_combine_stage:
+            _, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights)
         else:
-            _, model = maxsat.anytime_lex_solve(encoding, soft_lit_groups, weights, self.settings, timeout)
+            _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, self.settings.anytime_timeout)
 
         if model is None:
             return [], False
 
         # Calculate the size of the model the sat solver just found
-        best_size = sum(ruleid_to_size[var] for var in model if var > 0)
+        best_size = solver.ObjectiveValue()
 
         # Ensure this new model is strictly better than global best
         size_ = self.state.best_hypothesis_size if self.state.best_hypothesis_score else float('inf')
@@ -226,6 +195,90 @@ class CombinerSize:
         best_prog = [ruleid_to_rule[var] for var in model if var > 0]
 
         return best_prog, best_size
+
+    def find_combination_norec_cp(self, last_combine_stage=False):
+        cp_mod = cp_model.CpModel()
+
+        encoding = []
+        ruleid_to_rule = {}
+        ruleid_to_size = {}
+
+        # Maps positive example index -> list of SAT variables covering it
+        rules_covering_pos_example = defaultdict(list)
+
+        # Maps rule ID -> CP-SAT boolean variable
+        rule_vars = {}
+
+        # k acts as the rule ID
+        for k, prog_hash in enumerate(self.saved_progs, start=1):
+            prog = self.prog_lookup[prog_hash]
+            rule = next(iter(prog))
+
+            size = calc_rule_size(rule)
+            ruleid_to_rule[k] = rule
+            ruleid_to_size[k] = size
+
+            # 1. Create a CP-SAT Boolean variable for this rule
+            rule_vars[k] = cp_mod.NewBoolVar(f'rule_{k}')
+
+            for ex in self.coverage_pos[prog_hash].search(1):
+                rules_covering_pos_example[ex].append(k)
+
+        # 2. HARD CONSTRAINT: Force the solver to cover every positive example
+        for ex in range(self.tester.num_pos):
+            cov_clause = rules_covering_pos_example.get(ex)
+
+            if cov_clause is None:
+                # print('weird', last_combine_stage)
+                continue
+
+            if len(cov_clause) == 1:
+                # Essential rule: It's the only one covering this example
+                cp_mod.Add(rule_vars[cov_clause[0]] == 1)
+            else:
+                cp_mod.AddBoolOr([rule_vars[k] for k in cov_clause])
+
+        # 3. DEFINE OBJECTIVE: Minimise the total size of the selected rules
+        # Multiply the boolean (0 or 1) by the rule's size
+        total_size_expr = sum(rule_vars[k] * ruleid_to_size[k] for k in rule_vars)
+        cp_mod.Minimize(total_size_expr)
+
+        # 4. STRICT IMPROVEMENT CONSTRAINT (Optional but highly recommended)
+        # By telling the solver it MUST beat the current best, it prunes bad branches early.
+        current_best_size = self.state.best_hypothesis_size if self.state.best_hypothesis_score else float('inf')
+        if current_best_size != float('inf'):
+            cp_mod.Add(total_size_expr < int(current_best_size))
+
+        # 5. SOLVER SETUP
+        solver = cp_model.CpSolver()
+        solver.parameters.num_search_workers = 8
+
+        # Replicating anytime logic: apply timeout unless it's the final stage
+        if not last_combine_stage:
+            solver.parameters.max_time_in_seconds = float(self.settings.anytime_timeout)
+            solver.parameters.cp_model_presolve = False
+            solver.parameters.interleave_search = True
+
+        # 6. SOLVE
+        # logger.info('calling cp sat')
+        status = solver.Solve(cp_mod)
+        # logger.info('cp sat stopped')
+
+        # OPTIMAL means it proved it's the best. FEASIBLE means it found a valid
+        # solution but timed out before proving there isn't a better one.
+        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+
+            # Extract the rules where the solver set the variable to True (1)
+            best_prog = [ruleid_to_rule[k] for k, var in rule_vars.items() if solver.Value(var)]
+            best_size = sum(ruleid_to_size[k] for k, var in rule_vars.items() if solver.Value(var))
+
+            # Sanity check (technically redundant because of our strict improvement constraint)
+            if current_best_size <= best_size:
+                return [], False
+
+            return best_prog, best_size
+
+        return [], False
 
     def find_combination(self, last_combine_stage=False):
         encoding = []
@@ -298,8 +351,9 @@ class CombinerSize:
             rule_soft_lits.append(-r_var)
             weights.append(ruleid_to_size[rule_id])
 
-        # SOFT CONSTRAINT: Minimise the size of the selected rules
-        soft_lit_groups = [[lit for lit in rule_soft_lits]]
+        # SOFT CONSTRAINT: Minimise the total size of the selected rules
+        # The base solver expects a list of clauses, so we wrap each literal in a list
+        soft_clauses = [[lit] for lit in rule_soft_lits]
 
         # PRUNE INCONSISTENT
         for prog in self.inconsistent:
@@ -323,13 +377,12 @@ class CombinerSize:
         # Check existing best size
         size_ = self.state.best_hypothesis_size if self.state.best_hypothesis_score else float('inf')
 
-        timeout = self.settings.maxsat_timeout
         while True:
-            # Replaced unused `cost` variable with `_`
-            if timeout is None or last_combine_stage:
-                _, model = maxsat.exact_lex_solve(encoding, soft_lit_groups, weights, self.settings)
+
+            if last_combine_stage:
+                _, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights)
             else:
-                _, model = maxsat.anytime_lex_solve(encoding, soft_lit_groups, weights, self.settings, timeout)
+                _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, self.settings.anytime_timeout)
 
             if model is None:
                 break
@@ -369,7 +422,11 @@ class CombinerSize:
         if self.settings.recursion_enabled:
             new_solution, size = self.find_combination(last_combine_stage)
         else:
-            new_solution, size = self.find_combination_norec(last_combine_stage)
+
+            if self.settings.nuwls and not last_combine_stage:
+                new_solution, size = self.find_combination_norec_maxsat(last_combine_stage)
+            else:
+                new_solution, size = self.find_combination_norec_cp(last_combine_stage)
 
         if len(new_solution) == 0:
             return
