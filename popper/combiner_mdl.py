@@ -91,12 +91,23 @@ class CombinerMDL:
         tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
         inconsistent = test_result.inconsistent
 
+        best_mdl = self.state.best_hypothesis_mdl if self.state.best_hypothesis_mdl else float('inf')
+        if (fp+ prog_size) >= best_mdl:
+            print(fp + prog_size, best_mdl, format_prog(prog))
+            assert(False)
+        # IF A RULE COSTS MORE (SIZE + ERRORS) THAN THE POSITIVES IT COVERS, IT IS DEAD WEIGHT
+        if tp <= (fp + prog_size):
+            assert(False)
+
         local_delete = set()
+
+        # check whether we have already seen a program that covers these positives and negatives
         ignore_this_prog = (pos_covered, neg_covered) in self.state.success_sets_noise
 
         # check whether new program is dominated by an older one
+        # old_pos ⊇ new_pos, old_neg ⊆ new_neg, old_size <= new_size
         if not ignore_this_prog:
-            # find programs that cover at least the same pos_examples as prog
+            # find programs that cover at least the same pos examples as new prog
             s_pos = set.intersection(*(self.covered_by_pos[ex] for ex in pos_covered.search(1)))
 
             for old_prog in s_pos:
@@ -107,27 +118,48 @@ class CombinerMDL:
                     ignore_this_prog = True
                     break
 
-        moo1 = moo2 = moo3 = False
+        # find programs that cover at least the same neg examples as new prog
+        # new_pos ⊇ old_pos, new_neg ⊆ old_neg, new_size <= old_size
         if not ignore_this_prog and (inconsistent or fp > 0):
-            s_neg = set.intersection(*(self.covered_by_neg[ex] for ex, ex_cov in enumerate(neg_covered) if ex_cov == 1))
-            for prog1 in s_neg:
-                if subset(self.coverage_pos[prog1], pos_covered):
-                    size1, tp1, fp1 = self.scores[prog1]
+            s_neg = set.intersection(*(self.covered_by_neg[ex] for ex in neg_covered.search(1)))
 
+            for old_prog in s_neg:
+                # check whether old program covers a subset of the pos examples covered by the new prog
+                if subset(self.coverage_pos[old_prog], pos_covered):
+                    size1, tp1, fp1 = self.scores[old_prog]
+
+                    # if old prog is the same size then we can ignore the old prog
                     if size1 == prog_size:
-                        local_delete.add(prog1)
+                        local_delete.add(old_prog)
                         continue
 
+                    # @AC, what is this? is it sound?
                     if (tp - fp - prog_size) <= (tp1 - fp1 - size1):
                         ignore_this_prog = True
                         break
 
+                    # print('ASDA1') OLD PROGRAM DOMINATES NEW PROGRAM ON SAME NEGATIVE COVERAGE
+                    # same neg => same fp, so compare tp and size
+                    if tp1 >= tp and size1 <= prog_size:
+                        print('ASDA1')
+                        ignore_this_prog = True
+                        break
 
+                    # print('ASDA2') NEW PROGRAM DOMINATES OLD PROGRAM ON SAME NEGATIVE COVERAGE
+                    if tp >= tp1 and prog_size <= size1:
+                        print('ASDA2')
+                        local_delete.add(old_prog)
 
+        # “If the new program is at least as good as an old one on positive coverage, and is no worse in size and FP, then delete the old one.”
         if not inconsistent:
+            # find examples not covered by this new prog
             not_covered = self.tester.pos_examples_ ^ pos_covered
-            progs_not_subsumed = set.union(*(self.covered_by_pos[ex] for ex, ex_cov in enumerate(not_covered) if ex_cov == 1))
+
+            # find all old programs that are not subsumed by the new program
+            progs_not_subsumed = set.union(*(self.covered_by_pos[ex] for ex in not_covered.search(1)))
+
             all_progs = set.union(*(self.covered_by_pos[ex] for ex, ex_cov in enumerate(self.tester.pos_examples_) if ex_cov == 1))
+
             s_pos2 = all_progs.difference(progs_not_subsumed)
             for prog1 in s_pos2:
                 size1, tp1, fp1 = self.scores[prog1]
@@ -209,7 +241,6 @@ class CombinerMDL:
                 self.saved_progs.remove(prog_hash)
             else:
                 to_combine_set.remove(prog_hash)
-
 
     def load_solver(self):
         if self.settings.debug:

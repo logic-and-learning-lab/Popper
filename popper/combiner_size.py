@@ -367,24 +367,27 @@ class CombinerSize:
             return
 
         if self.settings.recursion_enabled:
-            new_solution, cost = self.find_combination(last_combine_stage)
+            new_solution, size = self.find_combination(last_combine_stage)
         else:
-            new_solution, cost = self.find_combination_norec(last_combine_stage)
+            new_solution, size = self.find_combination_norec(last_combine_stage)
 
         if len(new_solution) == 0:
-            return None
+            return
 
-        elif self.state.solution_found and cost > self.state.best_hypothesis_size:
-            print(cost, self.state.best_hypothesis_size, self.state.solution_found)
+        if self.state.solution_found and size > self.state.best_hypothesis_size:
             assert(False)
-            return None
 
-        new_solution = reduce_prog(new_solution)
-        pos_covered, neg_covered = self.tester.test_prog_all(new_solution)
-        tp = pos_covered.count(1)
-        fp = neg_covered.count(1)
-        tn = self.tester.num_neg - fp
-        fn = self.tester.num_pos - tp
-        size = calc_prog_size(new_solution)
+        if self.settings.recursion_enabled:
+            new_solution = reduce_prog(new_solution)
+            pos_covered, neg_covered = self.tester.test_prog_all(new_solution)
+            tp = pos_covered.count(1)
+            fp = neg_covered.count(1)
+            tn = self.tester.num_neg - fp
+            fn = self.tester.num_pos - tp
+        else:
+            tp = self.tester.num_pos
+            fp = 0
+            tn = self.tester.num_neg
+            fn = 0
 
         return new_solution, size, (tp, fn, tn, fp)
