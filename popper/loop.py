@@ -31,12 +31,9 @@ def load_combiner(settings, tester, state):
 def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix):
     if hypothesis != state.best_hypothesis and conf_matrix != state.best_hypothesis_score:
         print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
-    else:
-        print('skip')
     state.best_hypothesis_score = conf_matrix
     state.best_hypothesis_size = hypothesis_size
     state.best_hypothesis = hypothesis
-    # print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
     _, fn, _, fp = conf_matrix
 
     if settings.noisy:
@@ -52,7 +49,7 @@ def check_size_change(state, prog_size):
     if state.search_depth == prog_size:
         return False
     state.search_depth = prog_size
-    logger.info(f'Generating hypotheses of size: {prog_size}')
+    logger.out(f'Generating hypotheses of size: {prog_size}')
     return True
 
 def popper(settings, tester, state, bkcons):
@@ -75,9 +72,7 @@ def popper(settings, tester, state, bkcons):
         build_constraints = build_constraints_noiseless
         test_prog = tester.test_prog
 
-    # GENERATE PROGRAMS
     for prog in generator.get_prog():
-
         stats.stats.total_programs += 1
 
         # HORRIBLE HACK DUE TO PROLOG MEMORY LEAK
@@ -193,7 +188,7 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
             add_to_combiner_ = False
 
             if not has_invention and not is_recursive:
-                with stats.duration('find most general subsumed/covers_too_few'):
+                with stats.duration('find most   subsumed/covers_too_few'):
                     subsumed_progs = subsumer.subsumed_or_covers_too_few(prog, seen=set())
                 pruned_more_general = len(subsumed_progs) > 0
 

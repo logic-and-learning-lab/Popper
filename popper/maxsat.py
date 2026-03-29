@@ -16,7 +16,6 @@ def new_wcnf_to_file(hard_clauses, soft_clauses, weights, file):
     for clause, w in zip(soft_clauses, weights):
         if w == 0:
             continue
-        #print(str(w) + " " + " ".join(map(str, clause)) + " 0")
         file.write(str(w) + " " + " ".join(map(str, clause)) + " 0" + "\n")
     file.flush()
 

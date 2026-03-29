@@ -1133,15 +1133,15 @@ def deduce_non_singletons(settings):
 def get_bk_cons(settings, tester):
     bkcons = []
 
+    logger.info(f'Finding pointless rules')
     pointless = settings.pointless = tester.find_pointless_relations()
 
     for p,a in pointless:
         if settings.showcons:
-            print('remove pointless relation', p, a)
+            logger.output(f'Pointless relation: {p}/{a}')
         settings.body_preds.remove((p,a))
 
-    # if settings.datalog:
-    logger.debug(f'Loading recalls')
+    logger.info(f'Loading recalls')
     with stats.duration('recalls'):
         recalls = deduce_recalls(settings)
 
@@ -1151,7 +1151,7 @@ def get_bk_cons(settings, tester):
         settings.datalog = True
         if settings.showcons:
             for x in recalls:
-                print('recall', x)
+                logger.output(f'recall: {x}')
         bkcons.extend(recalls)
 
     if settings.datalog:
@@ -1170,10 +1170,11 @@ def get_bk_cons(settings, tester):
 
 
     if not settings.datalog:
-        logger.debug(f'Loading recalls FAILURE')
+        logger.info('Loading recalls FAILURE')
     else:
         xs = []
         timeout = min(settings.timeout, settings.bkcons_timeout)
+        logger.info(f'Loading BK cons')
         with stats.duration('bkcons'):
             with ProcessPool(max_workers=1) as pool:
                 future = pool.schedule(deduce_bk_cons, args=(settings, tester), timeout=timeout)
@@ -1181,7 +1182,6 @@ def get_bk_cons(settings, tester):
                     xs = future.result()
                 except TimeoutError:
                     logger.info(f'Loading bkcons FAILURE: Task exceeded {timeout}')
-                    xs = []
         bkcons.extend(xs)
 
     return bkcons

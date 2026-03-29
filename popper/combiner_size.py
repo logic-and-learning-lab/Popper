@@ -102,7 +102,6 @@ class CombinerSize:
                 return combine_result2
         return combine_result1
 
-
     # delete programs from the combiner (or the list of programs to be combined) which are worse than this new program
     def filter_combine_programs(self, prog, prog_size, pos_covered):
         if self.settings.recursion_enabled:
@@ -133,6 +132,8 @@ class CombinerSize:
     def add_inconsistent(self, prog_hash):
         self.inconsistent.add(prog_hash)
 
+    # maxsat code to find a good combination of rules
+    # assumes no recursion to make it easier to understand
     def find_combination_norec_maxsat(self, last_combine_stage=False):
         encoding = []
 
@@ -157,13 +158,18 @@ class CombinerSize:
             for ex in self.coverage_pos[prog_hash].search(1):
                 rules_covering_pos_example[ex].append(k)
 
-            # Populate soft constraints instantly
+            # soft constraints
+            # why -k?
             rule_soft_lits.append(-k)
             weights.append(size)
 
-        # HARD CONSTRAINT: Force the solver to cover every positive example
+        # HARD CONSTRAINT
+        # solver must cover every positive example
         for ex in range(self.tester.num_pos):
             cov_clause = rules_covering_pos_example.get(ex)
+
+            if cov_clause is None:
+                continue
 
             # Optimisation: If only one rule covers this example, it's essential.
             if len(cov_clause) == 1:
@@ -175,23 +181,26 @@ class CombinerSize:
         # The base solver expects a list of clauses, so we wrap each literal in a list
         soft_clauses = [[lit] for lit in rule_soft_lits]
 
-        if last_combine_stage:
+        if last_combine_stage or not self.settings.nuwls:
+            # call the exact maxsat solver
             _, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights)
         else:
+            # call nuwls
             _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, self.settings.anytime_timeout)
 
         if model is None:
             return [], False
 
-        # Calculate the size of the model the sat solver just found
-        best_size = solver.ObjectiveValue()
+        # the size of the model the sat solver just found
+        # best_size = solver.ObjectiveValue()
+        best_size = sum(ruleid_to_size[var] for var in model if var > 0)
 
-        # Ensure this new model is strictly better than global best
+        # check new model is strictly better than global best
         size_ = self.state.best_hypothesis_size if self.state.best_hypothesis_score else float('inf')
         if size_ <= best_size:
             return [], False
 
-        # It's strictly better! Extract the rules and return them
+        # get the rules and return them
         best_prog = [ruleid_to_rule[var] for var in model if var > 0]
 
         return best_prog, best_size
@@ -251,18 +260,15 @@ class CombinerSize:
 
         # 5. SOLVER SETUP
         solver = cp_model.CpSolver()
-        solver.parameters.num_search_workers = 8
+        solver.parameters.num_search_workers = 1
+        solver.parameters.linearization_level = 2
 
         # Replicating anytime logic: apply timeout unless it's the final stage
         if not last_combine_stage:
             solver.parameters.max_time_in_seconds = float(self.settings.anytime_timeout)
-            solver.parameters.cp_model_presolve = False
-            solver.parameters.interleave_search = True
 
         # 6. SOLVE
-        # logger.info('calling cp sat')
         status = solver.Solve(cp_mod)
-        # logger.info('cp sat stopped')
 
         # OPTIMAL means it proved it's the best. FEASIBLE means it found a valid
         # solution but timed out before proving there isn't a better one.
@@ -270,7 +276,7 @@ class CombinerSize:
 
             # Extract the rules where the solver set the variable to True (1)
             best_prog = [ruleid_to_rule[k] for k, var in rule_vars.items() if solver.Value(var)]
-            best_size = sum(ruleid_to_size[k] for k, var in rule_vars.items() if solver.Value(var))
+            best_size = int(solver.ObjectiveValue())
 
             # Sanity check (technically redundant because of our strict improvement constraint)
             if current_best_size <= best_size:
@@ -280,6 +286,7 @@ class CombinerSize:
 
         return [], False
 
+    # GARBAGE AND NEEDS REFACTORING
     def find_combination(self, last_combine_stage=False):
         encoding = []
         rulehash_to_id = {}
@@ -422,11 +429,22 @@ class CombinerSize:
         if self.settings.recursion_enabled:
             new_solution, size = self.find_combination(last_combine_stage)
         else:
+            # if self.settings.cpsat:
+            #     new_solution, size = self.find_combination_norec_cp(last_combine_stage)
+            # else:
+            #     new_solution, size = self.find_combination_norec_maxsat(last_combine_stage)
 
-            if self.settings.nuwls and not last_combine_stage:
-                new_solution, size = self.find_combination_norec_maxsat(last_combine_stage)
+            if not self.settings.nuwls:
+                logger.info(f'Calling CP solver for noiseless combine stage with {len(self.saved_progs)} rules')
+                new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
+                logger.info(f'CP solver finished')
             else:
-                new_solution, size = self.find_combination_norec_cp(last_combine_stage)
+                if last_combine_stage:
+                    logger.info(f'Calling MaxSAT solver for noiseless combine stage with {len(self.saved_progs)} rules')
+                else:
+                    logger.info(f'Calling anytime MaxSAT solver for noiseless combine stage with {len(self.saved_progs)} rules')
+                new_solution, cost = self.find_combination_norec_maxsat(last_combine_stage)
+                logger.info(f'MaxSAT solver finished')
 
         if len(new_solution) == 0:
             return

@@ -15,10 +15,10 @@ class Literal(NamedTuple):
     predicate: str
     arguments: tuple
 
-TIMEOUT=1200
+TIMEOUT=3600
 MAX_VARS=6
 MAX_BODY=10
-ANYTIME_TIMEOUT=5
+ANYTIME_TIMEOUT=10
 BKCONS_TIMEOUT=10
 BATCH_SIZE=1000
 
@@ -39,10 +39,10 @@ def parse_args():
     parser.add_argument('--max-body', type=int, default=MAX_BODY, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
     parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
     parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
-    parser.add_argument('--quiet', '-q', default=False, action='store_true', help='Hide information during learning')
-    parser.add_argument('--debug', default=False, action='store_true', help='Print debugging information to stderr')
     parser.add_argument('--showcons', default=False, action='store_true', help='Show constraints deduced during the search')
-    parser.add_argument('--nuwls', default=False, action='store_true', help='use nuwls solver (default: None)')
+    parser.add_argument('--cpsat', default=False, action='store_true', help='Use cpsat solver (default: False)')
+    parser.add_argument('--nuwls', default=False, action='store_true', help='Use nuwls solver (default: False)')
+    parser.add_argument('--verbose', '-v', action='count', default=1, help='Increase verbosity (-v or -vv)')
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
@@ -159,14 +159,14 @@ class Settings:
         settings = Settings(**conf)
         return settings
 
-    def __init__(self, cmd_line=False, info=True, debug=False, stats=True, timeout=TIMEOUT, quiet=False, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, showcons=False, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, kbpath=None):
+    def __init__(self, cmd_line=False, info=True, stats=True, timeout=TIMEOUT, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, showcons=False, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, kbpath=None, cpsat=False, verbose=1):
 
         self.nuwls = nuwls
+        self.cpsat = cpsat
         self.anytime_timeout = anytime_timeout
         self.bias_file = bias_file
         self.bk_file = bk_file
         self.bkcons_timeout = BKCONS_TIMEOUT
-        self.debug = debug
         self.ex_file = ex_file
         self.has_directions = False
         self.info = info
@@ -178,7 +178,6 @@ class Settings:
         self.recursion_enabled = False
         self.show_stats = stats
         self.showcons = showcons
-        self.solver = 'rc2'
         self.timeout = timeout
 
         if noisy:
@@ -186,10 +185,9 @@ class Settings:
         else:
             self.batch_size = 1
 
-        if debug:
-            logger.setLevel(logging.DEBUG)
-        elif info:
-            logger.setLevel(logging.INFO)
+        self.verbosity=verbose
+        self.debug=verbose==3
+        logger.set_verbosity(verbose)
 
         solver = clingo.Control(['-Wnone'])
         with open(self.bias_file) as f:
@@ -319,9 +317,9 @@ class Settings:
 
         self.single_solve = not (self.recursion_enabled or self.pi_enabled)
 
-        logger.debug(f'Max rules: {self.max_rules}')
-        logger.debug(f'Max vars: {self.max_vars}')
-        logger.debug(f'Max body: {self.max_body}')
+        logger.info(f'Max rules: {self.max_rules}')
+        logger.info(f'Max vars: {self.max_vars}')
+        logger.info(f'Max body: {self.max_body}')
 
 def init_settings(in_settings=None):
     global settings
@@ -598,15 +596,15 @@ def order_rule(rule):
 
 def print_incomplete_solution2(prog, size, conf_matrix):
     tp, fn, tn, fp = conf_matrix
-    logger.info('*'*20)
-    logger.info('New best hypothesis:')
+    logger.out('*'*20)
+    logger.out('New best hypothesis:')
     if settings.noisy:
-        logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} mdl:{size+fn+fp}')
+        logger.out(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} mdl:{size+fn+fp}')
     else:
-        logger.info(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size}')
+        logger.out(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size}')
     for rule in order_prog(prog):
-        logger.info(format_rule(order_rule(rule)))
-    logger.info('*'*20)
+        logger.out(format_rule(order_rule(rule)))
+    logger.out('*'*20)
 
 def print_prog_score(prog, score):
     tp, fn, tn, fp = score

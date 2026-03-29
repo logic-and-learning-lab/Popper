@@ -221,7 +221,7 @@ class Generator:
         while True:
             if size > self.state.max_literals:
                 return
-            # self.settings.logger.info(f'Generating programs of size: {size}')
+            # self.settings.logger.out(f'Generating programs of size: {size}')
             self.current_size = size
             with stats.duration('init'):
                 self.update_solver(size)

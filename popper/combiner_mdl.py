@@ -12,7 +12,7 @@ from ortools.sat.python import cp_model
 from pysat.formula import IDPool
 from . import stats
 from . import logger
-from bitarray.util import subset, any_and, ones
+from bitarray.util import subset, any_and, ones, zeros
 from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution2
 import time
 
@@ -69,41 +69,7 @@ class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
         self.state.best_hypothesis_size = current_hypothesis_size
         self.state.best_hypothesis = hypothesis
         self.state.best_hypothesis_mdl = current_cost
-
         print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count))
-
-        # print(f"\n[Solution {self.solution_count}]")
-        # print(f"MDL: {int(current_cost)} (Size: {current_hypothesis_size}, Errors: {fn_count + fp_count})")
-        # print(f"Time: {elapsed_time:.2f}s | Rules: {len(hypothesis)}")
-
-# class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
-#     def __init__(self):
-#         cp_model.CpSolverSolutionCallback.__init__(self)
-#         self.__start_time = time.time()
-#         self.__solution_count = 0
-
-
-#     def on_solution_callback(self):
-#         self.__solution_count += 1
-#         # Use self.ObjectiveValue() directly!
-#         current_cost = self.ObjectiveValue()
-#         elapsed_time = time.time() - self.__start_time
-
-#         print(f"Solution {self.__solution_count}: "
-#               f"Cost = {int(current_cost)} " # Cast to int for your small 1..10 costs
-#               f"(Time: {elapsed_time:.2f}s)")
-
-
-#         fn_count = sum(solver.Value(fn) for fn in fn_vars)
-#         fp_count = sum(solver.Value(fp) for fp in fp_vars)
-#         tp_count = num_pos - fn_count
-#         tn_count = num_neg - fp_count
-
-#         hypothesis = [ruleid_to_rule[k] for k, var in rule_vars.items() if solver.Value(var)]
-#         state.best_hypothesis_score = (tp, fn, tn, fp)
-#         state.best_hypothesis_size = hypothesis_size
-#         state.best_hypothesis = hypothesis
-#         print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
 
 class CombinerMDL:
 
@@ -172,6 +138,50 @@ class CombinerMDL:
             if combine_result2:
                 return combine_result2
         return combine_result1
+
+    def build_incompatibility(self):
+        """
+        Computes pairwise rule incompatibility based on MDL gain.
+        incompatible[h] = set of rule hashes that should not be selected together.
+        """
+
+        incompatible = defaultdict(set)
+
+        progs = list(self.saved_progs)
+
+        for i in range(len(progs)):
+            h1 = progs[i]
+            pos1 = self.coverage_pos[h1]
+            neg1 = self.coverage_neg[h1]
+            size1, tp1, fp1 = self.scores[h1]
+
+            gain1 = tp1 - fp1 - size1
+
+            for j in range(i + 1, len(progs)):
+                h2 = progs[j]
+                pos2 = self.coverage_pos[h2]
+                neg2 = self.coverage_neg[h2]
+                size2, tp2, fp2 = self.scores[h2]
+
+                gain2 = tp2 - fp2 - size2
+
+                # --- UNION COVERAGE ---
+                pos_union = pos1 | pos2
+                neg_union = neg1 | neg2
+
+                tp_union = pos_union.count(1)
+                fp_union = neg_union.count(1)
+                size_union = size1 + size2
+
+                gain_union = tp_union - fp_union - size_union
+
+                # --- BASIC INCOMPATIBILITY CONDITION ---
+                if gain_union <= max(gain1, gain2):
+                    # print('poo', h1, h2)
+                    incompatible[h1].add(h2)
+                    incompatible[h2].add(h1)
+
+        return incompatible
 
     def decide_whether_to_combine(self, prog, prog_size, test_result):
         pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
@@ -322,6 +332,7 @@ class CombinerMDL:
             size, tp, fp = self.scores[prog_hash]
             if fp + size >= must_beat:
                 to_delete.add(prog_hash)
+                continue
 
         for prog_hash in to_delete:
             if prog_hash in self.saved_progs:
@@ -353,10 +364,15 @@ class CombinerMDL:
         pos_var = lambda ex: N + 1 + ex
         neg_var = lambda ex: N + num_pos + 1 + ex
 
+
+        # tmp_dump = {}
+
         # 1. PARSE RULES & POPULATE SIZES/COVERAGE
         for k, prog_hash in enumerate(self.saved_progs, start=1):
             prog = self.prog_lookup[prog_hash]
             rule = next(iter(prog))
+
+            # tmp_dump[k] = prog
 
             size = calc_rule_size(rule)
             ruleid_to_rule[k] = rule
@@ -375,8 +391,19 @@ class CombinerMDL:
         # 2. ENCODE POSITIVE EXAMPLES (Minimise FN)
         for ex in range(num_pos):
             pvar = N + 1 + ex
+
             # Hard clause: If example is covered (pvar), at least one covering rule MUST be true
             encoding.append([-pvar] + rules_covering_pos[ex])
+
+            # if len(rules_covering_pos[ex]) == 1:
+            #     h = tmp_dump[rules_covering_pos[ex][0]]
+            #     print(format_prog(h))
+            #     # pos_covered, neg_covered = self.tester.test_prog_all(new_solution)
+            #     # tp_ = self.tester.num_pos - fn
+            #     # tn_ = self.tester.num_neg - fp
+            #     # size, tp, fp = self.scores[h]
+            #     # print(f'asda price ex:{ex} h:{h} size:{size} tp:{tp} fp:{fp}')
+
 
             # Soft clause: Reward the solver for covering the positive example
             soft_clauses.append([pvar])
@@ -393,7 +420,21 @@ class CombinerMDL:
             soft_clauses.append([-nvar])
             weights.append(NEG_EXAMPLE_WEIGHT)
 
-        if last_combine_stage:
+        # if trick:
+        #     incompatible = self.build_incompatibility()
+
+        #     # hash_to_ruleid = {}
+        #     for k, prog_hash in enumerate(self.saved_progs, start=1):
+        #         hash_to_ruleid[prog_hash] = k
+
+        #     for h1, bad_set in incompatible.items():
+        #         r1 = hash_to_ruleid[h1]
+        #         for h2 in bad_set:
+        #             r2 = hash_to_ruleid[h2]
+        #             if r1 < r2:
+        #                 encoding.append([-r1, -r2])  # hard clause
+
+        if last_combine_stage or not self.settings.nuwls:
             _, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights)
         else:
             _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, self.settings.anytime_timeout)
@@ -424,7 +465,24 @@ class CombinerMDL:
         # Returns the raw fn + fp + size as requested in your snippet
         return best_prog, mdl
 
+    # def save_state(self):
+    #     import pickle
+    #     # Bundle the objects into a dictionary
+    #     data_to_save = {
+    #         'saved_progs': self.saved_progs,
+    #         'prog_lookup': self.prog_lookup,
+    #         'coverage_pos': self.coverage_pos,
+    #         'coverage_neg': self.coverage_neg,
+    #         'num_pos' : self.tester.num_pos,
+    #         'num_neg': self.tester.num_neg
+    #     }
+
+    #     with open('DUMP.pkl', 'wb') as f:
+    #         pickle.dump(data_to_save, f)
+    #     # print(f"Progress saved to {FILENAME}")
+
     def find_combination_norec_cp(self, last_combine_stage=False):
+
         ruleid_to_rule = {}
         ruleid_to_size = {}
 
@@ -438,6 +496,21 @@ class CombinerMDL:
 
         # 1. PARSE RULES
         for k, prog_hash in enumerate(self.saved_progs, start=1):
+
+
+            # prog = self.prog_lookup[prog_hash]
+            # pos_covered = self.coverage_pos[prog_hash]
+            # neg_covered = self.coverage_neg[prog_hash]
+            # # UNCOMMENT TO SHOW PROGRAMS ADDED TO THE SOLVER
+            # tp = len(pos_covered)
+            # fp = len(neg_covered)
+            # size = calc_prog_size(prog)
+            # fn = self.tester.num_pos - tp
+            # # print(f'size: {size} fp:{fp} tp:{tp} mdl:{size + fp + fn} {format_prog(prog)}')
+            # # print(f'\tpos_covered:{tuple(pos_covered.search(1))}')
+            # # print(f'\tneg_covered:{tuple(neg_covered.search(1))}')
+
+
             prog = self.prog_lookup[prog_hash]
             rule = next(iter(prog))
             ruleid_to_rule[k] = rule
@@ -451,35 +524,24 @@ class CombinerMDL:
         # 2. INITIALIZE CP-SAT MODEL & VARIABLES
         model = cp_model.CpModel()
         rule_vars = {k: model.NewBoolVar(f'r_{k}') for k in range(1, N + 1)}
-
-        # Track the errors specifically for the objective function
         fn_vars = [model.NewBoolVar(f'fn_{i}') for i in range(num_pos)]
         fp_vars = [model.NewBoolVar(f'fp_{j}') for j in range(num_neg)]
 
-        # 3. CONSTRAINTS (Linking Rules to Errors)
         for i in range(num_pos):
             rules = [rule_vars[k] for k in rules_covering_pos[i]]
             model.AddBoolOr(rules + [fn_vars[i]])
-
-            # covered = model.NewBoolVar(f'pos_covered_{i}')
-            # if rules_covering_pos[i]:
-            #     # If any rule fires, 'covered' is True
-            #     model.AddMaxEquality(covered, [rule_vars[k] for k in rules_covering_pos[i]])
-            #     # False Negative = NOT Covered (fn + covered = 1)
-            #     model.Add(fn_vars[i] + covered == 1)
-            # else:
-            #     # If no rules exist to cover it, it is always a False Negative
-            #     model.Add(fn_vars[i] == 1)
 
         for j in range(num_neg):
             rules = [rule_vars[k] for k in rules_covering_neg[j]]
             for r_var in rules:
                 model.AddImplication(r_var, fp_vars[j])
-            # if rules_covering_neg[j]:
-            #     # If any rule fires on a negative example, it is a False Positive
-            #     model.AddMaxEquality(fp_vars[j], [rule_vars[k] for k in rules_covering_neg[j]])
-            # else:
-            #     model.Add(fp_vars[j] == 0)
+
+        if self.state.best_hypothesis:
+            # print('warm starting')
+            best_set = {hash(r) for r in self.state.best_hypothesis}
+            for k, var in rule_vars.items():
+                rule = ruleid_to_rule[k]
+                model.AddHint(var, 1 if hash(rule) in best_set else 0)
 
         # 4. OBJECTIVE FUNCTION (MDL)
         objective_terms = []
@@ -495,23 +557,19 @@ class CombinerMDL:
         total_mdl_expr = cp_model.LinearExpr.Sum(objective_terms)
         model.Minimize(total_mdl_expr)
 
-        # 5. UPPER BOUND PRUNING
+        # # 5. UPPER BOUND PRUNING
         mdl_limit = self.state.best_hypothesis_mdl if self.state.best_hypothesis_mdl else float('inf')
         if mdl_limit != float('inf'):
             model.Add(total_mdl_expr < int(mdl_limit))
 
         # 6. SOLVE
         solver = cp_model.CpSolver()
-        solver.parameters.num_search_workers = 8
-        # solver.parameters.log_search_progress = True
+        solver.parameters.num_search_workers = 1
+        solver.parameters.linearization_level = 2
 
         if not last_combine_stage:
             solver.parameters.max_time_in_seconds = self.settings.anytime_timeout
-            solver.parameters.cp_model_presolve = False
-            solver.parameters.interleave_search = True
 
-        # status = solver.Solve(model)
-        # printer = SetCoverProgressPrinter()
         printer = SetCoverProgressPrinter(
             rule_vars=rule_vars,
             fn_vars=fn_vars,
@@ -523,7 +581,6 @@ class CombinerMDL:
             state=self.state  # This lets the printer update your global state
         )
 
-        logger.info('calling cpsat' + str(last_combine_stage))
         status = solver.Solve(model, printer)
 
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -538,6 +595,8 @@ class CombinerMDL:
 
         return best_prog, mdl
 
+    # OLD!
+    # NEEDS REFACTORING
     def find_combination(self, last_combine_stage=False):
         # print('')
         # print(f'lex:{self.settings.lex}')
@@ -699,10 +758,6 @@ class CombinerMDL:
             else:
                 _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, self.settings.anytime_timeout)
 
-            #     cost, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights, self.settings)
-            # else:
-            #     cost, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, self.settings, timeout)
-
             if model is None:
                 print("WARNING: No solution found, exit combiner.")
                 break
@@ -747,6 +802,70 @@ class CombinerMDL:
         best_prog = [ruleid_to_rule[k] for k in best_prog]
         return best_prog, best_fn + best_fp + best_size
 
+    def greedy_upper_bound(self):
+        covered_pos = zeros(self.tester.num_pos)
+        covered_neg = zeros(self.tester.num_neg)
+
+        total_size = 0
+        candidates = list(self.saved_progs)
+
+        out = []
+        while candidates:
+            best = None
+            best_delta = 0  # only accept strictly improving moves
+
+            for h in candidates:
+                new_tp = (~covered_pos & self.coverage_pos[h]).count(1)
+                new_fp = (~covered_neg & self.coverage_neg[h]).count(1)
+                size, tp, fp = self.scores[h]
+
+                delta = size + new_fp - new_tp
+
+                if best is None or delta < best_delta:
+                    best = h
+                    best_delta = delta
+
+            if best is None or best_delta >= 0:
+                break
+
+            size, tp, fp = self.scores[best]
+            total_size += size
+            covered_pos |= self.coverage_pos[best]
+            covered_neg |= self.coverage_neg[best]
+            candidates.remove(best)
+            out.append(best)
+
+
+
+        fn = self.tester.num_pos - covered_pos.count(1)
+        fp = covered_neg.count(1)
+
+        mdl_limit = self.state.best_hypothesis_mdl if self.state.best_hypothesis_mdl else float('inf')
+        prog_mdl = int(total_size + fp + fn)
+
+        if prog_mdl >= mdl_limit:
+            return
+
+        prog = []
+        for prog_hash in out:
+            for rule in self.prog_lookup[prog_hash]:
+                prog.append(rule)
+
+        # pos_covered, neg_covered = self.tester.test_prog_all(new_solution)
+        tp = self.tester.num_pos - fn
+        tn = self.tester.num_neg - fp
+
+        # 5. Update State
+        self.state.best_hypothesis_score = (tp, fn, tn, fp)
+        self.state.best_hypothesis_size = total_size
+        self.state.best_hypothesis = prog
+        self.state.best_hypothesis_mdl = prog_mdl
+
+        logger.info(f'New bound from greedy search: {prog_mdl}')
+        print_incomplete_solution2(prog, total_size, (tp, fn, tn, fp))
+
+        return total_size + fp + fn
+
     def update_best_prog(self, last_combine_stage=False):
         new_progs = self.to_combine
 
@@ -757,19 +876,22 @@ class CombinerMDL:
         if self.settings.recursion_enabled:
             new_solution, cost = self.find_combination(last_combine_stage)
         else:
-            if self.settings.nuwls and not last_combine_stage:
-                new_solution, cost = self.find_combination_norec_maxsat(last_combine_stage)
-            else:
-                new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
+            # self.build_incompatibility()
+            # do a quick greedy search to determine an upperbound
+            self.greedy_upper_bound()
 
-            # print('CALL COMBINER!!!', last_combine_stage)
-            # import time
-            # t1 = time.time()
-            # new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
-            # print('cpsat', time.time()-t1, cost)
-            # t1 = time.time()
-            # new_solution, cost = self.find_combination_norec(last_combine_stage)
-            # print('maxsat', time.time()-t1, cost)
+            if not self.settings.nuwls:
+                logger.info(f'Calling CP solver for noisy combine stage with {len(self.saved_progs)} rules')
+                new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
+                logger.info(f'CP solver finished')
+            else:
+                if last_combine_stage:
+                    logger.info(f'Calling MaxSAT solver for noisy combine stage with {len(self.saved_progs)} rules')
+                else:
+                    logger.info(f'Calling anytime MaxSAT solver for noisy combine stage with {len(self.saved_progs)} rules')
+                new_solution, cost = self.find_combination_norec_maxsat(last_combine_stage)
+                logger.info(f'MaxSAT solver finished')
+
 
         if len(new_solution) == 0:
             return None
