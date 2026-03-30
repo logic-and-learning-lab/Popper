@@ -1138,7 +1138,7 @@ def get_bk_cons(settings, tester):
 
     for p,a in pointless:
         if settings.showcons:
-            logger.output(f'Pointless relation: {p}/{a}')
+            logger.out(f'Pointless relation: {p}/{a}')
         settings.body_preds.remove((p,a))
 
     logger.info(f'Loading recalls')
@@ -1151,7 +1151,7 @@ def get_bk_cons(settings, tester):
         settings.datalog = True
         if settings.showcons:
             for x in recalls:
-                logger.output(f'recall: {x}')
+                logger.out(f'recall: {x}')
         bkcons.extend(recalls)
 
     if settings.datalog:
