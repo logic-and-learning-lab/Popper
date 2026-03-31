@@ -71,6 +71,61 @@ class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
         self.state.best_hypothesis_mdl = current_cost
         print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count))
 
+
+
+class OptPrinter(cp_model.CpSolverSolutionCallback):
+    def __init__(self, rule_vars, fn_vars, fp_vars, num_pos, num_neg,
+                 ruleid_to_rule, ruleid_to_size, state):
+        cp_model.CpSolverSolutionCallback.__init__(self)
+        self.rule_vars = rule_vars
+        self.fn_vars = fn_vars
+        self.fp_vars = fp_vars
+        self.num_pos = num_pos
+        self.num_neg = num_neg
+        self.ruleid_to_rule = ruleid_to_rule
+        self.ruleid_to_size = ruleid_to_size # Needed for size calculation
+        self.state = state
+        self.best_hash = hash(frozenset(state.best_hypothesis))
+        # self.start_time = time.time()
+        # self.solution_count = 0
+
+    def on_solution_callback(self):
+   # 4. Reconstruct Hypothesis
+        hypothesis = frozenset([
+            self.ruleid_to_rule[k]
+            for k, var in self.rule_vars.items()
+            if self.Value(var)
+        ])
+
+        if hash(hypothesis) == self.best_hash:
+            return
+
+        # 1. Calculate Complexity (Size) directly from variables
+        # We sum the size of every rule where the Boolean variable is True
+        current_hypothesis_size = sum(
+            self.ruleid_to_size[k]
+            for k, var in self.rule_vars.items()
+            if self.Value(var)
+        )
+
+        # 2. Extract Error Counts
+        fn_count = sum(self.Value(fn) for fn in self.fn_vars)
+        fp_count = sum(self.Value(fp) for fp in self.fp_vars)
+        tp_count = self.num_pos - fn_count
+        tn_count = self.num_neg - fp_count
+
+        # 3. Objective Value (Total MDL)
+        # current_cost should be equal to (current_hypothesis_size + fn_count + fp_count)
+        current_cost = self.ObjectiveValue()
+
+        # 5. Update State
+        # self.state.best_hypothesis_score = (tp_count, fn_count, tn_count, fp_count)
+        # self.state.best_hypothesis_size = current_hypothesis_size
+        # self.state.best_hypothesis = hypothesis
+        # self.state.best_hypothesis_mdl = current_cost
+        print("OPT")
+        print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count))
+
 class CombinerMDL:
 
     def __init__(self, settings, tester, state):
@@ -595,6 +650,90 @@ class CombinerMDL:
 
         return best_prog, mdl
 
+
+    def find_combination_norec_cp_all_opt(self):
+
+        ruleid_to_rule = {}
+        ruleid_to_size = {}
+
+        num_pos = self.tester.num_pos
+        num_neg = self.tester.num_neg
+
+        rules_covering_pos = [[] for _ in range(num_pos)]
+        rules_covering_neg = [[] for _ in range(num_neg)]
+
+        N = len(self.saved_progs)
+
+        # 1. PARSE RULES
+        for k, prog_hash in enumerate(self.saved_progs, start=1):
+            prog = self.prog_lookup[prog_hash]
+            rule = next(iter(prog))
+            ruleid_to_rule[k] = rule
+            ruleid_to_size[k] = calc_rule_size(rule)
+
+            for ex in self.coverage_pos[prog_hash].search(1):
+                rules_covering_pos[ex].append(k)
+            for ex in self.coverage_neg[prog_hash].search(1):
+                rules_covering_neg[ex].append(k)
+
+        # 2. INITIALIZE CP-SAT MODEL & VARIABLES
+        model = cp_model.CpModel()
+        rule_vars = {k: model.NewBoolVar(f'r_{k}') for k in range(1, N + 1)}
+        fn_vars = [model.NewBoolVar(f'fn_{i}') for i in range(num_pos)]
+        fp_vars = [model.NewBoolVar(f'fp_{j}') for j in range(num_neg)]
+
+        for i in range(num_pos):
+            rules = [rule_vars[k] for k in rules_covering_pos[i]]
+            model.AddBoolOr(rules + [fn_vars[i]])
+
+        for j in range(num_neg):
+            rules = [rule_vars[k] for k in rules_covering_neg[j]]
+            for r_var in rules:
+                model.AddImplication(r_var, fp_vars[j])
+
+        # if self.state.best_hypothesis:
+        #     # print('warm starting')
+        #     best_set = {hash(r) for r in self.state.best_hypothesis}
+        #     for k, var in rule_vars.items():
+        #         rule = ruleid_to_rule[k]
+        #         model.AddHint(var, 1 if hash(rule) in best_set else 0)
+
+        # # 4. OBJECTIVE FUNCTION (MDL)
+        objective_terms = []
+        # Size Cost
+        for k in range(1, N + 1):
+            objective_terms.append(rule_vars[k] * ruleid_to_size[k])
+        # Penalty Costs
+        for fn in fn_vars:
+            objective_terms.append(fn)
+        for fp in fp_vars:
+            objective_terms.append(fp)
+
+        total_mdl_expr = cp_model.LinearExpr.Sum(objective_terms)
+        model.Add(total_mdl_expr == int(self.state.best_hypothesis_mdl))
+
+        # 6. SOLVE
+        solver = cp_model.CpSolver()
+        solver.parameters.num_search_workers = 1
+        solver.parameters.linearization_level = 2
+        solver.parameters.enumerate_all_solutions = True
+
+        print('LAST COMBINER!!!', self.state.best_hypothesis_size)
+        # printer = OptPrinter(rule_vars=rule_vars,ruleid_to_rule=ruleid_to_rule, num_pos=self.tester.num_pos, num_neg=self.tester.num_neg, state=self.state)
+
+        printer = OptPrinter(
+            rule_vars=rule_vars,
+            fn_vars=fn_vars,
+            fp_vars=fp_vars,
+            num_pos=num_pos,
+            num_neg=num_neg,
+            ruleid_to_rule=ruleid_to_rule,
+            ruleid_to_size=ruleid_to_size,
+            state=self.state  # This lets the printer update your global state
+        )
+
+        solver.Solve(model, printer)
+
     # OLD!
     # NEEDS REFACTORING
     def find_combination(self, last_combine_stage=False):
@@ -884,6 +1023,8 @@ class CombinerMDL:
                 logger.info(f'Calling CP solver for noisy combine stage with {len(self.saved_progs)} rules')
                 new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
                 logger.info(f'CP solver finished')
+                # if last_combine_stage:
+                    # self.find_combination_norec_cp_all_opt()
             else:
                 if last_combine_stage:
                     logger.info(f'Calling MaxSAT solver for noisy combine stage with {len(self.saved_progs)} rules')

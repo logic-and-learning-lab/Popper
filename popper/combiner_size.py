@@ -15,7 +15,71 @@ import itertools
 from . import stats
 from . import logger
 from bitarray.util import subset, any_and, ones
-from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size
+from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution2
+
+class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
+    def __init__(self, rule_vars, num_pos, num_neg,
+                 ruleid_to_rule, ruleid_to_size, state):
+        cp_model.CpSolverSolutionCallback.__init__(self)
+        self.rule_vars = rule_vars
+        self.num_pos = num_pos
+        self.num_neg = num_neg
+        self.ruleid_to_rule = ruleid_to_rule
+        self.state = state
+
+    def on_solution_callback(self):
+        # self.solution_count += 1
+        # elapsed_time = time.time() - self.start_time
+
+        hypothesis = [self.ruleid_to_rule[k] for k, var in self.rule_vars.items() if self.Value(var)]
+        current_hypothesis_size = int(self.ObjectiveValue())
+
+
+        # 2. Extract Error Counts
+        fn_count = 0
+        fp_count = 0
+        tp_count = self.num_pos
+        tn_count = self.num_neg
+
+        # 5. Update State
+        self.state.best_hypothesis_score = (tp_count, fn_count, tn_count, fp_count)
+        self.state.best_hypothesis_size = current_hypothesis_size
+        self.state.best_hypothesis = hypothesis
+        # self.state.best_hypothesis_mdl = current_cost
+        print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count))
+
+        # print('MOOOOO')
+
+
+class AllOptPrinter(cp_model.CpSolverSolutionCallback):
+    def __init__(self, rule_vars, ruleid_to_rule, num_pos, num_neg, state):
+        cp_model.CpSolverSolutionCallback.__init__(self)
+        self.rule_vars = rule_vars
+        self.ruleid_to_rule = ruleid_to_rule
+        self.num_pos=num_pos
+        self.num_neg=num_neg
+        self.best_hash = hash(frozenset(state.best_hypothesis))
+
+    def on_solution_callback(self):
+        # self.solution_count += 1
+        # elapsed_time = time.time() - self.start_time
+
+        hypothesis = frozenset([self.ruleid_to_rule[k] for k, var in self.rule_vars.items() if self.Value(var)])
+        # current_hypothesis_size = int(self.ObjectiveValue())
+        current_hypothesis_size = calc_prog_size(hypothesis)
+
+        if hash(hypothesis) == self.best_hash:
+            return
+
+        # 2. Extract Error Counts
+        fn_count = 0
+        fp_count = 0
+        tp_count = self.num_pos
+        tn_count = self.num_neg
+        print('OPTTTTTTT')
+
+        print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count))
+
 
 class CombinerSize:
 
@@ -205,6 +269,8 @@ class CombinerSize:
 
         return best_prog, best_size
 
+
+
     def find_combination_norec_cp(self, last_combine_stage=False):
         cp_mod = cp_model.CpModel()
 
@@ -267,8 +333,17 @@ class CombinerSize:
         if not last_combine_stage:
             solver.parameters.max_time_in_seconds = float(self.settings.anytime_timeout)
 
+        printer = SetCoverProgressPrinter(
+            rule_vars=rule_vars,
+            num_pos=self.tester.num_pos,
+            num_neg=self.tester.num_neg,
+            ruleid_to_rule=ruleid_to_rule,
+            ruleid_to_size=ruleid_to_size,
+            state=self.state  # This lets the printer update your global state
+        )
+
         # 6. SOLVE
-        status = solver.Solve(cp_mod)
+        status = solver.Solve(cp_mod, printer)
 
         # OPTIMAL means it proved it's the best. FEASIBLE means it found a valid
         # solution but timed out before proving there isn't a better one.
@@ -285,6 +360,79 @@ class CombinerSize:
             return best_prog, best_size
 
         return [], False
+
+    def find_combination_norec_cp_all_optimal(self):
+        cp_mod = cp_model.CpModel()
+
+        encoding = []
+        ruleid_to_rule = {}
+        ruleid_to_size = {}
+
+        # Maps positive example index -> list of SAT variables covering it
+        rules_covering_pos_example = defaultdict(list)
+
+        # Maps rule ID -> CP-SAT boolean variable
+        rule_vars = {}
+
+        # k acts as the rule ID
+        for k, prog_hash in enumerate(self.saved_progs, start=1):
+            prog = self.prog_lookup[prog_hash]
+            rule = next(iter(prog))
+
+            # print(format_prog(prog), prog_hash)
+
+            size = calc_rule_size(rule)
+            ruleid_to_rule[k] = rule
+            ruleid_to_size[k] = size
+
+            # 1. Create a CP-SAT Boolean variable for this rule
+            rule_vars[k] = cp_mod.NewBoolVar(f'rule_{k}')
+
+            for ex in self.coverage_pos[prog_hash].search(1):
+                rules_covering_pos_example[ex].append(k)
+
+        # 2. HARD CONSTRAINT: Force the solver to cover every positive example
+        for ex in range(self.tester.num_pos):
+            cov_clause = rules_covering_pos_example.get(ex)
+
+            if cov_clause is None:
+                # print('weird', last_combine_stage)
+                continue
+
+            if len(cov_clause) == 1:
+                # Essential rule: It's the only one covering this example
+                cp_mod.Add(rule_vars[cov_clause[0]] == 1)
+            else:
+                cp_mod.AddBoolOr([rule_vars[k] for k in cov_clause])
+
+        # 3. DEFINE OBJECTIVE: Minimise the total size of the selected rules
+        # Multiply the boolean (0 or 1) by the rule's size
+        total_size_expr = sum(rule_vars[k] * ruleid_to_size[k] for k in rule_vars)
+
+        # for k, prog_hash in enumerate(self.saved_progs, start=1):
+
+        # for rule in self.state.best_hypothesis :
+            # k = hash(frozenset([rule]))
+            # print(rule_vars[k])
+
+        # current_best_size =  if self.state.best_hypothesis_score else float('inf')
+        # cp_mod.Add(total_size_expr <= int(self.state.best_hypothesis_size) + 10)
+        cp_mod.Add(total_size_expr == int(self.state.best_hypothesis_size))
+
+        # moo = []
+
+
+        # 5. SOLVER SETUP
+        solver = cp_model.CpSolver()
+        solver.parameters.num_search_workers = 1
+        solver.parameters.linearization_level = 2
+        solver.parameters.enumerate_all_solutions = True
+
+        printer = AllOptPrinter(rule_vars=rule_vars,ruleid_to_rule=ruleid_to_rule, num_pos=self.tester.num_pos, num_neg=self.tester.num_neg, state=self.state)
+
+        # 6. SOLVE
+        solver.Solve(cp_mod, printer)
+
 
     # GARBAGE AND NEEDS REFACTORING
     def find_combination(self, last_combine_stage=False):
@@ -429,14 +577,11 @@ class CombinerSize:
         if self.settings.recursion_enabled:
             new_solution, size = self.find_combination(last_combine_stage)
         else:
-            # if self.settings.cpsat:
-            #     new_solution, size = self.find_combination_norec_cp(last_combine_stage)
-            # else:
-            #     new_solution, size = self.find_combination_norec_maxsat(last_combine_stage)
-
             if not self.settings.nuwls:
                 logger.info(f'Calling CP solver for noiseless combine stage with {len(self.saved_progs)} rules')
                 new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
+                # if last_combine_stage:
+                    # self.find_combination_norec_cp_all_optimal()
                 logger.info(f'CP solver finished')
             else:
                 if last_combine_stage:
@@ -445,6 +590,7 @@ class CombinerSize:
                     logger.info(f'Calling anytime MaxSAT solver for noiseless combine stage with {len(self.saved_progs)} rules')
                 new_solution, cost = self.find_combination_norec_maxsat(last_combine_stage)
                 logger.info(f'MaxSAT solver finished')
+            size = calc_prog_size(new_solution)
 
         if len(new_solution) == 0:
             return
@@ -464,5 +610,6 @@ class CombinerSize:
             fp = 0
             tn = self.tester.num_neg
             fn = 0
+
 
         return new_solution, size, (tp, fn, tn, fp)
