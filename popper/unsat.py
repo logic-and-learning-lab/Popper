@@ -2,7 +2,7 @@
 # Andrew Cropper, Céline Hocquette:
 # Learning Logic Programs by Finding Minimal Unsatisfiable Subprograms. ECAI 2024: 4295-4302
 
-
+from . import logger
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions
 
 class UnsatCoreFinder:
@@ -17,13 +17,13 @@ class UnsatCoreFinder:
         unsat_cores = self.explain_totally_incomplete(prog)
 
         for subprog, unsat_body in unsat_cores:
-            if self.settings.showcons:
+            if self.settings.verbosity > 2:
                 if len(subprog) > 1:
                     print('\n')
                 for rule in enumerate(subprog):
                     pass
                 for rule in subprog:
-                    print('\t', 'UNSAT:', '\t', format_rule(rule))
+                    logger.debug(f'\t UNSAT: \t {format_rule(rule)}')
 
             if unsat_body:
                 _, body = list(subprog)[0]

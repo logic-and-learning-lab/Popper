@@ -39,10 +39,8 @@ def parse_args():
     parser.add_argument('--max-body', type=int, default=MAX_BODY, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
     parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
     parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
-    parser.add_argument('--showcons', default=False, action='store_true', help='Show constraints deduced during the search')
-    parser.add_argument('--cpsat', default=False, action='store_true', help='Use cpsat solver (default: False)')
     parser.add_argument('--nuwls', default=False, action='store_true', help='Use nuwls solver (default: False)')
-    parser.add_argument('--verbose', '-v', action='count', default=1, help='Increase verbosity (-v or -vv)')
+    parser.add_argument('--verbose', '-v', action='count', default=1, help='Increase verbosity (-v or -vv or -vvv)')
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
@@ -159,10 +157,9 @@ class Settings:
         settings = Settings(**conf)
         return settings
 
-    def __init__(self, cmd_line=False, info=True, stats=True, timeout=TIMEOUT, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, showcons=False, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, kbpath=None, cpsat=False, verbose=1):
+    def __init__(self, cmd_line=False, info=True, stats=True, timeout=TIMEOUT, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, kbpath=None, verbose=1):
 
         self.nuwls = nuwls
-        self.cpsat = cpsat
         self.anytime_timeout = anytime_timeout
         self.bias_file = bias_file
         self.bk_file = bk_file
@@ -177,7 +174,6 @@ class Settings:
         self.pi_enabled = False
         self.recursion_enabled = False
         self.show_stats = stats
-        self.showcons = showcons
         self.timeout = timeout
 
         if noisy:

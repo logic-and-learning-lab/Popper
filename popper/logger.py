@@ -1,9 +1,10 @@
 # logger.py
 import logging
 
+TRACE_LEVEL=4
+
 # 1. Create the instance
 logger = logging.getLogger("popper")
-# logger.setLevel(logging.DEBUG)
 
 # 2. Add your custom logic here (Formatter, Handlers, etc.)
 class SecondsFormatter(logging.Formatter):
@@ -19,21 +20,25 @@ if not logger.handlers:
     logger.addHandler(handler)
     logger.propagate = False
 
-
-# Add this to logger.py
 def set_verbosity(level):
-    """
-    1 = Normal (out)
-    2 = Info (info + out)
-    3 = Detailed (debug + info + out)
-    """
-    if level == 1:
+    if level <= 1:
         logger.setLevel(logging.WARNING)
     elif level == 2:
         logger.setLevel(logging.INFO)
     elif level == 3:
         logger.setLevel(logging.DEBUG)
+    elif level >= 4:
+        logger.setLevel(TRACE_LEVEL)
 
-info = logger.info
-debug = logger.debug
+# Trace needs a tiny helper to allow logger.trace() syntax
+# full debug (vvv)
+def trace(msg, *args, **kwargs):
+    if logger.isEnabledFor(TRACE_LEVEL):
+        logger.log(TRACE_LEVEL, msg, *args, **kwargs)
+
+# normal output
 out = logger.warning
+# a little more explaining what popper is doing (v)
+info = logger.info
+# a little more explaining what constraints popper found (vv)
+debug = logger.debug

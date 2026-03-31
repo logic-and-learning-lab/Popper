@@ -746,9 +746,9 @@ def deduce_bk_cons(settings, tester):
                     out.add(str(atom))
     xs = [x + '.' for x in out]
 
-    if settings.showcons:
+    if settings.verbosity > 2:
         for x in sorted(xs):
-            print('BKCON', x)
+            logger.debug(f'BKCON {x}')
 
     return xs + new_cons
 
@@ -877,8 +877,7 @@ def deduce_type_cons(settings):
         n = len(vs)
         if n > settings.max_vars:
             continue
-        if settings.showcons:
-            print('max_vars', k, len(vs))
+        logger.debug(f'max_vars {k} {len(vs)}')
         con = ":- clause(C), #count{V : var_type(C, V," + k + ")} > " + str(n) + "."
         # print(con)
         yield con
@@ -1137,8 +1136,7 @@ def get_bk_cons(settings, tester):
     pointless = settings.pointless = tester.find_pointless_relations()
 
     for p,a in pointless:
-        if settings.showcons:
-            logger.out(f'Pointless relation: {p}/{a}')
+        logger.info(f'Pointless relation: {p}/{a}')
         settings.body_preds.remove((p,a))
 
     logger.info(f'Loading recalls')
@@ -1149,23 +1147,19 @@ def get_bk_cons(settings, tester):
         settings.datalog = False
     else:
         settings.datalog = True
-        if settings.showcons:
-            for x in recalls:
-                logger.out(f'recall: {x}')
+        for x in recalls:
+            logger.debug(f'recall: {x}')
         bkcons.extend(recalls)
 
     if settings.datalog:
         xs = deduce_non_singletons(settings)
-        if settings.showcons:
-            for x in xs:
-                print('singletons', x)
+        for x in xs:
+            logger.debug(f'singletons {x}')
         bkcons.extend(xs)
 
-
         type_cons = tuple(deduce_type_cons(settings))
-        if settings.showcons:
-            for x in type_cons:
-                print('type_con', x)
+        for x in type_cons:
+            logger.debug(f'type_con {x}')
         bkcons.extend(type_cons)
 
 

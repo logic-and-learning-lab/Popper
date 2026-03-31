@@ -79,9 +79,9 @@ def popper(settings, tester, state, bkcons):
         if stats.stats.total_programs % 10000 == 0:
             tester.janus_clear_cache()
 
-        if settings.debug:
-            logger.debug(f'Program {stats.stats.total_programs}:')
-            logger.debug(format_prog(prog))
+        if settings.verbosity > 3:
+            logger.trace(f'Program {stats.stats.total_programs}:')
+            logger.trace(format_prog(prog))
 
         prog_size = calc_prog_size(prog)
         size_change = check_size_change(state, prog_size)
@@ -192,17 +192,17 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
                     subsumed_progs = subsumer.subsumed_or_covers_too_few(prog, seen=set())
                 pruned_more_general = len(subsumed_progs) > 0
 
-                if settings.showcons and not pruned_more_general:
+                if not pruned_more_general and settings.verbosity > 2:
                     if subsumed:
-                        print('\t', 'SUBSUMED:', '\t', format_prog(prog))
+                        logger.debug(f'\t SUBSUMED: \t {format_prog(prog)}')
                     elif subsumed_by_two:
-                        print('\t', 'SUBSUMED BY TWO:', '\t', format_prog(prog))
+                        logger.debug(f'\t SUBSUMED BY TWO: \t {format_prog(prog)}')
                     elif covers_too_few:
-                        print('\t', 'COVERS TOO FEW:', '\t', format_prog(prog))
+                        logger.debug(f'\t COVERS TOO FEW: \t {format_prog(prog)}')
 
                 for subsumed_prog, message in subsumed_progs:
-                    if settings.showcons:
-                        print('\t', message, '\t', format_prog(prog))
+                    if settings.verbosity > 2:
+                        logger.debug(f'\t {message}: \t {format_prog(prog)}')
                     subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog)
                     new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
@@ -408,8 +408,8 @@ def check_recursive_redundancy(settings, tester, prog):
         if tester.has_redundant_literal(frozenset([rule])):
             add_gen = True
             new_cons.append((Constraint.GENERALISATION, [rule]))
-            if settings.showcons:
-                print('\t', format_rule(rule), '\t', 'has_redundant_literal')
+            if settings.verbosity > 2:
+                logger.debug(f'\t {format_rule(rule)} \t has_redundant_literal')
 
     # remove a subset of theta-subsumed rules when learning recursive programs with more than two rules
     if settings.max_rules > 2:
@@ -432,8 +432,9 @@ def check_redundant_literals(settings, allsatcore_finder, prog, add_spec, pruned
             add_to_combiner_ = False
             add_spec = True
             for x in xs:
-                if settings.showcons:
-                    print('\t', 'REDUCIBLE_1:', '\t', ','.join(format_literal(literal) for literal in x))
+                if settings.verbosity > 2:
+                    _tmp = ','.join(format_literal(literal) for literal in x)
+                    logger.debug(f'\t REDUCIBLE_1 \t {_tmp}')
                 new_cons.append((Constraint.UNSAT, x))
 
     # check whether a rule contains an indiscriminate literal
@@ -445,8 +446,8 @@ def check_redundant_literals(settings, allsatcore_finder, prog, add_spec, pruned
                 add_to_combiner_ = False
                 add_spec = True
                 pruned_more_general = True
-                if settings.showcons:
-                    print('\t', 'REDUCIBLE_2:', '\t', format_prog(bad_prog))
+                if settings.verbosity > 2:
+                    logger.debug('\t REDUCIBLE_2: \t {format_prog(bad_prog)}')
                 new_cons.append((Constraint.SPECIALISATION, bad_prog))
 
     return new_cons, add_spec, pruned_more_general, add_to_combiner_
