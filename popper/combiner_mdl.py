@@ -1020,19 +1020,15 @@ class CombinerMDL:
             self.greedy_upper_bound()
 
             if not self.settings.nuwls:
-                logger.info(f'Calling CP solver for noisy combine stage with {len(self.saved_progs)} rules')
+                if last_combine_stage:
+                    logger.info(f'Calling CP solver for final noisy combine stage with {len(self.saved_progs)} rules')
                 new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
-                logger.info(f'CP solver finished')
                 # if last_combine_stage:
                     # self.find_combination_norec_cp_all_opt()
             else:
                 if last_combine_stage:
-                    logger.info(f'Calling MaxSAT solver for noisy combine stage with {len(self.saved_progs)} rules')
-                else:
-                    logger.info(f'Calling anytime MaxSAT solver for noisy combine stage with {len(self.saved_progs)} rules')
+                    logger.info(f'Calling MaxSAT solver for final noisy combine stage with {len(self.saved_progs)} rules')
                 new_solution, cost = self.find_combination_norec_maxsat(last_combine_stage)
-                logger.info(f'MaxSAT solver finished')
-
 
         if len(new_solution) == 0:
             return None

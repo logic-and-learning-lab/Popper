@@ -69,13 +69,11 @@ Popper can learn from [noisy](https://arxiv.org/pdf/2308.09393.pdf) data with th
  - `--max_vars` maximum number of variables in a rule to `N` (default: 6)
  - `--max_body` maximum number of body literals in a rule to `N` (default: 10)
  - `--stats` shows runtime statistics (default: false)
- - `--debug` runs in debug mode (default: false)
- - `--quiet` runs in quiet mode (default: False)
  - `--timeout` maximum learning time (default: 3600 seconds)
- - `--eval-timeout` a maximum example testing time. This flag only applies when learning recursive rules (default: 0.001 seconds)
- - `--solver {rc2,uwr,wmaxcdcl}`which exact solver to use (default: `rc2`)
- - `--anytime-solver {wmaxcdcl,nuwls}`which anytime solver to use (default: `None`)
- - `--anytime-timeout` sets the maximum time allowed by the anytime solver (default: 10 seconds)
+ - `--verbose, -v        Increase verbosity (-v or -vv or -vvv)
+ - `--nuwls` Use nuwls solver (default: False)
+
+
 
 **Solvers**
 

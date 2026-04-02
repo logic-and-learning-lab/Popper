@@ -34,13 +34,13 @@ class Constraint:
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper is an ILP system based on learning from failures')
     parser.add_argument('kbpath', help='Path to files to learn from')
-    parser.add_argument('--noisy', default=False, action='store_true', help='tell Popper that there is noise')
+    parser.add_argument('--noisy', '-n', default=False, action='store_true', help='Use a noisy (MDL) cost function (default: False)')
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {TIMEOUT})')
     parser.add_argument('--max-body', type=int, default=MAX_BODY, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
     parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
-    parser.add_argument('--stats', default=False, action='store_true', help='Print statistics at end of execution')
     parser.add_argument('--nuwls', default=False, action='store_true', help='Use nuwls solver (default: False)')
-    parser.add_argument('--verbose', '-v', action='count', default=1, help='Increase verbosity (-v or -vv or -vvv)')
+    # parser.add_argument('-v', action='count', default=1, help='Increase verbosity (-v, -vv, or -vvv)')
+    parser.add_argument('-v', action='count', default=1, dest='verbosity', help='Increase verbosity (-v, -vv, or -vvv)')
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
@@ -157,7 +157,7 @@ class Settings:
         settings = Settings(**conf)
         return settings
 
-    def __init__(self, cmd_line=False, info=True, stats=True, timeout=TIMEOUT, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, kbpath=None, verbose=1):
+    def __init__(self, cmd_line=False, info=True, timeout=TIMEOUT, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, kbpath=None, verbosity=1):
 
         self.nuwls = nuwls
         self.anytime_timeout = anytime_timeout
@@ -173,7 +173,6 @@ class Settings:
         self.non_datalog_flag = False
         self.pi_enabled = False
         self.recursion_enabled = False
-        self.show_stats = stats
         self.timeout = timeout
 
         if noisy:
@@ -181,9 +180,11 @@ class Settings:
         else:
             self.batch_size = 1
 
-        self.verbosity=verbose
-        self.debug=verbose==3
-        logger.set_verbosity(verbose)
+        self.verbosity=verbosity
+        self.debug=verbosity==3
+        self.show_stats = self.verbosity>1
+
+        logger.set_verbosity(verbosity)
 
         solver = clingo.Control(['-Wnone'])
         with open(self.bias_file) as f:

@@ -578,18 +578,15 @@ class CombinerSize:
             new_solution, size = self.find_combination(last_combine_stage)
         else:
             if not self.settings.nuwls:
-                logger.info(f'Calling CP solver for noiseless combine stage with {len(self.saved_progs)} rules')
+                if last_combine_stage:
+                    logger.info(f'Calling CP solver for final combine stage with {len(self.saved_progs)} rules')
                 new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
                 # if last_combine_stage:
                     # self.find_combination_norec_cp_all_optimal()
-                logger.info(f'CP solver finished')
             else:
                 if last_combine_stage:
-                    logger.info(f'Calling MaxSAT solver for noiseless combine stage with {len(self.saved_progs)} rules')
-                else:
-                    logger.info(f'Calling anytime MaxSAT solver for noiseless combine stage with {len(self.saved_progs)} rules')
+                    logger.info(f'Calling MaxSAT solver for final noiseless combine stage with {len(self.saved_progs)} rules')
                 new_solution, cost = self.find_combination_norec_maxsat(last_combine_stage)
-                logger.info(f'MaxSAT solver finished')
             size = calc_prog_size(new_solution)
 
         if len(new_solution) == 0:

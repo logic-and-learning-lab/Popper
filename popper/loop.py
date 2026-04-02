@@ -447,7 +447,7 @@ def check_redundant_literals(settings, allsatcore_finder, prog, add_spec, pruned
                 add_spec = True
                 pruned_more_general = True
                 if settings.verbosity > 2:
-                    logger.debug('\t REDUCIBLE_2: \t {format_prog(bad_prog)}')
+                    logger.debug(f'\t REDUCIBLE_2: \t {format_prog(bad_prog)}')
                 new_cons.append((Constraint.SPECIALISATION, bad_prog))
 
     return new_cons, add_spec, pruned_more_general, add_to_combiner_
