@@ -112,15 +112,7 @@ class Tester():
     def test_prog(self, prog, prog_size=None):
         inconsistent = False
 
-        if len(prog) > 1:
-            with self.using(prog):
-                pos_covered_list = query_once('pos_covered(S)')['S']
-                if self.num_neg > 0:
-                    inconsistent = bool_query("inconsistent")
-            pos_covered_bits = bitarray(self.num_pos)
-            pos_covered_bits[pos_covered_list] = 1
-            pos_covered = frozenbitarray(pos_covered_bits)
-        else:
+        if len(prog) == 1:
             pos_covered = self._test_prog_pos(prog)
             if self.num_neg > 0 and pos_covered.any():
                 if self.settings.has_directions:
@@ -129,6 +121,14 @@ class Tester():
                     _, body = next(iter(prog))
                     q = parse_body(body.union(self.neg_literal_set))
                 inconsistent = bool_query(q)
+        else:
+            with self.using(prog):
+                pos_covered_list = query_once('pos_covered(S)')['S']
+                if self.num_neg > 0:
+                    inconsistent = bool_query("inconsistent")
+            pos_covered_bits = bitarray(self.num_pos)
+            pos_covered_bits[pos_covered_list] = 1
+            pos_covered = frozenbitarray(pos_covered_bits)
 
         # cache results
         self.cached_pos_covered[hash(prog)] = pos_covered
@@ -156,11 +156,7 @@ class Tester():
         too_many_fp = False
         inconsistent = False
 
-        if len(prog) > 1:
-            pos_covered, neg_covered = self.test_prog_all(prog)
-            inconsistent = neg_covered.any()
-            tp = pos_covered.count(1)
-        else:
+        if len(prog) == 1:
             # AC: we could push all this reasoning to Prolog to only need a single call
             pos_covered = self._test_prog_pos(prog)
             tp = pos_covered.count(1)
@@ -185,7 +181,10 @@ class Tester():
                 inconsistent = neg_covered.any()
             else:
                 too_few_tp = True
-
+        else:
+            pos_covered, neg_covered = self.test_prog_all(prog)
+            inconsistent = neg_covered.any()
+            tp = pos_covered.count(1)
 
         # @AC, why no cache pos here?
 
@@ -330,8 +329,7 @@ class Tester():
         neg_covered_bits = bitarray(self.num_neg)
         neg_covered_bits[neg_covered] = 1
         neg_covered = frozenbitarray(neg_covered_bits)
-
-    #     return neg_covered
+        return neg_covered
 
     # why twice???
 

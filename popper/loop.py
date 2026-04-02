@@ -12,8 +12,8 @@ from . import stats
 
 def load_generator(settings, state, bkcons):
     if settings.single_solve:
-        # from .gen2 import Generator
-        from .gen5 import Generator
+        from .gen6 import Generator
+        # from .gen8 import Generator
     elif settings.max_rules == 2 and not settings.pi_enabled:
         from .gen3 import Generator
     else:
@@ -62,7 +62,6 @@ def popper(settings, tester, state, bkcons):
     num_pos, num_neg = tester.num_pos, tester.num_neg
     noisy = settings.noisy
 
-    # initialise components depending on cost function
     if noisy:
         state.best_hypothesis_score = (0, num_pos, num_neg, 0)
         state.best_hypothesis_mdl = num_pos
@@ -79,16 +78,19 @@ def popper(settings, tester, state, bkcons):
         if stats.stats.total_programs % 10000 == 0:
             janus_clear_cache()
 
-        if settings.verbosity > 3:
-            logger.trace(f'Program {stats.stats.total_programs}:')
-            logger.trace(format_prog(prog))
-
         prog_size = calc_prog_size(prog)
         size_change = check_size_change(state, prog_size)
 
         # TEST
         with stats.duration('test'):
             test_result = test_prog(prog, prog_size)
+
+        if settings.verbosity > 3:
+            if settings.noisy:
+                logger.trace(f'Program {stats.stats.total_programs} tp:{test_result.tp} fn:{test_result.fn} tn:{test_result.tn} fp:{test_result.fp} size:{prog_size} mdl:{test_result.mdl}')
+            else:
+                logger.trace(f'Program {stats.stats.total_programs} tp:{test_result.tp} fn:{test_result.fn}')
+            logger.trace(format_prog(prog))
 
         # if non-separable hypothesis is perfect, stop
         if not test_result.inconsistent and test_result.tp == num_pos:

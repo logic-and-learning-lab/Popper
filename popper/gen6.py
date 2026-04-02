@@ -1,4 +1,3 @@
-# @AC: I think it would be more efficient if the solver just returns an int for each possible body literal
 import time
 import re
 import clingo
@@ -159,7 +158,6 @@ class Generator:
         solver.ground([('base', [])])
         self.solver = solver
 
-
         # --- NEW CACHING LOGIC ---
         # Pre-parse and map all possible ground Clingo Symbols to your Python Literals
         self.symbol_to_literal = {}
@@ -184,6 +182,10 @@ class Generator:
 
             # print(print_args_str, janus_args_str)
             # print(args[1].name, atom_args)
+
+            # print(pred, args)
+
+            # self.atom_to_clingo[pred, atom_args] = sym
 
             # Key: The clingo.Symbol object itself
             # Value: Your pre-existing Python literal object
@@ -216,7 +218,8 @@ class Generator:
 
             pos_id = sym_atom.literal
             neg_id = -sym_atom.literal
-            # print((True, pred, args))
+            # if
+            # print('cached_clingo_atoms',(True, pred, args[3]))
             # This will now store the exact tuple your constrain method expects
             self.cached_clingo_atoms[(True, pred, args)] = pos_id
             self.cached_clingo_atoms[(False, pred, args)] = neg_id
@@ -226,7 +229,6 @@ class Generator:
         head = self.settings.head_literal
         gen_timer = stats.duration('generate')
         symbol_to_literal = self.symbol_to_literal
-        cached_literals = self.settings.cached_literals
 
         while True:
             with gen_timer:
@@ -248,7 +250,7 @@ class Generator:
             self.model.context.add_nogood([atom])
 
     def constrain(self, cons):
-        all_ground_cons = []
+        all_ground_cons = set()
 
         for xs in cons:
             con_type = xs[0]
@@ -261,64 +263,55 @@ class Generator:
                     ground_cons = self.unsat_constraint2(con_prog)
                 case Constraint.BANISH | Constraint.GENERALISATION:
                     ground_cons = self.build_generalisation_constraint3(con_prog, con_size)
-            all_ground_cons.extend(ground_cons)
+            # all_ground_cons.update(ground_cons)
+            all_ground_cons.update(frozenset(x) for x in ground_cons)
 
         add_nogood = self.model.context.add_nogood
         cached_clingo_atoms = self.cached_clingo_atoms
 
-        if not hasattr(self, 'hits'):
-            self.hits = 0
-            self.misses = 0
-
-        for ground_body in set(all_ground_cons):
-            try:
-                nogood = [cached_clingo_atoms[atom] for atom in ground_body]
-                self.hits += 1
-            except:
-                # means we are trying to add an atom that is not allowed
-                # caused by our naive grounding
-                # for atom in ground_body:
-                #     if atom not in cached_clingo_atoms:
-                #         print('missing atom', atom)
-                self.misses += 1
-
-                continue
-            add_nogood(nogood)
-        print(self.hits, self.misses)
+        for ground_body in all_ground_cons:
+            add_nogood(ground_body)
 
     def unsat_constraint2(self, body):
         # if no types, remap variables
         if len(self.settings.body_types) == 0:
             _, body = remap_variables((None, body))
 
+        cache = self.cached_clingo_atoms
         assignments = self.find_deep_bindings4(body)
         for assignment in assignments:
+            valid_variant = True
             rule = []
             for pred, args in body:
                 args2 = tuple(assignment[x] for x in args)
-                rule.append((True, 'body_literal', (0, pred, len(args), args2)))
-
-            yield frozenset(rule)
+                k = (True, 'body_literal', (0, pred, len(args), args2))
+                clingo_literal = cache.get(k)
+                if clingo_literal is None:
+                    valid_variant = False
+                    break
+                rule.append(clingo_literal)
+            if valid_variant:
+                yield rule
 
     def build_specialisation_constraint3(self, prog, size=None):
         rule = tuple(prog)[0]
         if not size:
             yield from self.find_variants(rule)
             return
-
         for body in self.find_variants(rule):
-            body = list(body)
-            body.append((True, 'program_size_at_least', (size,)))
-            yield frozenset(body)
+            k = (True, 'program_size_at_least', (size,))
+            clingo_literal = self.cached_clingo_atoms[k]
+            yield body + [clingo_literal]
 
     def build_generalisation_constraint3(self, prog, size=None):
         rule = tuple(prog)[0]
         for body in self.find_variants(rule, max_rule_vars=True):
-            body = list(body)
-            body.append((True, 'body_size', (0, len(body))))
+            k = (True, 'body_size', (0, len(body)))
+            body.append(self.cached_clingo_atoms[k])
             if size:
-                body.append((True, 'program_size_at_least', (size,)))
-            yield frozenset(body)
+                k = (True, 'program_size_at_least', (size,))
+                body.append(self.cached_clingo_atoms[k])
+            yield body
 
     def find_variants(self, rule, max_rule_vars=False):
         head, body = rule
@@ -327,14 +320,22 @@ class Generator:
             subset = range(len(head.arguments), len(body_vars | set(head.arguments)))
         else:
             subset = range(len(head.arguments), self.settings.max_vars)
+        cache = self.cached_clingo_atoms
         for xs in permutations(subset, len(body_vars)):
+            valid_variant = True
             xs = head.arguments + xs
             new_body = []
             for pred, args in body:
                 new_args = tuple(xs[arg] for arg in args)
-                new_literal = (True, 'body_literal', (0, pred, len(new_args), new_args))
-                new_body.append(new_literal)
-            yield frozenset(new_body)
+                k = (True, 'body_literal', (0, pred, len(args), new_args))
+                clingo_literal = cache.get(k)
+                if clingo_literal is None:
+                    valid_variant = False
+                    # print('missed', k)
+                    break
+                new_body.append(clingo_literal)
+            if valid_variant:
+                yield new_body
 
     def find_deep_bindings4(self, body):
         head_types = self.settings.head_types
