@@ -1,19 +1,19 @@
 from bitarray.util import subset, ones
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, remap_variables, format_prog, print_incomplete_solution2
-from . tester import Tester
+from . tester import Tester, janus_clear_cache
 from . bkcons import get_bk_cons
 from . unsat import UnsatCoreFinder
 from . allsat import AllSatCoreFinder
 from . subsume import SubsumeChecker
 from . state import SearchState
 from . joiner import Joiner
-
 from . import logger
 from . import stats
 
 def load_generator(settings, state, bkcons):
     if settings.single_solve:
-        from .gen2 import Generator
+        # from .gen2 import Generator
+        from .gen5 import Generator
     elif settings.max_rules == 2 and not settings.pi_enabled:
         from .gen3 import Generator
     else:
@@ -77,7 +77,7 @@ def popper(settings, tester, state, bkcons):
 
         # HORRIBLE HACK DUE TO PROLOG MEMORY LEAK
         if stats.stats.total_programs % 10000 == 0:
-            tester.janus_clear_cache()
+            janus_clear_cache()
 
         if settings.verbosity > 3:
             logger.trace(f'Program {stats.stats.total_programs}:')

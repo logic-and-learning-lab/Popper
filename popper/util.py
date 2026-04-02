@@ -500,38 +500,51 @@ def generalisations(prog, allow_headless=True, recursive=False):
                 new_prog = prog[:i] + new_subrule + prog[i+1:]
                 yield new_prog
 
+
 def order_rule_datalog(head, body):
+    seen_vars = set(head.arguments) if head else set()
+
+    recursive_literals = []
+    body_info = []
+
+    for lit in body:
+        if head and lit.predicate == head.predicate:
+            recursive_literals.append(lit)
+        else:
+            # Pre-calculate set(args) ONCE here to use .issubset() later
+            body_info.append([lit, lit.arguments, lit.predicate, set(lit.arguments)])
+
     ordered_body = []
-    seen_vars = set()
+    local_recalls = recalls
 
-    if head:
-        seen_vars.update(head.arguments)
-        recursive_literals = set(literal for literal in body if literal.predicate == head.predicate)
-    else:
-        recursive_literals = set()
+    while body_info:
+        selected_idx = -1
 
-    body_literals = set(body) - recursive_literals
-
-    while body_literals:
-        selected_literal = None
-        for literal in body_literals:
-            if set(literal.arguments).issubset(seen_vars):
-                selected_literal = literal
+        # 1. FAST PATH: Find first literal where all args are grounded
+        for i, info in enumerate(body_info):
+            # info[3] is the pre-calculated set(args)
+            if info[3].issubset(seen_vars):
+                selected_idx = i
                 break
 
-        if selected_literal == None:
-            selected_literal = min(body_literals, key=lambda x: tmp_score_(seen_vars, x))
+        # 2. SLOW PATH: fallback to score
+        if selected_idx == -1:
+            best_score = float('inf')
+            for i, info in enumerate(body_info):
+                # info[2] is predicate, info[1] is arguments (tuple)
+                key = (info[2], tuple(1 if x in seen_vars else 0 for x in info[1]))
+                score = local_recalls[key]
 
-        ordered_body.append(selected_literal)
-        seen_vars.update(selected_literal.arguments)
-        body_literals.remove(selected_literal)
+                if score < best_score:
+                    best_score = score
+                    selected_idx = i
+
+        # Use pop(i) to maintain the stable relative order of the remaining literals
+        lit, args, _, _ = body_info.pop(selected_idx)
+        ordered_body.append(lit)
+        seen_vars.update(args)
 
     return head, tuple(ordered_body) + tuple(recursive_literals)
-
-def tmp_score_(seen_vars, literal):
-    pred, args = literal
-    # GLOBAL VARIABLE SHITSHOW
-    return recalls[pred, tuple(1 if x in seen_vars else 0 for x in args)]
 
 def order_rule(rule):
     head, body = rule

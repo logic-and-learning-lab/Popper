@@ -164,15 +164,30 @@ class Generator:
         # Pre-parse and map all possible ground Clingo Symbols to your Python Literals
         self.symbol_to_literal = {}
 
+        literal_id = 0
+
         # Iterate only through the atoms we care about to build the lookup table once
         for sym_atom in self.solver.symbolic_atoms.by_signature("body_literal", 4):
             sym = sym_atom.symbol
             args = sym.arguments
+            predicate = args[1].name
             atom_args = tuple(args[3].arguments)
+            # raw_args = tuple(arg.number for arg in atom_args)
+
+            # # Build Janus string: "father(_V0,_V1)"
+            # janus_args_str = ','.join(f'_V{i}' for i in raw_args)
+            # janus_args_str = f'{predicate}({janus_args_str})'
+
+            # # Build Print string: "father(V0,V1)"
+            # print_args_str = ','.join(f'V{i}' for i in raw_args)
+            # print_args_str = f'{predicate}({print_args_str})'
+
+            # print(print_args_str, janus_args_str)
+            # print(args[1].name, atom_args)
 
             # Key: The clingo.Symbol object itself
             # Value: Your pre-existing Python literal object
-            self.symbol_to_literal[sym] = self.settings.cached_literals[args[1].name, atom_args]
+            self.symbol_to_literal[sym] = self.settings.cached_literals[predicate, atom_args]
 
         # self.cached_clingo_atoms2 = {}
         # 1. Add this tiny helper to correctly unpack nested tuples
