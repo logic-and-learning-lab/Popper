@@ -116,6 +116,7 @@ class Tester():
             pos_covered = self._test_prog_pos(prog)
             if self.num_neg > 0 and pos_covered.any():
                 if self.settings.has_directions:
+                    atom_str, body_str = parse_single_rule(prog)
                     q = f'neg_index(_ID, {atom_str}), {body_str}'
                 else:
                     _, body = next(iter(prog))
@@ -294,7 +295,7 @@ class Tester():
     # also called internally by test_prog_noisy
     def test_prog_all(self, prog):
         pos_covered = self._test_prog_pos(prog)
-        neg_covered = self._test_prog_neg(prog)
+        neg_covered = self.test_prog_neg(prog)
         return pos_covered, neg_covered
 
     # ONLY CALLED BY THIS CLASS
@@ -314,7 +315,7 @@ class Tester():
         return pos_covered
 
     # # ONLY CALLED BY JOINER AND THIS CLASS
-    def _test_prog_neg(self, prog):
+    def test_prog_neg(self, prog):
 
         if len(prog) == 1:
             atom_str, body_str = parse_single_rule(prog)
