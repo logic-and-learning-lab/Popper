@@ -31,6 +31,82 @@ from pysat.pb import *
 from pysat.formula import WCNF
 #from pysat.examples.rc2 import RC2
 
+import re
+
+def inline_logic_rules(rules_text, target_predicate):
+    # 1. Parse rules into a dictionary
+    rules = {}
+    pattern = re.compile(r"(\w+)\((.*?)\)\s*:-\s*(.*)\.")
+    all_found_vars = set()
+
+    for line in rules_text.strip().split('\n'):
+        match = pattern.search(line)
+        if not match:
+            continue
+        head_name, head_args, body_str = match.groups()
+
+        # Parse body literals: name(arg1, arg2)
+        body_literals = re.findall(r"(\w+)\((.*?)\)", body_str)
+        parsed_body = []
+        for p_name, p_args in body_literals:
+            args_list = [a.strip() for a in p_args.split(',')]
+            parsed_body.append((p_name, args_list))
+            all_found_vars.update(args_list)
+
+        args_list = [a.strip() for a in head_args.split(',')]
+        rules[head_name] = {'args': args_list, 'body': parsed_body}
+        all_found_vars.update(args_list)
+
+    if target_predicate not in rules:
+        return f"Error: Predicate '{target_predicate}' not found."
+
+    # 2. Determine the starting index for new variables
+    v_ids = [int(v[1:]) for v in all_found_vars if v.startswith('V') and v[1:].isdigit()]
+    var_counter = max(v_ids) if v_ids else 0
+
+    # 3. Perform the inlining
+    root = rules[target_predicate]
+    inlined_literals = []
+    current_vars = set(root['args'])
+
+    for pred, args in root['body']:
+        if pred in rules and pred != target_predicate:
+            sub_rule = rules[pred]
+
+            # Map formal parameters (sub-rule head) to actual parameters (call site)
+            mapping = dict(zip(sub_rule['args'], args))
+
+            for sub_pred, sub_args in sub_rule['body']:
+                new_sub_args = []
+                for sa in sub_args:
+                    if sa in mapping:
+                        # Map to the variable passed in the call
+                        new_sub_args.append(mapping[sa])
+                    elif sa.startswith('V'):
+                        # Local variable in sub-rule: Check for collision
+                        if sa not in mapping:
+                            if sa in current_vars:
+                                var_counter += 1
+                                mapping[sa] = f"V{var_counter}"
+                            else:
+                                mapping[sa] = sa
+                                current_vars.add(sa)
+                        new_sub_args.append(mapping[sa])
+                    else:
+                        # Constants or other types
+                        new_sub_args.append(sa)
+
+                inlined_literals.append(f"{sub_pred}({','.join(new_sub_args)})")
+        else:
+            # Not a rule we can inline, keep as is
+            inlined_literals.append(f"{pred}({','.join(args)})")
+            current_vars.update([a for a in args if a.startswith('V')])
+
+    # 4. Format and return
+    head_str = f"{target_predicate}({','.join(root['args'])})"
+    body_str = ",".join(inlined_literals)
+    return f"{head_str}:- {body_str}."
+
 PB_ENCODING = 5
 CARD_ENCODING = 1
 
@@ -140,6 +216,7 @@ class Joiner:
         if add_to_combiner:
             self.add_consistent_program(pos_covered, prog_size)
         elif add_to_join:
+
             # CALL TEST TO GET NEG EXAMPLES
             neg_covered = self.tester.test_prog_neg(prog)
 
@@ -176,9 +253,12 @@ class Joiner:
                 spec_cons_fragments = self.make_consistent_fragments(max_size=prog_size)
 
                 # add the combinations found by the joiner as consistent programs
-                for [c, p] in spec_cons_fragments:
-                    print("c", c)
-                    print("p", p)
+                for program_, coverage_ in spec_cons_fragments:
+                    x = format_prog(program_)
+                    # print("prog1", x)
+                    head, _ = next(iter(program_))
+                    print('prog2\t', inline_logic_rules(x, head.predicate))
+                    print("coverage\t", coverage_)
                     continue
                     success_sets_combiner[calc_prog_size(c)] += [p]
                     k = hash(c)
@@ -456,7 +536,7 @@ class Joiner:
             program_lits = [self.program_selected_var[p] for p in self.program_selected_var]
             program_weights = [self.progid_to_size[p] for p in self.program_selected_var]
             if len(program_lits) > 0:
-                cnf = PBEnc.atmost(lits=program_lits, weights=program_weights, bound=self.settings.max_literals, top_id=self.top, encoding=PB_ENCODING)
+                cnf = PBEnc.atmost(lits=program_lits, weights=program_weights, bound=self.state.max_literals, top_id=self.top, encoding=PB_ENCODING)
                 for clause in cnf.clauses:
                     encoding.append(clause)
                     self.top = max(self.top, max([abs(lit) for lit in clause]))
@@ -479,8 +559,8 @@ class Joiner:
         encoding.extend(cnf.clauses)
 
         # any combination cannot have a longer size than the size of the current best hypothesis
-        if self.settings.max_literals:
-            size_bound = min([self.settings.max_literals-1, max_size]) if max_size else self.settings.max_literals-1
+        if self.state.max_literals:
+            size_bound = min([self.state.max_literals-1, max_size]) if max_size else self.state.max_literals-1
             program_lits = [self.program_selected_var[p] for p in self.program_selected_var]
             program_weights = [self.progid_to_size[p] for p in self.program_selected_var]
             cnf = PBEnc.atmost(lits=program_lits, weights=program_weights, bound=size_bound-1, top_id=self.top, encoding=PB_ENCODING)
@@ -491,7 +571,7 @@ class Joiner:
             # any incomplete combination cannot have a longer size than the maximum number of literals allowed in a hypothesis minus the min size of
             # rules in the combiner
             # we still search until combiner.min_size as we might need to reduce this value
-            size_bound_partial_complete = max([self.state.min_size, self.settings.max_literals-self.state.min_size-1])
+            size_bound_partial_complete = max([self.state.min_size, self.state.max_literals-self.state.min_size-1])
             if max_size:
                 size_bound_partial_complete = min([size_bound_partial_complete, max_size])
 
@@ -567,7 +647,7 @@ class Joiner:
             unfolded_prog = self.build_unfolded_program(selected)
             # folded_prog = self.build_folded_program(selected_fragments)
             # combination = Combination(unfolded_prog, folded_prog)
-            print(f"found fragment {format_prog(unfolded_prog)} {pos_covered}")
+            # print(f"found fragment {format_prog(unfolded_prog)} {pos_covered}")
             fragments.append([unfolded_prog, pos_covered])
 
             # # Build constraints to prune other models
@@ -600,7 +680,7 @@ class Joiner:
 
             encoding, prog_vars = self.build_encoding_suboptimal(uncovered)
             # print(f"uncovered {[i for i, x in enumerate(uncovered) if x == 1]}")
-            print(f"solving {uncovered.count()} uncovered examples with {len(self.program_selected_var.keys())} programs")
+            # print(f"solving {uncovered.count()} uncovered examples with {len(self.program_selected_var.keys())} programs")
             clause = [self.example_covered_var[i] for i, x in enumerate(uncovered) if x == 1]
             encoding.append(clause)
             soft_clauses = [[self.example_covered_var[x]] for x in self.pos_index]
@@ -608,7 +688,7 @@ class Joiner:
             model = None
             selected, pos_covered = [], set()
             with stats.duration('join solve suboptimal (MaxSAT)'):
-                cost, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, [1 for _ in range(self.tester.num_pos)], self.settings)
+                cost, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, [1 for _ in range(self.tester.num_pos)])
 
             if model is None:
                 break
@@ -634,12 +714,12 @@ class Joiner:
             unfolded_prog = self.build_unfolded_program(selected)
             folded_prog = self.build_folded_program(selected_fragments)
             # combination = Combination(unfolded_prog, folded_prog)
-            print(f"found fragment {format_prog(unfolded_prog)}")
+            # print(f"found fragment {format_prog(unfolded_prog)}")
             fragments.append([unfolded_prog, pos_covered])
 
-            print('START found fragment folded_prog')
-            print(f"{format_prog(folded_prog)}")
-            print('END')
+            # print('START found fragment folded_prog')
+            # print(f"{format_prog(folded_prog)}")
+            # print('END')
 
             # Build constraints to prune other models
             # prevent the solver from finding supersets of the rules selected
@@ -752,10 +832,10 @@ class Joiner:
             models = []
             for size in range(min_size, max_size+1):
                 with stats.duration('update_progs_in_joiner_size'):
-                    if not self.state.min_size or not self.settings.max_literals:
+                    if not self.state.min_size or not self.state.max_literals:
                         max_size_incomplete = None
                     else:
-                        max_size_incomplete = max([self.state.min_size, self.settings.max_literals - self.state.min_size])
+                        max_size_incomplete = max([self.state.min_size, self.state.max_literals - self.state.min_size])
                     only_complete = False if (not max_size_incomplete or size < max_size_incomplete) else True
                     has_programs = self.update_progs_in_joiner_size(size, only_complete=only_complete)
                 if not has_programs:

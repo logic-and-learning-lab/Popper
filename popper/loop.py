@@ -102,7 +102,7 @@ def popper(settings, tester, state, bkcons):
         cons, add_to_combiner = build_constraints(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result)
 
         # JOINER
-        if False:
+        if settings.joiner:
             with stats.duration('join'):
                 join_result = joiner.join(prog, prog_size, test_result, size_change, add_to_combiner)
 

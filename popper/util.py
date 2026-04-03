@@ -39,8 +39,8 @@ def parse_args():
     parser.add_argument('--max-body', type=int, default=MAX_BODY, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
     parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
     parser.add_argument('--nuwls', default=False, action='store_true', help='Use nuwls solver (default: False)')
-    # parser.add_argument('-v', action='count', default=1, help='Increase verbosity (-v, -vv, or -vvv)')
     parser.add_argument('-v', action='count', default=1, dest='verbosity', help='Increase verbosity (-v, -vv, or -vvv)')
+    parser.add_argument('-j', dest='joiner', default=False, action='store_true', help='Use join stage (default: False)')
     return parser.parse_args()
 
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
@@ -157,8 +157,9 @@ class Settings:
         settings = Settings(**conf)
         return settings
 
-    def __init__(self, cmd_line=False, info=True, timeout=TIMEOUT, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, kbpath=None, verbosity=1):
+    def __init__(self, cmd_line=False, info=True, timeout=TIMEOUT, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, kbpath=None, verbosity=1, joiner=False):
 
+        self.joiner=joiner
         self.nuwls = nuwls
         self.anytime_timeout = anytime_timeout
         self.bias_file = bias_file
