@@ -21,7 +21,7 @@ class Program(NamedTuple):
     negated: bool = False
 
 import numbers
-from . util import format_rule, calc_prog_size, format_prog, calc_rule_size, prog_is_recursive, prog_has_invention, Literal
+from . util import format_rule, calc_prog_size, format_prog, calc_rule_size, prog_is_recursive, prog_has_invention, Literal, order_rule
 
 from . import maxsat
 from pysat.formula import IDPool
@@ -32,6 +32,57 @@ from pysat.formula import WCNF
 #from pysat.examples.rc2 import RC2
 
 import re
+
+
+# --- THE ASP LOGIC ---
+ASP_SUB_OPTIMAL = """
+% ==========================================
+
+#show select/1.
+%#show covers_joined/1.
+% #show size/2.
+% 1. GENERATION (Only guess the independent variables)
+% ==========================================
+2 { select(P) : program(P) }.
+
+program(P):- size(P,_).
+neg_ex(E):- misses_neg(_,E).
+
+% ==========================================
+% 2. DETERMINISTIC DERIVATION (No guessing here!)
+% ==========================================
+% The joined rule misses E if ANY selected program misses E.
+misses_joined(E) :- select(P), misses_pos(P, E).
+
+% The joined rule covers E if it is a positive example and does NOT miss it.
+covers_joined(E) :- uncovered(E), not misses_joined(E).
+
+% ==========================================
+% 3. CONSTRAINTS
+% ==========================================
+% Must miss all negative examples
+:- neg_ex(E), { select(P) : misses_neg(P, E) } 0.
+
+% Datalog constraint
+:- datalog_req, head_arg(A), { select(P) : has_arg(P, A) } 0.
+
+% Must cover at least one currently UNCOVERED example
+:- { covers_joined(E) : uncovered(E) } 0.
+
+% Prevent supersets of previously selected combinations
+% :- prev_combo(Id), { not select(P) : combo_prog(Id, P) } 0.
+
+% ==========================================
+% 4. OPTIMIZATION
+% ==========================================
+% 4. OPTIMIZATION
+% Priority 2: Maximise coverage
+#maximize { 1@2, E : covers_joined(E) }.
+
+% Priority 1: Minimise (Sum of sizes - num_selected + 1)
+#minimize { S-1@1, P : select(P), size(P, S) }.
+
+"""
 
 def inline_logic_rules(rules_text, target_predicate):
     # 1. Parse rules into a dictionary
@@ -209,6 +260,8 @@ class Joiner:
         tp = test_result.tp
         settings = self.settings
 
+        head_pred = next(iter(prog))[0].predicate
+
         # add_to_join = inconsistent and not subsumed and not add_spec and tp > 0
         add_to_join = inconsistent and tp > 0
 
@@ -254,18 +307,32 @@ class Joiner:
 
                 # add the combinations found by the joiner as consistent programs
                 for program_, coverage_ in spec_cons_fragments:
+                    # program__ = inline_logic_rules_prog(program_, head_pred)
+                    program_ = inline_logic_rules_ast(program_, head_pred)
                     x = format_prog(program_)
-                    # print("prog1", x)
-                    head, _ = next(iter(program_))
-                    print('prog2\t', inline_logic_rules(x, head.predicate))
-                    print("coverage\t", coverage_)
+
+                    a,b = self.tester.test_prog_all(program_)
+                    print('DEBUG', x, a.count(1))
+                    
+                    # print(program_)
+                    # print(program__)
+                    # print(program___)
+
+                    # print(self.settings.pi_enabled,'self.settings.pi_enabled')
+                    # print('')
+                    # print('1 - ', moo(program_))
+                    # print('2 - ', moo(program__))
+                    # print('3 - ', moo(program___))
+                    # print('x', inline_logic_rules(x, head_pred), coverage_.count(1))
+                    # exit()
+
                     continue
-                    success_sets_combiner[calc_prog_size(c)] += [p]
-                    k = hash(c)
-                    to_combine.add(k)
-                    prog_lookup[k] = c
-                    coverage_pos[k] = p
-                    coverage_neg[k] = zeros(num_neg)
+                    # success_sets_combiner[calc_prog_size(c)] += [p]
+                    # k = hash(c)
+                    # to_combine.add(k)
+                    # prog_lookup[k] = c
+                    # coverage_pos[k] = p
+                    # coverage_neg[k] = zeros(num_neg)
 
 
     def add_program_fragment(self, prog, pos_covered, neg_covered):
@@ -452,56 +519,81 @@ class Joiner:
         self.existing_consistent[size].append(~pos_covered)
 
 
-
     # # TODO: can backtrack and remove programs from the joiner?
     def build_base_encoding(self, pbenc=False, optimal=False, examples=None):
+        """
+        Builds the base SAT encoding for joining rules.
+        Returns a tuple containing the generated clauses and the set of valid programs.
+        """
+        logger.info('build_base_encoding')
+
         if optimal:
-            assert examples is None
+            assert examples is None, "Examples must be None when searching for an optimal solution."
+
         if examples is None:
             examples = ones(self.tester.num_pos)
 
-        # TODO: need this mapping or to rebuild self.program_selected_var
-        # self.prog_var_to_index = dict()
-        # i = len(self.pos_index)+1
-
+        # 1. Determine the universe of programs to consider
         if self.settings.non_datalog:
-            all_progs_pos = set().union(p for i, x in enumerate(examples) for p in self.programs_covering_example[i])
-            all_progs = all_progs_pos
+            # Flatten all programs that cover the given examples into a single set
+            all_progs = {
+                prog
+                for i, _ in enumerate(examples)
+                for prog in self.programs_covering_example[i]
+            }
         else:
             all_progs = set(self.program_selected_var.keys())
-        # print(f"datalog {self.settings.non_datalog} examples {examples.count()} number of programs in join {len(all_progs)}")
 
         clauses = []
-        # if positive example covered then no program not covering that example can be selected
 
-        for i, x in enumerate(examples):
-            if x:
-                for p in self.programs_not_covering_example[i]:
-                    if p in all_progs:
-                        clause = [-self.example_covered_var[i], -self.program_selected_var[p]]
-                        clauses.append(clause)
+        # 2. Constraint: Positive Example Coverage
+        # If the joined rule is to cover example `i`, NO selected fragment can miss it.
+        # Logically: E_i => ~P_p (encoded as ~E_i \/ ~P_p)
+        for i in examples.search(1):
+            for p in self.programs_not_covering_example[i]:
+                if p in all_progs:
+                    clauses.append([-self.example_covered_var[i], -self.program_selected_var[p]])
 
-        # for each negative example we must select at least one program not covering that example
+        # 3. Constraint: Negative Example Consistency
+        # For each negative example, the joined rule must NOT cover it.
+        # Therefore, at least one selected fragment must MISS the negative example.
         for x in self.neg_index:
-            clause = [self.program_selected_var[p] for p in self.programs_not_covering_example[-x-1] if p in all_progs]
-            clauses.append(clause)
-        # datalog constraint: for each variable must select at least one program with that variable
+            neg_ex_key = -x - 1  # Note: Negative examples are stored using negative dictionary keys
+
+            valid_progs_to_miss_neg = [
+                self.program_selected_var[p]
+                for p in self.programs_not_covering_example[neg_ex_key]
+                if p in all_progs
+            ]
+            clauses.append(valid_progs_to_miss_neg)
+
+        # 4. Constraint: Datalog Safety (Optional)
+        # Every variable in the head must appear in at least one selected fragment's body.
         if not self.settings.non_datalog:
-            for x in self.head_args:
-                clause = [self.program_selected_var[p] for p in self.programs_with_arg[x] if p in all_progs]
-                clauses.append(clause)
+            for arg in self.head_args:
+                valid_progs_with_arg = [
+                    self.program_selected_var[p]
+                    for p in self.programs_with_arg[arg]
+                    if p in all_progs
+                ]
+                clauses.append(valid_progs_with_arg)
+
         self.top = self.vpool.top
 
+        # 5. Constraint: Pseudo-Boolean Encoding (Optional)
         if pbenc:
             with stats.duration('pbenc'):
-                count = 0
-                max_s = self.optimal_depth_search+1 if self.optimal else max(self.existing_consistent)+1
+                max_s = self.optimal_depth_search + 1 if self.optimal else max(self.existing_consistent) + 1
+
                 for s in range(max_s):
                     for pos_covered_complement in self.existing_consistent[s]:
-                        clauses.append([self.example_covered_var[i] for i, x in enumerate(pos_covered_complement) if x == 1])
-                        count += 1
+                        clause = [
+                            self.example_covered_var[i]
+                            for i, val in enumerate(pos_covered_complement)
+                            if val == 1
+                        ]
+                        clauses.append(clause)
 
-        # print(f"number of programs in the joiner {len(self.program_selected_var)}")
         return clauses, all_progs
 
 
@@ -521,7 +613,7 @@ class Joiner:
             cost, model = maxsat.exact_maxsat_solve(hard_clauses, soft_clauses, weights, self.settings)
         else:
             cost, model = maxsat.anytime_maxsat_solve(hard_clauses, soft_clauses, weights, self.settings, timeout)
-        
+
         selected = [p for p in self.program_selected_var if lit_is_true(model, self.program_selected_var[p])]
         return selected
 
@@ -635,11 +727,13 @@ class Joiner:
                     pos_covered = pos_covered & self.pos_exs_covered[p]
 
             if self.join_minimize:
+                assert(False)
                 with stats.duration('minimize_size'):
                     selected = self.minimize_size(pos_covered, self.join_minimize_timeout)
             else:
                 with stats.duration('remove_redundancy'):
-                    selected = self.remove_redundant_selected_fragment(selected, pos_covered)
+                    selected2 = self.remove_redundant_selected_fragment(selected, pos_covered)
+                    assert(selected == selected2)
 
             #self.constraints.append(clause)
 
@@ -669,15 +763,184 @@ class Joiner:
         return fragments
 
 
+
+    def solve_encoding_suboptimal_asp(self):
+        state = self.state
+        logger.info('solve_encoding_suboptimal_maxsat_asp')
+
+        fragments = []
+        uncovered = state.uncovered.copy()
+
+        print('uncovered',uncovered)
+
+        # Keep track of combinations found in previous loop iterations
+        # to prevent the solver from finding supersets of them again.
+        # NO NEED I THINK
+        # previous_selections = []
+
+        while uncovered.any():
+            with stats.duration('join solve suboptimal (ASP)'):
+
+
+                # Only consider programs that cover at least ONE currently uncovered example
+                all_progs = set(self.program_selected_var.keys())
+
+                valid_progs = set([p for p in all_progs if (self.pos_exs_covered[p] & uncovered).any()])
+
+                if len(valid_progs) < 2:
+                    return []
+
+                print('rule filtering\t', len(all_progs), len(valid_progs))
+
+                facts = []
+
+                for p in valid_progs:
+                    facts.append(f"size({p}, {self.progid_to_size[p]}).")
+
+
+                # has_some_neg =
+                # Inject Examples and "Miss" facts
+                for i in uncovered.search(1):
+                    facts.append(f"uncovered({i}).")
+                    # if all(p in self.programs_not_covering_example[i] for p in valid_progs):
+                    #     print('NOT GOOD')
+                    #     assert(False)
+
+                    for p in self.programs_not_covering_example[i]:
+                        if p in valid_progs:
+                            facts.append(f"misses_pos({p}, {i}).")
+
+                print('pos example filtering\t', len(uncovered), uncovered.count(1))
+
+                # MORE FILTERING HERE
+                # NEVER ADD PROGRAMS THAT ARE SUBSUMED RELATIVE TO THE UNCOVERED POS EXAMPLES
+
+                # count_neg = 0
+                # count_neg_filter = 0
+                has_neg=False
+                for x in self.neg_index:
+                    neg_key = -x - 1
+                    # count_neg+=1
+                    # neg_coverd_by_something_interesting=False
+                    for p in self.programs_not_covering_example[neg_key]:
+                        # if p in all_progs:
+                        if p in valid_progs:
+                            facts.append(f"misses_neg({p}, {x}).")
+                            has_neg = True
+                            # neg_coverd_by_something_interesting = True
+                        # elif p in all_progs:
+                            # print('skipped something')
+                    # if neg_coverd_by_something_interesting:
+                        # count_neg_filter +=1
+                        # facts.append(f"neg_ex({x}).")
+
+                # print('neg example filtering\t', count_neg, count_neg_filter)
+
+                if not has_neg:
+                    # print("POO")
+                    return  []
+                        # exit()
+
+                # Inject Datalog facts
+                if not self.settings.non_datalog:
+                    facts.append("datalog_req.")
+                    for arg in self.head_args:
+                        safe_arg = str(arg).replace('V', 'v')
+                        facts.append(f"head_arg({safe_arg}).")
+                        for p in self.programs_with_arg[arg]:
+                            if p in valid_progs:
+                                facts.append(f"has_arg({p}, {safe_arg}).")
+
+                # Inject historical constraints (no supersets)
+                # AC: I THINK THIS IS NO LONGER POSSIBLE DUE TO THE SET COVERING IDEA
+                # for combo_id, prev_sel in enumerate(previous_selections):
+                #     facts.append(f"prev_combo({combo_id}).")
+                #     for p in prev_sel:
+                #         facts.append(f"combo_prog({combo_id}, {p}).")
+
+                facts = "\n".join(facts)
+                encoding = facts + '\n' + ASP_SUB_OPTIMAL
+
+                print('writing debug')
+                with open('debug.pl', 'w') as f:
+                    f.write(encoding)
+
+
+                ctl = clingo.Control([])
+                ctl.add("base", [], encoding)
+                ctl.ground([("base", [])])
+
+                optimal_selected = []
+                def on_model(m):
+                    nonlocal optimal_selected
+                    # Clingo calls this repeatedly as it finds better models.
+                    # The last one it finds is the mathematical optimum.
+                    optimal_selected = [a.arguments[0].number for a in m.symbols(atoms=True) if a.name == "select"]
+
+                ctl.solve(on_model=on_model)
+
+            # If no model is found, we cannot cover any more examples. Break.
+            if not optimal_selected:
+                break
+
+            # exit()
+
+            selected = optimal_selected
+
+            # --- POST-PROCESSING (Matching original logic) ---
+            # Recompute actual coverage strictly using reduce intersection
+            # pos_covered = reduce(lambda a, b: a & b, [self.pos_exs_covered[s] for s in selected])
+
+            pos_covered = bitarray(self.pos_exs_covered[selected[0]].copy())
+            print('POS_COVERED.COUNT', pos_covered.count(1))
+            for s in selected[1:]:
+                pos_covered &= self.pos_exs_covered[s]
+
+            uncovered = uncovered & ~pos_covered
+            assert pos_covered.count() > 0
+
+            if self.join_minimize:
+                assert(False)
+                # WHAT IS THIS?
+                with stats.duration('minimize_size'):
+                    selected = self.minimize_size(pos_covered, self.join_minimize_timeout)
+            else:
+                # WHAT IS THIS?
+                with stats.duration('remove_redundancy'):
+                    selected2 = self.remove_redundant_selected_fragment(selected, pos_covered)
+                    assert(selected == selected2)
+
+            # Re-verify pos_covered after minimization/redundancy removal
+            pos_covered = reduce(lambda a, b: a & b, [self.pos_exs_covered[s] for s in selected])
+
+            unfolded_prog = self.build_unfolded_program(selected)
+            fragments.append([unfolded_prog, pos_covered])
+
+            # Save this selection to block it in the next loop iteration
+            # NO NEED
+            # previous_selections.append(selected)
+
+            if (~pos_covered).count() > 0:
+                combination_size = calc_prog_size(unfolded_prog)
+                self.add_consistent_program(pos_covered, combination_size)
+
+        logger.debug(f"number of fragments found with joiner: {len(fragments)}")
+        return fragments
+
     # suboptimal encoding: tries to find at least one combination covering each positive example
     # minimize size of each combination found
     def solve_encoding_suboptimal_maxsat(self):
+        state = self.state
+        logger.info('solve_encoding_suboptimal_maxsat')
 
         fragments = []
-        uncovered = ones(self.tester.num_pos)
+        # uncovered = ones(self.tester.num_pos)
+        uncovered = state.uncovered
+
+        # print(uncovered, uncovered2)
+
 
         while uncovered.any():
-
             encoding, prog_vars = self.build_encoding_suboptimal(uncovered)
             # print(f"uncovered {[i for i, x in enumerate(uncovered) if x == 1]}")
             # print(f"solving {uncovered.count()} uncovered examples with {len(self.program_selected_var.keys())} programs")
@@ -777,7 +1040,7 @@ class Joiner:
 
             count += 1
             self.constraints.append(clause)
-            
+
             # if self.join_minimize:
             #     selected = self.minimize_size(pos_covered, self.join_minimize_timeout)
 
@@ -809,18 +1072,24 @@ class Joiner:
 
 
     def make_consistent_fragments(self, min_size=None, max_size=None):
+        print('make_consistent_fragments', min_size, max_size)
         if not min_size:
             min_size = self.optimal_depth_search
         else:
             min_size = max(min_size, self.optimal_depth_search)
+
         # if we do not yet have a solution, only try to find at least one fragment which cover each positive example
         if not self.state.solution_found:
-            # with stats.duration('build_encoding_subopt'):
-            #     model = self.build_encoding_suboptimal()
             with stats.duration('solve_encoding_subopt'):
-                return self.solve_encoding_suboptimal_maxsat()
+                # return self.solve_encoding_suboptimal_maxsat()
+                return self.solve_encoding_suboptimal_asp()
+
+        # TMP!!!
+        return []
+
         # otherwise find all possible fragments (up to some size), as we look for an optimal solution
-        else:
+        # else:
+        if True:
             self.optimal = True
             if not self.deleted_cover_one:
                 # delete programs which cover only one positive example when we switch from suboptimal to optimal joiner
@@ -949,3 +1218,129 @@ class Joiner:
         # AC CHANGED
         return rules, Literal(new_pred, head_args)
 
+
+
+def inline_logic_rules_prog(program_, target_predicate):
+    """
+    Inlines invented predicates in a program_ frozenset into the target predicate's rule.
+    Returns a frozenset containing the single inlined rule as (head Literal, frozenset body Literals).
+    """
+    rules = {}
+    for head, body in program_:
+        rules[head.predicate] = (head, list(body))
+
+    if target_predicate not in rules:
+        return None
+
+    # Find the highest variable index to avoid collisions when minting fresh vars.
+    max_var = max(
+        a
+        for head, body in program_
+        for lit in [head] + list(body)
+        for a in lit.arguments
+        if isinstance(a, int)
+    )
+    var_counter = max_var
+
+    root_head, root_body = rules[target_predicate]
+    inlined_body = []
+
+    for lit in root_body:
+        if lit.predicate in rules and lit.predicate != target_predicate:
+            sub_head, sub_body = rules[lit.predicate]
+
+            mapping = dict(zip(sub_head.arguments, lit.arguments))
+
+            for sub_lit in sub_body:
+                new_args = []
+                for a in sub_lit.arguments:
+                    if a in mapping:
+                        new_args.append(mapping[a])
+                    else:
+                        var_counter += 1
+                        mapping[a] = var_counter
+                        new_args.append(var_counter)
+                inlined_body.append(Literal(sub_lit.predicate, tuple(new_args)))
+        else:
+            inlined_body.append(lit)
+
+    return frozenset({(root_head, frozenset(inlined_body))})
+
+
+def inline_logic_rules_ast(program_, target_predicate):
+    """
+    Inlines logic rules operating directly on a program object.
+    Returns the AST (frozenset of rules) containing the inlined target rule.
+    """
+    rules = {}
+    max_var = -1
+
+    # 1. Parse the program objects into a dictionary and find the max variable ID
+    for head, body in program_:
+        rules[head.predicate] = {
+            'head_literal': head,
+            'args': head.arguments,
+            'body': body
+        }
+
+        # Find the highest integer variable to avoid collisions globally
+        for arg in head.arguments:
+            if isinstance(arg, int) and arg > max_var:
+                max_var = arg
+        for lit in body:
+            for arg in lit.arguments:
+                if isinstance(arg, int) and arg > max_var:
+                    max_var = arg
+
+    if target_predicate not in rules:
+        raise ValueError(f"Predicate '{target_predicate}' not found in program.")
+
+    # 2. Perform the inlining
+    root = rules[target_predicate]
+    inlined_body_literals = []
+    current_vars = set(root['args'])
+
+    # Start generating new variables strictly above the highest known variable ID
+    var_counter = max(max_var, 0)
+
+    # Extract the Literal constructor dynamically to ensure type matching
+    Literal = type(root['head_literal'])
+
+    for lit in root['body']:
+        if lit.predicate in rules and lit.predicate != target_predicate:
+            sub_rule = rules[lit.predicate]
+
+            # Map formal parameters (sub-rule head args) to actual parameters (call site args)
+            mapping = dict(zip(sub_rule['args'], lit.arguments))
+
+            for sub_lit in sub_rule['body']:
+                new_sub_args = []
+                for sa in sub_lit.arguments:
+                    if sa in mapping:
+                        # Map to the variable passed in the call
+                        new_sub_args.append(mapping[sa])
+                    elif isinstance(sa, int):
+                        # Local variable in the sub-rule: Check for collision
+                        if sa in current_vars:
+                            var_counter += 1
+                            mapping[sa] = var_counter
+                        else:
+                            mapping[sa] = sa
+                            current_vars.add(sa)
+                        new_sub_args.append(mapping[sa])
+                    else:
+                        # Constants or other types
+                        new_sub_args.append(sa)
+
+                # Create a new Literal object for the inlined body
+                new_literal = Literal(predicate=sub_lit.predicate, arguments=tuple(new_sub_args))
+                inlined_body_literals.append(new_literal)
+        else:
+            # Not an invented rule we can inline, keep the literal object as is
+            inlined_body_literals.append(lit)
+            current_vars.update([a for a in lit.arguments if isinstance(a, int)])
+
+    # 3. Construct and return the new AST
+    inlined_rule = (root['head_literal'], frozenset(inlined_body_literals))
+
+    return frozenset({inlined_rule})
