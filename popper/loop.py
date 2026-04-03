@@ -13,7 +13,6 @@ from . import stats
 def load_generator(settings, state, bkcons):
     if settings.single_solve:
         from .gen6 import Generator
-        # from .gen8 import Generator
     elif settings.max_rules == 2 and not settings.pi_enabled:
         from .gen3 import Generator
     else:
