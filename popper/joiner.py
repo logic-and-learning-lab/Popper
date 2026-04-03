@@ -5,14 +5,13 @@
 
 import collections
 from collections import defaultdict
-import time
-from itertools import combinations
-from bitarray import bitarray, frozenbitarray
+from bitarray import bitarray
 from bitarray.util import ones
 from bitarray.util import subset
 import clingo
 from typing import NamedTuple
 from functools import reduce
+from . tester import TestResult
 from . import stats
 from . import logger
 
@@ -20,8 +19,7 @@ class Program(NamedTuple):
     rules: tuple
     negated: bool = False
 
-import numbers
-from . util import format_rule, calc_prog_size, format_prog, calc_rule_size, prog_is_recursive, prog_has_invention, Literal, order_rule
+from . util import format_rule, calc_prog_size, format_prog, prog_is_recursive, prog_has_invention, Literal
 
 from . import maxsat
 from pysat.formula import IDPool
@@ -265,6 +263,8 @@ class Joiner:
         # add_to_join = inconsistent and not subsumed and not add_spec and tp > 0
         add_to_join = inconsistent and tp > 0
 
+        
+        num_pos = self.tester.num_pos
 
         if add_to_combiner:
             self.add_consistent_program(pos_covered, prog_size)
@@ -309,10 +309,27 @@ class Joiner:
                 for program_, coverage_ in spec_cons_fragments:
                     # program__ = inline_logic_rules_prog(program_, head_pred)
                     program_ = inline_logic_rules_ast(program_, head_pred)
-                    x = format_prog(program_)
+                    # x = format_pirog(program_)
+                    # a,b = self.tester.test_prog_all(program_)
+                    # print('DEBUG', x, a.count(1))
 
-                    a,b = self.tester.test_prog_all(program_)
-                    print('DEBUG', x, a.count(1))
+                    tp = coverage_.count(1)
+                    fn = num_pos-tp
+                    
+                    
+                    yield program_, calc_prog_size(program_), TestResult(
+                    tp=tp,
+                    fn=fn,
+                    tn=None,
+                    fp=None,
+                    pos_covered=coverage_,
+                    neg_covered=None,
+                    inconsistent=False,
+                    conf_matrix=(tp, fn, None, None)
+                    )
+                
+
+                    # yield program_, calc_prog_size(program_), 
                     
                     # print(program_)
                     # print(program__)
@@ -766,12 +783,12 @@ class Joiner:
 
     def solve_encoding_suboptimal_asp(self):
         state = self.state
-        logger.info('solve_encoding_suboptimal_maxsat_asp')
+        # logger.info('solve_encoding_suboptimal_maxsat_asp')
 
         fragments = []
         uncovered = state.uncovered.copy()
 
-        print('uncovered',uncovered)
+        # print('uncovered',uncovered)
 
         # Keep track of combinations found in previous loop iterations
         # to prevent the solver from finding supersets of them again.
@@ -790,7 +807,7 @@ class Joiner:
                 if len(valid_progs) < 2:
                     return []
 
-                print('rule filtering\t', len(all_progs), len(valid_progs))
+                # print('rule filtering\t', len(all_progs), len(valid_progs))
 
                 facts = []
 
@@ -810,7 +827,7 @@ class Joiner:
                         if p in valid_progs:
                             facts.append(f"misses_pos({p}, {i}).")
 
-                print('pos example filtering\t', len(uncovered), uncovered.count(1))
+                # print('pos example filtering\t', len(uncovered), uncovered.count(1))
 
                 # MORE FILTERING HERE
                 # NEVER ADD PROGRAMS THAT ARE SUBSUMED RELATIVE TO THE UNCOVERED POS EXAMPLES
@@ -861,9 +878,9 @@ class Joiner:
                 facts = "\n".join(facts)
                 encoding = facts + '\n' + ASP_SUB_OPTIMAL
 
-                print('writing debug')
-                with open('debug.pl', 'w') as f:
-                    f.write(encoding)
+                # print('writing debug')
+                # with open('debug.pl', 'w') as f:
+                    # f.write(encoding)
 
 
                 ctl = clingo.Control([])
@@ -892,7 +909,7 @@ class Joiner:
             # pos_covered = reduce(lambda a, b: a & b, [self.pos_exs_covered[s] for s in selected])
 
             pos_covered = bitarray(self.pos_exs_covered[selected[0]].copy())
-            print('POS_COVERED.COUNT', pos_covered.count(1))
+            # print('POS_COVERED.COUNT', pos_covered.count(1))
             for s in selected[1:]:
                 pos_covered &= self.pos_exs_covered[s]
 
@@ -1072,7 +1089,7 @@ class Joiner:
 
 
     def make_consistent_fragments(self, min_size=None, max_size=None):
-        print('make_consistent_fragments', min_size, max_size)
+        # print('make_consistent_fragments', min_size, max_size)
         if not min_size:
             min_size = self.optimal_depth_search
         else:

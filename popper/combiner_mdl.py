@@ -15,6 +15,7 @@ from . import logger
 from bitarray.util import subset, any_and, ones, zeros
 from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution2
 import time
+from . state import update_best_hypothesis
 
 POS_EXAMPLE_WEIGHT = 1
 NEG_EXAMPLE_WEIGHT = 1
@@ -166,33 +167,32 @@ class CombinerMDL:
 
         # self.load_solver()
 
-    def combine(self, prog, prog_size, test_result, size_change, add_to_combiner, last_combine_stage=False):
-        add_to_combiner = add_to_combiner and self.decide_whether_to_combine(prog, prog_size, test_result)
-        state = self.state
-
-        if add_to_combiner:
+    def add_prog(self, prog, prog_size, test_result):
+        if self.decide_whether_to_combine(prog, prog_size, test_result):
+            state = self.state
+            
             # MOVE SOMEWHERE ELSE LATER
             if state.min_size is None:
                 state.min_size = prog_size
             self.to_combine.add(hash(prog))
 
+    def combine(self, size_change, last_combine_stage=False):        
+        
         call_combine = len(self.to_combine) > 0 and (len(self.to_combine) >= self.settings.batch_size or size_change)
-
-        combine_result1 = None
+        
         if self.settings.recursion_enabled:
             call_combine = len(self.to_combine) > 0
 
-        if call_combine:
-            self.filter_combine_programs(self.to_combine)
+        if not call_combine:
+            return False
+        
+        self.filter_combine_programs(self.to_combine)
 
-            with stats.duration('combine'):
-                combine_result2 = self.update_best_prog(last_combine_stage=last_combine_stage)
-
-            self.to_combine.clear()
-
-            if combine_result2:
-                return combine_result2
-        return combine_result1
+        with stats.duration('combine'):
+            combine_result = self.update_best_prog(last_combine_stage=last_combine_stage)
+        self.to_combine.clear()
+        
+        return combine_result
 
     def build_incompatibility(self):
         """
@@ -1010,7 +1010,7 @@ class CombinerMDL:
 
         self.saved_progs.update(new_progs)
         if not self.saved_progs:
-            return
+            return False
 
         if self.settings.recursion_enabled:
             new_solution, cost = self.find_combination(last_combine_stage)
@@ -1031,11 +1031,10 @@ class CombinerMDL:
                 new_solution, cost = self.find_combination_norec_maxsat(last_combine_stage)
 
         if len(new_solution) == 0:
-            return None
+            return False
 
         if cost > self.state.best_hypothesis_mdl:
             assert(False)
-            return None
 
         new_solution = reduce_prog(new_solution)
         pos_covered, neg_covered = self.tester.test_prog_all(new_solution)
@@ -1045,4 +1044,5 @@ class CombinerMDL:
         fn = self.tester.num_pos - tp
         size = calc_prog_size(new_solution)
 
-        return new_solution, size, (tp, fn, tn, fp)
+        update_best_hypothesis(self.settings, self.state, new_solution, size, (tp, fn, tn, fp))
+        return True

@@ -1,20 +1,15 @@
 # Code and ideas from the papers:
+# Andrew Cropper, Céline Hocquette: # Learning Logic Programs by Combining Programs. ECAI 2023: 501-508
+# Céline Hocquette, Andreas Niskanen, Matti Järvisalo, Andrew Cropper: # Learning MDL Logic Programs from Noisy Data. AAAI 2024: 10553-10561
 
-# Andrew Cropper, Céline Hocquette:
-# Learning Logic Programs by Combining Programs. ECAI 2023: 501-508
-
-# Céline Hocquette, Andreas Niskanen, Matti Järvisalo, Andrew Cropper:
-# Learning MDL Logic Programs from Noisy Data. AAAI 2024: 10553-10561
-
-import time
 from collections import defaultdict
 from ortools.sat.python import cp_model
 from . import maxsat
 from pysat.formula import IDPool
-import itertools
 from . import stats
 from . import logger
-from bitarray.util import subset, any_and, ones
+from . state import update_best_hypothesis
+from bitarray.util import subset, any_and
 from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution2
 
 class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
@@ -33,7 +28,6 @@ class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
 
         hypothesis = [self.ruleid_to_rule[k] for k, var in self.rule_vars.items() if self.Value(var)]
         current_hypothesis_size = int(self.ObjectiveValue())
-
 
         # 2. Extract Error Counts
         fn_count = 0
@@ -115,56 +109,61 @@ class CombinerSize:
 
         # self.load_solver()
 
-    def combine(self, prog, prog_size, test_result, size_change, add_to_combiner, last_combine_stage=False):
+    def add_prog(self, prog, prog_size, test_result):
         state = self.state
         pos_covered = test_result.pos_covered
+        
+        self.filter_combine_programs(prog, prog_size, pos_covered)
 
-        if add_to_combiner:
-            self.filter_combine_programs(prog, prog_size, pos_covered)
+        # UPDATE STATE
+        # MOVE SOMEWHERE ELSE LATER
+        if state.min_size is None:
+            state.min_size = prog_size
 
-            # UPDATE STATE
-            # MOVE SOMEWHERE ELSE LATER
-            if state.min_size is None:
-                state.min_size = prog_size
+        k = hash(prog)
+        state.success_sets[pos_covered] = prog_size
+        self.success_sets_aux[pos_covered] = k
+        self.coverage_pos[k] = pos_covered
+        self.prog_lookup[k] = prog
 
-            k = hash(prog)
-            state.success_sets[pos_covered] = prog_size
-            self.success_sets_aux[pos_covered] = k
-            self.coverage_pos[k] = pos_covered
-            self.prog_lookup[k] = prog
+        for p, s in self.state.success_sets.items():
+            if p == pos_covered:
+                continue
+            self.state.paired_success_sets[s + prog_size].add(p | pos_covered)
 
-            for p, s in self.state.success_sets.items():
-                if p == pos_covered:
-                    continue
-                self.state.paired_success_sets[s + prog_size].add(p | pos_covered)
+        self.to_combine.add(hash(prog))
 
-            self.to_combine.add(hash(prog))
+        if state.solution_found:
+            return False
+        
+        if any_and(state.uncovered, pos_covered):
+            if state.best_hypothesis:
+                new_hypothesis = state.best_hypothesis | prog
+            else:
+                new_hypothesis = prog
+            state.uncovered &= ~pos_covered
+            fn = state.uncovered.count(1)
+            tp = self.tester.num_pos - fn
+            new_hypothesis_size = calc_prog_size(new_hypothesis)
+            conf_matrix = (tp, fn, self.tester.num_neg, 0)            
+            update_best_hypothesis(self.settings, self.state, new_hypothesis, new_hypothesis_size, conf_matrix)
 
-        call_combine = len(self.to_combine) > 0 and state.solution_found and (len(self.to_combine) >= self.settings.batch_size or size_change)
+            if fn == 0:
+                return self._combine(False)
+            
+        return False
 
-        combine_result1 = None
-        if add_to_combiner and not state.solution_found:
-            if any_and(state.uncovered, pos_covered):
-                if state.best_hypothesis:
-                    tmp = state.best_hypothesis | prog
-                else:
-                    tmp = prog
-                state.uncovered &= ~pos_covered
-                fn = state.uncovered.count(1)
-                tp = self.tester.num_pos - fn
-                hypothesis_size = calc_prog_size(tmp)
-                combine_result1 = tmp, hypothesis_size, (tp, fn, self.tester.num_neg, 0)
-                call_combine = fn == 0
-
+    def _combine(self, last_combine_stage):
+        with stats.duration('combine'):
+            x = self.update_best_prog(last_combine_stage=last_combine_stage)
+        self.to_combine.clear()
+        return x
+    
+    def combine(self, size_change, last_combine_stage=False):
+        call_combine = len(self.to_combine) > 0 and self.state.solution_found and (len(self.to_combine) >= self.settings.batch_size or size_change)
         if call_combine:
-            with stats.duration('combine'):
-                combine_result2 = self.update_best_prog(last_combine_stage=last_combine_stage)
-
-            self.to_combine.clear()
-
-            if combine_result2:
-                return combine_result2
-        return combine_result1
+            return self._combine(last_combine_stage)
+        return False
 
     # delete programs from the combiner (or the list of programs to be combined) which are worse than this new program
     def filter_combine_programs(self, prog, prog_size, pos_covered):
@@ -572,7 +571,7 @@ class CombinerSize:
 
         self.saved_progs.update(new_progs)
         if not self.saved_progs:
-            return
+            return False
 
         if self.settings.recursion_enabled:
             new_solution, size = self.find_combination(last_combine_stage)
@@ -590,7 +589,7 @@ class CombinerSize:
             size = calc_prog_size(new_solution)
 
         if len(new_solution) == 0:
-            return
+            return False
 
         if self.state.solution_found and size > self.state.best_hypothesis_size:
             assert(False)
@@ -608,5 +607,6 @@ class CombinerSize:
             tn = self.tester.num_neg
             fn = 0
 
+        update_best_hypothesis(self.settings, self.state, new_solution, size, (tp, fn, tn, fp))
 
-        return new_solution, size, (tp, fn, tn, fp)
+        return True

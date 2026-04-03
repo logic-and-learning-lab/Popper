@@ -5,7 +5,7 @@ from . bkcons import get_bk_cons
 from . unsat import UnsatCoreFinder
 from . allsat import AllSatCoreFinder
 from . subsume import SubsumeChecker
-from . state import SearchState
+from . state import SearchState, update_best_hypothesis
 from . joiner import Joiner
 from . import logger
 from . import stats
@@ -27,23 +27,6 @@ def load_combiner(settings, tester, state):
         from . combiner_size import CombinerSize
         return CombinerSize(settings, tester, state)
 
-def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix):
-    if hypothesis != state.best_hypothesis and conf_matrix != state.best_hypothesis_score:
-        print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
-    state.best_hypothesis_score = conf_matrix
-    state.best_hypothesis_size = hypothesis_size
-    state.best_hypothesis = hypothesis
-    _, fn, _, fp = conf_matrix
-
-    if settings.noisy:
-        mdl = mdl_score(fn, fp, hypothesis_size)
-        state.best_hypothesis_mdl = mdl
-        state.max_literals = mdl - 1
-    elif fp == 0 and fn == 0:
-        state.solution_found = True
-        state.max_literals = hypothesis_size - 1
-        state.min_pos_coverage = 2
-
 def check_size_change(state, prog_size):
     if state.search_depth == prog_size:
         return False
@@ -56,7 +39,7 @@ def popper(settings, tester, state, bkcons):
     allsatcore_finder = AllSatCoreFinder(settings, tester)
     subsumer = SubsumeChecker(settings, tester, state)
     generator = load_generator(settings, state, bkcons)
-    combine_helper = load_combiner(settings, tester, state)
+    combiner = load_combiner(settings, tester, state)
     joiner = Joiner(settings, tester, state)
     num_pos, num_neg = tester.num_pos, tester.num_neg
     noisy = settings.noisy
@@ -98,20 +81,24 @@ def popper(settings, tester, state, bkcons):
             return
 
         # BUILD CONSTRAINTS
-        cons, add_to_combiner = build_constraints(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result)
+        cons, add_to_combiner = build_constraints(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combiner, test_result)
+
+        if add_to_combiner:
+            combiner.add_prog(prog, prog_size, test_result)
 
         # JOINER
         if settings.joiner:
             with stats.duration('join'):
-                join_result = joiner.join(prog, prog_size, test_result, size_change, add_to_combiner)
+                for join_res in joiner.join(prog, prog_size, test_result, size_change, add_to_combiner):
+                    join_prog, _, _ = join_res
+                    print('JOIN_PROG',format_prog(join_prog))
+                    combiner.add_prog(*join_res)
 
-        # COMBINE
-        combine_result = combine_helper.combine(prog, prog_size, test_result, size_change, add_to_combiner)
+        # COMBINER
+        new_hyp = combiner.combine(size_change)
 
         # IF NEW HYPOTHESIS
-        if combine_result:
-            update_best_hypothesis(settings, state, *combine_result)
-
+        if new_hyp:
             # AC: TRY TO REFACTOR OUT
             if noisy:
                 cons.extend(build_cons_previous_hypotheses(state.best_hypothesis_mdl, prog_size, num_pos, num_neg, state))
@@ -127,10 +114,7 @@ def popper(settings, tester, state, bkcons):
 
     # LAST COMBINE STAGE
     with stats.duration('combine'):
-        combine_result = combine_helper.update_best_prog(last_combine_stage=True)
-
-    if combine_result:
-        update_best_hypothesis(settings, state, *combine_result)
+        combiner.update_best_prog(last_combine_stage=True)
 
 def learn_solution(settings):
     state = SearchState()

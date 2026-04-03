@@ -1,5 +1,6 @@
 from collections import defaultdict
 import time
+from . util import print_incomplete_solution2, mdl_score
 
 class SearchState:
     # pos_covered_bit_array -> prog_size+prog_size2
@@ -39,3 +40,20 @@ class SearchState:
         time_now = time.time()
         time_spent = time_now - self.start_time
         return max(int(timeout-time_spent), 1)
+
+def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix):
+    if hypothesis != state.best_hypothesis and conf_matrix != state.best_hypothesis_score:
+        print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
+    state.best_hypothesis_score = conf_matrix
+    state.best_hypothesis_size = hypothesis_size
+    state.best_hypothesis = hypothesis
+    _, fn, _, fp = conf_matrix
+
+    if settings.noisy:
+        mdl = mdl_score(fn, fp, hypothesis_size)
+        state.best_hypothesis_mdl = mdl
+        state.max_literals = mdl - 1
+    elif fp == 0 and fn == 0:
+        state.solution_found = True
+        state.max_literals = hypothesis_size - 1
+        state.min_pos_coverage = 2
