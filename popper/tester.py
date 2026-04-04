@@ -10,6 +10,7 @@ from collections import defaultdict
 from itertools import combinations
 from typing import NamedTuple
 from . recalls import recalls
+from . import logger
 
 # MAXIMUM TESTING TIME FOR A RECURSIVE HYPOTHESIS
 EVAL_TIMEOUT=0.001
@@ -73,8 +74,10 @@ class Tester():
         for x in [exs_pl_path, bk_pl_path, test_pl_path]:
             if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
                 x = x.replace('\\', '\\\\')
+            logger.info(f'Consulting {x}')
             consult(x)
 
+        logger.info(f'Loading examples')
         query_once('load_examples')
 
         neg_literal = Literal('neg_fact', tuple(range(len(self.settings.head_literal.arguments))))
@@ -90,10 +93,12 @@ class Tester():
 
         if atoms:
             try:
+                logger.info(f'Deducing neg example recalls')
                 deduce_neg_example_recalls(settings, atoms)
             except Exception as e:
                 print(e)
 
+        logger.info(f'Determining number of examples')
         self.num_pos = query_once('findall(_K, pos_index(_K, _Atom), _S), length(_S, N)')['N']
         self.num_neg = query_once('findall(_K, neg_index(_K, _Atom), _S), length(_S, N)')['N']
 
