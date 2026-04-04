@@ -250,9 +250,9 @@ class Tester():
 
         if len(prog) == 1:
             rule = next(iter(prog))
-            head, body = rule
+            head, _body = rule
             new_head = f'pos_index(_ID, {format_literal_janus(head)})'
-            ordered_body = parse_body(body)
+            _, ordered_body = _parse_rule_cached(rule)
             if self.settings.noisy:
                 q = f'succeeds_k_times({new_head},({ordered_body}),K)'
                 return query_once(q, {'K':calc_rule_size(rule)})['truth']
