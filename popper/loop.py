@@ -173,8 +173,7 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
         with stats.duration('check subsumed and covers_too_few'):
             if settings.joiner:
                 # joiner can learn bigger rules than ones we have seen so we need to take into account program size
-                subsumed = pos_covered in state.success_sets and state.success_sets[pos_covered] <= prog_size
-                subsumed = subsumed or any(size <= prog_size and subset(pos_covered, xs) for xs, size in state.success_sets.items())
+                subsumed = (pos_covered in state.success_sets and state.success_sets[pos_covered] <= prog_size) or any(size <= prog_size and subset(pos_covered, xs) for xs, size in state.success_sets.items())
             else:
                 subsumed = pos_covered in state.success_sets or any(subset(pos_covered, xs) for xs in state.success_sets)
                         
