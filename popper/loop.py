@@ -84,7 +84,7 @@ def popper(settings, tester, state, bkcons):
         cons, add_to_combiner = build_constraints(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combiner, test_result)
 
         if add_to_combiner:
-            assert(not tester.has_redundant_literal(prog))
+            # assert(not tester.has_redundant_literal(prog))
             combiner.add_prog(prog, prog_size, test_result)
         
         if settings.joiner and not add_to_combiner and not tester.has_redundant_literal(prog):

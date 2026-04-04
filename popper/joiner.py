@@ -204,7 +204,7 @@ class Joiner:
 
             for program_, coverage_ in result:
                 program_ = inline_logic_rules_ast(program_, head_pred)
-                logger.out(f'JOIN PROG: {format_prog(program_)}')
+                # logger.out(f'JOIN PROG: {format_prog(program_)}')
                 tp = coverage_.count(1)
                 fn = num_pos - tp
                 yield program_, calc_prog_size(program_), TestResult(
@@ -1011,239 +1011,466 @@ class Joiner:
 
         return fragments
 
+    # @profile
     def solve_encoding_suboptimal_sat_greedy(self):
-        from pysat.solvers import Solver
+
+        # print('solve_encoding_suboptimal_sat_greedy')
 
         uncovered = self.state.uncovered.copy()
         fragments = []
 
         # Build a persistent SAT solver with the time-invariant hard constraints.
         # These never change across outer iterations so we add them once.
-        sat = Solver(name='cadical153')
+        with Solver(name='cadical153') as sat:
 
-        # Negative example hitting set.
-        for x_neg in self.neg_index:
-            neg_key = -x_neg - 1
-            missers = [
-                self.program_selected_var[p]
-                for p in self.programs_not_covering_example[neg_key]
-                if p in self.program_selected_var
-            ]
-            if missers:
-                sat.add_clause(missers)
-            else:
-                return fragments
-
-        # Datalog safety.
-        if not self.settings.non_datalog:
-            for arg in self.head_args:
-                carriers = [
+            # Negative example hitting set.
+            for x_neg in self.neg_index:
+                neg_key = -x_neg - 1
+                missers = [
                     self.program_selected_var[p]
-                    for p in self.programs_with_arg[arg]
+                    for p in self.programs_not_covering_example[neg_key]
                     if p in self.program_selected_var
                 ]
-                if carriers:
-                    sat.add_clause(carriers)
+                if missers:
+                    sat.add_clause(missers)
+                else:
+                    return fragments
 
-        # At least two fragments selected.
-        card = CardEnc.atleast(
-            lits=list(self.program_selected_var.values()),
-            bound=2,
-            top_id=self.vpool.top,
-            encoding=EncType.seqcounter,
-        )
-        for clause in card.clauses:
-            sat.add_clause(clause)
-        self.vpool.top = max(self.vpool.top, card.nv)
+            # Datalog safety.
+            if not self.settings.non_datalog:
+                for arg in self.head_args:
+                    carriers = [
+                        self.program_selected_var[p]
+                        for p in self.programs_with_arg[arg]
+                        if p in self.program_selected_var
+                    ]
+                    if carriers:
+                        sat.add_clause(carriers)
 
-        while uncovered.any():
+            # At least two fragments selected.
+            card = CardEnc.atleast(
+                lits=list(self.program_selected_var.values()),
+                bound=2,
+                top_id=self.vpool.top,
+                encoding=EncType.seqcounter,
+            )
+            for clause in card.clauses:
+                sat.add_clause(clause)
+            self.vpool.top = max(self.vpool.top, card.nv)
+
+            while uncovered.any():
+                valid_progs = {
+                    p for p in self.program_selected_var
+                    if (self.pos_exs_covered[p] & uncovered).any()
+                }
+
+                if len(valid_progs) < 2:
+                    break
+
+                # Try each uncovered example in turn.
+                # For each one, ask SAT: is there a valid selection that covers it?
+                # If yes, take that solution and update uncovered.
+                # If no, skip this example and try the next.
+                solved = False
+                for e in uncovered.search(1):
+                    # Assumption: example e must be covered, i.e. no selected fragment
+                    # from valid_progs misses it.  We force this via a unit assumption
+                    # on the coverage implication: assume every misser is NOT selected.
+                    missers_of_e = [
+                        p for p in self.programs_not_covering_example[e]
+                        if p in valid_progs
+                    ]
+
+                    # Assume all missers of e are deselected.
+                    assumptions = [-self.program_selected_var[p] for p in missers_of_e]
+
+                    # Also restrict to valid_progs only by assuming all others deselected.
+                    assumptions += [
+                        -self.program_selected_var[p]
+                        for p in self.program_selected_var
+                        if p not in valid_progs
+                    ]
+
+                    if not sat.solve(assumptions=assumptions):
+                        # Cannot cover example e under current constraints -- skip it.
+                        continue
+
+
+                    # t1 = time.time()
+                    model = sat.get_model()
+                    # d1 = time.time()-t1
+                    selected_ids = [
+                        p for p in valid_progs
+                        if model[self.program_selected_var[p] - 1] > 0
+                    ]
+
+                    # print('inner loop solving time', d1)
+
+                    if not selected_ids:
+                        continue
+
+                    pos_covered = bitarray(self.pos_exs_covered[selected_ids[0]].copy())
+                    for p_id in selected_ids[1:]:
+                        pos_covered &= self.pos_exs_covered[p_id]
+
+                    if not pos_covered.any():
+                        assert(False)
+                        # continue
+
+                    len_a = len(selected_ids)
+                    # t1 = time.time()
+                    selected_ids, pos_covered = self.remove_redundant_fragments(selected_ids, pos_covered)
+                    # d = time.time()-t1
+                    len_b = len(selected_ids)
+                    # print(len_a, len_b)
+
+                    pos_covered = frozenbitarray(pos_covered)
+                    uncovered &= ~pos_covered
+                    unfolded = self.build_unfolded_program(selected_ids)
+                    fragments.append([unfolded, pos_covered])
+
+                    if (~pos_covered).any():
+                        self.add_consistent_program(pos_covered, calc_prog_size(unfolded))
+
+                    # print('\t greedy1', pos_covered.count(1), calc_prog_size(unfolded))
+                    solved = True
+                    break
+
+                if not solved:
+                    # No uncovered example could be covered -- done.
+                    break
+
+        # logger.debug(f"number of fragments found with joiner (sat greedy): {len(fragments)}")
+        return fragments
+
+
+    def solve_encoding_suboptimal_sat_greedy_v2(self):
+        """
+        Greedy SAT-based joiner. Covers one uncovered example per outer
+        iteration using a persistent CaDiCaL solver. Key design choices:
+
+        - Hard constraints are added once and never rebuilt.
+        - Progress is enforced by a hard OR clause over valid_progs added
+          each outer iteration -- no invalid_progs assumption list needed.
+        - Fragments that no longer cover any uncovered example are permanently
+          deselected via unit clauses, shrinking the active problem over time.
+        - valid_prog_missers is precomputed once per outer iteration.
+        - Uncoverable examples are skipped via a cheap set lookup before
+          any solver call.
+        """
+        # from pysat.solvers import Solver
+        # from pysat.card import CardEnc, EncType
+        # from pysat.formula import IDPool
+
+        if not self.state.uncovered.any():
+            return []
+
+        uncovered = self.state.uncovered.copy()
+        fragments = []
+
+        with Solver(name='cadical153') as sat:
+
+            # ------------------------------------------------------------------
+            # One-time hard constraints.
+            # ------------------------------------------------------------------
+
+            # Negative example hitting set.
+            for x_neg in self.neg_index:
+                neg_key = -x_neg - 1
+                missers = [
+                    self.program_selected_var[p]
+                    for p in self.programs_not_covering_example[neg_key]
+                    if p in self.program_selected_var
+                ]
+                if missers:
+                    sat.add_clause(missers)
+                else:
+                    return fragments
+
+            # Datalog safety.
+            if not self.settings.non_datalog:
+                for arg in self.head_args:
+                    carriers = [
+                        self.program_selected_var[p]
+                        for p in self.programs_with_arg[arg]
+                        if p in self.program_selected_var
+                    ]
+                    if carriers:
+                        sat.add_clause(carriers)
+
+            # At least two fragments selected.
+            card = CardEnc.atleast(
+                lits=list(self.program_selected_var.values()),
+                bound=2,
+                top_id=self.vpool.top,
+                encoding=EncType.seqcounter,
+            )
+            for clause in card.clauses:
+                sat.add_clause(clause)
+            self.vpool.top = max(self.vpool.top, card.nv)
+
+            # Bias solver to prefer not selecting fragments -- encourages
+            # minimal selections on the first guess.
+            # for var in self.program_selected_var.values():
+                # sat.set_polarity(var, False)
+
+            # ------------------------------------------------------------------
+            # Outer loop.
+            # ------------------------------------------------------------------
             valid_progs = {
                 p for p in self.program_selected_var
                 if (self.pos_exs_covered[p] & uncovered).any()
             }
 
-            if len(valid_progs) < 2:
-                break
+            while uncovered.any():
+                if len(valid_progs) < 2:
+                    break
 
-            # Try each uncovered example in turn.
-            # For each one, ask SAT: is there a valid selection that covers it?
-            # If yes, take that solution and update uncovered.
-            # If no, skip this example and try the next.
-            solved = False
-            for e in uncovered.search(1):
-                # Assumption: example e must be covered, i.e. no selected fragment
-                # from valid_progs misses it.  We force this via a unit assumption
-                # on the coverage implication: assume every misser is NOT selected.
-                missers_of_e = [
-                    p for p in self.programs_not_covering_example[e]
-                    if p in valid_progs
-                ]
+                # Progress clause: at least one fragment from valid_progs must
+                # be selected.  Since every fragment in valid_progs covers at
+                # least one currently uncovered example, this guarantees the
+                # join makes progress.  Added as a hard clause -- no assumption
+                # needed, and valid_progs only shrinks so this is monotone.
+                sat.add_clause([self.program_selected_var[p] for p in valid_progs])
 
-                # Assume all missers of e are deselected.
-                assumptions = [-self.program_selected_var[p] for p in missers_of_e]
+                # Precompute missers filtered to valid_progs once per outer
+                # iteration rather than once per example.
+                valid_prog_missers = {
+                    e: [p for p in self.programs_not_covering_example[e] if p in valid_progs]
+                    for e in uncovered.search(1)
+                }
 
-                # Also restrict to valid_progs only by assuming all others deselected.
-                assumptions += [
-                    -self.program_selected_var[p]
-                    for p in self.program_selected_var
-                    if p not in valid_progs
-                ]
+                solved = False
+                for e, missers_of_e in valid_prog_missers.items():
+                    # Cheap pre-filter: if no valid fragment covers e, skip
+                    # immediately without calling the solver.
+                    if not self.programs_covering_example[e].intersection(valid_progs):
+                        continue
 
-                if not sat.solve(assumptions=assumptions):
-                    # Cannot cover example e under current constraints -- skip it.
-                    continue
+                    # Assume every misser of e is deselected, forcing the join
+                    # to cover e.  This is the only assumption needed -- the
+                    # progress clause handles the restriction to valid_progs.
+                    assumptions = [-self.program_selected_var[p] for p in missers_of_e]
 
-                model = sat.get_model()
-                selected_ids = [
-                    p for p in valid_progs
-                    if model[self.program_selected_var[p] - 1] > 0
-                ]
+                    if not sat.solve(assumptions=assumptions):
+                        continue
 
-                if not selected_ids:
-                    continue
+                    model_set = {v for v in sat.get_model() if v > 0}
+                    selected_ids = [
+                        p for p in valid_progs
+                        if self.program_selected_var[p] in model_set
+                    ]
 
-                pos_covered = bitarray(self.pos_exs_covered[selected_ids[0]].copy())
-                for p_id in selected_ids[1:]:
-                    pos_covered &= self.pos_exs_covered[p_id]
+                    if not selected_ids:
+                        continue
 
-                if not pos_covered.any():
-                    assert(False)
-                    continue
+                    pos_covered = bitarray(self.pos_exs_covered[selected_ids[0]].copy())
+                    for p_id in selected_ids[1:]:
+                        pos_covered &= self.pos_exs_covered[p_id]
 
-                pos_covered = frozenbitarray(pos_covered)
-                uncovered &= ~pos_covered
-                unfolded = self.build_unfolded_program(selected_ids)
-                fragments.append([unfolded, pos_covered])
+                    if not pos_covered.any():
+                        assert False, "solver returned selection covering nothing"
 
-                if (~pos_covered).any():
-                    self.add_consistent_program(pos_covered, calc_prog_size(unfolded))
+                    selected_ids, pos_covered = self.remove_redundant_fragments(
+                        selected_ids, pos_covered
+                    )
 
-                # print('\t greedy1', pos_covered.count(1), calc_prog_size(unfolded))
-                solved = True
-                break
+                    # from bitarray.util import frozenbitarray
+                    pos_covered = frozenbitarray(pos_covered)
+                    uncovered &= ~pos_covered
 
-            if not solved:
-                # No uncovered example could be covered -- done.
-                break
+                    unfolded = self.build_unfolded_program(selected_ids)
+                    fragments.append([unfolded, pos_covered])
 
-        sat.delete()
+                    if (~pos_covered).any():
+                        self.add_consistent_program(pos_covered, calc_prog_size(unfolded))
+
+                    # ----------------------------------------------------------
+                    # Shrink the encoding: permanently deselect fragments that
+                    # no longer cover any uncovered example, and update
+                    # valid_progs incrementally rather than recomputing it.
+                    # ----------------------------------------------------------
+                    newly_useless = {
+                        p for p in valid_progs
+                        if not (self.pos_exs_covered[p] & uncovered).any()
+                    }
+                    for p in newly_useless:
+                        sat.add_clause([-self.program_selected_var[p]])
+                    valid_progs -= newly_useless
+
+                    # print('\t greedy2', pos_covered.count(1), calc_prog_size(unfolded))
+                    solved = True
+                    break
+
+                if not solved:
+                    break
+
         logger.debug(f"number of fragments found with joiner (sat greedy): {len(fragments)}")
         return fragments
 
-    def solve_encoding_greedy_sat(self):
-        # Work on a copy of the uncovered examples
-        uncovered = self.state.uncovered.copy()
+    def remove_redundant_fragments(self, selected_ids, pos_covered):
+        """
+        Greedily remove fragments from selected_ids that are not needed.
+        A fragment is redundant if the remaining selection:
+          - still covers at least one positive example (intersection is non-empty)
+          - still misses all negative examples (intersection of neg_covered is empty)
+          - still satisfies Datalog safety
+        """
+        changed = True
+        while changed:
+            changed = False
+            for p in list(selected_ids):
+                if len(selected_ids) <= 2:
+                    # Must keep at least two fragments (hard constraint).
+                    break
+                subselected = [q for q in selected_ids if q != p]
 
-        # Track which examples we have already attempted to cover so we don't loop forever
-        processed = bitarray(len(uncovered))
-        processed.setall(0)
+                # Check Datalog safety first -- cheapest check.
+                if self.break_datalog(subselected):
+                    continue
 
-        fragments = []
+                # Recompute coverage for the reduced selection.
+                sub_pos = bitarray(self.pos_exs_covered[subselected[0]].copy())
+                for q in subselected[1:]:
+                    sub_pos &= self.pos_exs_covered[q]
 
-        # Continue while there are uncovered examples we haven't tried yet
-        while (uncovered & ~processed).any():
-            # FIX 1: Use next() to get the first available bit index from the iterator
-            try:
-                e_target = next((uncovered & ~processed).search(1))
-            except StopIteration:
+                if not sub_pos.any():
+                    # Removing p loses all coverage.
+                    continue
+
+                # Check neg safety: intersection of neg_covered must be empty.
+                # neg_exs_covered[q] is the set of negatives covered by q.
+                # The join covers a negative iff ALL selected fragments cover it.
+                sub_neg = bitarray(self.neg_exs_covered[subselected[0]].copy())
+                for q in subselected[1:]:
+                    sub_neg &= self.neg_exs_covered[q]
+
+                if sub_neg.any():
+                    # Removing p causes the join to cover a negative example.
+                    continue
+
+                # p is genuinely redundant -- drop it.
+                selected_ids = subselected
+                pos_covered = frozenbitarray(sub_pos)
+                changed = True
                 break
 
-            processed[e_target] = 1 # Mark this target example as attempted
+        return selected_ids, pos_covered
 
-            # Filter: In an AND-join, EVERY fragment must cover the target example.
-            # We only consider fragments that already cover e_target.
-            candidates = [
-                p for p in self.program_selected_var.keys()
-                if self.pos_exs_covered[p][e_target] == 1
-            ]
+    # def solve_encoding_greedy_sat(self):
+    #     # Work on a copy of the uncovered examples
+    #     uncovered = self.state.uncovered.copy()
 
-            # Requirement: At least two fragments must cover this example to form a join
-            if len(candidates) < 2:
-                continue
+    #     # Track which examples we have already attempted to cover so we don't loop forever
+    #     processed = bitarray(len(uncovered))
+    #     processed.setall(0)
 
-            # 1. Initialize Solver and Variable Pool
-            # Fresh solver and pool for each target example to keep the problem small
-            solver = Solver(name='cadical153')
-            vpool = IDPool()
-            def x(p): return vpool.id(f"sel_{p}")
+    #     fragments = []
 
-            # 2. Hard Constraint: At least two fragments must be selected
-            # FIX 2: Use cnf.clauses and cnf.nv for PySAT compatibility
-            # FIX: Use seqcounter (0) or totalizer (2) for bounds > 1
-            cnf = CardEnc.atleast(
-                lits=[x(p) for p in candidates],
-                bound=2,
-                top_id=vpool.top,
-                encoding=EncType.seqcounter
-            )
-            for clause in cnf.clauses:
-                solver.add_clause(clause)
+    #     # Continue while there are uncovered examples we haven't tried yet
+    #     while (uncovered & ~processed).any():
+    #         # FIX 1: Use next() to get the first available bit index from the iterator
+    #         try:
+    #             e_target = next((uncovered & ~processed).search(1))
+    #         except StopIteration:
+    #             break
 
-            # Update the pool ceiling to account for auxiliary variables used by CardEnc
-            vpool.top = cnf.nv
+    #         processed[e_target] = 1 # Mark this target example as attempted
 
-            # 3. Hard Constraint: Consistency (Hitting Set for Negatives)
-            # The join must miss every negative example.
-            # For each negative, at least one selected fragment must miss it.
-            possible_to_be_consistent = True
-            for x_neg in self.neg_index:
-                neg_key = -x_neg - 1
-                # Candidates that miss this negative
-                missers = [x(p) for p in candidates if p in self.programs_not_covering_example[neg_key]]
-                if missers:
-                    solver.add_clause(missers)
-                else:
-                    # If no candidate misses this negative, a consistent join for e_target is impossible
-                    possible_to_be_consistent = False
-                    break
+    #         # Filter: In an AND-join, EVERY fragment must cover the target example.
+    #         # We only consider fragments that already cover e_target.
+    #         candidates = [
+    #             p for p in self.program_selected_var.keys()
+    #             if self.pos_exs_covered[p][e_target] == 1
+    #         ]
 
-            if not possible_to_be_consistent:
-                solver.delete()
-                continue
+    #         # Requirement: At least two fragments must cover this example to form a join
+    #         if len(candidates) < 2:
+    #             continue
 
-            # 4. Hard Constraint: Datalog Safety (Optional)
-            if not self.settings.non_datalog:
-                for arg in self.head_args:
-                    carriers = [x(p) for p in self.programs_with_arg[arg] if p in candidates]
-                    if carriers:
-                        solver.add_clause(carriers)
-                    else:
-                        possible_to_be_consistent = False
-                        break
+    #         # 1. Initialize Solver and Variable Pool
+    #         # Fresh solver and pool for each target example to keep the problem small
+    #         solver = Solver(name='cadical153')
+    #         vpool = IDPool()
+    #         def x(p): return vpool.id(f"sel_{p}")
 
-            if not possible_to_be_consistent:
-                solver.delete()
-                continue
+    #         # 2. Hard Constraint: At least two fragments must be selected
+    #         # FIX 2: Use cnf.clauses and cnf.nv for PySAT compatibility
+    #         # FIX: Use seqcounter (0) or totalizer (2) for bounds > 1
+    #         cnf = CardEnc.atleast(
+    #             lits=[x(p) for p in candidates],
+    #             bound=2,
+    #             top_id=vpool.top,
+    #             encoding=EncType.seqcounter
+    #         )
+    #         for clause in cnf.clauses:
+    #             solver.add_clause(clause)
 
-            # 5. Solve the SAT problem
-            if solver.solve():
-                model = solver.get_model()
-                model_set = set(model)
+    #         # Update the pool ceiling to account for auxiliary variables used by CardEnc
+    #         vpool.top = cnf.nv
 
-                # Identify which programs the solver picked
-                selected_ids = [p for p in candidates if x(p) in model_set]
+    #         # 3. Hard Constraint: Consistency (Hitting Set for Negatives)
+    #         # The join must miss every negative example.
+    #         # For each negative, at least one selected fragment must miss it.
+    #         possible_to_be_consistent = True
+    #         for x_neg in self.neg_index:
+    #             neg_key = -x_neg - 1
+    #             # Candidates that miss this negative
+    #             missers = [x(p) for p in candidates if p in self.programs_not_covering_example[neg_key]]
+    #             if missers:
+    #                 solver.add_clause(missers)
+    #             else:
+    #                 # If no candidate misses this negative, a consistent join for e_target is impossible
+    #                 possible_to_be_consistent = False
+    #                 break
 
-                # Compute the actual intersection coverage of the new joined rule
-                # intersection across all selected fragments
-                res_covered = bitarray(self.pos_exs_covered[selected_ids[0]].copy())
-                for p_id in selected_ids[1:]:
-                    res_covered &= self.pos_exs_covered[p_id]
+    #         if not possible_to_be_consistent:
+    #             solver.delete()
+    #             continue
 
-                res_covered = frozenbitarray(res_covered)
-                unfolded = self.build_unfolded_program(selected_ids)
-                fragments.append([unfolded, res_covered])
+    #         # 4. Hard Constraint: Datalog Safety (Optional)
+    #         if not self.settings.non_datalog:
+    #             for arg in self.head_args:
+    #                 carriers = [x(p) for p in self.programs_with_arg[arg] if p in candidates]
+    #                 if carriers:
+    #                     solver.add_clause(carriers)
+    #                 else:
+    #                     possible_to_be_consistent = False
+    #                     break
 
-                # Update search state: anything covered by this rule is removed from 'uncovered'
-                uncovered &= ~res_covered
+    #         if not possible_to_be_consistent:
+    #             solver.delete()
+    #             continue
 
-                # Maintain consistency constraints for future search iterations
-                if (~res_covered).any():
-                    self.add_consistent_program(res_covered, calc_prog_size(unfolded))
+    #         # 5. Solve the SAT problem
+    #         if solver.solve():
+    #             model = solver.get_model()
+    #             model_set = set(model)
 
-                print('\t greedy2', res_covered.count(1), calc_prog_size(unfolded))
+    #             # Identify which programs the solver picked
+    #             selected_ids = [p for p in candidates if x(p) in model_set]
 
-            # Cleanup solver memory
-            solver.delete()
+    #             # Compute the actual intersection coverage of the new joined rule
+    #             # intersection across all selected fragments
+    #             res_covered = bitarray(self.pos_exs_covered[selected_ids[0]].copy())
+    #             for p_id in selected_ids[1:]:
+    #                 res_covered &= self.pos_exs_covered[p_id]
+
+    #             res_covered = frozenbitarray(res_covered)
+    #             unfolded = self.build_unfolded_program(selected_ids)
+    #             fragments.append([unfolded, res_covered])
+
+    #             # Update search state: anything covered by this rule is removed from 'uncovered'
+    #             uncovered &= ~res_covered
+
+    #             # Maintain consistency constraints for future search iterations
+    #             if (~res_covered).any():
+    #                 self.add_consistent_program(res_covered, calc_prog_size(unfolded))
+
+    #             print('\t greedy2', res_covered.count(1), calc_prog_size(unfolded))
+
+    #         # Cleanup solver memory
+    #         solver.delete()
 
         return fragments
     def make_consistent_fragments(self, min_size=None, max_size=None):
@@ -1257,15 +1484,28 @@ class Joiner:
         else:
             min_size = max(min_size, self.optimal_depth_search)
 
-        print('solve_encoding_subopt')
+        # print('solve_encoding_subopt')
+
+
+        # @AC I AM STILL TRYING TO DECIDE HOW BEST TO DO THIS JOIN STAGE
+        with stats.duration('join'):
+            return self.solve_encoding_suboptimal_sat_greedy_v2()
 
         # t1 = time.time()
-        # self.solve_encoding_greedy_sat()
+        # x = self.solve_encoding_suboptimal_sat_greedy()
         # print(f'supergreedy {time.time()-t1}')
 
-        t1 = time.time()
-        x = self.solve_encoding_suboptimal_sat_greedy()
-        print(f'supergreedy claude {time.time()-t1}')
+        # t1 = time.time()
+        # self.solve_encoding_suboptimal_sat_greedy_v2()
+        # print(f'supergreedy v2 {time.time()-t1}')
+
+        # return x
+
+
+
+        # t1 = time.time()
+            # return self.solve_encoding_suboptimal_sat_greedy()
+        # print(f'supergreedy claude {time.time()-t1}')
 
 
         # t1 = time.time()
@@ -1297,7 +1537,7 @@ class Joiner:
         # x = self.solve_encoding_suboptimal_asp()
         # print(f'ASP {time.time()-t1}')
 
-        return x
+        # return x
 
     def break_datalog(self, subselected):
         if self.settings.non_datalog:
