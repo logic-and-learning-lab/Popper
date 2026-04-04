@@ -3,11 +3,11 @@ from importlib import resources
 from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
-from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal, Literal, mdl_score, order_rule
+from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, Literal, mdl_score, order_rule
 from bitarray import bitarray, frozenbitarray
 from bitarray.util import ones
 from collections import defaultdict
-from itertools import product
+from itertools import product, combinations
 from typing import NamedTuple
 from . recalls import recalls
 
@@ -25,8 +25,8 @@ class TestResult(NamedTuple):
     inconsistent: bool
     conf_matrix: tuple
     mdl: int = None
-    too_few_tp: bool = False   # Added : bool
-    too_many_fp: bool = False  # Added : bool
+    too_few_tp: bool = False
+    too_many_fp: bool = False
 
 def bool_query(query):
     return query_once(query)['truth']
@@ -100,7 +100,6 @@ class Tester():
         self.pos_examples_ = ones(self.num_pos)
 
         self.cached_pos_covered = {}
-        self.cached_inconsistent = {}
 
         if self.settings.recursion_enabled:
             query_once(f'assert(timeout({EVAL_TIMEOUT})), fail')
@@ -276,7 +275,7 @@ class Tester():
         return not bool_query(q)
 
     # called by the allsat code
-    # checks whehter a literal is implied by the body
+    # checks whether a literal is implied by the body
     def is_literal_redundant(self, body, literal):
         q = f'{parse_body(body)}, \\+ {format_literal_janus(literal)}'
         return not bool_query(q)
@@ -310,7 +309,7 @@ class Tester():
         pos_covered = frozenbitarray(pos_covered_bits)
         return pos_covered
 
-    # # ONLY CALLED BY JOINER AND THIS CLASS
+    # ONLY CALLED BY JOINER AND THIS CLASS
     def test_prog_neg(self, prog):
 
         if len(prog) == 1:
@@ -341,7 +340,7 @@ class Tester():
 
 
     # THIS IS CALLED BY THE SUBSUMER CHECKER
-    # FOR EACH RULE, WE CHECK WHAT THE SUBRULES ENTAI:
+    # FOR EACH RULE, WE CHECK WHAT THE SUBRULES ENTAIL:
     def get_pos_covered(self, prog):
 
         k1 = hash(prog)
@@ -397,7 +396,6 @@ class Tester():
 
 
     def find_redundant_rules(self, prog):
-        # assert(False)
         base = []
         step = []
         for rule in prog:
@@ -415,64 +413,54 @@ class Tester():
         settings = self.settings
         keep = set()
         pointless = set()
-
         missing = set()
-        arities = {}
 
         for p, pa in settings.body_preds:
-            query = f'current_predicate({p}/{pa})'
             try:
-                if not query_once(query)['truth']:
+                if not query_once(f'current_predicate({p}/{pa})')['truth']:
                     pointless.add((p, pa))
-                    # print(p, pa)
                     missing.add(p)
             except Exception as Err:
                 print(f"Error in find_pointless_relations: {Err}")
                 return pointless
 
-        for p, pa in settings.body_preds:
-            if p in missing:
+        preds = [(p, pa) for p, pa in settings.body_preds if p not in missing]
+
+        for (p, pa), (q, qa) in combinations(preds, 2):
+            if pa != qa:
+                continue
+            if settings.body_types and settings.body_types[p] != settings.body_types[q]:
                 continue
 
-            for q, qa in settings.body_preds:
-                if p == q:
-                    continue
-                if pa != qa:
-                    continue
-                if settings.body_types and settings.body_types[p] != settings.body_types[q]:
-                    continue
+            a, b = (p, pa), (q, qa)
+            if a in pointless and b in pointless:
+                continue
 
-                if q in missing:
+            arg_str = ','.join(f'_V{i}' for i in range(pa))
+            query = f'({p}({arg_str}), \\+ {q}({arg_str})) ; ({q}({arg_str}), \\+ {p}({arg_str}))'
+            try:
+                if query_once(query)['truth']:
                     continue
+            except Exception as Err:
+                print('ERROR detecting pointless relations', Err)
+                return pointless
 
-                arg_str = ','.join(f'_V{i}' for i in range(pa))
-                query1 = f'{p}({arg_str}), \\+ {q}({arg_str})'
-                query2 = f'{q}({arg_str}), \\+ {p}({arg_str})'
-                try:
-                    if query_once(query1)['truth'] or query_once(query2)['truth']:
-                        continue
-                except Exception as Err:
-                    print('ERROR detecting pointless relations', Err)
-                    return pointless
+            if a in keep and b in keep:
+                raise ValueError(f'Both {a} and {b} are in keep — invariant violated')
+            if a not in pointless and b not in pointless:
+                if a in keep:
+                    pointless.add(b)
+                elif b in keep:
+                    pointless.add(a)
+                else:
+                    keep.add(a)
+                    pointless.add(b)
+            elif a in pointless or b in pointless:
+                if a not in keep:
+                    pointless.add(a)
+                if b not in keep:
+                    pointless.add(b)
 
-                a, b = (p,pa), (q,qa)
-
-                if a in keep and b in keep:
-                    assert(False)
-                if a not in pointless and b not in pointless:
-                    if a in keep:
-                        pointless.add(b)
-                    elif b in keep:
-                        pointless.add(a)
-                    else:
-                        keep.add(a)
-                        pointless.add(b)
-                elif a in pointless or b in pointless:
-                    if a not in keep:
-                        pointless.add(a)
-                    if b not in keep:
-                        pointless.add(b)
-        # return frozenset((p, arities[p]) for p in pointless)
         return pointless
 
 def deduce_neg_example_recalls(settings, atoms):
@@ -483,10 +471,8 @@ def deduce_neg_example_recalls(settings, atoms):
     counts = {var_subset: defaultdict(set) for var_subset in binary_strings}
 
     for var_subset in binary_strings:
-        # print(var_subset)
         d1 = counts[var_subset]
         for args in atoms:
-            # print(args)
             key = []
             value = []
             for i in range(arity):
@@ -502,7 +488,6 @@ def deduce_neg_example_recalls(settings, atoms):
     all_recalls = {}
     pred = 'neg_fact'
     all_recalls[(pred, (0,)*arity)] = len(atoms)
-    # print(counts.items())
     for args, d2 in counts.items():
         recall = max(len(xs) for xs in d2.values())
         all_recalls[(pred, args)] = recall
