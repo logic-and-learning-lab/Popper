@@ -95,89 +95,67 @@ def uses_in_order(xs, ys):
 
 def build_props(settings, arities):
     myvars = all_myvars[:settings.max_vars]
+
+    def prolog_args(items):
+        """Join items as Prolog tuple args; adds trailing comma for arity 1."""
+        items = list(items)
+        s = ','.join(items)
+        return s + ',' if len(items) == 1 else s
+
+    # Build canonical pairs in one pass.
+    # xs is always the first a1 vars (a fixed prefix), so ys can introduce at most
+    # a2 new consecutive variables — no need to permute the full variable pool.
     pairs = set()
     for a1 in arities:
         xs = tuple(myvars[:a1])
-        xs_set = set(xs)
         for a2 in arities:
-            for ys in permutations(myvars,a2):
+            candidate_vars = myvars[:min(a1 + a2, settings.max_vars)]
+            for ys in permutations(candidate_vars, a2):
                 if not connected(xs, ys):
                     continue
                 if not uses_in_order(xs, ys):
                     continue
-                pairs.add(tuple(sorted([xs, ys])))
-
-    pairs = sorted(pairs)
-    pairs2 = set()
-    for xs, ys in pairs:
-        xs, ys = sorted([xs, ys], key=len, reverse=True)
-        out_xs, out_ys = canonicalize_vars(xs, ys)
-        pairs2.add((out_xs, out_ys))
-    pairs = sorted(pairs2)
+                longer, shorter = sorted([xs, ys], key=len, reverse=True)
+                canon = canonicalize_vars(longer, shorter)
+                pairs.add((canon[0], canon[1]))
 
     props = []
     cons = []
-    for xs, ys in pairs:
+    for xs, ys in sorted(pairs):
         xs_set = set(xs)
         ys_set = set(ys)
 
-        left = ''.join(x.lower() for x in xs)
+        left  = ''.join(x.lower() for x in xs)
         right = ''.join(y.lower() for y in ys)
 
-        t_left = ','.join(f'T{x}' for x in xs)
-        t_right = ','.join(f'T{y}' for y in ys)
+        t_left    = prolog_args(f'T{x}' for x in xs)
+        t_right   = prolog_args(f'T{y}' for y in ys)
+        atom_left  = prolog_args(xs)
+        ys_masked  = [y if y in xs_set else '_' for y in ys]
+        atom_right = prolog_args(ys_masked)
 
-        zs = []
-        for y in ys:
-            if y not in xs_set:
-                zs.append('_')
-            else:
-                zs.append(y)
-
-        atom_left = ','.join(xs)
-        atom_right = ','.join(zs)
-
-        if len(xs) == 1:
-            t_left += ','
-            atom_left += ','
-        if len(ys) == 1:
-            t_right += ','
-            atom_right += ','
-
-        # IMPLIES NOT
+        # IMPLIES NOT: P(xs) => not Q(ys)
         key = f'not_{left}_{right}'
-
-        # if the vars are identical then remove symmetries
-        sym_con = ''
-        if xs == ys:
-            sym_con = 'P<Q,'
+        sym_con = 'P<Q,' if xs == ys else ''
 
         l1 = f'prop({key},(P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), not {key}_aux((P,Q)).'
         l2 = f'{key}_aux((P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), holds(Q,({atom_right})).'
         props.extend([l1, l2])
-
-        con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
-        cons.append(con1)
+        cons.append(f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).')
 
         if not ys_set.issubset(xs_set):
             continue
 
-        # IMPLIES
+        # IMPLIES: P(xs) => Q(ys)  (ys vars are a subset of xs vars)
         key = f'{left}_{right}'
-
-        # if the vars are identical then remove symmetries
-        sym_con = ''
-        if xs == ys:
-            sym_con = 'P!=Q,'
+        sym_con = 'P!=Q,' if xs == ys else ''
 
         l1 = f'prop({key},(P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), holds(Q,({atom_right})), not {key}_aux((P,Q)).'
         l2 = f'{key}_aux((P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), not holds(Q,({atom_right})).'
         props.extend([l1, l2])
 
-        rule_vars = ys_set
-        checker = ','.join(f'valid_var(Rule,{v})' for v in rule_vars)
-        con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})), {checker}.'
-        cons.append(con1)
+        checker = ','.join(f'valid_var(Rule,{v})' for v in ys_set)
+        cons.append(f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})), {checker}.')
 
     return props, cons
 
