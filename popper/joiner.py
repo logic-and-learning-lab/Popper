@@ -252,72 +252,49 @@ class Joiner:
         self.prog_deleted = collections.defaultdict(list)
 
 
-    def join(self, prog, prog_size, test_result, size_change, add_to_combiner):
+    def add_prog(self, prog, prog_size, test_result, add_to_combiner):
         pos_covered = test_result.pos_covered
         inconsistent = test_result.inconsistent
         tp = test_result.tp
-        settings = self.settings
-
-        head_pred = next(iter(prog))[0].predicate
-
-        # add_to_join = inconsistent and not subsumed and not add_spec and tp > 0
-        add_to_join = inconsistent and tp > 0
-
-        
         num_pos = self.tester.num_pos
 
         if add_to_combiner:
-            self.add_consistent_program(pos_covered, prog_size)
-        elif add_to_join:
-
-            # CALL TEST TO GET NEG EXAMPLES
+                self.add_consistent_program(pos_covered, prog_size)
+        elif inconsistent and tp > 0:
             neg_covered = self.tester.test_prog_neg(prog)
+            subsumed_joiner = any(
+                subset(pos_covered, xs1) and subset(xs2, neg_covered)
+                for (xs1, xs2) in self.success_sets_joiner
+            )
+            covers_everything = (
+                self.settings.non_datalog
+                and pos_covered.count(1) == num_pos
+                and neg_covered.count(1) == self.tester.num_neg
+            )
+            if not subsumed_joiner and not covers_everything:
+                p = Program(prog, False)
+                self.to_join[prog_size].append([p, pos_covered, neg_covered])
+                self.success_sets_joiner[pos_covered, neg_covered] = p
 
-            subsumed_joiner = (any(subset(pos_covered, xs1) and subset(xs2, neg_covered)
-                                        for [xs1, xs2] in self.success_sets_joiner))
+    def join(self, prog, prog_size):
+        head_pred = next(iter(prog))[0].predicate
+        num_pos = self.tester.num_pos
 
-            # neg_subsumed_joiner = (any(subset(~pos_covered, xs1) and subset(xs2, ~neg_covered)
-            #                             for [xs1, xs2] in success_sets_joiner))
-
-            covers_everything = settings.non_datalog and (pos_covered.count(1) == num_pos) and (neg_covered.count(1) == num_neg)
-
-            # neg_inconsistent = (~neg_covered).any()
-
-            # if inconsistent and not subsumed and not add_spec and tp > 0 and not subsumed_joiner and not covers_everything:
-            if inconsistent and tp > 0 and not subsumed_joiner and not covers_everything:
-                self.to_join[prog_size] += [[Program(prog, False), pos_covered, neg_covered]]
-                self.success_sets_joiner[tuple((pos_covered, neg_covered))] = Program(prog, False)
-
-            # if settings.negjoin and neg_inconsistent and not neg_subsumed and not neg_subsumed_joiner and tp != num_pos and tp > 0:
-            #     to_join[prog_size] += [[Program(prog, True), ~pos_covered, ~neg_covered]]
-            #     success_sets_joiner[tuple((~pos_covered, ~neg_covered))] = Program(prog, True)
-
-
-        if size_change:
-            with stats.duration('join'):
-                # add all inconsistent programs if we call the suboptimal joiner, otherwise only add
-                # programs with size up to prog_size-joiner.min_size
-                max_s = prog_size-self.min_size if (self.state.solution_found and self.min_size) else prog_size
-                for k in range(max_s+1):
-                    for prog_, pos_covered, neg_covered in self.to_join[k]:
-                        self.add_program_fragment(prog_, pos_covered, neg_covered)
-                    self.to_join[k] = []
-                # we only run the joiner up to the current program size
-                spec_cons_fragments = self.make_consistent_fragments(max_size=prog_size)
-
-                # add the combinations found by the joiner as consistent programs
-                for program_, coverage_ in spec_cons_fragments:
-                    # program__ = inline_logic_rules_prog(program_, head_pred)
-                    program_ = inline_logic_rules_ast(program_, head_pred)
-                    # x = format_pirog(program_)
-                    # a,b = self.tester.test_prog_all(program_)
-                    # print('DEBUG', x, a.count(1))
-
-                    tp = coverage_.count(1)
-                    fn = num_pos-tp
-                    
-                    
-                    yield program_, calc_prog_size(program_), TestResult(
+        with stats.duration('join'):
+            # add all inconsistent programs if we call the suboptimal joiner, otherwise only add
+            # programs with size up to prog_size-joiner.min_size
+            max_s = prog_size - self.min_size if (self.state.solution_found and self.min_size) else prog_size
+            for k in range(max_s + 1):
+                for prog_, pos_covered, neg_covered in self.to_join[k]:
+                    self.add_program_fragment(prog_, pos_covered, neg_covered)
+                self.to_join[k] = []
+            # we only run the joiner up to the current program size
+            for program_, coverage_ in self.make_consistent_fragments(max_size=prog_size):
+                program_ = inline_logic_rules_ast(program_, head_pred)
+                logger.out(f'JOIN PROG: {format_prog(program_)}')
+                tp = coverage_.count(1)
+                fn = num_pos - tp
+                yield program_, calc_prog_size(program_), TestResult(
                     tp=tp,
                     fn=fn,
                     tn=None,
@@ -325,32 +302,8 @@ class Joiner:
                     pos_covered=coverage_,
                     neg_covered=None,
                     inconsistent=False,
-                    conf_matrix=(tp, fn, None, None)
-                    )
-                
-
-                    # yield program_, calc_prog_size(program_), 
-                    
-                    # print(program_)
-                    # print(program__)
-                    # print(program___)
-
-                    # print(self.settings.pi_enabled,'self.settings.pi_enabled')
-                    # print('')
-                    # print('1 - ', moo(program_))
-                    # print('2 - ', moo(program__))
-                    # print('3 - ', moo(program___))
-                    # print('x', inline_logic_rules(x, head_pred), coverage_.count(1))
-                    # exit()
-
-                    continue
-                    # success_sets_combiner[calc_prog_size(c)] += [p]
-                    # k = hash(c)
-                    # to_combine.add(k)
-                    # prog_lookup[k] = c
-                    # coverage_pos[k] = p
-                    # coverage_neg[k] = zeros(num_neg)
-
+                    conf_matrix=(tp, fn, None, None),
+                )
 
     def add_program_fragment(self, prog, pos_covered, neg_covered):
         prog_hash = get_prog_hash(prog)
@@ -362,29 +315,18 @@ class Joiner:
             self.progid_to_prog[prog_id] = prog
         prog_id = self.proghash_to_id[prog_hash]
         if prog.negated:
-            self.progid_to_size[prog_id] = prog_size+2
-            if not self.min_size:
-                self.min_size = prog_size+2
-            else:
-                self.min_size = min(self.min_size, prog_size+2)
+            adjusted_size = prog_size + 2
         # if the fragment selected has recursion or predicate invention we combine it as a new invented predicate
         # therefore we need to take into account the new body literal added
         elif prog_is_recursive(prog_rules) or prog_has_invention(prog_rules):
-            self.progid_to_size[prog_id] = prog_size+1
-            if not self.min_size:
-                self.min_size = prog_size+1
-            else:
-                self.min_size = min(self.min_size, prog_size+1)
-        # otherwise we simply concatenate the body literals, therefore the size is calc_prog_size(prog)-1 
+            adjusted_size = prog_size + 1
+        # otherwise we simply concatenate the body literals, therefore the size is calc_prog_size(prog)-1
         # (we ignore the head literal)
         else:
-            self.progid_to_size[prog_id] = prog_size-1
-            if not self.min_size:
-                self.min_size = prog_size-1
-            else:
-                self.min_size = min(self.min_size, prog_size-1)
+            adjusted_size = prog_size - 1
+        self.progid_to_size[prog_id] = adjusted_size
+        self.min_size = adjusted_size if not self.min_size else min(self.min_size, adjusted_size)
         assert self.progid_to_size[prog_id] >= self.min_size
-        prog_id = self.proghash_to_id[prog_hash]
         self.pos_exs_covered[prog_id] = pos_covered
         self.neg_exs_covered[prog_id] = neg_covered
 
@@ -411,12 +353,12 @@ class Joiner:
         if not self.settings.non_datalog:
             # programs with more than one rule are added with an invented predicate
             if len(prog_rules) == 1:
-                head, body = list(prog_rules)[0]
-                body_vars = set([a for b in body for a in b.arguments]).intersection(set(head.arguments))
+                head, body = next(iter(prog_rules))
+                body_vars = {a for b in body for a in b.arguments}.intersection(head.arguments)
                 for x in body_vars:
                     self.programs_with_arg[x].append(prog_id)
             else:
-                head, body = list(prog_rules)[0]
+                head, body = next(iter(prog_rules))
                 for x in head.arguments:
                     self.programs_with_arg[x].append(prog_id)               
 
@@ -425,9 +367,8 @@ class Joiner:
 
         # save the programs which are larger than the current depth of optimal search
         # we will delete them for the optimal call
-        program_size = self.progid_to_size[prog_id]
-        if program_size > self.optimal_depth_search-self.min_size:
-            self.prog_to_large[program_size].append([prog_id, prog, pos_covered, neg_covered])
+        if adjusted_size > self.optimal_depth_search - self.min_size:
+            self.prog_to_large[adjusted_size].append([prog_id, prog, pos_covered, neg_covered])
 
     # def add_program_fragment(self, prog, pos_covered, neg_covered):
     #     # TODO: check subsumed
@@ -779,8 +720,7 @@ class Joiner:
         logger.debug(f"number of fragments found with joiner: {len(fragments)}")
         return fragments
 
-
-
+    @profile
     def solve_encoding_suboptimal_asp(self):
         state = self.state
         # logger.info('solve_encoding_suboptimal_maxsat_asp')
@@ -916,16 +856,16 @@ class Joiner:
             uncovered = uncovered & ~pos_covered
             assert pos_covered.count() > 0
 
-            if self.join_minimize:
-                assert(False)
-                # WHAT IS THIS?
-                with stats.duration('minimize_size'):
-                    selected = self.minimize_size(pos_covered, self.join_minimize_timeout)
-            else:
-                # WHAT IS THIS?
-                with stats.duration('remove_redundancy'):
-                    selected2 = self.remove_redundant_selected_fragment(selected, pos_covered)
-                    assert(selected == selected2)
+            # if self.join_minimize:
+            #     assert(False)
+            #     # WHAT IS THIS?
+            #     with stats.duration('minimize_size'):
+            #         selected = self.minimize_size(pos_covered, self.join_minimize_timeout)
+            # else:
+            #     # WHAT IS THIS?
+            #     with stats.duration('remove_redundancy'):
+            #         selected2 = self.remove_redundant_selected_fragment(selected, pos_covered)
+            #         assert(selected == selected2)
 
             # Re-verify pos_covered after minimization/redundancy removal
             pos_covered = reduce(lambda a, b: a & b, [self.pos_exs_covered[s] for s in selected])

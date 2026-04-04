@@ -85,20 +85,25 @@ def popper(settings, tester, state, bkcons):
 
         if add_to_combiner:
             combiner.add_prog(prog, prog_size, test_result)
+        
+        if settings.joiner:
+            joiner.add_prog(prog, prog_size, test_result, add_to_combiner)
 
         # JOINER
-        if settings.joiner:
-            with stats.duration('join'):
-                for join_res in joiner.join(prog, prog_size, test_result, size_change, add_to_combiner):
-                    join_prog, _, _ = join_res
-                    print('JOIN_PROG',format_prog(join_prog))
-                    combiner.add_prog(*join_res)
+        if settings.joiner and size_change:
+            for join_res in joiner.join(prog, prog_size):
+                join_prog, _, join_test_res = join_res
+                if settings.verbosity > 2:
+                    logger.debug(f'Greedy join program tp:{join_test_res.tp} fn:{join_test_res.fn}')
+                    logger.debug(format_prog(join_prog))
+                combiner.add_prog(*join_res)
 
         # COMBINER
         new_hyp = combiner.combine(size_change)
 
         # IF NEW HYPOTHESIS
         if new_hyp:
+            
             # AC: TRY TO REFACTOR OUT
             if noisy:
                 cons.extend(build_cons_previous_hypotheses(state.best_hypothesis_mdl, prog_size, num_pos, num_neg, state))
@@ -164,7 +169,13 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
         pos_covered = test_result.pos_covered
 
         with stats.duration('check subsumed and covers_too_few'):
-            subsumed = pos_covered in state.success_sets or any(subset(pos_covered, xs) for xs in state.success_sets)
+            if settings.joiner:
+                # joiner can learn bigger rules than ones we have seen so we need to take into account program size
+                subsumed = pos_covered in state.success_sets and state.success_sets[pos_covered] <= prog_size
+                subsumed = subsumed or any(size <= prog_size and subset(pos_covered, xs) for xs, size in state.success_sets.items())
+            else:
+                subsumed = pos_covered in state.success_sets or any(subset(pos_covered, xs) for xs in state.success_sets)
+                        
             subsumed_by_two = not subsumed and subsumer.check_subsumed_by_two(pos_covered, prog_size)
             covers_too_few = not subsumed and not subsumed_by_two and subsumer.check_covers_too_few(prog_size, pos_covered)
 
@@ -283,7 +294,8 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
 
     if tp > 0 and state.success_sets and fp == 0:
         with stats.duration('check subsumed and covers_too_few'):
-            subsumed = pos_covered in state.success_sets or any(subset(pos_covered, xs) for xs in state.success_sets)
+            # subsumed = pos_covered in state.success_sets or any(subset(pos_covered, xs) for xs in state.success_sets)
+            subsumed = (pos_covered in state.success_sets and state.success_sets[pos_covered] <= prog_size) or any(state.success_sets[xs] <= prog_size and subset(pos_covered, xs) for xs in state.success_sets)
             subsumed_by_two = not subsumed and subsumer.check_subsumed_by_two(pos_covered, prog_size)
 
         if subsumed or subsumed_by_two:

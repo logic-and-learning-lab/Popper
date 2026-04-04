@@ -20,6 +20,7 @@ class SubsumeChecker:
         if len(body) == 0:
             return []
 
+        state = self.state
         out = set()
         head_vars = set(head.arguments)
 
@@ -64,7 +65,12 @@ class SubsumeChecker:
             new_prog_size = calc_prog_size(new_prog)
             sub_prog_pos_covered = self.tester.get_pos_covered(new_prog)
 
-            subsumed = sub_prog_pos_covered in self.state.success_sets or any(subset(sub_prog_pos_covered, xs) for xs in self.state.success_sets)
+            if self.settings.joiner:
+                subsumed = sub_prog_pos_covered in state.success_sets and state.success_sets[sub_prog_pos_covered] <= new_prog_size
+                subsumed = subsumed or any(size <= new_prog_size and subset(sub_prog_pos_covered, xs) for xs, size in state.success_sets.items())                
+            else:
+                subsumed = sub_prog_pos_covered in self.state.success_sets or any(subset(sub_prog_pos_covered, xs) for xs in self.state.success_sets)
+
             subsumed_by_two = not subsumed and self.check_subsumed_by_two(sub_prog_pos_covered, new_prog_size)
             covers_too_few = not subsumed and not subsumed_by_two and self.check_covers_too_few(new_prog_size, sub_prog_pos_covered)
 
