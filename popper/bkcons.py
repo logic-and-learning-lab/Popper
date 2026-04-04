@@ -6,22 +6,23 @@
 # Honey, I shrunk the hypothesis space (through logical preprocessing). CoRR abs/2506.06739 (2025)
 
 import time
+import os
 import clingo
 import clingo.script
-from pebble import ProcessPool
-from concurrent.futures import TimeoutError
-from . util import generate_binary_strings
-from clingo import Function, Number, Tuple_
 from collections import defaultdict
 from itertools import permutations
+from multiprocessing import Queue, Manager
+from pebble import ProcessPool
+from concurrent.futures import TimeoutError
+
+from . util import generate_binary_strings
+from clingo import Function, Number, Tuple_
+
 clingo.script.enable_python()
 from . import logger
 from . import stats
 from . recalls import recalls
 
-
-import os
-# AC: I do not know what this code below really does, but it works
 class suppress_stdout_stderr(object):
     '''
     A context manager for doing a "deep suppression" of stdout and stderr in
@@ -30,7 +31,6 @@ class suppress_stdout_stderr(object):
        This will not suppress raised exceptions, since exceptions are printed
     to stderr just before a script exits, and after the context manager has
     exited (at least, I think that is why it lets exceptions through).
-
     '''
     def __init__(self):
         # Open a pair of null files
@@ -56,7 +56,6 @@ for i in range(1,20):
     tmp_map[i] = ','.join(f'V{j}' for j in range(i))
 
 TIDY_OUTPUT = """
-
 #defined body_literal/4.
 #defined clause_var/2.
 #defined var_type/3.
@@ -95,9 +94,7 @@ def uses_in_order(xs, ys):
     return True
 
 def build_props(settings, arities):
-
     myvars = all_myvars[:settings.max_vars]
-
     pairs = set()
     for a1 in arities:
         xs = tuple(myvars[:a1])
@@ -159,7 +156,6 @@ def build_props(settings, arities):
         l2 = f'{key}_aux((P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), holds(Q,({atom_right})).'
         props.extend([l1, l2])
 
-
         con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})).'
         cons.append(con1)
 
@@ -178,290 +174,21 @@ def build_props(settings, arities):
         l2 = f'{key}_aux((P,Q)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), type(P,({t_left})), type(Q,({t_right})), holds(P,({atom_left})), not holds(Q,({atom_right})).'
         props.extend([l1, l2])
 
-
         rule_vars = ys_set
         checker = ','.join(f'valid_var(Rule,{v})' for v in rule_vars)
         con1 = f':- prop({key},(P,Q)), body_literal(Rule,P,_,({atom_left})), body_literal(Rule,Q,_,({atom_right})), {checker}.'
         cons.append(con1)
 
-
-
     return props, cons
 
-def has_unordered_vars(xs, ys):
-    out_xs, out_ys = canonicalize_vars(xs, ys)
-    z1 = tuple(sorted([xs, ys]))
-    z2 = tuple(sorted([out_xs, out_ys]))
-    return z1 != z2
-
-def rename_variables(xs, ys):
-    out_xs, out_ys = canonicalize_vars(xs, ys)
-    xs = ''.join(x.lower() for x in out_xs)
-    ys = ''.join(y.lower() for y in out_ys)
-    return xs, ys
-
-
-def build_props2(settings, arities):
-    premise1 = []
-
-    arities = [x for x in arities if x < 3]
-
-    myvars = all_myvars[:settings.max_vars]
-
-    pairs = []
-    for a1 in arities:
-        xs = tuple(myvars[:a1])
-        for a2 in arities:
-            for ys in permutations(myvars,a2):
-                if not connected(xs, ys):
-                    continue
-                if not uses_in_order(xs, ys):
-                    continue
-                xs_ys = set(xs) | set(ys)
-                for a3 in arities:
-                    for zs in permutations(myvars,a3):
-                        if not connected(xs_ys, zs):
-                            continue
-                        if not uses_in_order(xs_ys, zs):
-                            continue
-                        pairs.append((xs, ys, zs))
-
-    pairs2 = set()
-    for xs, ys, zs in pairs:
-        xs, ys, zs = sorted([xs, ys, zs], key=lambda x: len(x), reverse=True)
-        out_xs, out_ys, out_zs = canonicalize_vars(xs, ys, zs)
-        pairs2.add((out_xs, out_ys, out_zs))
-
-    seen = set()
-
-    for xs, ys, zs in pairs2:
-        k = (frozenset((xs, ys)), zs)
-        if k in seen:
-            continue
-        seen.add(k)
-
-    props = []
-    cons = []
-    seen = set()
-    for xs, ys, zs in pairs2:
-        xs_set = set(xs)
-        ys_set = set(ys)
-        zs_set = set(zs)
-
-        a1 = ''.join(x.lower() for x in xs)
-        a2 = ''.join(y.lower() for y in ys)
-        a3 = ''.join(z.lower() for z in zs)
-
-        t1 = ','.join(f'T{x}' for x in xs)
-        t2 = ','.join(f'T{y}' for y in ys)
-        t3 = ','.join(f'T{z}' for z in zs)
-
-
-        smoothed = []
-        xs_ys_set = xs_set | ys_set
-        for z in zs:
-            if z not in xs_ys_set:
-                smoothed.append('_')
-            else:
-                smoothed.append(z)
-
-        smoothed = ','.join(smoothed)
-        if len(zs) == 1:
-            smoothed += ','
-
-
-        atom1 = ','.join(xs)
-        atom2 = ','.join(ys)
-        atom3 = ','.join(zs)
-
-        if len(xs) == 1:
-            t1 += ','
-            atom1 += ','
-        if len(ys) == 1:
-            t2 += ','
-            atom2 += ','
-        if len(zs) == 1:
-            t3 += ','
-            atom3 += ','
-
-        # IMPLIES NOT
-        key = f'not_{a1}_{a2}_{a3}'
-
-        if frozenset([a1, a2, a3]) in seen:
-            continue
-        seen.add(frozenset([a1, a2, a3]))
-
-        # if the vars are identical then remove symmetries
-        sym_con = ''
-        if xs == ys:
-            sym_con += 'P<Q,'
-        if xs == zs:
-            sym_con += 'P<R,'
-        if ys == zs:
-            sym_con += 'Q<R,'
-
-
-
-        aux_key = f'{key}_subsumed'
-        aux1 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a1}_{a2},(P,Q)).'
-        aux2 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a1}_{a3},(P,R)).'
-        aux3 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a2}_{a3},(Q,R)).'
-        props.extend([aux1, aux2, aux3])
-
-        a1_, a2_ = rename_variables(a1, a2)
-        aux1 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a1_}_{a2_},(P,Q)).'
-        a1_, a3_ = rename_variables(a1, a3)
-        aux2 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a1_}_{a3_},(P,R)).'
-        a2_, a3_ = rename_variables(a2, a3)
-        aux3 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop(not_{a2_}_{a3_},(Q,R)).'
-        props.extend([aux1, aux2, aux3])
-
-
-        l1 = f'prop({key},(P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not {key}_aux((P,Q,R)), not {aux_key}(P,Q,R).'
-        l2 = f'{key}_aux((P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), holds(R,({atom3})), not {aux_key}(P,Q,R).'
-
-        props.extend([l1, l2])
-
-        con1 = f':- prop({key},(P,Q,R)), body_literal(Rule,P,_,({atom1})), body_literal(Rule,Q,_,({atom2})), body_literal(Rule,R,_,({atom3})).'
-        cons.append(con1)
-
-        if not zs_set.issubset(xs_ys_set):
-            continue
-
-        # IMPLIES
-        key = f'{a1}_{a2}_{a3}'
-
-
-        aux_key = f'{key}_subsumed'
-        aux1 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop({a1}_{a3},(P,R)).'
-        aux2 = f'{aux_key}(P,Q,R):- body_pred(P,_), body_pred(Q,_), body_pred(R,_), prop({a2}_{a3},(Q,R)).'
-        props.extend([aux1, aux2])
-
-
-        l1 = f'prop({key},(P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not {key}_aux((P,Q,R)), not {aux_key}(P,Q,R).'
-        l2 = f'{key}_aux((P,Q,R)):- {sym_con} body_pred(P,{len(xs)}), body_pred(Q,{len(ys)}), body_pred(R,{len(zs)}), type(P,({t1})), type(Q,({t2})), type(R,({t3})), holds(P,({atom1})), holds(Q,({atom2})), not holds(R,({smoothed})).'
-
-
-        props.extend([l1, l2])
-
-
-        rule_vars = zs_set
-        checker = ','.join(f'valid_var(Rule,{v})' for v in rule_vars)
-        con1 = f':- prop({key},(P,Q,R)), body_literal(Rule,P,_,({atom1})), body_literal(Rule,Q,_,({atom2})), body_literal(Rule,R,_,({atom3})), {checker}.'
-        cons.append(con1)
-
-    props = sorted(list(set(props)))
-    return props, cons
-
-def arg_to_symbol(arg):
-    if isinstance(arg, tuple):
-        return Tuple_(tuple(arg_to_symbol(a) for a in arg))
-    if isinstance(arg, (int, float)):
-        return Number(arg)
-    if isinstance(arg, str):
-        return Function(arg)
-    assert False, f'Unhandled argtype({type(arg)}) in aspsolver.py arg_to_symbol()'
-
-def atom_to_symbol(pred, args):
-    xs = tuple(arg_to_symbol(arg) for arg in args)
-    return Function(name = pred, arguments = xs)
-
-# def deduce_bk_coins(settings, tester):
-#     prog = []
-#     lookup2 = {k: f'({v})' for k,v in tmp_map.items()}
-#     lookup1 = {k:v for k,v in lookup2.items()}
-#     lookup1[1] = '(V0,)'
-#     head_pred, head_args = settings.head_literal
-#     head_arity = len(head_args)
-
-#     arities = set()
-#     for p, a in settings.body_preds:
-#         arities.add(a)
-#         arg_str = lookup1[a]
-#         arg_str2 = lookup2[a]
-#         rule = f'holds({p},{arg_str}):- {p}{arg_str2}.'
-#         prog.append(rule)
-#         prog.append(f'body_pred({p},{a}).')
-
-#     if settings.head_types:
-#         types = tuple(settings.head_types)
-#         prog.append(f'type({settings.head_literal[0]},{types}).')
-
-#         for pred, types in settings.body_types.items():
-#             types = tuple(types)
-#             prog.append(f'type({pred},{types}).')
-
-#     prog = '\n'.join(prog)
-
-#     with open(settings.bk_file) as f:
-#         bk = f.read()
-
-#     bk = bk.replace('\\+','not')
-
-#     new_props1, new_cons1 = build_props(settings, arities, tester)
-#     new_props2, new_cons2 = build_props2(settings, arities)
-
-#     new_props = new_props1 + new_props2
-#     new_cons = new_cons1 + new_cons2
-
-#     new_props = '\n'.join(new_props)
-#     encoding = [prog, bk, TIDY_OUTPUT, new_props]
-
-#     if settings.head_types == None:
-#         if head_arity == 1:
-#             types = '(t,)'
-#         else:
-#             types = tuple(['t'] * head_arity)
-#         encoding.append(f'type({head_pred},{types}).')
-
-#     if len(settings.body_types) == 0:
-#         for p, a in settings.body_preds:
-#             if a == 1:
-#                 types = '(t,)'
-#             else:
-#                 types = tuple(['t'] * a)
-
-#             encoding.append(f'type({p},{types}).')
-
-
-#     encoding = '\n'.join(encoding)
-#     solver = clingo.Control(['-Wnone'])
-#     solver.add('base', [], encoding)
-#     solver.ground([('base', [])])
-#     out = set()
-
-#     with solver.solve(yield_=True) as handle:
-#         for m in handle:
-#             for atom in m.symbols(shown = True):
-#                 args = atom.arguments
-#                 if atom.name == 'prop':
-#                     out.add(str(atom))
-#     xs = [x + '.' for x in out]
-
-#     if settings.verbosity > 2:
-#         for x in sorted(xs):
-#             logger.debug(f'BKCON {x}')
-
-#     return xs + new_cons
-
-
-def deduce_recalls(settings):
+def deduce_recalls(settings, solver):
     # Jan Struyf, Hendrik Blockeel: Query Optimization in Inductive Logic Programming by Reordering Literals. ILP 2003: 329-346
+    
+    if solver is None:
+        return None
 
     counts = {}
     counts_all = {}
-
-    try:
-
-        with open(settings.bk_file) as f:
-            bk = f.read()
-        solver = clingo.Control(['-Wnone'])
-        with suppress_stdout_stderr():
-            solver.add('base', [], bk)
-            solver.ground([('base', [])])
-    except Exception as Err:
-        print('WARNING: cannot deduce recalls', Err)
-        return None
 
     for pred, arity in settings.body_preds:
         counts_all[pred] = 0
@@ -495,7 +222,7 @@ def deduce_recalls(settings):
         d1 = counts[pred]
         all_recalls[(pred, (0,)*arity)] = counts_all[pred]
         for args, d2 in d1.items():
-            recall = max(len(xs) for xs in d2.values())
+            recall = max([len(xs) for xs in d2.values()] + [0])
             all_recalls[(pred, args)] = recall
 
     recalls.update(all_recalls)
@@ -530,20 +257,13 @@ def deduce_recalls(settings):
 
     return out
 
-def deduce_type_cons(settings):
-
+def deduce_type_cons(settings, solver):
     body_types = settings.body_types
 
-    if len(body_types) == 0:
+    if len(body_types) == 0 or solver is None:
         return
 
     type_objects = defaultdict(set)
-
-    with open(settings.bk_file) as f:
-        bk = f.read()
-    solver = clingo.Control(['-Wnone'])
-    solver.add('base', [], bk)
-    solver.ground([('base', [])])
 
     for pred, arity in settings.body_preds:
         for atom in solver.symbolic_atoms.by_signature(pred, arity=arity):
@@ -577,7 +297,6 @@ total(P, I):-
     not not_total(P, I),
     pred(P,_).
 
-
 not_total2(P, I, J):-
     pred(P,A),
     A>2,
@@ -595,7 +314,6 @@ total2(P, I, J):-
     type(P, J, _),
     I < J,
     not not_total2(P, I, J).
-
 
 not_total3(P, I, J, K):-
     pred(P,A),
@@ -669,7 +387,6 @@ def _process_total_atoms(solver, signature, arity, pred_lookup, seen, cons):
 def deduce_non_singletons(settings):
     encoding = []
 
-
     if len(settings.body_types) == 0:
         return []
 
@@ -712,8 +429,7 @@ def deduce_non_singletons(settings):
     encoding = sorted(encoding)
     encoding.append(SINGLETON_ENCODING)
 
-    with open(settings.bk_file) as f:
-        bk = f.read()
+    bk = settings.bk_string
 
     encoding.append(bk)
     encoding = '\n'.join(encoding)
@@ -731,12 +447,6 @@ def deduce_non_singletons(settings):
     _process_total_atoms(solver, 'total', 2, pred_lookup, seen, cons)
     return cons
 
-from multiprocessing import Queue
-import clingo
-
-from multiprocessing import Manager
-from pebble import ProcessPool
-from concurrent.futures import TimeoutError
 
 def run_deduce_bk_cons(settings, tester):
     timeout = min(settings.timeout, settings.bkcons_timeout)
@@ -744,8 +454,6 @@ def run_deduce_bk_cons(settings, tester):
     manager = Manager()
     shared_results = manager.list()
     with ProcessPool(max_workers=1) as pool:
-        # deduce_bk_cons_stream(settings, tester, shared_results)
-
         future = pool.schedule(deduce_bk_cons_stream, args=(settings, shared_results), timeout=timeout)
 
         try:
@@ -760,7 +468,6 @@ def run_deduce_bk_cons(settings, tester):
         return list(shared_results)
 
 def deduce_bk_cons_stream(settings, shared_results):
-    # try:
     prog = []
 
     lookup2 = {k: f'({v})' for k,v in tmp_map.items()}
@@ -789,14 +496,11 @@ def deduce_bk_cons_stream(settings, shared_results):
 
     prog = '\n'.join(prog)
 
-    with open(settings.bk_file) as f:
-        bk = f.read()
-
+    bk = settings.bk_string
     bk = bk.replace('\\+','not')
 
     # ---- generate props ----
     new_props1, new_cons1 = build_props(settings, arities)
-    # new_props2, new_cons2 = build_props2(settings, arities)
 
     # ---- solver ----
     solver = clingo.Control(['-Wnone'])
@@ -816,6 +520,10 @@ def deduce_bk_cons_stream(settings, shared_results):
 def get_bk_cons(settings, tester):
     bkcons = []
 
+    # Read the BK file into memory exactly once
+    with open(settings.bk_file) as f:
+        settings.bk_string = f.read()
+
     logger.info(f'Finding pointless rules')
     pointless = settings.pointless = tester.find_pointless_relations()
 
@@ -823,41 +531,45 @@ def get_bk_cons(settings, tester):
         logger.info(f'Pointless relation: {p}/{a}')
         settings.body_preds.remove((p,a))
 
+    # Create a shared pure-BK solver for symbolic_atoms inspection
+    base_solver = clingo.Control(['-Wnone'])
+    try:
+        with suppress_stdout_stderr():
+            base_solver.add('base', [], settings.bk_string)
+            base_solver.ground([('base', [])])
+    except Exception as Err:
+        logger.info('Loading recalls FAILURE')
+        settings.datalog = False
+        return []
+
+    settings.datalog = True
+
     logger.info(f'Loading recalls')
     with stats.duration('recalls'):
-        recalls = deduce_recalls(settings)
+        recalls = deduce_recalls(settings, base_solver)
 
-    if recalls == None:
-        settings.datalog = False
-    else:
-        settings.datalog = True
-        for x in recalls:
-            logger.debug(f'recall: {x}')
-        bkcons.extend(recalls)
+    for x in recalls:
+        logger.debug(f'recall: {x}')
+    bkcons.extend(recalls)
 
-    if settings.datalog:
-        xs = deduce_non_singletons(settings)
+
+    xs = deduce_non_singletons(settings)
+    for x in xs:
+        logger.debug(f'singletons {x}')
+    bkcons.extend(xs)
+
+    type_cons = tuple(deduce_type_cons(settings, base_solver))
+    for x in type_cons:
+        logger.debug(f'type_con {x}')
+    bkcons.extend(type_cons)
+
+    timeout = min(settings.timeout, settings.bkcons_timeout)
+    logger.info(f'Loading BK cons')
+    with stats.duration('bkcons'):
+        xs = run_deduce_bk_cons(settings, tester)
         for x in xs:
-            logger.debug(f'singletons {x}')
-        bkcons.extend(xs)
-
-        type_cons = tuple(deduce_type_cons(settings))
-        for x in type_cons:
-            logger.debug(f'type_con {x}')
-        bkcons.extend(type_cons)
-
-
-    if not settings.datalog:
-        logger.info('Loading recalls FAILURE')
-    else:
-        xs = []
-        timeout = min(settings.timeout, settings.bkcons_timeout)
-        logger.info(f'Loading BK cons')
-        with stats.duration('bkcons'):
-            xs = run_deduce_bk_cons(settings, tester)
-            for x in xs:
-                if x.startswith('prop'):
-                    logger.debug(f'BKCON {x}')
+            if x.startswith('prop'):
+                logger.debug(f'BKCON {x}')
         bkcons.extend(xs)
 
     return bkcons
