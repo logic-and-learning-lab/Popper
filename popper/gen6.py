@@ -43,12 +43,12 @@ def _remap_body_variables(body):
 
 class Generator:
 
-    def __init__(self, settings, _state, bkcons=[]):
+    def __init__(self, settings, _state, bkcons=None):
         self.settings = settings
         self.cached_clingo_atoms = {}
         self.pruned_sizes = set()
 
-        encoding = self._build_encoding(bkcons)
+        encoding = self._build_encoding(bkcons or [])
         solver = clingo.Control(['--heuristic=Domain', '-Wnone'])
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
@@ -64,9 +64,7 @@ class Generator:
 
         with open(self.settings.bias_file) as f:
             bias_text = f.read()
-        bias_text = re.sub(r'max_vars\(\d*\).', '', bias_text)
-        bias_text = re.sub(r'max_body\(\d*\).', '', bias_text)
-        bias_text = re.sub(r'max_clauses\(\d*\).', '', bias_text)
+        bias_text = re.sub(r'max_(?:vars|body|clauses)\(\d*\)\.', '', bias_text)
 
         for p, a in self.settings.pointless:
             bias_text = re.sub(rf'body_pred\({p},\s*{a}\)\.', '', bias_text)
@@ -155,19 +153,17 @@ class Generator:
 
     def _build_caches(self):
         self.symbol_to_literal = {}
-        for sym_atom in self.solver.symbolic_atoms.by_signature("body_literal", 4):
-            sym = sym_atom.symbol
-            args = sym.arguments
-            predicate = args[1].name
-            atom_args = tuple(args[3].arguments)
-            self.symbol_to_literal[sym] = self.settings.cached_literals[predicate, atom_args]
-
         for sym_atom in self.solver.symbolic_atoms:
             sym = sym_atom.symbol
             args = tuple(_unpack_symbol(a) for a in sym.arguments)
             pos_id = sym_atom.literal
             self.cached_clingo_atoms[(True, sym.name, args)] = pos_id
             self.cached_clingo_atoms[(False, sym.name, args)] = -pos_id
+            if sym.name == "body_literal" and len(sym.arguments) == 4:
+                raw_args = sym.arguments
+                predicate = raw_args[1].name
+                atom_args = tuple(raw_args[3].arguments)
+                self.symbol_to_literal[sym] = self.settings.cached_literals[predicate, atom_args]
 
     def get_prog(self):
         handle = iter(self.solver.solve(yield_=True))
@@ -181,8 +177,8 @@ class Generator:
                 if model is None:
                     return
                 self.model = model
-                rule = head, frozenset(symbol_to_literal[atom] for atom in model.symbols(shown=True))
-            yield frozenset({rule})
+                rule = head, frozenset([symbol_to_literal[atom] for atom in model.symbols(shown=True)])
+            yield frozenset((rule,))
 
     def prune_size(self, size):
         if size in self.pruned_sizes:
@@ -230,16 +226,16 @@ class Generator:
                 yield rule
 
     def build_specialisation_constraint(self, prog, size=None):
-        rule = tuple(prog)[0]
+        rule = next(iter(prog))
         if not size:
             yield from self.find_variants(rule)
             return
+        size_literal = self.cached_clingo_atoms[(True, 'program_size_at_least', (size,))]
         for body in self.find_variants(rule):
-            clingo_literal = self.cached_clingo_atoms[(True, 'program_size_at_least', (size,))]
-            yield body + [clingo_literal]
+            yield body + [size_literal]
 
     def build_generalisation_constraint(self, prog, size=None):
-        rule = tuple(prog)[0]
+        rule = next(iter(prog))
         for body in self.find_variants(rule, max_rule_vars=True):
             body.append(self.cached_clingo_atoms[(True, 'body_size', (0, len(body)))])
             if size:
@@ -248,19 +244,19 @@ class Generator:
 
     def find_variants(self, rule, max_rule_vars=False):
         head, body = rule
-        body_vars = frozenset(x for literal in body for x in literal.arguments if x >= len(head.arguments))
+        body_vars = {x for literal in body for x in literal.arguments if x >= len(head.arguments)}
         if max_rule_vars:
             var_range = range(len(head.arguments), len(body_vars | set(head.arguments)))
         else:
             var_range = range(len(head.arguments), self.settings.max_vars)
         cache = self.cached_clingo_atoms
+        body_list = [(lit.predicate, lit.arguments, len(lit.arguments)) for lit in body]
         for xs in permutations(var_range, len(body_vars)):
             xs = head.arguments + xs
             new_body = []
-            for pred, args in body:
+            for pred, args, arity in body_list:
                 new_args = tuple(xs[arg] for arg in args)
-                k = (True, 'body_literal', (0, pred, len(args), new_args))
-                clingo_literal = cache.get(k)
+                clingo_literal = cache.get((True, 'body_literal', (0, pred, arity, new_args)))
                 if clingo_literal is None:
                     break
                 new_body.append(clingo_literal)
