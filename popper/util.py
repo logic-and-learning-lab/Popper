@@ -19,7 +19,7 @@ TIMEOUT=3600
 MAX_VARS=6
 MAX_BODY=10
 ANYTIME_TIMEOUT=10
-BKCONS_TIMEOUT=10
+BKCONS_TIMEOUT=5
 BATCH_SIZE=1000
 
 class Constraint:
@@ -326,6 +326,10 @@ def init_settings(in_settings=None):
     if in_settings is None:
         settings = Settings.from_args()
     return settings
+
+def generate_binary_strings(bit_count):
+    from itertools import product
+    return list(product((0,1), repeat=bit_count))[1:-1]
 
 def rename_variables(rule):
     head, body = rule

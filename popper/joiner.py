@@ -204,6 +204,11 @@ class Joiner:
 
             for program_, coverage_ in result:
                 program_ = inline_logic_rules_ast(program_, head_pred)
+
+                pos_, neg_ = self.tester.test_prog_all(program_)
+                assert(pos_.count(1) == coverage_.count(1))
+                assert(neg_.count(1) == 0)
+
                 # logger.out(f'JOIN PROG: {format_prog(program_)}')
                 tp = coverage_.count(1)
                 fn = num_pos - tp
@@ -273,7 +278,7 @@ class Joiner:
             else:
                 head, body = next(iter(prog_rules))
                 for x in head.arguments:
-                    self.programs_with_arg[x].append(prog_id)               
+                    self.programs_with_arg[x].append(prog_id)
 
         if num_pos_covered == 1:
             self.programs_covering_one_positive.add(prog_id)
@@ -1143,6 +1148,54 @@ class Joiner:
         # logger.debug(f"number of fragments found with joiner (sat greedy): {len(fragments)}")
         return fragments
 
+    def greedy_pair_join(self, uncovered, valid_progs):
+        """
+        Try to find a good pair of fragments (size=2) using fast bitset ops.
+
+        Returns:
+            (selected_ids, pos_covered) or (None, None)
+        """
+
+        valid_list = list(valid_progs)
+        n = len(valid_list)
+
+        if n < 2:
+            return None, None
+
+        # Pre-fetch for speed (avoid dict lookups in loop)
+        pos = self.pos_exs_covered
+        neg = self.neg_exs_covered
+
+        # Optional: sort by descending coverage to hit good pairs earlier
+        valid_list.sort(key=lambda p: (pos[p] & uncovered).count(), reverse=True)
+
+        for i_idx in range(n):
+            i = valid_list[i_idx]
+
+            pos_i = pos[i]
+            neg_i = neg[i]
+
+            # quick prune: must cover something
+            if not (pos_i & uncovered).any():
+                continue
+
+            for j_idx in range(i_idx + 1, n):
+                j = valid_list[j_idx]
+
+                # --- NEGATIVE SAFETY (cheap, do first) ---
+                if (neg_i & neg[j]).any():
+                    continue
+
+                # --- POSITIVE COVERAGE ---
+                cov = pos_i & pos[j]
+
+                if not (cov & uncovered).any():
+                    continue
+
+                # Found valid pair
+                return [i, j], cov
+
+        return None, None
 
     def solve_encoding_suboptimal_sat_greedy_v2(self):
         """
@@ -1222,6 +1275,10 @@ class Joiner:
                 if (self.pos_exs_covered[p] & uncovered).any()
             }
 
+            # t1 = time.time()
+            # self.greedy_pair_join(uncovered, valid_progs)
+            # print('greedy_pair_join', time.time()-t1)
+
             while uncovered.any():
                 if len(valid_progs) < 2:
                     break
@@ -1298,7 +1355,9 @@ class Joiner:
                         sat.add_clause([-self.program_selected_var[p]])
                     valid_progs -= newly_useless
 
+
                     # print('\t greedy2', pos_covered.count(1), calc_prog_size(unfolded))
+
                     solved = True
                     break
 
@@ -1488,15 +1547,15 @@ class Joiner:
 
 
         # @AC I AM STILL TRYING TO DECIDE HOW BEST TO DO THIS JOIN STAGE
-        with stats.duration('join'):
-            return self.solve_encoding_suboptimal_sat_greedy_v2()
+        # with stats.duration('join'):
+        #     return self.solve_encoding_suboptimal_sat_greedy_v2()
 
         # t1 = time.time()
-        # x = self.solve_encoding_suboptimal_sat_greedy()
+        # return self.solve_encoding_suboptimal_sat_greedy()
         # print(f'supergreedy {time.time()-t1}')
 
         # t1 = time.time()
-        # self.solve_encoding_suboptimal_sat_greedy_v2()
+        # return self.solve_encoding_suboptimal_sat_greedy_v2()
         # print(f'supergreedy v2 {time.time()-t1}')
 
         # return x
@@ -1504,7 +1563,7 @@ class Joiner:
 
 
         # t1 = time.time()
-            # return self.solve_encoding_suboptimal_sat_greedy()
+        return self.solve_encoding_suboptimal_sat_greedy()
         # print(f'supergreedy claude {time.time()-t1}')
 
 

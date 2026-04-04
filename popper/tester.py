@@ -3,11 +3,11 @@ from importlib import resources
 from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
-from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, Literal, mdl_score, order_rule
+from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, Literal, mdl_score, order_rule, generate_binary_strings
 from bitarray import bitarray, frozenbitarray
 from bitarray.util import ones
 from collections import defaultdict
-from itertools import product, combinations
+from itertools import combinations
 from typing import NamedTuple
 from . recalls import recalls
 
@@ -494,5 +494,3 @@ def deduce_neg_example_recalls(settings, atoms):
 
     recalls.update(all_recalls)
 
-def generate_binary_strings(bit_count):
-    return list(product((0,1), repeat=bit_count))[1:-1]
