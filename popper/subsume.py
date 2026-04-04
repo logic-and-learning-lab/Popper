@@ -1,8 +1,8 @@
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, suppress_stdout_stderr, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions
+from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions
 from bitarray.util import subset, any_and, ones
 from itertools import chain, combinations, permutations
 class SubsumeChecker:
-    
+
     def __init__(self, settings, tester, state):
         self.settings = settings
         self.tester = tester
@@ -67,7 +67,7 @@ class SubsumeChecker:
 
             if self.settings.joiner:
                 subsumed = sub_prog_pos_covered in state.success_sets and state.success_sets[sub_prog_pos_covered] <= new_prog_size
-                subsumed = subsumed or any(size <= new_prog_size and subset(sub_prog_pos_covered, xs) for xs, size in state.success_sets.items())                
+                subsumed = subsumed or any(size <= new_prog_size and subset(sub_prog_pos_covered, xs) for xs, size in state.success_sets.items())
             else:
                 subsumed = sub_prog_pos_covered in self.state.success_sets or any(subset(sub_prog_pos_covered, xs) for xs in self.state.success_sets)
 

@@ -1,8 +1,7 @@
 import os
-import time
 from importlib import resources
 from janus_swi import query_once, consult
-from functools import cache, lru_cache
+from functools import cache
 from contextlib import contextmanager
 from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, format_literal, Literal, mdl_score, order_rule
 from bitarray import bitarray, frozenbitarray
@@ -91,7 +90,6 @@ class Tester():
 
         if atoms:
             try:
-                # settings.recall = settings.recall | deduce_neg_example_recalls(settings, atoms)
                 deduce_neg_example_recalls(settings, atoms)
             except Exception as e:
                 print(e)
@@ -186,8 +184,6 @@ class Tester():
             pos_covered, neg_covered = self.test_prog_all(prog)
             inconsistent = neg_covered.any()
             tp = pos_covered.count(1)
-
-        # @AC, why no cache pos here?
 
         # Calculate final metrics
         fn = self.num_pos - tp
@@ -332,8 +328,6 @@ class Tester():
         neg_covered = frozenbitarray(neg_covered_bits)
         return neg_covered
 
-    # why twice???
-
     @cache
     def has_redundant_literal(self, prog):
         for head, body in prog:
@@ -345,18 +339,6 @@ class Tester():
                 return True
         return False
 
-    # this code is called all over the place
-    # def has_redundant_literal(self, prog):
-        # for rule in prog:
-        #     head, body = rule
-        #     if head:
-        #         c = f"[{','.join(('not_'+ format_literal_janus(head),) + tuple(format_literal_janus(lit) for lit in body))}]"
-        #     else:
-        #         c = f"[{','.join(tuple(format_literal_janus(lit) for lit in body))}]"
-        #     q = f'redundant_literal({c})'
-        #     if query_once(q)['truth']:
-        #         return True
-        # return False
 
     # THIS IS CALLED BY THE SUBSUMER CHECKER
     # FOR EACH RULE, WE CHECK WHAT THE SUBRULES ENTAI:
@@ -399,11 +381,7 @@ class Tester():
         yield
         for predicate, arity in current_clauses:
             args = ','.join(['_'] * arity)
-            x = query_once(f"retractall({predicate}({args}))")
-
-    # def is_non_functional(self, prog):
-    #     with self.using(prog):
-    #         return bool_query('non_functional')
+            query_once(f"retractall({predicate}({args}))")
 
     def reduce_inconsistent(self, program):
         if len(program) < 3:
@@ -418,23 +396,8 @@ class Tester():
         return program
 
 
-    # # WE ASSUME THAT THERE IS A REUNDANT RULE
-    # def find_redundant_rule_(self, prog):
-    #     prog_ = []
-    #     for i, (head, body) in enumerate(prog):
-    #         c = f"{i}-[{','.join(('not_'+ format_literal(head),) + tuple(format_literal(lit) for lit in body))}]"
-    #         prog_.append(c)
-    #     prog_ = f"[{','.join(prog_)}]"
-    #     prog_ = janus_format_rule(prog_)
-    #     q = f'find_redundant_rule({prog_}, K1, K2)'
-    #     res = query_once(q)
-    #     k1 = res['K1']
-    #     k2 = res['K2']
-    #     return prog[k1], prog[k2]
-
     def find_redundant_rules(self, prog):
         # assert(False)
-        # AC: if the overhead of this call becomes too high, such as when learning programs with lots of clauses, we can improve it by not comparing already compared clauses
         base = []
         step = []
         for rule in prog:
@@ -457,8 +420,6 @@ class Tester():
         arities = {}
 
         for p, pa in settings.body_preds:
-            arities[p] = pa
-
             query = f'current_predicate({p}/{pa})'
             try:
                 if not query_once(query)['truth']:
@@ -467,12 +428,9 @@ class Tester():
                     missing.add(p)
             except Exception as Err:
                 print(f"Error in find_pointless_relations: {Err}")
-                settings.logger.error(f"Error in find_pointless_relations: {Err}")
                 return pointless
 
         for p, pa in settings.body_preds:
-            arities[p] = pa
-
             if p in missing:
                 continue
 
@@ -490,8 +448,6 @@ class Tester():
                 arg_str = ','.join(f'_V{i}' for i in range(pa))
                 query1 = f'{p}({arg_str}), \\+ {q}({arg_str})'
                 query2 = f'{q}({arg_str}), \\+ {p}({arg_str})'
-                # print(query1)
-                # print(query2)
                 try:
                     if query_once(query1)['truth'] or query_once(query2)['truth']:
                         continue
@@ -501,7 +457,6 @@ class Tester():
 
                 a, b = (p,pa), (q,qa)
 
-                # WTF IS GOING ON HERE?
                 if a in keep and b in keep:
                     assert(False)
                 if a not in pointless and b not in pointless:
@@ -517,13 +472,6 @@ class Tester():
                         pointless.add(a)
                     if b not in keep:
                         pointless.add(b)
-                elif a not in pointless and b not in pointless:
-                    keep.add(a)
-                    pointless.add(b)
-                elif a in pointless:
-                    pointless.add(b)
-                elif b in pointless:
-                    pointless.add(b)
         # return frozenset((p, arities[p]) for p in pointless)
         return pointless
 

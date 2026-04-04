@@ -108,9 +108,9 @@ def order_prog(prog):
 
 def rule_is_recursive(rule):
     head, body = rule
-    head_pred, _head_args = head
     if not head:
         return False
+    head_pred, _head_args = head
     return any(head_pred == pred for pred, _args in body)
 
 def prog_is_recursive(prog):
@@ -210,6 +210,8 @@ class Settings:
         for x in solver.symbolic_atoms.by_signature('non_datalog', arity=0):
             self.non_datalog_flag = True
 
+        self.datalog = not self.non_datalog_flag
+
         self.directions = directions = defaultdict(dict)
 
         for x in solver.symbolic_atoms.by_signature('direction', arity=2):
@@ -247,7 +249,7 @@ class Settings:
             self.max_rules = 1
 
         self.body_preds = get_body_preds(solver)
-        max_arity = max(max_arity, max(arity for (pred, arity) in self.body_preds))
+        max_arity = max(max_arity, max((arity for (pred, arity) in self.body_preds), default=0))
 
         # check that directions are all given
         if self.has_directions:
@@ -261,7 +263,6 @@ class Settings:
 
         if self.has_directions:
             head_pred, head_args = self.head_literal
-            # print('head_args', head_args)
             for head_args in permutations(range(self.max_vars), len(head_args)):
                 head_inputs = frozenset(arg for i, arg in enumerate(head_args) if directions[head_pred][i] == '+')
                 head_outputs = frozenset(arg for i, arg in enumerate(head_args) if directions[head_pred][i] == '-')
@@ -304,7 +305,7 @@ class Settings:
             else:
                 self.body_types[pred] = xs
 
-        if len(self.body_types) > 0 or not self.head_types is None:
+        if len(self.body_types) > 0 or self.head_types is not None:
             if self.head_types is None:
                 print('WARNING: MISSING HEAD TYPE')
                 exit()
@@ -325,37 +326,6 @@ def init_settings(in_settings=None):
     if in_settings is None:
         settings = Settings.from_args()
     return settings
-
-import os
-# AC: I do not know what this code below really does, but it works
-class suppress_stdout_stderr(object):
-    '''
-    A context manager for doing a "deep suppression" of stdout and stderr in
-    Python, i.e. will suppress all print, even if the print originates in a
-    compiled C/Fortran sub-function.
-       This will not suppress raised exceptions, since exceptions are printed
-    to stderr just before a script exits, and after the context manager has
-    exited (at least, I think that is why it lets exceptions through).
-
-    '''
-    def __init__(self):
-        # Open a pair of null files
-        self.null_fds =  [os.open(os.devnull,os.O_RDWR) for x in range(2)]
-        # Save the actual stdout (1) and stderr (2) file descriptors.
-        self.save_fds = [os.dup(1), os.dup(2)]
-
-    def __enter__(self):
-        # Assign the null pointers to stdout and stderr.
-        os.dup2(self.null_fds[0],1)
-        os.dup2(self.null_fds[1],2)
-
-    def __exit__(self, *_):
-        # Re-assign the real stdout/stderr back to (1) and (2)
-        os.dup2(self.save_fds[0],1)
-        os.dup2(self.save_fds[1],2)
-        # Close all file descriptors
-        for fd in self.null_fds + self.save_fds:
-            os.close(fd)
 
 def rename_variables(rule):
     head, body = rule
@@ -565,7 +535,7 @@ def order_rule(rule):
     if head:
         head_pred, head_args = head
         head_inputs = settings.literal_inputs[(head_pred, head_args)]
-        if head_inputs == []:
+        if not head_inputs:
             return rule
         grounded_variables.update(head_inputs)
 
