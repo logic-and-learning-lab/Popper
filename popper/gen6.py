@@ -249,14 +249,14 @@ class Generator:
             var_range = range(len(head.arguments), len(body_vars | set(head.arguments)))
         else:
             var_range = range(len(head.arguments), self.settings.max_vars)
-        cache = self.cached_clingo_atoms
+        cache_get = self.cached_clingo_atoms.get
         body_list = [(lit.predicate, lit.arguments, len(lit.arguments)) for lit in body]
         for xs in permutations(var_range, len(body_vars)):
             xs = head.arguments + xs
             new_body = []
             for pred, args, arity in body_list:
                 new_args = tuple(xs[arg] for arg in args)
-                clingo_literal = cache.get((True, 'body_literal', (0, pred, arity, new_args)))
+                clingo_literal = cache_get((True, 'body_literal', (0, pred, arity, new_args)))
                 if clingo_literal is None:
                     break
                 new_body.append(clingo_literal)
