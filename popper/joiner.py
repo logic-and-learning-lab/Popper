@@ -44,73 +44,55 @@ import re
 
 
 ASP_GREEDY = """
-% ==========================================
-
 #show select/1.
 2 { select(P) : program(P) }.
-
 is_safe(E) :- select(P), hits_neg(_,E), not hits_neg(P, E).
 :- select(P), hits_neg(P, E), not is_safe(E).
 """
 
-
-# program(P):- misses_neg(P,_).
-# neg_ex(E):- misses_neg(_,E).
-# neg_ex(E):- hits_neg(_,E).
-
-# % Must miss all negative examples
-# % :- neg_ex(E), { select(P) : misses_neg(P, E) } 0.
-# :- neg_ex(E), #count{P : select(P), not misses_neg(P, E)} == 0.
-
 # --- THE ASP LOGIC ---
 ASP_SUB_OPTIMAL = """
-% ==========================================
-
 #show select/1.
-%#show covers_joined/1.
-% #show size/2.
-% 1. GENERATION (Only guess the independent variables)
-% ==========================================
 2 { select(P) : program(P) }.
 
-program(P):- size(P,_).
-neg_ex(E):- misses_neg(_,E).
+is_safe_neg(E) :- select(P), hits_neg(_,E), not hits_neg(P, E).
+:- select(P), hits_neg(P, E), not is_safe_neg(E).
 
-% ==========================================
-% 2. DETERMINISTIC DERIVATION (No guessing here!)
-% ==========================================
-% The joined rule misses E if ANY selected program misses E.
-misses_joined(E) :- select(P), misses_pos(P, E).
+pos(E):- hits_pos(_,E).
+missed_pos(E):- select(P), pos(E), not hits_pos(P,E).
+good_pos(E):- select(P), pos(E), hits_pos(P,E), not missed_pos(E).
 
-% The joined rule covers E if it is a positive example and does NOT miss it.
-covers_joined(E) :- uncovered(E), not misses_joined(E).
-
-% ==========================================
-% 3. CONSTRAINTS
-% ==========================================
-% Must miss all negative examples
-:- neg_ex(E), { select(P) : misses_neg(P, E) } 0.
-
-% Datalog constraint
-:- datalog_req, head_arg(A), { select(P) : has_arg(P, A) } 0.
-
-% Must cover at least one currently UNCOVERED example
-:- { covers_joined(E) : uncovered(E) } 0.
-
-% Prevent supersets of previously selected combinations
-% :- prev_combo(Id), { not select(P) : combo_prog(Id, P) } 0.
+:- not good_pos(_).
 
 % ==========================================
 % 4. OPTIMIZATION
 % ==========================================
-% 4. OPTIMIZATION
-% Priority 2: Maximise coverage
-#maximize { 1@2, E : covers_joined(E) }.
-
-% Priority 1: Minimise (Sum of sizes - num_selected + 1)
-#minimize { S-1@1, P : select(P), size(P, S) }.
-
+#maximize { 1@2, E : good_pos(E) }.
 """
+
+ASP_SUB_OPTIMAL2 = """
+#show select/1.
+2 { select(P) : program(P) }.
+
+is_safe_neg(E) :- select(P), hits_neg(_,E), not hits_neg(P, E).
+:- select(P), hits_neg(P, E), not is_safe_neg(E).
+
+pos(E):- hits_pos(_,E).
+missed_uncovered(E):- select(P), uncovered(E), not hits_pos(P,E).
+good_uncovered(E):- select(P), uncovered(E), hits_pos(P,E), not missed_uncovered(E).
+:- not good_uncovered(_).
+
+% ==========================================
+% 4. OPTIMIZATION
+% ==========================================
+#maximize { 1@2, E : good_uncovered(E) }.
+"""
+
+#minimize { 1@1, P : select(P)}.
+
+# % Priority 1: Minimise (Sum of sizes - num_selected + 1)
+# minimize { S-1@1, P : select(P), size(P, S) }.
+
 
 def get_rule_hash(rule):
     head, body = rule
@@ -380,7 +362,7 @@ class Joiner:
                 print(format_prog(program_), neg_.count(1))
                 assert(False)
 
-            # print(format_prog(program_), 'GOOD!')
+            print('\t', pos_.count(1), format_prog(program_))
         # @AC I AM STILL TRYING TO DECIDE HOW BEST TO DO THIS JOIN STAGE
 
 
@@ -398,10 +380,25 @@ class Joiner:
         # xs = self.solve_sat(version=2)
         # print('sat2', time.time()-t1)
         # list(map(test_it, xs))
-
+        # print('')
         # t1 = time.time()
         # xs = self.solve_asp()
         # print('asp', time.time()-t1)
+        # list(map(test_it, xs))
+
+        # print('*'*10)
+        # t1 = time.time()
+        # xs = self.solve_asp_opt()
+        # print('asp_opt', time.time()-t1)
+        # list(map(test_it, xs))
+        # print('')
+        # print('')
+        # t1 = time.time()
+        # xs = self.solve_asp_opt_v2()
+        # print('asp_opt', time.time()-t1)
+        # list(map(test_it, xs))
+
+
         return xs
 
     def break_datalog(self, subselected):
@@ -697,7 +694,7 @@ class Joiner:
                 def on_model(m):
                     nonlocal optimal_selected
 
-                    # elapsed = time.time() - solve_start
+                    elapsed = time.time() - solve_start
 
                     # m.cost returns a list of integers representing optimization levels
                     # Based on your ASP:
@@ -745,6 +742,249 @@ class Joiner:
         logger.debug(f"number of fragments found with joiner: {len(fragments)}")
         return fragments
 
+    def solve_asp_opt(self):
+        state = self.state
+        uncovered = state.uncovered.copy()
+        fragments = []
+
+        while uncovered.any():
+            solved = False
+
+            for e in uncovered.search(1):
+
+                # 1. Target R: Find all rules (programs) that cover positive example e
+                R = {
+                    p for p in self.program_selected_var
+                    if self.pos_exs_covered[p][e]
+                }
+
+                if len(R) < 2:
+                    continue
+
+                facts = []
+
+                for p in R:
+                    facts.append(f'program({p}).')
+
+                for p, xs in self.programs_covering_example.items():
+                    if p not in R:
+                        continue
+                    for x in xs:
+                        facts.append(f"hits_pos({p}, {x}).")
+
+                # 3. Negative examples
+                has_neg = False
+                for x in self.neg_index:
+                    neg_key = -x - 1
+                    for p in self.programs_covering_example[neg_key]:
+                        if p in R:
+                            facts.append(f"hits_neg({p}, {x}).")
+                            has_neg = True
+
+                if not has_neg:
+                    break
+
+                # 5. ASP Solving
+                encoding = "\n".join(facts) + '\n' + ASP_SUB_OPTIMAL
+
+                with open('asp_opt.pl', 'w') as f:
+                    f.write(encoding)
+
+                # print('**********')
+                # print(encoding)
+                # print('**********')
+                ctl = clingo.Control([])
+                ctl.add("base", [], encoding)
+                ctl.ground([("base", [])])
+
+
+
+                optimal_selected = []
+
+                solve_start = time.time()
+
+                # print('MOOOO')
+                def on_model(m):
+                    nonlocal optimal_selected
+
+                    elapsed = time.time() - solve_start
+
+                    # m.cost returns a list of integers representing optimization levels
+                    # Based on your ASP:
+                    # m.cost[0] will be negative total coverage (since it's a maximize)
+                    # m.cost[1] will be the total size penalty
+                    print(f"ASP New Model Found! Cost: {m.cost} | Time: {elapsed:.3f}s")
+
+                    optimal_selected = [a.arguments[0].number for a in m.symbols(atoms=True) if a.name == "select"]
+                    # optimal_selected = [a.arguments[0].number for a in m.symbols(atoms=True)]
+
+                ctl.solve(on_model=on_model)
+
+                if not optimal_selected:
+                    print("UNSAT")
+                    continue
+
+                # Compute coverage as intersection across selected programs
+                pos_covered = bitarray(self.pos_exs_covered[optimal_selected[0]].copy())
+                for s in optimal_selected[1:]:
+                    pos_covered &= self.pos_exs_covered[s]
+
+                uncovered &= ~pos_covered
+                unfolded_prog = self.build_unfolded_program(optimal_selected)
+                fragments.append([unfolded_prog, frozenbitarray(pos_covered)])
+
+                # if (~pos_covered).count() > 0:
+                    # self.add_consistent_program(pos_covered, calc_prog_size(unfolded_prog))
+
+                # exit()
+                # print(optimal_selected)
+                # print(format_prog(unfolded_prog))
+
+                # program_ = inline_logic_rules_ast(unfolded_prog, self.head_pred)
+                # pos_, neg_ = self.tester.test_prog_all(program_)
+                # if pos_.count(1) != pos_covered.count(1):
+                #     print(format_prog(program_))
+                #     assert(False)
+                # if neg_.count(1) != 0:
+                #     print(format_prog(program_), neg_.count(1))
+                #     assert(False)
+                # print('asp', pos_covered.count(1), calc_prog_size(unfolded_prog))
+
+            if not solved:
+                break
+
+        logger.debug(f"number of fragments found with joiner: {len(fragments)}")
+        return fragments
+
+    def solve_asp_opt_v2(self):
+        state = self.state
+        uncovered = state.uncovered.copy()
+        fragments = []
+
+        while uncovered.any():
+            solved = False
+
+            # 1. Target R: Find all rules (programs) that cover positive example e
+            R = {
+                p for p in self.program_selected_var
+                if (self.pos_exs_covered[p] & uncovered).any()
+            }
+
+            if len(R) < 2:
+                break
+                # continue
+
+            uncovered_set = set(uncovered.search(1))
+
+            # print('')
+            # print('MOOOO'*5)
+            # print('uncovered_set', sorted(uncovered_set))
+
+            facts = []
+
+            for p in R:
+                facts.append(f'program({p}).')
+
+            for x in self.pos_index:
+                for p in self.programs_covering_example[x]:
+                    if p not in R:
+                        continue
+                    facts.append(f"hits_pos({p}, {x}).")
+                    if x in uncovered_set:
+                        facts.append(f"uncovered({x}).")
+
+            # exit()
+            # 3. Negative examples
+            has_neg = False
+            for x in self.neg_index:
+                neg_key = -x - 1
+                for p in self.programs_covering_example[neg_key]:
+                    if p in R:
+                        facts.append(f"hits_neg({p}, {x}).")
+                        has_neg = True
+
+            if not has_neg:
+                break
+
+            # 5. ASP Solving
+            encoding = "\n".join(facts) + '\n' + ASP_SUB_OPTIMAL2
+
+            # with open('asp_opt2.pl', 'w') as f:
+                # f.write(encoding)
+
+            # print('**********')
+            # print(encoding)
+            # print('**********')
+            ctl = clingo.Control([])
+            ctl.add("base", [], encoding)
+            ctl.ground([("base", [])])
+
+
+
+            optimal_selected = None
+
+            solve_start = time.time()
+
+
+            def on_model(m):
+                nonlocal optimal_selected
+
+                elapsed = time.time() - solve_start
+
+                # m.cost returns a list of integers representing optimization levels
+                # Based on your ASP:
+                # m.cost[0] will be negative total coverage (since it's a maximize)
+                # m.cost[1] will be the total size penalty
+                # print(f"ASP New Model Found! Cost: {m.cost} | Time: {elapsed:.3f}s")
+
+                optimal_selected = [a.arguments[0].number for a in m.symbols(atoms=True) if a.name == "select"]
+                # optimal_selected = [a.arguments[0].number for a in m.symbols(atoms=True)]
+
+            ctl.solve(on_model=on_model)
+
+            if optimal_selected is None:
+                # print('UNSAT!!!', )
+                break
+
+            # print('optimal_selected', optimal_selected)
+
+            # for x in optimal_selected:
+            #     print('selected', x, list(self.pos_exs_covered[x].search(1)))
+
+            # Compute coverage as intersection across selected programs
+            pos_covered = bitarray(self.pos_exs_covered[optimal_selected[0]].copy())
+            for s in optimal_selected[1:]:
+                pos_covered &= self.pos_exs_covered[s]
+
+            # print('pos_covered', list(pos_covered.search(1)))
+            # print('uncovered1', uncovered.count(1))
+            uncovered &= ~pos_covered
+            # print('uncovered2', uncovered.count(1))
+            unfolded_prog = self.build_unfolded_program(optimal_selected)
+            fragments.append([unfolded_prog, frozenbitarray(pos_covered)])
+
+            # if (~pos_covered).count() > 0:
+                # self.add_consistent_program(pos_covered, calc_prog_size(unfolded_prog))
+
+            # exit()
+            # print(optimal_selected)
+            # print(format_prog(unfolded_prog))
+
+            # program_ = inline_logic_rules_ast(unfolded_prog, self.head_pred)
+            # pos_, neg_ = self.tester.test_prog_all(program_)
+            # if pos_.count(1) != pos_covered.count(1):
+            #     print(format_prog(program_))
+            #     assert(False)
+            # if neg_.count(1) != 0:
+            #     print(format_prog(program_), neg_.count(1))
+            #     assert(False)
+            # print('asp', pos_covered.count(1), calc_prog_size(unfolded_prog))
+
+        # if not solved:
+            # break
+
+        logger.debug(f"number of fragments found with joiner: {len(fragments)}")
+        return fragments
 
 def inline_logic_rules_ast(program_, target_predicate):
     """
