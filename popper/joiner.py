@@ -43,12 +43,7 @@ from bitarray import bitarray
 import re
 
 
-ASP_GREEDY = """
-#show select/1.
-2 { select(P) : program(P) }.
-is_safe(E) :- select(P), hits_neg(_,E), not hits_neg(P, E).
-:- select(P), hits_neg(P, E), not is_safe(E).
-"""
+
 
 # --- THE ASP LOGIC ---
 ASP_SUB_OPTIMAL = """
@@ -191,6 +186,8 @@ class Joiner:
 
         # assert(prog_size)
 
+        logger.info('Starting join stage')
+
         with stats.duration('join'):
             # add all inconsistent programs if we call the suboptimal joiner, otherwise only add
             # programs with size up to prog_size-joiner.min_size
@@ -224,6 +221,8 @@ class Joiner:
                     inconsistent=False,
                     conf_matrix=(tp, fn, None, None),
                 )
+
+        logger.info('Finished join stage')
 
     def add_program_fragment(self, prog, pos_covered, neg_covered):
         prog_hash = get_prog_hash(prog)
@@ -362,7 +361,7 @@ class Joiner:
                 print(format_prog(program_), neg_.count(1))
                 assert(False)
 
-            print('\t', pos_.count(1), format_prog(program_))
+            # print('\t', pos_.count(1), format_prog(program_))
         # @AC I AM STILL TRYING TO DECIDE HOW BEST TO DO THIS JOIN STAGE
 
 
@@ -372,18 +371,30 @@ class Joiner:
         # list(map(test_it, xs))
 
         # t1 = time.time()
-        xs = self.solve_sat2()
-        # print('sat2', time.time()-t1)
+        # xs = self.solve_sat2()
+        # print('sat2\t', time.time()-t1, len(xs))
         # list(map(test_it, xs))
 
         # t1 = time.time()
-        # xs = self.solve_sat(version=2)
-        # print('sat2', time.time()-t1)
+        xs = self.solve_sat3()
+        # print('sat3\t', time.time()-t1, len(xs))
         # list(map(test_it, xs))
-        # print('')
+
+
+
+        # # t1 = time.time()
+        # # xs = self.solve_sat(version=2)
+        # # print('sat2', time.time()-t1)
+        # # list(map(test_it, xs))
+        # # print('')
         # t1 = time.time()
         # xs = self.solve_asp()
-        # print('asp', time.time()-t1)
+        # print('asp\t', time.time()-t1, len(xs))
+        # list(map(test_it, xs))
+
+        # t1 = time.time()
+        # xs = self.solve_asp2()
+        # print('asp2\t', time.time()-t1, len(xs))
         # list(map(test_it, xs))
 
         # print('*'*10)
@@ -560,15 +571,93 @@ class Joiner:
         logger.debug(f"number of fragments found with joiner: {len(fragments)}")
         return fragments
 
+    def solve_sat3(self):
+        state = self.state
+        uncovered = state.uncovered.copy()
+        fragments = []
+        all_progs = list(self.program_selected_var)
+        if len(all_progs) < 2:
+            return fragments
+
+        prog_to_var = {p: i + 1 for i, p in enumerate(all_progs)}
+        top_id = len(all_progs)
+
+        solver = Glucose3()
+
+        hit_neg_union = bitarray(len(self.neg_index))
+        hit_neg_union.setall(0)
+        for p in all_progs:
+            hit_neg_union |= self.neg_exs_covered[p]
+
+        feasible = True
+        for x in hit_neg_union.search(1):
+            missers = [prog_to_var[p] for p in all_progs if not self.neg_exs_covered[p][x]]
+            if not missers:
+                feasible = False
+                break
+            solver.add_clause(missers)
+
+        if not feasible:
+            solver.delete()
+            return fragments
+
+        cnf = CardEnc.atleast(
+            lits=list(prog_to_var.values()),
+            bound=2,
+            top_id=top_id,
+            encoding=EncType.seqcounter
+        )
+        solver.append_formula(cnf.clauses)
+
+        newly_covered = set()
+
+        for e in uncovered.search(1):
+            if e in newly_covered:
+                continue
+
+            assumptions = [-prog_to_var[p] for p in all_progs if not self.pos_exs_covered[p][e]]
+            if not solver.solve(assumptions=assumptions):
+                newly_covered.add(e)
+                continue
+
+            model_set = set(solver.get_model())
+            optimal_selected = [p for p in all_progs
+                                if prog_to_var[p] in model_set
+                                and self.pos_exs_covered[p][e]]
+
+            if len(optimal_selected) < 2:
+                newly_covered.add(e)
+                continue
+
+            pos_covered = bitarray(self.pos_exs_covered[optimal_selected[0]].copy())
+            for s in optimal_selected[1:]:
+                pos_covered &= self.pos_exs_covered[s]
+
+            if not pos_covered.any():
+                newly_covered.add(e)
+                continue
+
+            for covered_e in pos_covered.search(1):
+                newly_covered.add(covered_e)
+
+            unfolded_prog = self.build_unfolded_program(optimal_selected)
+            fragments.append([unfolded_prog, frozenbitarray(pos_covered)])
+
+        solver.delete()
+        logger.debug(f"number of fragments found with joiner: {len(fragments)}")
+        return fragments
+
+    # @profile
     def solve_sat2(self):
         state = self.state
         uncovered = state.uncovered.copy()
         fragments = []
 
+        print("uncovered", len(uncovered))
         while uncovered.any():
             solved = False
             for e in uncovered.search(1):
-                R = [p for p in self.program_selected_var if self.pos_exs_covered[p][e]]
+                R = {p for p in self.program_selected_var if self.pos_exs_covered[p][e]}
                 if len(R) < 2:
                     continue
 
@@ -581,6 +670,8 @@ class Joiner:
                 hit_neg_union.setall(0)
                 for p in R:
                     hit_neg_union |= self.neg_exs_covered[p]
+
+                # print(e, hit_neg_union.count(1), len(R))
 
                 # Pre-feasibility check before building solver
                 possible = True
@@ -673,6 +764,12 @@ class Joiner:
                     break
 
                 # 5. ASP Solving
+                ASP_GREEDY = """
+                #show select/1.
+                2 { select(P) : program(P) }.
+                is_safe(E) :- select(P), hits_neg(_,E), not hits_neg(P, E).
+                :- select(P), hits_neg(P, E), not is_safe(E).
+                """
                 encoding = "\n".join(facts) + '\n' + ASP_GREEDY
 
                 # with open('asp_sat.pl', 'w') as f:
@@ -741,6 +838,104 @@ class Joiner:
 
         logger.debug(f"number of fragments found with joiner: {len(fragments)}")
         return fragments
+
+    def solve_asp2(self):
+        state = self.state
+        uncovered = state.uncovered.copy()
+        fragments = []
+
+        all_progs = list(self.program_selected_var)
+        if len(all_progs) < 2:
+            return fragments
+
+        # Build static facts once
+        facts = []
+        for p in all_progs:
+            facts.append(f'program({p}).')
+
+        # Negative example facts over all programs
+        has_neg = False
+        hit_neg_union = bitarray(len(self.neg_index))
+        hit_neg_union.setall(0)
+        for p in all_progs:
+            hit_neg_union |= self.neg_exs_covered[p]
+
+        feasible = True
+        for x in hit_neg_union.search(1):
+            missers = [p for p in all_progs if not self.neg_exs_covered[p][x]]
+            if not missers:
+                feasible = False
+                break
+            for p in all_progs:
+                if self.neg_exs_covered[p][x]:
+                    facts.append(f'hits_neg({p},{x}).')
+                    has_neg = True
+
+        if not feasible or not has_neg:
+            return fragments
+
+        # Positive example facts: covers(P, E) for scoping per iteration
+        for p in all_progs:
+            for e in self.pos_exs_covered[p].search(1):
+                facts.append(f'covers_pos({p},{e}).')
+
+        ASP_GREEDY = """
+        #show select/1.
+        2 { select(P) : program(P) }.
+        is_safe(E) :- select(P), hits_neg(_,E), not hits_neg(P, E).
+        :- select(P), hits_neg(P, E), not is_safe(E).
+        """
+        encoding = "\n".join(facts) + '\n' + ASP_GREEDY
+
+        ctl = clingo.Control(['--warn=none'])
+        ctl.add("base", [], encoding)
+        ctl.ground([("base", [])])
+
+        while uncovered.any():
+            solved = False
+            for e in uncovered.search(1):
+                # Scope to programs covering e via assumptions
+                assumptions = []
+                for p in all_progs:
+                    atom = clingo.Function('program', [clingo.Number(p)])
+                    if self.pos_exs_covered[p][e]:
+                        assumptions.append((atom, True))
+                    else:
+                        assumptions.append((atom, False))
+
+                optimal_selected = []
+                def on_model(m):
+                    nonlocal optimal_selected
+                    optimal_selected = [
+                        a.arguments[0].number
+                        for a in m.symbols(atoms=True)
+                        if a.name == "select"
+                    ]
+
+                result = ctl.solve(assumptions=assumptions, on_model=on_model)
+
+                if not optimal_selected:
+                    continue
+
+                pos_covered = bitarray(self.pos_exs_covered[optimal_selected[0]].copy())
+                for s in optimal_selected[1:]:
+                    pos_covered &= self.pos_exs_covered[s]
+
+                if not pos_covered.any():
+                    continue
+
+                uncovered &= ~pos_covered
+                unfolded_prog = self.build_unfolded_program(optimal_selected)
+                fragments.append([unfolded_prog, frozenbitarray(pos_covered)])
+                solved = True
+                break
+
+            if not solved:
+                break
+
+        logger.debug(f"number of fragments found with joiner: {len(fragments)}")
+        return fragments
+
 
     def solve_asp_opt(self):
         state = self.state
