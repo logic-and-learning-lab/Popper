@@ -48,7 +48,7 @@ def parse_body(body):
     return _parse_rule_cached((None, body))[1]
 
 def parse_single_rule(prog):
-    rule = next(iter(prog))
+    (rule,) = prog
     return _parse_rule_cached(rule)
 
 @cache
@@ -104,6 +104,9 @@ class Tester():
 
         self.pos_examples_ = ones(self.num_pos)
 
+        self.empty_pos_covered = frozenbitarray(self.num_pos)
+        self.empty_neg_covered = frozenbitarray(self.num_neg)
+
         self.cached_pos_covered = {}
 
         if self.settings.recursion_enabled:
@@ -121,7 +124,8 @@ class Tester():
                     atom_str, body_str = parse_single_rule(prog)
                     q = f'neg_index(_ID, {atom_str}), {body_str}'
                 else:
-                    _, body = next(iter(prog))
+                    (rule,) = prog
+                    _, body = rule
                     q = parse_body(body.union(self.neg_literal_set))
                 inconsistent = bool_query(q)
         else:
@@ -129,9 +133,13 @@ class Tester():
                 pos_covered_list = query_once('pos_covered(S)')['S']
                 if self.num_neg > 0:
                     inconsistent = bool_query("inconsistent")
-            pos_covered_bits = bitarray(self.num_pos)
-            pos_covered_bits[pos_covered_list] = 1
-            pos_covered = frozenbitarray(pos_covered_bits)
+            
+            if not pos_covered_list:
+                pos_covered = self.empty_pos_covered
+            else:
+                pos_covered_bits = bitarray(self.num_pos)
+                pos_covered_bits[pos_covered_list] = 1
+                pos_covered = frozenbitarray(pos_covered_bits)
 
         # cache results
         self.cached_pos_covered[hash(prog)] = pos_covered
@@ -233,7 +241,8 @@ class Tester():
         if len(body) > 1:
             q = parse_body(body)
         else:
-            q = format_literal_janus(next(iter(body)))
+            (lit,) = body
+            q = format_literal_janus(lit)
 
         return bool_query(q)
 
@@ -249,7 +258,7 @@ class Tester():
             return self.cached_pos_covered[k].any()
 
         if len(prog) == 1:
-            rule = next(iter(prog))
+            (rule,) = prog
             head, _body = rule
             new_head = f'pos_index(_ID, {format_literal_janus(head)})'
             _, ordered_body = _parse_rule_cached(rule)
@@ -309,6 +318,9 @@ class Tester():
             with self.using(prog):
                 pos_covered = query_once('pos_covered(S)')['S']
 
+        if not pos_covered:
+            return self.empty_pos_covered
+
         pos_covered_bits = bitarray(self.num_pos)
         pos_covered_bits[pos_covered] = 1
         pos_covered = frozenbitarray(pos_covered_bits)
@@ -327,6 +339,10 @@ class Tester():
             with self.using(prog):
                 res = query_once(f'neg_covered(S2)')
             neg_covered = res['S2']
+        
+        if not neg_covered:
+            return self.empty_neg_covered
+
         neg_covered_bits = bitarray(self.num_neg)
         neg_covered_bits[neg_covered] = 1
         neg_covered = frozenbitarray(neg_covered_bits)
