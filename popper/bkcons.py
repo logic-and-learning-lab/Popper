@@ -10,7 +10,7 @@ import os
 import clingo
 import clingo.script
 from collections import defaultdict
-from itertools import permutations
+from itertools import permutations, combinations, product
 from multiprocessing import Queue, Manager
 from pebble import ProcessPool
 from concurrent.futures import TimeoutError
@@ -51,10 +51,6 @@ class suppress_stdout_stderr(object):
         for fd in self.null_fds + self.save_fds:
             os.close(fd)
 
-tmp_map = {}
-for i in range(1,20):
-    tmp_map[i] = ','.join(f'V{j}' for j in range(i))
-
 TIDY_OUTPUT = """
 #defined body_literal/4.
 #defined clause_var/2.
@@ -62,7 +58,18 @@ TIDY_OUTPUT = """
 #defined clause/1.
 """
 
-all_myvars = ['A','B','C','D','E','F','G','H']
+def _clingo_tuple(n):
+    """Return V0..V(n-1) as a clingo tuple string, e.g. (V0,V1) or (V0,) for n=1."""
+    inner = ','.join(f'V{i}' for i in range(n))
+    return f'({inner},)' if n == 1 else f'({inner})'
+
+def _pred_args(n):
+    """Return V0..V(n-1) as a predicate argument list, e.g. (V0,V1)."""
+    return '(' + ','.join(f'V{i}' for i in range(n)) + ')'
+
+def _alpha_vars(n):
+    """Return the first n uppercase letter variable names: ['A', 'B', ...]."""
+    return [chr(ord('A') + i) for i in range(n)]
 
 def canonicalize_vars(*var_seqs):
     """Rename variables to A, B, C... in first-appearance order across all sequences."""
@@ -88,13 +95,10 @@ def connected(xs, ys):
 
 def uses_in_order(xs, ys):
     zs = set(xs) | set(ys)
-    for i in all_myvars[:len(zs)]:
-        if i not in zs:
-            return False
-    return True
+    return all(chr(ord('A') + i) in zs for i in range(len(zs)))
 
 def build_props(settings, arities):
-    myvars = all_myvars[:settings.max_vars]
+    myvars = _alpha_vars(settings.max_vars)
 
     def prolog_args(items):
         """Join items as Prolog tuple args; adds trailing comma for arity 1."""
@@ -212,24 +216,12 @@ def deduce_recalls(settings, solver):
             continue
         arity = len(key)
         args = [f'V{i}' for i in range(arity)]
-        args_str = ','.join(args)
-
-        if len(args) == 1:
-            args_str +=  ','
-        subset = []
-        fixer = []
-
-        for x, y in zip(key, args):
-            if x == 0:
-                subset.append(y)
-                fixer.append('_')
-            else:
-                fixer.append(y)
+        subset = [v for v, k in zip(args, key) if k == 0]
+        fixer  = [v if k else '_' for v, k in zip(args, key)]
 
         subset_str = ','.join(subset)
-        fixer_str = ','.join(fixer)
-        if len(fixer) == 1:
-            fixer_str+= ','
+        fixer_str  = ','.join(fixer) + (',' if len(fixer) == 1 else '')
+        args_str   = ','.join(args)  + (',' if arity == 1 else '')
         con2 = f':- body_literal(Rule,{pred},_,({fixer_str})), #count{{{subset_str}: body_literal(Rule,{pred},_,({args_str}))}} > {recall}.'
         out.append(con2)
 
@@ -362,6 +354,7 @@ def _process_total_atoms(solver, signature, arity, pred_lookup, seen, cons):
         cons.append(con)
         seen[p].add(singletons_checked)
 
+
 def deduce_non_singletons(settings):
     encoding = []
 
@@ -433,10 +426,7 @@ def run_deduce_bk_cons(settings, tester):
     shared_results = manager.list()
     with ProcessPool(max_workers=1) as pool:
         future = pool.schedule(deduce_bk_cons_stream, args=(settings, shared_results), timeout=timeout)
-
         try:
-            # 2. YOU MUST WAIT HERE.
-            # This blocks the parent until the child is done or timeout hits.
             future.result()
         except TimeoutError:
             logger.info(f"BK cons worker killed by timeout ({timeout}s)")
@@ -448,10 +438,6 @@ def run_deduce_bk_cons(settings, tester):
 def deduce_bk_cons_stream(settings, shared_results):
     prog = []
 
-    lookup2 = {k: f'({v})' for k,v in tmp_map.items()}
-    lookup1 = {k:v for k,v in lookup2.items()}
-    lookup1[1] = '(V0,)'
-
     head_pred, head_args = settings.head_literal
     head_arity = len(head_args)
 
@@ -459,10 +445,7 @@ def deduce_bk_cons_stream(settings, shared_results):
 
     for p, a in settings.body_preds:
         arities.add(a)
-        arg_str = lookup1[a]
-        arg_str2 = lookup2[a]
-
-        prog.append(f'holds({p},{arg_str}):- {p}{arg_str2}.')
+        prog.append(f'holds({p},{_clingo_tuple(a)}):- {p}{_pred_args(a)}.')
         prog.append(f'body_pred({p},{a}).')
 
     # ---- types ----
@@ -475,7 +458,6 @@ def deduce_bk_cons_stream(settings, shared_results):
     prog = '\n'.join(prog)
 
     bk = settings.bk_string
-    bk = bk.replace('\\+','not')
 
     # ---- generate props ----
     new_props1, new_cons1 = build_props(settings, arities)
@@ -530,8 +512,8 @@ def get_bk_cons(settings, tester):
         logger.debug(f'recall: {x}')
     bkcons.extend(recalls)
 
-
     xs = deduce_non_singletons(settings)
+
     for x in xs:
         logger.debug(f'singletons {x}')
     bkcons.extend(xs)
