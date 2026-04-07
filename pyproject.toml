@@ -12,14 +12,9 @@ dependencies = [
   "bitarray",
   "janus_swi",
   "python-sat",
-  "pebble",
   "pypblib",
   "ortools>=9.15.6755",
 ]
-
-[project.scripts]
-# This makes 'popper' work in your terminal again
-popper = "popper.loop:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -30,8 +25,3 @@ popper = ["lp/*.pl"]
 
 [tool.uv]
 package = true
-
-[dependency-groups]
-dev = [
-    "line-profiler>=5.0.2",
-]
