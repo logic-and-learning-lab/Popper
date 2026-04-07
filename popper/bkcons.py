@@ -11,9 +11,6 @@ import clingo
 import clingo.script
 from collections import defaultdict
 from itertools import permutations, combinations, product
-from multiprocessing import Manager
-from pebble import ProcessPool
-from concurrent.futures import TimeoutError
 
 from . util import generate_binary_strings
 from . import logger
@@ -240,7 +237,7 @@ def _process_total_atoms(solver, signature, arity, pred_lookup, seen, cons):
         cons.append(con)
         seen[p].add(singletons_checked)
 
-def deduce_non_singletons(settings):
+def deduce_non_singletons(settings, solver):
     """Find combinations of arguments that cover the whole domain to prune redundant rules."""
     if not settings.body_types:
         return []
@@ -267,10 +264,8 @@ def deduce_non_singletons(settings):
                 val_str = ','.join(args[i] for i in indices)
                 encoding.append(f'{pred_name}({p},{idx_str},{val_str}):- {p}({arg_str}).')
 
-    encoding.extend([generate_singleton_encoding(max_size), settings.bk_string])
-    solver = clingo.Control(['-Wnone'])
-    solver.add('base', [], '\n'.join(encoding))
-    solver.ground([('base', [])])
+    solver.add('singletons', [], '\n'.join(encoding + [generate_singleton_encoding(max_size)]))
+    solver.ground([('singletons', [])])
 
     pred_lookup = {p: a for p, a in settings.body_preds}
     seen, cons = defaultdict(set), []
@@ -279,21 +274,8 @@ def deduce_non_singletons(settings):
         _process_total_atoms(solver, f'total{suffix}', n + 1, pred_lookup, seen, cons)
     return cons
 
-
-def run_deduce_bk_cons(settings, shared_results):
-    """Entry point for parallel BK constraint deduction."""
-    timeout = min(settings.timeout, settings.bkcons_timeout)
-    with ProcessPool(max_workers=1) as pool:
-        future = pool.schedule(deduce_bk_cons_stream, args=(settings, shared_results), timeout=timeout)
-        try:
-            future.result()
-        except TimeoutError:
-            logger.info(f"BK cons worker killed by timeout ({timeout}s)")
-        except Exception as e:
-            logger.error(f"Worker failed before timeout: {e}")
-
-def deduce_bk_cons_stream(settings, shared_results):
-    """Deduce properties (props) in a separate process."""
+def deduce_bk_props(settings, solver):
+    """Deduce properties (props) in the main process."""
     prog = []
     arities = set()
     for p, a in settings.body_preds:
@@ -303,21 +285,29 @@ def deduce_bk_cons_stream(settings, shared_results):
 
     if settings.head_types:
         prog.append(f'type({settings.head_literal[0]},{format_tuple(settings.head_types)}).')
+    else:
+        types = (f't',) if len(settings.head_literal.arguments) == 1 else tuple(['t'] * len(settings.head_literal.arguments))
+        prog.append(f'type({settings.head_literal[0]},{format_tuple(types)}).')
+
+    if settings.body_types:
         for pred, types in settings.body_types.items():
             prog.append(f'type({pred},{format_tuple(types)}).')
+    else:
+        for p, a in settings.body_preds:
+            types = (f't',) if a == 1 else tuple(['t'] * a)
+            prog.append(f'type({p},{format_tuple(types)}).')
 
     new_props, new_cons = build_props(settings, arities)
-    solver = clingo.Control(['-Wnone'])
-    base_encoding = '\n'.join(prog + [settings.bk_string, TIDY_OUTPUT] + new_props)
-    solver.add('base', [], base_encoding)
-    solver.ground([('base', [])])
+    solver.add('props', [], '\n'.join(prog + [TIDY_OUTPUT] + new_props + ['#show prop/2.']))
+    solver.ground([('props', [])])
     
+    props = []
     with solver.solve(yield_=True) as handle:
         for m in handle:
             for atom in m.symbols(shown=True):
                 if atom.name == 'prop':
-                    shared_results.append(str(atom) + '.')
-    shared_results.extend(new_cons)
+                    props.append(str(atom) + '.')
+    return props + new_cons
 
 def get_bk_cons(settings, tester):
     """Main function to gather all BK-derived constraints."""
@@ -350,7 +340,7 @@ def get_bk_cons(settings, tester):
         logger.debug(f'recall: {x}')
     bkcons.extend(recalls_cons)
 
-    singletons = deduce_non_singletons(settings)
+    singletons = deduce_non_singletons(settings, base_solver)
     for x in singletons:
         logger.debug(f'singletons {x}')
     bkcons.extend(singletons)
@@ -360,13 +350,9 @@ def get_bk_cons(settings, tester):
         logger.debug(f'type_con {x}')
     bkcons.extend(type_cons)
 
-
     logger.info(f'Loading BK cons')
     with stats.duration('bkcons'):
-        manager = Manager()
-        shared_results = manager.list()
-        run_deduce_bk_cons(settings, shared_results)
-        results = tuple(shared_results)
+        results = deduce_bk_props(settings, base_solver)
         for x in results:
             if x.startswith('prop'): logger.debug(f'BKCON {x}')
         bkcons.extend(results)
