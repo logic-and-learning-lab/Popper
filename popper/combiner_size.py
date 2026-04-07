@@ -149,7 +149,8 @@ class CombinerSize:
             update_best_hypothesis(self.settings, self.state, new_hypothesis, new_hypothesis_size, conf_matrix)
 
             if fn == 0:
-                return self._combine(False)
+                self._combine(False)
+                return True
             
         return False
 

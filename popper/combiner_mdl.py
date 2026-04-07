@@ -983,7 +983,7 @@ class CombinerMDL:
         prog_mdl = int(total_size + fp + fn)
 
         if prog_mdl >= mdl_limit:
-            return
+            return False
 
         prog = []
         for prog_hash in out:
@@ -1003,7 +1003,7 @@ class CombinerMDL:
         logger.info(f'New bound from greedy search: {prog_mdl}')
         print_incomplete_solution2(prog, total_size, (tp, fn, tn, fp))
 
-        return total_size + fp + fn
+        return True
 
     def update_best_prog(self, last_combine_stage=False):
         new_progs = self.to_combine
@@ -1012,25 +1012,24 @@ class CombinerMDL:
         if not self.saved_progs:
             return False
 
+        new_hyp_found = False
+
         if self.settings.recursion_enabled:
             new_solution, cost = self.find_combination(last_combine_stage)
         else:
-            # self.build_incompatibility()
             # do a quick greedy search to determine an upperbound
-            self.greedy_upper_bound()
+            new_hyp_found = self.greedy_upper_bound()
 
             if not self.settings.nuwls:
                 if last_combine_stage:
                     logger.info(f'Calling CP solver for final noisy combine stage with {len(self.saved_progs)} rules')
                 new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
-                # if last_combine_stage:
-                    # self.find_combination_norec_cp_all_opt()
             else:
                 if last_combine_stage:
                     logger.info(f'Calling MaxSAT solver for final noisy combine stage with {len(self.saved_progs)} rules')
                 new_solution, cost = self.find_combination_norec_maxsat(last_combine_stage)
 
-        if len(new_solution) == 0:
+        if not new_hyp_found and len(new_solution) == 0:
             return False
 
         if cost > self.state.best_hypothesis_mdl:
