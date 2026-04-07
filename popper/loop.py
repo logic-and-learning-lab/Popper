@@ -83,16 +83,17 @@ def popper(settings, tester, state, bkcons):
         # BUILD CONSTRAINTS
         cons, add_to_combiner = build_constraints(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combiner, test_result)
 
+        # flag to track whether we have found a new better hypothesis
+        new_hyp_found = False
+
         if add_to_combiner:
-            # assert(not tester.has_redundant_literal(prog))
-            combiner.add_prog(prog, prog_size, test_result)
+            new_hyp_found = combiner.add_prog(prog, prog_size, test_result)
         
         if settings.joiner and not add_to_combiner and not tester.has_redundant_literal(prog):
             joiner.add_prog(prog, prog_size, test_result, add_to_combiner)
 
         # JOINER
         if settings.joiner and size_change:
-            assert(prog_size is not None)
             for join_res in joiner.join(prog, prog_size):
                 join_prog, _, join_test_res = join_res
                 if settings.verbosity > 2:
@@ -101,10 +102,11 @@ def popper(settings, tester, state, bkcons):
                 combiner.add_prog(*join_res)
 
         # COMBINER
-        new_hyp = combiner.combine(size_change)
+        if not new_hyp_found:
+            new_hyp_found = combiner.combine(size_change)
 
         # IF NEW HYPOTHESIS
-        if new_hyp:
+        if new_hyp_found:
             
             # AC: TRY TO REFACTOR OUT
             if noisy:
@@ -230,7 +232,8 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
 
     # BUILD CONSTRAINTS
     if not pruned_more_general:
-        if add_gen and not pruned_sub_inconsistent:
+        # if add_gen and not pruned_sub_inconsistent:
+        if add_gen and (settings.recursion_enabled or settings.pi_enabled) and not pruned_sub_inconsistent:
             if settings.recursion_enabled or settings.pi_enabled:
                 new_cons.append((Constraint.GENERALISATION, prog))
         elif not add_spec:
