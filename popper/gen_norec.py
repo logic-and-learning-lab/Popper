@@ -5,15 +5,6 @@ from . util import Constraint, Literal
 from itertools import permutations
 from . import stats
 
-DEFAULT_HEURISTIC = """
-#heuristic size(N). [1000-N,true]
-"""
-
-NOISY_ENCODING = """
-program_bounds(0..K):- max_size(K).
-program_size_at_least(M):- size(N), program_bounds(M), M <= N.
-"""
-
 def _unpack_symbol(sym):
     if sym.type == clingo.SymbolType.Number:
         return sym.number
@@ -75,6 +66,23 @@ class Generator:
         encoding.append(f'max_body({self.settings.max_body}).')
         encoding.append(f'max_vars({self.settings.max_vars}).')
 
+        encoding.extend(self._build_symmetry_breaking_constraints())
+
+        if self.settings.noisy:
+            NOISY_ENCODING = """
+            program_bounds(0..K):- max_size(K).
+            program_size_at_least(M):- size(N), program_bounds(M), M <= N.
+            """
+            encoding.append(NOISY_ENCODING)
+
+        encoding.extend(bkcons)
+        DEFAULT_HEURISTIC = "#heuristic size(N). [1000-N,true]"
+        encoding.append(DEFAULT_HEURISTIC)
+
+        return '\n'.join(encoding)
+
+    def _build_symmetry_breaking_constraints(self):
+        encoding = []
         head_arity = len(self.settings.head_literal.arguments)
         encoding.append(f'head_vars({head_arity}, {tuple(range(head_arity))}).')
         arities = set(a for p, a in self.settings.body_preds)
@@ -105,14 +113,7 @@ class Generator:
                     encoding.append(f'direction_({pred}, {i}, in).')
                 if v == '-':
                     encoding.append(f'direction_({pred}, {i}, out).')
-
-        if self.settings.noisy:
-            encoding.append(NOISY_ENCODING)
-
-        encoding.extend(bkcons)
-        encoding.append(DEFAULT_HEURISTIC)
-
-        return '\n'.join(encoding)
+        return encoding
 
     def _build_ordering_constraints(self, arities):
         order_cons = []
@@ -202,8 +203,6 @@ class Generator:
                     ground_cons = self.unsat_constraint(con_prog)
                 case Constraint.BANISH | Constraint.GENERALISATION:
                     ground_cons = self.build_generalisation_constraint(con_prog, con_size)
-                case _:
-                    continue
             all_ground_cons.update(frozenset(x) for x in ground_cons)
 
         add_nogood = self.model.context.add_nogood

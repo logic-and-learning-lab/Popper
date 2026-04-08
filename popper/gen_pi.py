@@ -9,7 +9,7 @@ import numbers
 import clingo.script
 from importlib import resources
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, Literal, format_rule, remap_variables
+from . util import rule_is_recursive, Constraint, Literal, format_rule, canonicalise
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
@@ -922,7 +922,7 @@ class Generator:
 
     def unsat_constraint2(self, body):
         if len(self.settings.body_types) == 0:
-            _, body = remap_variables((None, body))
+            _, body = canonicalise((None, body))
 
         assignments = self.find_deep_bindings4(body)
         out = []

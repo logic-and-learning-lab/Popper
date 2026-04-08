@@ -1,5 +1,5 @@
 from bitarray.util import subset, ones
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, remap_variables, format_prog, print_incomplete_solution2
+from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, canonicalise, format_prog, print_incomplete_solution2
 from . tester import Tester, janus_clear_cache
 from . bkcons import get_bk_cons
 from . unsat import UnsatCoreFinder
@@ -12,11 +12,11 @@ from . import stats
 
 def load_generator(settings, state, bkcons):
     if settings.single_solve:
-        from .gen6 import Generator
+        from . gen_norec import Generator
     elif settings.max_rules == 2 and not settings.pi_enabled:
-        from .gen3 import Generator
+        from . gen_rec import Generator
     else:
-        from .generate import Generator
+        from . gen_pi import Generator
     return Generator(settings, state, bkcons)
 
 def load_combiner(settings, tester, state):
@@ -202,7 +202,7 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
                 for subsumed_prog, message in subsumed_progs:
                     if settings.verbosity > 2:
                         logger.debug(f'\t {message}: \t {format_prog(prog)}')
-                    subsumed_prog_ = frozenset(remap_variables(rule) for rule in subsumed_prog)
+                    subsumed_prog_ = frozenset(canonicalise(rule) for rule in subsumed_prog)
                     new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
     # if hypothesis is inconsistent, prune generalisations and do not add to the combiner

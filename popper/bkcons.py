@@ -1,39 +1,16 @@
 # Code and idea from the papers:
-# Andrew Cropper, Céline Hocquette:
-# Learning Logic Programs by Discovering Where Not to Search. AAAI 2023: 6289-6296
+# Andrew Cropper, Céline Hocquette: Learning Logic Programs by Discovering Where Not to Search. AAAI 2023: 6289-6296
+# Andrew Cropper, Filipe Gouveia, David M. Cerna: Honey, I shrunk the hypothesis space (through logical preprocessing). CoRR abs/2506.06739 (2025)
 
-# Andrew Cropper, Filipe Gouveia, David M. Cerna:
-# Honey, I shrunk the hypothesis space (through logical preprocessing). CoRR abs/2506.06739 (2025)
-
-import os
 import string
 import clingo
-import clingo.script
 from collections import defaultdict
-from itertools import permutations, combinations, product
-
+from itertools import permutations, combinations
 from . util import generate_binary_strings
 from . import logger
 from . import stats
 from . recalls import recalls
 
-clingo.script.enable_python()
-
-class suppress_stdout_stderr:
-    """A context manager for deep suppression of stdout and stderr (including C/Fortran)."""
-    def __init__(self):
-        self.null_fds = [os.open(os.devnull, os.O_RDWR) for _ in range(2)]
-        self.save_fds = [os.dup(1), os.dup(2)]
-
-    def __enter__(self):
-        os.dup2(self.null_fds[0], 1)
-        os.dup2(self.null_fds[1], 2)
-
-    def __exit__(self, *_):
-        os.dup2(self.save_fds[0], 1)
-        os.dup2(self.save_fds[1], 2)
-        for fd in self.null_fds + self.save_fds:
-            os.close(fd)
 
 def format_tuple(items):
     """Format items as a Clingo/Prolog tuple, e.g., (V0,V1) or (V0,)."""
@@ -45,7 +22,7 @@ def format_args(items):
     """Format items as a Clingo/Prolog argument list, e.g., (V0,V1)."""
     return f"({','.join(map(str, items))})"
 
-def canonicalize_vars(*var_seqs):
+def canonicalise_vars(*var_seqs):
     """Rename variables to A, B, C... in first-appearance order across all sequences."""
     lookup = {}
     def get_var(v):
@@ -85,7 +62,7 @@ def build_props(settings, arities):
                 
                 # Canonicalize to handle symmetries
                 longer, shorter = sorted([xs, ys], key=len, reverse=True)
-                canon = canonicalize_vars(longer, shorter)
+                canon = canonicalise_vars(longer, shorter)
                 pairs.add((canon[0], canon[1]))
 
     props, cons = [], []
@@ -320,11 +297,10 @@ def get_bk_cons(settings, tester):
         logger.info(f'Pointless relation: {p}/{a}')
         settings.body_preds.remove((p, a))
 
-    base_solver = clingo.Control(['-Wnone'])
+    base_solver = clingo.Control(['-Wnone'], logger=lambda code, msg: None)
     try:
-        with suppress_stdout_stderr():
-            base_solver.add('base', [], settings.bk_string)
-            base_solver.ground([('base', [])])
+        base_solver.add('base', [], settings.bk_string)
+        base_solver.ground([('base', [])])
     except Exception:
         logger.info('Loading recalls FAILURE')
         settings.datalog = False

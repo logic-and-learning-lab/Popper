@@ -94,60 +94,69 @@ class Generator:
 
         # if settings.bkcons:
         encoding.extend(bkcons)
+        encoding.extend(self._build_ordering_constraints(arities))
 
-        if settings.single_solve:
-            assert(False)
-            # if settings.order_space:
-            #     encoding.append(DEFAULT_HEURISTIC)
+        assert(not settings.single_solve)
+
 
         encoding = '\n'.join(encoding)
 
-        # with open('ENCODING-GEN.pl', 'w') as f:
-            # f.write(encoding)
-
-        if self.settings.single_solve:
-            assert(False)
-            solver = clingo.Control(['--heuristic=Domain','-Wnone'])
-        else:
-            solver = clingo.Control(['-Wnone'])
-            NUM_OF_LITERALS = """
-            %%% External atom for number of literals in the program %%%%%
-            #external size_in_literals(n).
-            :-
-                size_in_literals(n),
-                #sum{K+1,Clause : body_size(Clause,K)} != n.
-            """
-            solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
+        solver = clingo.Control(['-Wnone'])
+        NUM_OF_LITERALS = """
+        %%% External atom for number of literals in the program %%%%%
+        #external size_in_literals(n).
+        :-
+            size_in_literals(n),
+            #sum{K+1,Clause : body_size(Clause,K)} != n.
+        """
+        solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
 
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver
 
-    # def get_prog(self):
-    #     if self.handle is None:
-    #         self.handle = iter(self.solver.solve(yield_ = True))
-    #     self.model = next(self.handle, None)
-    #     if self.model is None:
-    #         return None
-    #     atoms = self.model.symbols(shown = True)
+    def _build_ordering_constraints(self, arities):
+        order_cons = []
+        max_arity = max(arities)
 
-    #     if self.settings.single_solve:
-    #         return self.parse_model_single_rule(atoms)
+        for arity in range(2, max_arity + 1):
+            xs1 = ','.join(f'V{i}' for i in range(arity))
+            xs2 = ','.join(f'X{i}' for i in range(arity))
 
-    #     if self.settings.pi_enabled:
-    #         return self.parse_model_pi(atoms)
+            if arity < max_arity:
+                prefix = ','.join('0' for _ in range(arity, max_arity)) + ',' + xs1
+            else:
+                prefix = xs1
 
-    #     return self.parse_model_recursion(atoms)
+            order_cons.append(f'appears(Rule,({prefix})):- body_literal(Rule,_,_,({xs2})), ordered_vars(({xs2}), ({xs1})).')
+            order_cons.append(f'var_tuple(({prefix})):- body_pred(P,{arity}), vars({arity},Vars), not bad_body(P,Vars), not type_mismatch(P,Vars), ordered_vars(Vars,OrderedVars), OrderedVars=({xs1}).')
+            order_cons.append(f'var_member(V,({prefix})):-vars(_, Vars), Vars=({xs1}), var_member(V,Vars).')
 
-    # generate.py
+        xs1 = ','.join(f'V{i}' for i in range(max_arity))
+        for k in range(max_arity):
+            xs2 = ','.join(f'V{i}' for i in range(k))
+            if k > 0 and k < max_arity:
+                xs2 += ','
+            xs2 += ','.join(f'X{i}' for i in range(k, max_arity))
+            order_cons.append(f'lower(({xs1}),({xs2})):- var_tuple(({xs1})), var_tuple(({xs2})), X{k} < V{k}.')
+
+        for k in range(max_arity - 1):
+            v0 = f'V{k}'
+            v1 = f'V{k+1}'
+            order_cons.append(f'seen_lower(Rule, Vars1, V):- V={v1}-1, Vars1 = ({xs1}), {v0} < V < {v1}, lower(Vars1, Vars2), var_tuple(Vars1), appears(Rule, Vars2), var_member(V, Vars2), not head_var(Rule,V).')
+            order_cons.append(f'gap_(({xs1}),{v1}-1):- var_tuple(({xs1})), {v0} < V < {v1}, var(V).')
+
+        order_cons.append(f'gap(({xs1}),V):- gap_(({xs1}), _), #max' + '{X :gap_((' + xs1 + '), X)} == V.')
+        order_cons.append(f':- appears(Rule,({xs1})), gap(({xs1}), V), not seen_lower(Rule,({xs1}),V), not head_var(Rule,V).')
+
+        return order_cons
 
     def get_prog(self):
         size = 0
         while True:
             if size > self.state.max_literals:
                 return
-            # self.settings.logger.out(f'Generating programs of size: {size}')
             self.current_size = size
             with stats.duration('init'):
                 self.update_solver(size)
@@ -161,14 +170,8 @@ class Generator:
                     if self.model is None:
                         break
                     atoms = self.model.symbols(shown=True)
-                    if self.settings.single_solve:
-                        assert(False)
-                        yield self.parse_model_single_rule(atoms)
-                    elif self.settings.pi_enabled:
-                        assert(False)
-                        yield self.parse_model_pi(atoms)
-                    else:
-                        yield self.parse_model_recursion(atoms)
+                    yield self.parse_model_recursion(atoms)
+
 
     def gen_symbol(self, literal, backend):
         sign, pred, args = literal
@@ -645,7 +648,7 @@ class Generator:
     def unsat_constraint2(self, body):
         # if no types, remap variables
         if len(self.settings.body_types) == 0:
-            _, body = remap_variables((None, body))
+            _, body = canonicalise((None, body))
 
         assignments = self.find_deep_bindings4(body)
         for rule_id in range(self.settings.max_rules):
@@ -710,7 +713,7 @@ class Generator:
                 continue
             yield assignment
 
-def remap_variables(rule):
+def canonicalise(rule):
     head, body = rule
     head_vars = set()
 

@@ -1,4 +1,4 @@
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, get_raw_prog, Literal, remap_variables, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions
+from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, get_raw_prog, Literal, canonicalise, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions
 from bitarray.util import subset, any_and, ones
 from itertools import chain, combinations, permutations
 class SubsumeChecker:
@@ -82,7 +82,7 @@ class SubsumeChecker:
                 out.update(xs)
                 continue
 
-            for x in self.find_variants(remap_variables(new_rule)):
+            for x in self.find_variants(canonicalise(new_rule)):
                 self.pruned2.add(hash(x))
 
             if subsumed:
@@ -103,20 +103,6 @@ class SubsumeChecker:
             for x in self.state.paired_success_sets[i]:
                 if subset(pos_covered, x):
                     return True
-        return False
-
-    def check_subsumed_by_two_v2(self, prog_size, prog2_size, pos_covered, pos_covered2):
-        space = prog2_size - prog_size
-
-        if space < self.state.min_size:
-            return False
-        uncovered = pos_covered2 & ~pos_covered
-
-        for xs, size in self.state.success_sets.items():
-            if size > space:
-                continue
-            if subset(xs, uncovered):
-                return True
         return False
 
     def check_covers_too_few(self, prog_size, pos_covered):

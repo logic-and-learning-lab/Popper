@@ -1,6 +1,5 @@
 from functools import cache
 import clingo
-import clingo.script
 import signal
 import argparse
 import os
@@ -9,7 +8,6 @@ from itertools import permutations, chain, combinations
 from collections import defaultdict
 from typing import NamedTuple
 from . recalls import recalls
-import logging
 
 class Literal(NamedTuple):
     predicate: str
@@ -19,7 +17,6 @@ TIMEOUT=3600
 MAX_VARS=6
 MAX_BODY=10
 ANYTIME_TIMEOUT=10
-BKCONS_TIMEOUT=5
 BATCH_SIZE=1000
 
 class Constraint:
@@ -133,9 +130,6 @@ def rule_is_invented(rule):
 def mdl_score(fn, fp, size):
     return fn + fp + size
 
-def flatten(xs):
-    return [item for sublist in xs for item in sublist]
-
 settings = None
 
 def get_body_preds(solver):
@@ -150,44 +144,70 @@ class Settings:
 
     @classmethod
     def from_args(cls):
-        args = parse_args() #
+        args = parse_args()
         bk, ex, bias = load_kbpath(args.kbpath)
         conf = vars(args)
         conf.update({'bk_file': bk, 'ex_file': ex, 'bias_file': bias})
         settings = Settings(**conf)
         return settings
 
-    def __init__(self, cmd_line=False, info=True, timeout=TIMEOUT, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, kbpath=None, verbosity=1, joiner=False):
+    def __init__(self, timeout=TIMEOUT, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, verbosity=1, joiner=False, **kwargs):
 
-        self.joiner=joiner
+        self.joiner = joiner
         self.nuwls = nuwls
         self.anytime_timeout = anytime_timeout
         self.bias_file = bias_file
         self.bk_file = bk_file
-        self.bkcons_timeout = BKCONS_TIMEOUT
         self.ex_file = ex_file
-        self.has_directions = False
-        self.info = info
         self.max_body = max_body
         self.max_vars = max_vars
         self.noisy = noisy
+        self.timeout = timeout
+        self.verbosity = verbosity
+        self.debug = verbosity == 3
+        self.show_stats = self.verbosity > 1
+
+        # Internal state
+        self.has_directions = False
         self.non_datalog_flag = False
         self.pi_enabled = False
         self.recursion_enabled = False
-        self.timeout = timeout
+        self.datalog = True
+        self.directions = defaultdict(dict)
+        self.head_literal = None
+        self.body_preds = set()
+        self.literal_inputs = {}
+        self.literal_outputs = {}
+        self.cached_atom_args = {}
+        self.cached_literals = {}
+        self.head_types = None
+        self.body_types = {}
+        self.max_rules = 1
+        self.single_solve = True
 
         if noisy:
             self.batch_size = BATCH_SIZE
         else:
             self.batch_size = 1
 
-        self.verbosity=verbosity
-        self.debug=verbosity==3
-        self.show_stats = self.verbosity>1
-
         logger.set_verbosity(verbosity)
 
         solver = clingo.Control(['-Wnone'])
+        self._load_bias(solver)
+        self._deduce_flags(solver)
+        self._deduce_directions(solver)
+        self._deduce_head_and_max_bounds(solver)
+        self._validate_directions()
+        self._initialize_caches(solver)
+        self._deduce_types(solver)
+
+        self.single_solve = not (self.recursion_enabled or self.pi_enabled)
+
+        logger.info(f'Max rules: {self.max_rules}')
+        logger.info(f'Max vars: {self.max_vars}')
+        logger.info(f'Max body: {self.max_body}')
+
+    def _load_bias(self, solver):
         with open(self.bias_file) as f:
             solver.add('bias', [], f.read())
         solver.add('bias', [], """
@@ -201,30 +221,29 @@ class Settings:
         """)
         solver.ground([('bias', [])])
 
-        for x in solver.symbolic_atoms.by_signature('enable_recursion', arity=0):
+    def _deduce_flags(self, solver):
+        for _ in solver.symbolic_atoms.by_signature('enable_recursion', arity=0):
             self.recursion_enabled = True
 
-        for x in solver.symbolic_atoms.by_signature('enable_pi', arity=0):
+        for _ in solver.symbolic_atoms.by_signature('enable_pi', arity=0):
             self.pi_enabled = True
 
-        for x in solver.symbolic_atoms.by_signature('non_datalog', arity=0):
+        for _ in solver.symbolic_atoms.by_signature('non_datalog', arity=0):
             self.non_datalog_flag = True
 
         self.datalog = not self.non_datalog_flag
 
-        self.directions = directions = defaultdict(dict)
-
+    def _deduce_directions(self, solver):
         for x in solver.symbolic_atoms.by_signature('direction', arity=2):
             self.has_directions = True
             pred = x.symbol.arguments[0].name
             for i, y in enumerate(x.symbol.arguments[1].arguments):
                 y = y.name
-                if y == 'in':
-                    arg_dir = '+'
-                elif y == 'out':
-                    arg_dir = '-'
-                directions[pred][i] = arg_dir
+                arg_dir = '+' if y == 'in' else '-' if y == 'out' else None
+                if arg_dir:
+                    self.directions[pred][i] = arg_dir
 
+    def _deduce_head_and_max_bounds(self, solver):
         max_arity = 0
         for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
             max_arity = max(max_arity, x.symbol.arguments[1].number)
@@ -249,33 +268,32 @@ class Settings:
             self.max_rules = 1
 
         self.body_preds = get_body_preds(solver)
-        max_arity = max(max_arity, max((arity for (pred, arity) in self.body_preds), default=0))
 
-        # check that directions are all given
+    def _validate_directions(self):
         if self.has_directions:
             for pred, arity in self.body_preds:
-                if len(directions[pred]) != arity:
-                    print(f'ERROR: missing directions for {pred}/{arity}')
+                if len(self.directions[pred]) != arity:
+                    logger.out(f'ERROR: missing directions for {pred}/{arity}')
                     exit()
 
-        self.literal_inputs = {}
-        self.literal_outputs = {}
+    def _initialize_caches(self, solver):
+        max_arity = max((arity for (pred, arity) in self.body_preds), default=0)
+        if self.head_literal:
+            max_arity = max(max_arity, len(self.head_literal.arguments))
 
         if self.has_directions:
             head_pred, head_args = self.head_literal
             for head_args in permutations(range(self.max_vars), len(head_args)):
-                head_inputs = frozenset(arg for i, arg in enumerate(head_args) if directions[head_pred][i] == '+')
-                head_outputs = frozenset(arg for i, arg in enumerate(head_args) if directions[head_pred][i] == '-')
+                head_inputs = frozenset(arg for i, arg in enumerate(head_args) if self.directions[head_pred][i] == '+')
+                head_outputs = frozenset(arg for i, arg in enumerate(head_args) if self.directions[head_pred][i] == '-')
                 self.literal_inputs[(head_pred, head_args)] = head_inputs
                 self.literal_outputs[(head_pred, head_args)] = head_outputs
 
-        self.cached_atom_args = {}
-        for i in range(1, max_arity+1):
+        for i in range(1, max_arity + 1):
             for args in permutations(range(0, self.max_vars), i):
                 k = tuple(clingo.Number(x) for x in args)
                 self.cached_atom_args[k] = args
 
-        self.cached_literals = {}
         for pred, arity in self.body_preds:
             for k, args in self.cached_atom_args.items():
                 if len(args) != arity:
@@ -283,20 +301,18 @@ class Settings:
                 literal = Literal(pred, args)
                 self.cached_literals[(pred, k)] = literal
                 if self.has_directions:
-                    self.literal_inputs[(pred, args)] = frozenset(arg for i, arg in enumerate(args) if directions[pred][i] == '+')
-                    self.literal_outputs[(pred, args)] = frozenset(arg for i, arg in enumerate(args) if directions[pred][i] == '-')
+                    self.literal_inputs[(pred, args)] = frozenset(arg for i, arg in enumerate(args) if self.directions[pred][i] == '+')
+                    self.literal_outputs[(pred, args)] = frozenset(arg for i, arg in enumerate(args) if self.directions[pred][i] == '-')
 
-        pred = self.head_literal.predicate
-        arity = len(self.head_literal.arguments)
+        # Cache head literals
+        if self.head_literal:
+            head_pred, head_arity = self.head_literal.predicate, len(self.head_literal.arguments)
+            for k, args in self.cached_atom_args.items():
+                if len(args) == head_arity:
+                    self.cached_literals[(head_pred, k)] = Literal(head_pred, args)
 
-        for k, args in self.cached_atom_args.items():
-            if len(args) != arity:
-                continue
-            literal = Literal(pred, args)
-            self.cached_literals[(pred, k)] = literal
-
-        self.head_types = None
-        self.body_types = {}
+    def _deduce_types(self, solver):
+        head_pred = self.head_literal.predicate if self.head_literal else None
         for x in solver.symbolic_atoms.by_signature('type', arity=2):
             pred = x.symbol.arguments[0].name
             xs = [y.name for y in x.symbol.arguments[1].arguments]
@@ -307,18 +323,12 @@ class Settings:
 
         if len(self.body_types) > 0 or self.head_types is not None:
             if self.head_types is None:
-                print('WARNING: MISSING HEAD TYPE')
+                logger.out('WARNING: MISSING HEAD TYPE')
                 exit()
-            for p,a in self.body_preds:
+            for p, a in self.body_preds:
                 if p not in self.body_types:
-                    print(f'WARNING: MISSING BODY TYPE FOR {p}')
+                    logger.out(f'WARNING: MISSING BODY TYPE FOR {p}')
                     exit()
-
-        self.single_solve = not (self.recursion_enabled or self.pi_enabled)
-
-        logger.info(f'Max rules: {self.max_rules}')
-        logger.info(f'Max vars: {self.max_vars}')
-        logger.info(f'Max body: {self.max_body}')
 
 def init_settings(in_settings=None):
     global settings
@@ -331,59 +341,27 @@ def generate_binary_strings(bit_count):
     from itertools import product
     return list(product((0,1), repeat=bit_count))[1:-1]
 
-def rename_variables(rule):
+def canonicalise(rule):
     head, body = rule
-    if head:
-        head_vars = set(head.arguments)
-    else:
-        head_vars = set()
+    head_vars = set(head.arguments) if head else set()
     next_var = len(head_vars)
+    lookup = {v: v for v in head_vars}
     new_body = []
-    lookup = {}
-    for pred, args in sorted(body, key=lambda x: x.predicate):
+    for lit in sorted(body):
         new_args = []
-        for var in args:
-            if var in head_vars:
-                new_args.append(var)
-                continue
-            elif var not in lookup:
-                lookup[var] = next_var
-                next_var+=1
-            new_args.append(lookup[var])
-        new_body.append((pred, tuple(new_args)))
-    return (head, new_body)
-
-def get_raw_prog(prog):
-    xs = set()
-    for rule in prog:
-        h, b = rename_variables(rule)
-        xs.add((h, frozenset(b)))
-    return frozenset(xs)
-
-def prog_hash(prog):
-    new_prog = get_raw_prog(prog)
-    return hash(new_prog)
-
-def remap_variables(rule):
-    head, body = rule
-
-    head_vars = frozenset(head.arguments) if head else frozenset()
-
-    next_var = len(head_vars)
-    lookup = {i:i for i in head_vars}
-
-    new_body = []
-    for pred, args in body:
-        new_args = []
-        for var in args:
+        for var in lit.arguments:
             if var not in lookup:
                 lookup[var] = next_var
-                next_var+=1
+                next_var += 1
             new_args.append(lookup[var])
-        new_atom = Literal(pred, tuple(new_args))
-        new_body.append(new_atom)
-
+        new_body.append(Literal(lit.predicate, tuple(new_args)))
     return head, frozenset(new_body)
+
+def get_raw_prog(prog):
+    return frozenset(canonicalise(rule) for rule in prog)
+
+def prog_hash(prog):
+    return hash(get_raw_prog(prog))
 
 def format_prog(prog):
     return '\n'.join(format_rule(rule) for rule in prog)
@@ -478,46 +456,66 @@ def generalisations(prog, allow_headless=True, recursive=False):
 
 def order_rule_datalog(head, body):
     seen_vars = set(head.arguments) if head else set()
-
     recursive_literals = []
-    body_info = []
+    pending_lits = set()
+    
+    # literal -> set of its arguments
+    lit_to_args = {}
+    # literal -> number of currently ungrounded arguments
+    remaining_count = {}
+    # variable -> set of pending literals containing it
+    var_to_lits = defaultdict(set)
 
     for lit in body:
         if head and lit.predicate == head.predicate:
             recursive_literals.append(lit)
         else:
-            # Pre-calculate set(args) ONCE here to use .issubset() later
-            body_info.append([lit, lit.arguments, lit.predicate, set(lit.arguments)])
+            pending_lits.add(lit)
+            args = set(lit.arguments)
+            lit_to_args[lit] = args
+            ungrounded = args - seen_vars
+            remaining_count[lit] = len(ungrounded)
+            for v in ungrounded:
+                var_to_lits[v].add(lit)
 
     ordered_body = []
     local_recalls = recalls
-
-    while body_info:
-        selected_idx = -1
-
-        # 1. FAST PATH: Find first literal where all args are grounded
-        for i, info in enumerate(body_info):
-            # info[3] is the pre-calculated set(args)
-            if info[3].issubset(seen_vars):
-                selected_idx = i
-                break
-
-        # 2. SLOW PATH: fallback to score
-        if selected_idx == -1:
+    
+    # Literals that are fully grounded
+    grounded_queue = [lit for lit in pending_lits if remaining_count[lit] == 0]
+    
+    # Sort for deterministic behavior in slow path
+    all_pending_sorted = sorted(list(pending_lits))
+    
+    while pending_lits:
+        if grounded_queue:
+            selected = grounded_queue.pop()
+        else:
+            # SLOW PATH
             best_score = float('inf')
-            for i, info in enumerate(body_info):
-                # info[2] is predicate, info[1] is arguments (tuple)
-                key = (info[2], tuple(1 if x in seen_vars else 0 for x in info[1]))
-                score = local_recalls[key]
-
-                if score < best_score:
-                    best_score = score
-                    selected_idx = i
-
-        # Use pop(i) to maintain the stable relative order of the remaining literals
-        lit, args, _, _ = body_info.pop(selected_idx)
-        ordered_body.append(lit)
-        seen_vars.update(args)
+            selected = None
+            for lit in all_pending_sorted:
+                if lit in pending_lits:
+                    key = (lit.predicate, tuple(1 if x in seen_vars else 0 for x in lit.arguments))
+                    score = local_recalls[key]
+                    if score < best_score:
+                        best_score = score
+                        selected = lit
+                    if score == 0:
+                        break
+        
+        pending_lits.remove(selected)
+        ordered_body.append(selected)
+        
+        # Update groundedness
+        new_vars = lit_to_args[selected] - seen_vars
+        for v in new_vars:
+            seen_vars.add(v)
+            for lit in var_to_lits[v]:
+                if lit in pending_lits:
+                    remaining_count[lit] -= 1
+                    if remaining_count[lit] == 0:
+                        grounded_queue.append(lit)
 
     return head, tuple(ordered_body) + tuple(recursive_literals)
 
@@ -600,14 +598,14 @@ def print_prog_score(prog, score):
     recall = 'n/a'
     if (tp+fn) > 0:
         recall = f'{tp / (tp+fn):0.2f}'
-    print('*'*10 + ' SOLUTION ' + '*'*10)
+    logger.out('*'*10 + ' SOLUTION ' + '*'*10)
     if settings.noisy:
-        print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size} MDL:{size+fn+fp}')
+        logger.out(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size} MDL:{size+fn+fp}')
     else:
-      print(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
+      logger.out(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
     for rule in order_prog(prog):
-        print(format_rule(order_rule(rule)))
-    print('*'*30)
+        logger.out(format_rule(order_rule(rule)))
+    logger.out('*'*30)
 
 def has_valid_directions(rule):
     if settings.has_directions:
