@@ -348,7 +348,6 @@ class Tester():
         neg_covered = frozenbitarray(neg_covered_bits)
         return neg_covered
 
-    @cache
     def has_redundant_literal(self, prog):
         for head, body in prog:
             lits = tuple(format_literal_janus(lit) for lit in body)
@@ -358,7 +357,6 @@ class Tester():
             if query_once(q)["truth"]:
                 return True
         return False
-
 
     # THIS IS CALLED BY THE SUBSUMER CHECKER
     # FOR EACH RULE, WE CHECK WHAT THE SUBRULES ENTAIL:
