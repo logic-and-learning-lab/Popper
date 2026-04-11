@@ -1,13 +1,15 @@
 # Code and idea from the paper: Andrew Cropper, Céline Hocquette: Learning Logic Programs by Finding Minimal Unsatisfiable Subprograms. ECAI 2024: 4295-4302
 
 from . import logger
-from . util import rule_is_recursive, prog_is_recursive, calc_rule_size, format_rule, Constraint, get_raw_prog, canonicalise, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions, Literal
+from . util import rule_is_recursive, prog_is_recursive, format_rule, Constraint, get_raw_prog, canonicalise, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions, Literal
 
 class UnsatCoreFinder:
     def __init__(self, settings, tester):
         self.settings = settings
         self.seen_prog = set()
-        self.unsat_set = set()
+        self.seen_raw_prog = set()
+        self.unsat_prog = set()
+        self.unsat_raw_prog = set()
         self.tester = tester
 
     def explain_incomplete(self, prog):
@@ -23,7 +25,7 @@ class UnsatCoreFinder:
 
             if is_headless_unsat:
                 # If a headless version (just the body) is unsat, it's a strong UNSAT constraint
-                _, body = list(subprog)[0]
+                _, body = next(iter(subprog))
                 yield (Constraint.UNSAT, body)
                 continue
 
@@ -48,18 +50,16 @@ class UnsatCoreFinder:
 
         for subprog in generalisations(prog, allow_headless=True, recursive=has_recursion):
             subprog = frozenset(subprog)
-            subprog_hash = hash(subprog)
-            
-            if subprog_hash in self.seen_prog:
+
+            if subprog in self.seen_prog:
                 continue
 
             raw_prog = get_raw_prog(subprog)
-            raw_hash = hash(raw_prog)
-            if raw_hash in self.seen_prog:
+            if raw_prog in self.seen_raw_prog:
                 continue
 
-            self.seen_prog.add(subprog_hash)
-            self.seen_prog.add(raw_hash)
+            self.seen_prog.add(subprog)
+            self.seen_raw_prog.add(raw_prog)
 
             if self._should_skip(subprog):
                 continue
@@ -83,7 +83,7 @@ class UnsatCoreFinder:
             headless = any(head is None for head, body in subprog)
 
             if headless:
-                body = list(test_prog)[0][1]
+                _, body = next(iter(test_prog))
                 if self.tester.is_body_sat(body):
                     continue
             else:
@@ -93,8 +93,8 @@ class UnsatCoreFinder:
             # Found an unsatisfiable generalisation
             seen_raw_unsat.add(raw_prog)
             seen_unsat_theory.add(subprog)
-            self.unsat_set.add(raw_prog)
-            self.unsat_set.add(subprog)
+            self.unsat_raw_prog.add(raw_prog)
+            self.unsat_prog.add(subprog)
 
             xs = self.explain_totally_incomplete_aux(subprog, seen_unsat_theory, seen_raw_unsat)
             if xs:
@@ -109,21 +109,22 @@ class UnsatCoreFinder:
         """Check if any subset of a single-rule program is already known to be unsat."""
         if len(subprog) != 1:
             return False
-            
-        h_, b_ = list(subprog)[0]
+
+        h_, b_ = next(iter(subprog))
         for x in non_empty_powerset(b_):
             # Check both headless and headed variants in the global unsat set
             sub_variants = [[(None, x)], [(h_, x)]]
             for sub_ in sub_variants:
                 fs_sub = frozenset(sub_)
-                if fs_sub in self.unsat_set:
+                if fs_sub in self.unsat_prog:
                     return True
-                if get_raw_prog(fs_sub) in self.unsat_set:
+                if get_raw_prog(fs_sub) in self.unsat_raw_prog:
                     return True
         return False
 
     def prog_is_ok(self, prog):
         """Check if a program satisfies basic sanity constraints (connectivity, directions)."""
+        has_recursion = False
         for rule in prog:
             head, body = rule
             if head and not head_connected(rule):
@@ -134,21 +135,17 @@ class UnsatCoreFinder:
 
             if not has_valid_directions(rule):
                 return False
+                
+            if head is None: # Headless rules not allowed in multi-rule programs here
+                if len(prog) > 1:
+                    return False
+            elif rule_is_recursive(rule):
+                has_recursion = True
+                if len(body) == 1:
+                    return False
 
         if len(prog) == 1:
             return True
-
-        # Recursive programs must have a base case and rules with body > 1
-        has_recursion = False
-        for rule in prog:
-            h, b = rule
-            if h is None: # Headless rules not allowed in multi-rule programs here
-                return False
-
-            if rule_is_recursive(rule):
-                has_recursion = True
-                if len(b) == 1:
-                    return False
 
         if not has_recursion:
             return False
@@ -162,7 +159,7 @@ class UnsatCoreFinder:
         """Check if recursive variables appear in input positions of other literals."""
         if not self.settings.has_directions:
             return False
-            
+
         for rule in prog:
             rec_outputs = set()
             non_rec_inputs = set()
@@ -173,7 +170,7 @@ class UnsatCoreFinder:
                     rec_outputs.update(self.settings.literal_outputs[(pred, args)])
                 else:
                     non_rec_inputs.update(self.settings.literal_inputs[(pred, args)])
-            if rec_outputs & non_rec_inputs:
+            if not rec_outputs.isdisjoint(non_rec_inputs):
                 return True
         return False
 
@@ -181,8 +178,8 @@ class UnsatCoreFinder:
         """Check if all head variables appear in the body for every rule."""
         for head, body in prog:
             _head_pred, head_args = head
-            body_args = set(x for _pred, args in body for x in args)
-            if any(x not in body_args for x in head_args):
+            body_args = {x for _pred, args in body for x in args}
+            if not set(head_args).issubset(body_args):
                 return False
         return True
 
@@ -192,9 +189,4 @@ def seen_more_general_unsat(prog, unsat_set):
 
 def build_test_prog(subprog):
     """Convert a raw subprogram into a frozenset of (Literal, frozenset(Literal)) for testing."""
-    test_prog = []
-    for head, body in subprog:
-        head_literal = Literal(head[0], head[1]) if head else False
-        body_literals = frozenset(Literal(pred, args) for pred, args in body)
-        test_prog.append((head_literal, body_literals))
-    return frozenset(test_prog)
+    return frozenset((head if head else False, body) for head, body in subprog)
