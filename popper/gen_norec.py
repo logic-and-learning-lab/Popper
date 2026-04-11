@@ -190,8 +190,7 @@ class Generator:
             self.model.context.add_nogood([atom])
 
     def constrain(self, cons):
-        all_ground_cons = set()
-
+        add_nogood = self.model.context.add_nogood
         for xs in cons:
             con_type = xs[0]
             con_prog = xs[1]
@@ -203,11 +202,8 @@ class Generator:
                     ground_cons = self.unsat_constraint(con_prog)
                 case Constraint.BANISH | Constraint.GENERALISATION:
                     ground_cons = self.build_generalisation_constraint(con_prog, con_size)
-            all_ground_cons.update(frozenset(x) for x in ground_cons)
-
-        add_nogood = self.model.context.add_nogood
-        for ground_body in all_ground_cons:
-            add_nogood(ground_body)
+            for ground_body in ground_cons:
+                add_nogood(ground_body)
 
     def unsat_constraint(self, body):
         if len(self.settings.body_types) == 0:
