@@ -33,12 +33,14 @@ def canonicalise_vars(*var_seqs):
 
 def connected(xs, ys):
     """Check if two variable sequences share at least one variable."""
-    return bool(set(xs) & set(ys))
+    return not set(xs).isdisjoint(ys)
+
+ALPHABET_CACHE = tuple(set(string.ascii_uppercase[:i]) for i in range(20))
 
 def uses_in_order(xs, ys):
     """Check if variables are used in order (A, B, C...) without gaps."""
     zs = set(xs) | set(ys)
-    return all(string.ascii_uppercase[i] in zs for i in range(len(zs)))
+    return zs == ALPHABET_CACHE[len(zs)]
 
 TIDY_OUTPUT = """
 #defined body_literal/4.

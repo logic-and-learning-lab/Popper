@@ -385,36 +385,42 @@ def theory_subsumes(prog1, prog2):
 def head_connected(rule):
     head, body = rule
     head_connected_vars = set(head.arguments)
-    body_literals = set(body)
+    body_literals = list(body)
 
     while body_literals:
-        connected = []
+        progress = False
+        next_body_literals = []
         for literal in body_literals:
-            if any (x in head_connected_vars for x in literal.arguments):
+            if not head_connected_vars.isdisjoint(literal.arguments):
                 head_connected_vars.update(literal.arguments)
-                connected.append(literal)
-        if not connected and body_literals:
+                progress = True
+            else:
+                next_body_literals.append(literal)
+        if not progress and body_literals:
             return False
-        body_literals.difference_update(connected)
+        body_literals = next_body_literals
     return True
 
 def connected(body):
-    if len(body) == 1:
+    if len(body) <= 1:
         return True
 
-    body = list(body)
-    connected_vars = set(body[0].arguments)
-    body_literals = set(body[1:])
+    it = iter(body)
+    connected_vars = set(next(it).arguments)
+    body_literals = list(it)
 
     while body_literals:
-        connected = []
+        progress = False
+        next_body_literals = []
         for literal in body_literals:
-            if any (x in connected_vars for x in literal.arguments):
+            if not connected_vars.isdisjoint(literal.arguments):
                 connected_vars.update(literal.arguments)
-                connected.append(literal)
-        if not connected and body_literals:
+                progress = True
+            else:
+                next_body_literals.append(literal)
+        if not progress and body_literals:
             return False
-        body_literals.difference_update(connected)
+        body_literals = next_body_literals
     return True
 
 def non_empty_powerset(iterable):
@@ -526,7 +532,7 @@ def order_rule(rule):
         return rule
 
     if settings.datalog:
-        return order_rule_datalog(head, frozenset(body))
+        return order_rule_datalog(head, body)
 
     if not settings.has_directions:
         return rule
@@ -627,7 +633,7 @@ def has_valid_directions_(rule):
         if not grounded:
             return True
     else:
-        if all(not lit_inputs[(p, a)] for p, a in body):
+        if not any(lit_inputs[(p, a)] for p, a in body):
             return True
         grounded = set()
 

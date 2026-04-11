@@ -12,7 +12,7 @@ from ortools.sat.python import cp_model
 from pysat.formula import IDPool
 from . import stats
 from . import logger
-from bitarray.util import subset, any_and, ones, zeros
+from bitarray.util import subset, any_and, ones, zeros, count_and, count_or
 from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution2
 import time
 from . state import update_best_hypothesis
@@ -221,11 +221,8 @@ class CombinerMDL:
                 gain2 = tp2 - fp2 - size2
 
                 # --- UNION COVERAGE ---
-                pos_union = pos1 | pos2
-                neg_union = neg1 | neg2
-
-                tp_union = pos_union.count(1)
-                fp_union = neg_union.count(1)
+                tp_union = count_or(pos1, pos2)
+                fp_union = count_or(neg1, neg2)
                 size_union = size1 + size2
 
                 gain_union = tp_union - fp_union - size_union
@@ -954,8 +951,8 @@ class CombinerMDL:
             best_delta = 0  # only accept strictly improving moves
 
             for h in candidates:
-                new_tp = (~covered_pos & self.coverage_pos[h]).count(1)
-                new_fp = (~covered_neg & self.coverage_neg[h]).count(1)
+                new_tp = count_and(~covered_pos, self.coverage_pos[h])
+                new_fp = count_and(~covered_neg, self.coverage_neg[h])
                 size, tp, fp = self.scores[h]
 
                 delta = size + new_fp - new_tp

@@ -108,6 +108,7 @@ class Tester():
         self.empty_neg_covered = frozenbitarray(self.num_neg)
 
         self.cached_pos_covered = {}
+        self.cached_redundant_literal = {}
 
         if self.settings.recursion_enabled:
             query_once(f'assert(timeout({EVAL_TIMEOUT})), fail')
@@ -349,13 +350,19 @@ class Tester():
         return neg_covered
 
     def has_redundant_literal(self, prog):
+        cached = self.cached_redundant_literal
+        if prog in cached:
+            return cached[prog]
+
         for head, body in prog:
             lits = tuple(format_literal_janus(lit) for lit in body)
             if head:
                 lits = (f"not_{format_literal_janus(head)}",) + lits
             q = f"redundant_literal([{','.join(lits)}])"
             if query_once(q)["truth"]:
+                cached[prog] = True
                 return True
+        cached[prog] = False
         return False
 
     # THIS IS CALLED BY THE SUBSUMER CHECKER
@@ -512,4 +519,3 @@ def deduce_neg_example_recalls(settings, atoms):
         all_recalls[(pred, args)] = recall
 
     recalls.update(all_recalls)
-

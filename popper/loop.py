@@ -6,7 +6,6 @@ from . unsat import UnsatCoreFinder
 from . allsat import AllSatCoreFinder
 from . subsume import SubsumeChecker
 from . state import SearchState, update_best_hypothesis
-from . joiner import Joiner
 from . import logger
 from . import stats
 
@@ -27,6 +26,12 @@ def load_combiner(settings, tester, state):
         from . combiner_size import CombinerSize
         return CombinerSize(settings, tester, state)
 
+def load_joiner(settings, tester, state):
+    if not settings.joiner:
+        return None
+    from . joiner import Joiner
+    return Joiner(settings, tester, state)
+
 def check_size_change(state, prog_size):
     if state.search_depth == prog_size:
         return False
@@ -40,7 +45,7 @@ def popper(settings, tester, state, bkcons):
     subsumer = SubsumeChecker(settings, tester, state)
     generator = load_generator(settings, state, bkcons)
     combiner = load_combiner(settings, tester, state)
-    joiner = Joiner(settings, tester, state)
+    joiner = load_joiner(settings, tester, state)
     num_pos, num_neg = tester.num_pos, tester.num_neg
     noisy = settings.noisy
 
@@ -88,12 +93,14 @@ def popper(settings, tester, state, bkcons):
 
         if add_to_combiner:
             new_hyp_found = combiner.add_prog(prog, prog_size, test_result)
+            if joiner:
+                joiner.add_consistent_program(test_result.pos_covered, prog_size)
         
-        if settings.joiner and not add_to_combiner and not tester.has_redundant_literal(prog):
+        if joiner and not add_to_combiner and not tester.has_redundant_literal(prog):
             joiner.add_prog(prog, prog_size, test_result, add_to_combiner)
 
         # JOINER
-        if settings.joiner and size_change:
+        if joiner and size_change:
             for join_res in joiner.join(prog, prog_size):
                 join_prog, _, join_test_res = join_res
                 if settings.verbosity > 2:
