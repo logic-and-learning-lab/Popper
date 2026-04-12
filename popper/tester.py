@@ -4,8 +4,8 @@ from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
 from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, Literal, mdl_score, order_rule, generate_binary_strings
-from bitarray import bitarray, frozenbitarray
-from bitarray.util import ones
+from bitarray import frozenbitarray
+from bitarray.util import ones, zeros
 from collections import defaultdict
 from itertools import combinations
 from typing import NamedTuple
@@ -57,6 +57,11 @@ def parse_rule_for_recursion(rule):
 
 def janus_clear_cache():
     return query_once('retractall(janus:py_call_cache(_String,_Input,_TV,_M,_Goal,_Dict,_Truth,_OutVars))')
+
+def frozen_bits_from_indices(size, indices):
+    bits = zeros(size)
+    bits[indices] = 1
+    return frozenbitarray(bits)
 
 class Tester():
 
@@ -138,9 +143,7 @@ class Tester():
             if not pos_covered_list:
                 pos_covered = self.empty_pos_covered
             else:
-                pos_covered_bits = bitarray(self.num_pos)
-                pos_covered_bits[pos_covered_list] = 1
-                pos_covered = frozenbitarray(pos_covered_bits)
+                pos_covered = frozen_bits_from_indices(self.num_pos, pos_covered_list)
 
         # cache results
         self.cached_pos_covered[hash(prog)] = pos_covered
@@ -184,9 +187,7 @@ class Tester():
                     atom_str, body_str = parse_single_rule(prog)
                     q = f'findfirstn(K, _ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
                     neg_covered = query_once(q, {'K':max_k_neg})['S']
-                neg_covered_bits = bitarray(self.num_neg)
-                neg_covered_bits[neg_covered] = 1
-                neg_covered = frozenbitarray(neg_covered_bits)
+                neg_covered = frozen_bits_from_indices(self.num_neg, neg_covered)
                 if neg_covered.count(1) == max_k_neg:
                     too_many_fp = True
 
@@ -322,10 +323,7 @@ class Tester():
         if not pos_covered:
             return self.empty_pos_covered
 
-        pos_covered_bits = bitarray(self.num_pos)
-        pos_covered_bits[pos_covered] = 1
-        pos_covered = frozenbitarray(pos_covered_bits)
-        return pos_covered
+        return frozen_bits_from_indices(self.num_pos, pos_covered)
 
     # ONLY CALLED BY JOINER AND THIS CLASS
     def test_prog_neg(self, prog):
@@ -344,10 +342,7 @@ class Tester():
         if not neg_covered:
             return self.empty_neg_covered
 
-        neg_covered_bits = bitarray(self.num_neg)
-        neg_covered_bits[neg_covered] = 1
-        neg_covered = frozenbitarray(neg_covered_bits)
-        return neg_covered
+        return frozen_bits_from_indices(self.num_neg, neg_covered)
 
     def has_redundant_literal(self, prog):
         cached = self.cached_redundant_literal

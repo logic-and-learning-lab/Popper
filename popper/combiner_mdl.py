@@ -1026,8 +1026,8 @@ class CombinerMDL:
                     logger.info(f'Calling MaxSAT solver for final noisy combine stage with {len(self.saved_progs)} rules')
                 new_solution, cost = self.find_combination_norec_maxsat(last_combine_stage)
 
-        if not new_hyp_found and len(new_solution) == 0:
-            return False
+        if len(new_solution) == 0:
+            return new_hyp_found
 
         if cost > self.state.best_hypothesis_mdl:
             assert(False)
