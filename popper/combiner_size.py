@@ -361,7 +361,7 @@ class CombinerSize:
 
         return [], False
 
-    def find_combination_norec_cp_all_optimal(self):
+    def find_combination_norec_cp_all_opt(self):
         cp_mod = cp_model.CpModel()
 
         encoding = []
@@ -417,10 +417,9 @@ class CombinerSize:
 
         # current_best_size =  if self.state.best_hypothesis_score else float('inf')
         # cp_mod.Add(total_size_expr <= int(self.state.best_hypothesis_size) + 10)
-        cp_mod.Add(total_size_expr == int(self.state.best_hypothesis_size))
+        cp_mod.Add(total_size_expr <= int(self.state.best_hypothesis_size))
 
         # moo = []
-
 
         # 5. SOLVER SETUP
         solver = cp_model.CpSolver()
@@ -431,7 +430,16 @@ class CombinerSize:
         printer = AllOptPrinter(rule_vars=rule_vars,ruleid_to_rule=ruleid_to_rule, num_pos=self.tester.num_pos, num_neg=self.tester.num_neg, state=self.state)
 
         # 6. SOLVE
-        solver.Solve(cp_mod, printer)
+        status = solver.Solve(cp_mod, printer)
+
+        if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            return [], False
+
+        # Ensure this new model is strictly better than the global best
+        mdl = solver.ObjectiveValue()
+        best_prog = [ruleid_to_rule[k] for k, var in rule_vars.items() if solver.Value(var)]
+
+        return best_prog, mdl
 
 
     # GARBAGE AND NEEDS REFACTORING
@@ -580,9 +588,11 @@ class CombinerSize:
             if not self.settings.nuwls:
                 if last_combine_stage:
                     logger.info(f'Calling CP solver for final combine stage with {len(self.saved_progs)} rules')
-                new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
-                # if last_combine_stage:
-                    # self.find_combination_norec_cp_all_optimal()
+                if last_combine_stage and self.settings.all_opt:
+                    # this method finds all (not actually all but more than one) optimal hypotheses
+                    new_solution, cost = self.find_combination_norec_cp_all_opt()
+                else:
+                    new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
             else:
                 if last_combine_stage:
                     logger.info(f'Calling MaxSAT solver for final noiseless combine stage with {len(self.saved_progs)} rules')

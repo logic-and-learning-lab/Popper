@@ -32,6 +32,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Popper is an ILP system based on learning from failures')
     parser.add_argument('kbpath', help='Path to files to learn from')
     parser.add_argument('--noisy', '-n', default=False, action='store_true', help='Use a noisy (MDL) cost function (default: False)')
+    parser.add_argument('--all-opt', default=False, action='store_true', help='Enable all-opt mode (default: False)')
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {TIMEOUT})')
     parser.add_argument('--max-body', type=int, default=MAX_BODY, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
     parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
@@ -151,8 +152,9 @@ class Settings:
         settings = Settings(**conf)
         return settings
 
-    def __init__(self, timeout=TIMEOUT, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, verbosity=1, joiner=False, **kwargs):
+    def __init__(self, timeout=TIMEOUT, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, verbosity=1, joiner=False, all_opt=False, **kwargs):
 
+        self.all_opt = all_opt
         self.joiner = joiner
         self.nuwls = nuwls
         self.anytime_timeout = anytime_timeout

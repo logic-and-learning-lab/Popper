@@ -124,7 +124,7 @@ class OptPrinter(cp_model.CpSolverSolutionCallback):
         # self.state.best_hypothesis_size = current_hypothesis_size
         # self.state.best_hypothesis = hypothesis
         # self.state.best_hypothesis_mdl = current_cost
-        print("OPT")
+        # print("OPT")
         print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count))
 
 class CombinerMDL:
@@ -647,7 +647,6 @@ class CombinerMDL:
 
         return best_prog, mdl
 
-
     def find_combination_norec_cp_all_opt(self):
 
         ruleid_to_rule = {}
@@ -707,7 +706,7 @@ class CombinerMDL:
             objective_terms.append(fp)
 
         total_mdl_expr = cp_model.LinearExpr.Sum(objective_terms)
-        model.Add(total_mdl_expr == int(self.state.best_hypothesis_mdl))
+        model.Add(total_mdl_expr <= int(self.state.best_hypothesis_mdl))
 
         # 6. SOLVE
         solver = cp_model.CpSolver()
@@ -715,7 +714,7 @@ class CombinerMDL:
         solver.parameters.linearization_level = 2
         solver.parameters.enumerate_all_solutions = True
 
-        print('LAST COMBINER!!!', self.state.best_hypothesis_size)
+        # print('LAST COMBINER!!!', self.state.best_hypothesis_size)
         # printer = OptPrinter(rule_vars=rule_vars,ruleid_to_rule=ruleid_to_rule, num_pos=self.tester.num_pos, num_neg=self.tester.num_neg, state=self.state)
 
         printer = OptPrinter(
@@ -729,7 +728,19 @@ class CombinerMDL:
             state=self.state  # This lets the printer update your global state
         )
 
-        solver.Solve(model, printer)
+        status = solver.Solve(model, printer)
+
+        if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            return [], False
+
+        # Ensure this new model is strictly better than the global best
+        mdl = solver.ObjectiveValue()
+        # if mdl_limit <= mdl:
+            # return [], False
+
+        best_prog = [ruleid_to_rule[k] for k, var in rule_vars.items() if solver.Value(var)]
+
+        return best_prog, mdl
 
     # OLD!
     # NEEDS REFACTORING
@@ -1020,7 +1031,12 @@ class CombinerMDL:
             if not self.settings.nuwls:
                 if last_combine_stage:
                     logger.info(f'Calling CP solver for final noisy combine stage with {len(self.saved_progs)} rules')
-                new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
+
+                if last_combine_stage and self.settings.all_opt:
+                    # this method finds all (not actually all but more than one) optimal hypotheses
+                    new_solution, cost = self.find_combination_norec_cp_all_opt()
+                else:
+                    new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
             else:
                 if last_combine_stage:
                     logger.info(f'Calling MaxSAT solver for final noisy combine stage with {len(self.saved_progs)} rules')
