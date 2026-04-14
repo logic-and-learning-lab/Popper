@@ -34,8 +34,8 @@ def parse_args():
     parser.add_argument('--noisy', '-n', default=False, action='store_true', help='Use a noisy (MDL) cost function (default: False)')
     parser.add_argument('--all-opt', default=False, action='store_true', help='Enable all-opt mode (default: False)')
     parser.add_argument('--timeout', type=float, default=TIMEOUT, help=f'Overall timeout in seconds (default: {TIMEOUT})')
-    parser.add_argument('--max-body', type=int, default=MAX_BODY, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
-    parser.add_argument('--max-vars', type=int, default=MAX_VARS, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
+    parser.add_argument('--max-body', type=int, default=None, help=f'Maximum number of body literals allowed in rule (default: {MAX_BODY})')
+    parser.add_argument('--max-vars', type=int, default=None, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
     parser.add_argument('--nuwls', default=False, action='store_true', help='Use nuwls solver (default: False)')
     parser.add_argument('-v', action='count', default=1, dest='verbosity', help='Increase verbosity (-v, -vv, or -vvv)')
     parser.add_argument('-j', dest='joiner', default=False, action='store_true', help='Use join stage (default: False)')
@@ -148,11 +148,15 @@ class Settings:
         args = parse_args()
         bk, ex, bias = load_kbpath(args.kbpath)
         conf = vars(args)
+        conf.update({
+            'max_body_override': args.max_body is not None,
+            'max_vars_override': args.max_vars is not None,
+        })
         conf.update({'bk_file': bk, 'ex_file': ex, 'bias_file': bias})
         settings = Settings(**conf)
         return settings
 
-    def __init__(self, timeout=TIMEOUT, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, verbosity=1, joiner=False, all_opt=False, **kwargs):
+    def __init__(self, timeout=TIMEOUT, max_body=MAX_BODY, max_vars=MAX_VARS, ex_file=None, bk_file=None, bias_file=None, noisy=False, nuwls=None, anytime_timeout=ANYTIME_TIMEOUT, verbosity=1, joiner=False, all_opt=False, max_body_override=False, max_vars_override=False, **kwargs):
 
         self.all_opt = all_opt
         self.joiner = joiner
@@ -161,8 +165,10 @@ class Settings:
         self.bias_file = bias_file
         self.bk_file = bk_file
         self.ex_file = ex_file
-        self.max_body = max_body
-        self.max_vars = max_vars
+        self.max_body = MAX_BODY if max_body is None else max_body
+        self.max_vars = MAX_VARS if max_vars is None else max_vars
+        self.max_body_override = max_body_override
+        self.max_vars_override = max_vars_override
         self.noisy = noisy
         self.timeout = timeout
         self.verbosity = verbosity
@@ -254,11 +260,11 @@ class Settings:
             head_args = tuple(range(head_arity))
             self.head_literal = Literal(head_pred, head_args)
 
-        if self.max_body == MAX_BODY:
+        if not self.max_body_override:
             for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
                 self.max_body = x.symbol.arguments[0].number
 
-        if self.max_vars == MAX_VARS:
+        if not self.max_vars_override:
             for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
                 self.max_vars = x.symbol.arguments[0].number
 
