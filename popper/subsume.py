@@ -14,27 +14,21 @@ class SubsumeChecker:
         if seen is None:
             seen = set()
 
-        head, body = list(prog)[0]
-        body = list(body)
+        head, body = next(iter(prog))
 
-        if len(body) == 0:
+        if len(body) < 2:
             return []
 
         state = self.state
         out = set()
         head_vars = set(head.arguments)
 
-        for i in range(len(body)):
-            new_body = body[:i] + body[i + 1:]
-            new_body = frozenset(new_body)
+        for atom in body:
+            new_body = body - {atom}
 
-            if len(new_body) == 0:
+            if new_body in seen:
                 continue
-
-            k1 = frozenset(new_body)
-            if k1 in seen:
-                continue
-            seen.add(k1)
+            seen.add(new_body)
 
             new_rule = (head, new_body)
             new_prog = frozenset({new_rule})
@@ -47,19 +41,8 @@ class SubsumeChecker:
             if any(hash(frozenset(x)) in self.pruned2 for x in non_empty_powerset(new_body)):
                 continue
 
-            if not head_connected(new_rule):
-                xs = self.subsumed_or_covers_too_few(new_prog, seen)
-                out.update(xs)
-                continue
-
-            if not has_valid_directions(new_rule):
-                xs = self.subsumed_or_covers_too_few(new_prog, seen)
-                out.update(xs)
-                continue
-
-            if self.tester.has_redundant_literal(new_prog):
-                xs = self.subsumed_or_covers_too_few(new_prog, seen)
-                out.update(xs)
+            if not head_connected(new_rule) or not has_valid_directions(new_rule) or self.tester.has_redundant_literal(new_prog):
+                out.update(self.subsumed_or_covers_too_few(new_prog, seen))
                 continue
 
             new_prog_size = calc_prog_size(new_prog)
@@ -69,7 +52,7 @@ class SubsumeChecker:
                 subsumed = sub_prog_pos_covered in state.success_sets and state.success_sets[sub_prog_pos_covered] <= new_prog_size
                 subsumed = subsumed or any(size <= new_prog_size and subset(sub_prog_pos_covered, xs) for xs, size in state.success_sets.items())
             else:
-                subsumed = sub_prog_pos_covered in self.state.success_sets or any(subset(sub_prog_pos_covered, xs) for xs in self.state.success_sets)
+                subsumed = sub_prog_pos_covered in state.success_sets or any(subset(sub_prog_pos_covered, xs) for xs in state.success_sets)
 
             subsumed_by_two = not subsumed and self.check_subsumed_by_two(sub_prog_pos_covered, new_prog_size)
             covers_too_few = not subsumed and not subsumed_by_two and self.check_covers_too_few(new_prog_size, sub_prog_pos_covered)
@@ -78,7 +61,7 @@ class SubsumeChecker:
                 continue
 
             xs = self.subsumed_or_covers_too_few(new_prog, seen)
-            if len(xs) > 0:
+            if xs:
                 out.update(xs)
                 continue
 
@@ -89,10 +72,8 @@ class SubsumeChecker:
                 out.add((new_prog, 'SUBSUMED (GENERALISATION)'))
             elif subsumed_by_two:
                 out.add((new_prog, 'SUBSUMED BY TWO (GENERALISATION)'))
-            elif covers_too_few:
-                out.add((new_prog, 'COVERS TOO FEW (GENERALISATION)'))
             else:
-                assert False
+                out.add((new_prog, 'COVERS TOO FEW (GENERALISATION)'))
 
         return out
 
@@ -197,7 +178,7 @@ class SubsumeChecker:
 
         # MAX TOTAL RULES = 4
         # this prog must be used with 1 or 2 or 3 existing progs
-        elif max_additional_rules == 3:
+        if max_additional_rules == 3:
             # success_sets = sorted(((pos_covered_, size) for (pos_covered_, size) in self.state.success_sets.items()), key=lambda x: x[1])
             n = len(success_sets)
 
