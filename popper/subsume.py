@@ -1,6 +1,7 @@
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, get_raw_prog, Literal, canonicalise, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions
 from bitarray.util import subset, any_and, ones
 from itertools import chain, combinations, permutations
+from . import stats
 class SubsumeChecker:
 
     def __init__(self, settings, tester, state):
@@ -8,6 +9,7 @@ class SubsumeChecker:
         self.tester = tester
         self.state = state
         self.tmp = {}
+        self.tmp2 = set()
         self.pruned2 = set()
 
     def subsumed_or_covers_too_few(self, prog, seen=None):
@@ -86,6 +88,15 @@ class SubsumeChecker:
                     return True
         return False
 
+    # def check_covers_too_few(self, prog_size, pos_covered):
+    #     with stats.duration("A"):
+    #         A = self.check_covers_too_few_v1(prog_size, pos_covered)
+    #     with stats.duration("B"):
+    #         B = self.check_covers_too_few_v2(prog_size, pos_covered)
+
+    #     assert(A == B)
+    #     return A
+
     def check_covers_too_few(self, prog_size, pos_covered):
         k1 = hash((prog_size, pos_covered))
         if k1 in self.tmp:
@@ -102,6 +113,23 @@ class SubsumeChecker:
         self.tmp[k1] = v
         self.tmp[k2] = v
         return v
+
+    # @AC, SHOULD SWITCH TO THIS CODE
+    # def check_covers_too_few_v2(self, prog_size, pos_covered):
+    #     k = (prog_size, pos_covered)
+    #     if k in self.tmp2:
+    #       return True           # k is only present when result is True
+
+    #     max_literals = self.state.max_literals
+    #     search_depth = self.state.search_depth
+
+    #     # ... run the actual check ...
+    #     v = self.check_covers_too_few_(prog_size, pos_covered)
+
+    #     if v:
+    #         self.tmp2.add(k)
+    #     # never store False — falls through anyway, and may become True later
+    #     return v
 
     def check_covers_too_few_(self, prog_size, pos_covered):
         num_pos = self.tester.num_pos

@@ -65,3 +65,9 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
         # if we use joiner, then we do not learn rules in increasing size order, so skip min coverage pruning
         if not settings.joiner:
             state.min_pos_coverage = 2
+
+    # prune stale paired_success_sets buckets
+    stale = [k for k in state.paired_success_sets if k > state.max_literals]
+    for k in stale:
+        # print('DELETE state.paired_success_set')
+        del state.paired_success_sets[k]

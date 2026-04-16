@@ -3,7 +3,7 @@ from importlib import resources
 from janus_swi import query_once, consult
 from functools import cache
 from contextlib import contextmanager
-from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, prog_hash, format_rule, Literal, mdl_score, order_rule, generate_binary_strings
+from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, get_raw_prog, format_rule, Literal, mdl_score, order_rule, generate_binary_strings
 from bitarray import frozenbitarray
 from bitarray.util import ones, zeros
 from collections import defaultdict
@@ -54,6 +54,14 @@ def parse_single_rule(prog):
 @cache
 def parse_rule_for_recursion(rule):
     return format_rule(order_rule(rule))[:-1]
+
+@cache
+def rule_has_redundant_literal(rule):
+    head, body = rule
+    lits = tuple(format_literal_janus(lit) for lit in body)
+    if head:
+        lits = (f"not_{format_literal_janus(head)}",) + lits
+    return query_once(f"redundant_literal([{','.join(lits)}])")["truth"]
 
 def janus_clear_cache():
     return query_once('retractall(janus:py_call_cache(_String,_Input,_TV,_M,_Goal,_Dict,_Truth,_OutVars))')
@@ -113,7 +121,6 @@ class Tester():
         self.empty_neg_covered = frozenbitarray(self.num_neg)
 
         self.cached_pos_covered = {}
-        self.cached_redundant_literal = {}
 
         if self.settings.recursion_enabled:
             query_once(f'assert(timeout({EVAL_TIMEOUT})), fail')
@@ -146,7 +153,7 @@ class Tester():
                 pos_covered = frozen_bits_from_indices(self.num_pos, pos_covered_list)
 
         # cache results
-        self.cached_pos_covered[hash(prog)] = pos_covered
+        self.cached_pos_covered[prog] = pos_covered
 
         tp = pos_covered.count(1)
         fn = self.num_pos - tp
@@ -251,11 +258,10 @@ class Tester():
     # used by the unsat core checker to see if a rule is satisfiable
     def is_sat(self, prog):
 
-        k1 = hash(prog)
-        if k1 in self.cached_pos_covered:
-            return self.cached_pos_covered[k1].any()
+        if prog in self.cached_pos_covered:
+            return self.cached_pos_covered[prog].any()
 
-        k = prog_hash(prog)
+        k = get_raw_prog(prog)
         if k in self.cached_pos_covered:
             return self.cached_pos_covered[k].any()
 
@@ -345,36 +351,22 @@ class Tester():
         return frozen_bits_from_indices(self.num_neg, neg_covered)
 
     def has_redundant_literal(self, prog):
-        cached = self.cached_redundant_literal
-        if prog in cached:
-            return cached[prog]
-
-        for head, body in prog:
-            lits = tuple(format_literal_janus(lit) for lit in body)
-            if head:
-                lits = (f"not_{format_literal_janus(head)}",) + lits
-            q = f"redundant_literal([{','.join(lits)}])"
-            if query_once(q)["truth"]:
-                cached[prog] = True
-                return True
-        cached[prog] = False
-        return False
+        return any(rule_has_redundant_literal(rule) for rule in prog)
 
     # THIS IS CALLED BY THE SUBSUMER CHECKER
     # FOR EACH RULE, WE CHECK WHAT THE SUBRULES ENTAIL:
     def get_pos_covered(self, prog):
 
-        k1 = hash(prog)
-        if k1 in self.cached_pos_covered:
-            return self.cached_pos_covered[k1]
+        if prog in self.cached_pos_covered:
+            return self.cached_pos_covered[prog]
 
-        k = prog_hash(prog)
+        k = get_raw_prog(prog)
         if k in self.cached_pos_covered:
             return self.cached_pos_covered[k]
 
         pos_covered = self._test_prog_pos(prog)
         self.cached_pos_covered[k] = pos_covered
-        self.cached_pos_covered[k1] = pos_covered
+        self.cached_pos_covered[prog] = pos_covered
         return pos_covered
 
     @contextmanager

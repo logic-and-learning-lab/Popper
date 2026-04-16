@@ -880,8 +880,6 @@ class CombinerMDL:
             candidates.remove(best)
             out.append(best)
 
-
-
         fn = self.tester.num_pos - covered_pos.count(1)
         fp = covered_neg.count(1)
 
