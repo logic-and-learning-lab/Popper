@@ -56,7 +56,7 @@ class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
 
         # 3. Objective Value (Total MDL)
         # current_cost should be equal to (current_hypothesis_size + fn_count + fp_count)
-        current_cost = self.ObjectiveValue()
+        current_cost = int(self.ObjectiveValue())
 
         # 4. Reconstruct Hypothesis
         hypothesis = [
@@ -517,104 +517,21 @@ class CombinerMDL:
         # Returns the raw fn + fp + size as requested in your snippet
         return best_prog, mdl
 
-    # def save_state(self):
-    #     import pickle
-    #     # Bundle the objects into a dictionary
-    #     data_to_save = {
-    #         'saved_progs': self.saved_progs,
-    #         'prog_lookup': self.prog_lookup,
-    #         'coverage_pos': self.coverage_pos,
-    #         'coverage_neg': self.coverage_neg,
-    #         'num_pos' : self.tester.num_pos,
-    #         'num_neg': self.tester.num_neg
-    #     }
-
-    #     with open('DUMP.pkl', 'wb') as f:
-    #         pickle.dump(data_to_save, f)
-    #     # print(f"Progress saved to {FILENAME}")
-
     def find_combination_norec_cp(self, last_combine_stage=False):
+        model, rule_vars, fn_vars, fp_vars, ruleid_to_rule, ruleid_to_size, total_mdl_expr = self._build_mdl_model()
 
-        ruleid_to_rule = {}
-        ruleid_to_size = {}
+        mdl_limit = self.state.best_hypothesis_mdl if self.state.best_hypothesis_mdl else float('inf')
+        if mdl_limit != float('inf'):
+            model.Add(total_mdl_expr < int(mdl_limit))
 
-        num_pos = self.tester.num_pos
-        num_neg = self.tester.num_neg
-
-        rules_covering_pos = [[] for _ in range(num_pos)]
-        rules_covering_neg = [[] for _ in range(num_neg)]
-
-        N = len(self.saved_progs)
-
-        # 1. PARSE RULES
-        for k, prog_hash in enumerate(self.saved_progs, start=1):
-
-
-            # prog = self.prog_lookup[prog_hash]
-            # pos_covered = self.coverage_pos[prog_hash]
-            # neg_covered = self.coverage_neg[prog_hash]
-            # # UNCOMMENT TO SHOW PROGRAMS ADDED TO THE SOLVER
-            # tp = len(pos_covered)
-            # fp = len(neg_covered)
-            # size = calc_prog_size(prog)
-            # fn = self.tester.num_pos - tp
-            # # print(f'size: {size} fp:{fp} tp:{tp} mdl:{size + fp + fn} {format_prog(prog)}')
-            # # print(f'\tpos_covered:{tuple(pos_covered.search(1))}')
-            # # print(f'\tneg_covered:{tuple(neg_covered.search(1))}')
-
-
-            prog = self.prog_lookup[prog_hash]
-            rule = next(iter(prog))
-            ruleid_to_rule[k] = rule
-            ruleid_to_size[k] = calc_rule_size(rule)
-
-            for ex in self.coverage_pos[prog_hash].search(1):
-                rules_covering_pos[ex].append(k)
-            for ex in self.coverage_neg[prog_hash].search(1):
-                rules_covering_neg[ex].append(k)
-
-        # 2. INITIALIZE CP-SAT MODEL & VARIABLES
-        model = cp_model.CpModel()
-        rule_vars = {k: model.NewBoolVar(f'r_{k}') for k in range(1, N + 1)}
-        fn_vars = [model.NewBoolVar(f'fn_{i}') for i in range(num_pos)]
-        fp_vars = [model.NewBoolVar(f'fp_{j}') for j in range(num_neg)]
-
-        for i in range(num_pos):
-            rules = [rule_vars[k] for k in rules_covering_pos[i]]
-            model.AddBoolOr(rules + [fn_vars[i]])
-
-        for j in range(num_neg):
-            rules = [rule_vars[k] for k in rules_covering_neg[j]]
-            for r_var in rules:
-                model.AddImplication(r_var, fp_vars[j])
+        model.Minimize(total_mdl_expr)
 
         if self.state.best_hypothesis:
-            # print('warm starting')
             best_set = {hash(r) for r in self.state.best_hypothesis}
             for k, var in rule_vars.items():
                 rule = ruleid_to_rule[k]
                 model.AddHint(var, 1 if hash(rule) in best_set else 0)
 
-        # 4. OBJECTIVE FUNCTION (MDL)
-        objective_terms = []
-        # Size Cost
-        for k in range(1, N + 1):
-            objective_terms.append(rule_vars[k] * ruleid_to_size[k])
-        # Penalty Costs
-        for fn in fn_vars:
-            objective_terms.append(fn)
-        for fp in fp_vars:
-            objective_terms.append(fp)
-
-        total_mdl_expr = cp_model.LinearExpr.Sum(objective_terms)
-        model.Minimize(total_mdl_expr)
-
-        # # 5. UPPER BOUND PRUNING
-        mdl_limit = self.state.best_hypothesis_mdl if self.state.best_hypothesis_mdl else float('inf')
-        if mdl_limit != float('inf'):
-            model.Add(total_mdl_expr < int(mdl_limit))
-
-        # 6. SOLVE
         solver = cp_model.CpSolver()
         solver.parameters.num_search_workers = 1
         solver.parameters.linearization_level = 2
@@ -626,11 +543,11 @@ class CombinerMDL:
             rule_vars=rule_vars,
             fn_vars=fn_vars,
             fp_vars=fp_vars,
-            num_pos=num_pos,
-            num_neg=num_neg,
+            num_pos=self.tester.num_pos,
+            num_neg=self.tester.num_neg,
             ruleid_to_rule=ruleid_to_rule,
             ruleid_to_size=ruleid_to_size,
-            state=self.state  # This lets the printer update your global state
+            state=self.state,
         )
 
         status = solver.Solve(model, printer)
@@ -638,29 +555,58 @@ class CombinerMDL:
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return [], False
 
-        # Ensure this new model is strictly better than the global best
         mdl = solver.ObjectiveValue()
         if mdl_limit <= mdl:
             return [], False
 
         best_prog = [ruleid_to_rule[k] for k, var in rule_vars.items() if solver.Value(var)]
-
         return best_prog, mdl
 
-    def find_combination_norec_cp_all_opt(self):
+
+    def _enumerate_all_optimal(self):
+        model, rule_vars, fn_vars, fp_vars, ruleid_to_rule, ruleid_to_size, total_mdl_expr = self._build_mdl_model()
+
+        optimal_mdl = self.state.best_hypothesis_mdl if self.state.best_hypothesis_mdl else float('inf')
+        if optimal_mdl == float('inf'):
+            assert(False)
+        model.Add(total_mdl_expr == int(optimal_mdl))
+
+        solver = cp_model.CpSolver()
+        solver.parameters.num_search_workers = 1
+        solver.parameters.linearization_level = 2
+        solver.parameters.enumerate_all_solutions = True
+
+        printer = OptPrinter(
+            rule_vars=rule_vars,
+            fn_vars=fn_vars,
+            fp_vars=fp_vars,
+            num_pos=self.tester.num_pos,
+            num_neg=self.tester.num_neg,
+            ruleid_to_rule=ruleid_to_rule,
+            ruleid_to_size=ruleid_to_size,
+            state=self.state,
+        )
+
+        status = solver.Solve(model, printer)
+
+        if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            return [], False
+
+        best_prog = [ruleid_to_rule[k] for k, var in rule_vars.items() if solver.Value(var)]
+        return best_prog, solver.ObjectiveValue()
+
+
+    def _build_mdl_model(self):
+        """Builds the CP-SAT model and returns it along with all supporting data structures."""
+        num_pos = self.tester.num_pos
+        num_neg = self.tester.num_neg
+        N = len(self.saved_progs)
 
         ruleid_to_rule = {}
         ruleid_to_size = {}
-
-        num_pos = self.tester.num_pos
-        num_neg = self.tester.num_neg
-
         rules_covering_pos = [[] for _ in range(num_pos)]
         rules_covering_neg = [[] for _ in range(num_neg)]
 
-        N = len(self.saved_progs)
-
-        # 1. PARSE RULES
         for k, prog_hash in enumerate(self.saved_progs, start=1):
             prog = self.prog_lookup[prog_hash]
             rule = next(iter(prog))
@@ -672,7 +618,6 @@ class CombinerMDL:
             for ex in self.coverage_neg[prog_hash].search(1):
                 rules_covering_neg[ex].append(k)
 
-        # 2. INITIALIZE CP-SAT MODEL & VARIABLES
         model = cp_model.CpModel()
         rule_vars = {k: model.NewBoolVar(f'r_{k}') for k in range(1, N + 1)}
         fn_vars = [model.NewBoolVar(f'fn_{i}') for i in range(num_pos)]
@@ -683,64 +628,17 @@ class CombinerMDL:
             model.AddBoolOr(rules + [fn_vars[i]])
 
         for j in range(num_neg):
-            rules = [rule_vars[k] for k in rules_covering_neg[j]]
-            for r_var in rules:
+            for r_var in [rule_vars[k] for k in rules_covering_neg[j]]:
                 model.AddImplication(r_var, fp_vars[j])
 
-        # if self.state.best_hypothesis:
-        #     # print('warm starting')
-        #     best_set = {hash(r) for r in self.state.best_hypothesis}
-        #     for k, var in rule_vars.items():
-        #         rule = ruleid_to_rule[k]
-        #         model.AddHint(var, 1 if hash(rule) in best_set else 0)
-
-        # # 4. OBJECTIVE FUNCTION (MDL)
-        objective_terms = []
-        # Size Cost
-        for k in range(1, N + 1):
-            objective_terms.append(rule_vars[k] * ruleid_to_size[k])
-        # Penalty Costs
-        for fn in fn_vars:
-            objective_terms.append(fn)
-        for fp in fp_vars:
-            objective_terms.append(fp)
-
-        total_mdl_expr = cp_model.LinearExpr.Sum(objective_terms)
-        model.Add(total_mdl_expr <= int(self.state.best_hypothesis_mdl))
-
-        # 6. SOLVE
-        solver = cp_model.CpSolver()
-        solver.parameters.num_search_workers = 1
-        solver.parameters.linearization_level = 2
-        solver.parameters.enumerate_all_solutions = True
-
-        # print('LAST COMBINER!!!', self.state.best_hypothesis_size)
-        # printer = OptPrinter(rule_vars=rule_vars,ruleid_to_rule=ruleid_to_rule, num_pos=self.tester.num_pos, num_neg=self.tester.num_neg, state=self.state)
-
-        printer = OptPrinter(
-            rule_vars=rule_vars,
-            fn_vars=fn_vars,
-            fp_vars=fp_vars,
-            num_pos=num_pos,
-            num_neg=num_neg,
-            ruleid_to_rule=ruleid_to_rule,
-            ruleid_to_size=ruleid_to_size,
-            state=self.state  # This lets the printer update your global state
+        objective_terms = (
+            [rule_vars[k] * ruleid_to_size[k] for k in range(1, N + 1)]
+            + fn_vars
+            + fp_vars
         )
+        total_mdl_expr = cp_model.LinearExpr.Sum(objective_terms)
 
-        status = solver.Solve(model, printer)
-
-        if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            return [], False
-
-        # Ensure this new model is strictly better than the global best
-        mdl = solver.ObjectiveValue()
-        # if mdl_limit <= mdl:
-            # return [], False
-
-        best_prog = [ruleid_to_rule[k] for k, var in rule_vars.items() if solver.Value(var)]
-
-        return best_prog, mdl
+        return model, rule_vars, fn_vars, fp_vars, ruleid_to_rule, ruleid_to_size, total_mdl_expr
 
     # OLD!
     # NEEDS REFACTORING
@@ -1031,12 +929,10 @@ class CombinerMDL:
             if not self.settings.nuwls:
                 if last_combine_stage:
                     logger.info(f'Calling CP solver for final noisy combine stage with {len(self.saved_progs)} rules')
-
+                new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
                 if last_combine_stage and self.settings.all_opt:
-                    # this method finds all (not actually all but more than one) optimal hypotheses
-                    new_solution, cost = self.find_combination_norec_cp_all_opt()
-                else:
-                    new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
+                    logger.info(f'Calling CP solver to find all optimal hypotheses')
+                    self._enumerate_all_optimal()
             else:
                 if last_combine_stage:
                     logger.info(f'Calling MaxSAT solver for final noisy combine stage with {len(self.saved_progs)} rules')
