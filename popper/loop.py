@@ -187,7 +187,7 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
                 subsumed = pos_covered in state.success_sets or any(subset(pos_covered, xs) for xs in state.success_sets)
                         
             subsumed_by_two = not subsumed and subsumer.check_subsumed_by_two(pos_covered, prog_size)
-            covers_too_few = not subsumed and not subsumed_by_two and subsumer.check_covers_too_few(prog_size, pos_covered)
+            covers_too_few = not subsumed and not subsumed_by_two and subsumer.check_covers_too_few(prog_size, pos_covered, prog)
 
         if subsumed or subsumed_by_two or covers_too_few:
             add_spec = True

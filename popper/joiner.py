@@ -5,12 +5,12 @@
 from pysat.solvers import Glucose3, Cadical153
 from pysat.card import CardEnc, EncType
 import clingo
+import os
 import time
 import collections
 from collections import defaultdict
 from bitarray import bitarray, frozenbitarray
-from bitarray.util import ones
-from bitarray.util import subset
+from bitarray.util import ones, zeros, subset
 from pysat.solvers import Solver
 from typing import NamedTuple
 from functools import reduce
@@ -57,6 +57,7 @@ class Joiner:
 
         self.head_pred = self.settings.head_literal.predicate
         self.head_args = self.settings.head_literal.arguments
+
 
         self.proghash_to_id = {}
         self.progid_to_prog = {}
@@ -182,16 +183,7 @@ class Joiner:
             self.proghash_to_id[prog_hash] = prog_id
             self.progid_to_prog[prog_id] = prog
         prog_id = self.proghash_to_id[prog_hash]
-        # if prog.negated:
-        #     adjusted_size = prog_size + 2
-        # # if the fragment selected has recursion or predicate invention we combine it as a new invented predicate
-        # # therefore we need to take into account the new body literal added
-        # elif prog_is_recursive(prog_rules) or prog_has_invention(prog_rules):
-        #     adjusted_size = prog_size + 1
-        # # otherwise we simply concatenate the body literals, therefore the size is calc_prog_size(prog)-1
-        # # (we ignore the head literal)
-        # else:
-        #     adjusted_size = prog_size - 1
+
         self.progid_to_size[prog_id] = prog_size
         self.min_size = prog_size if not self.min_size else min(self.min_size, prog_size)
         assert self.progid_to_size[prog_id] >= self.min_size
@@ -291,6 +283,7 @@ class Joiner:
         # if we do not yet have a solution, only try to find at least one fragment which cover each positive example
         if self.state.solution_found:
             self.solve_complete()
+            # list(find_good_fragments_from_joiner(self))
             return []
 
         # print('make_consistent_fragments', min_size, max_size)
@@ -444,12 +437,7 @@ class Joiner:
                 continue
 
             model_set = set(solver.get_model())
-            optimal_selected = [p for p in all_progs
-                                if prog_to_var[p] in model_set
-                                and self.pos_exs_covered[p][e]]
-
-
-
+            optimal_selected = [p for p in all_progs if prog_to_var[p] in model_set and self.pos_exs_covered[p][e]]
 
             if len(optimal_selected) < 2:
                 newly_covered.add(e)
@@ -460,13 +448,10 @@ class Joiner:
                 pos_covered &= self.pos_exs_covered[s]
 
             selected_ids, pos_covered_ = self.remove_redundant_fragments(optimal_selected, pos_covered)
-            # if len(selected_ids) < len(optimal_selected):
-            #     print(len(selected_ids), len(optimal_selected))
+            if len(selected_ids) < len(optimal_selected):
+                print(len(selected_ids), len(optimal_selected))
 
-            if pos_covered != pos_covered_:
-                print('pos_covered', frozenbitarray(pos_covered))
-                print('pos_covered_', pos_covered_)
-                # assert(frozenbitarray(pos_covered) == pos_covered_)
+            assert subset(frozenbitarray(pos_covered), pos_covered_)
 
             if not pos_covered.any():
                 newly_covered.add(e)
@@ -482,124 +467,127 @@ class Joiner:
         logger.debug(f"number of fragments found with joiner: {len(fragments)}")
         return fragments
 
+    # def solve_asp2(self):
+    #     state = self.state
+    #     uncovered = state.uncovered.copy()
+    #     fragments = []
 
-    def solve_asp2(self):
-        state = self.state
-        uncovered = state.uncovered.copy()
-        fragments = []
+    #     all_progs = list(self.program_selected_var)
+    #     if len(all_progs) < 2:
+    #         return fragments
 
-        all_progs = list(self.program_selected_var)
-        if len(all_progs) < 2:
-            return fragments
+    #     # Build static facts once
+    #     facts = []
+    #     for p in all_progs:
+    #         facts.append(f'program({p}).')
 
-        # Build static facts once
-        facts = []
-        for p in all_progs:
-            facts.append(f'program({p}).')
+    #     # Negative example facts over all programs
+    #     has_neg = False
+    #     hit_neg_union = bitarray(len(self.neg_index))
+    #     hit_neg_union.setall(0)
+    #     for p in all_progs:
+    #         hit_neg_union |= self.neg_exs_covered[p]
 
-        # Negative example facts over all programs
-        has_neg = False
-        hit_neg_union = bitarray(len(self.neg_index))
-        hit_neg_union.setall(0)
-        for p in all_progs:
-            hit_neg_union |= self.neg_exs_covered[p]
+    #     feasible = True
+    #     for x in hit_neg_union.search(1):
+    #         missers = [p for p in all_progs if not self.neg_exs_covered[p][x]]
+    #         if not missers:
+    #             feasible = False
+    #             break
+    #         for p in all_progs:
+    #             if self.neg_exs_covered[p][x]:
+    #                 facts.append(f'hits_neg({p},{x}).')
+    #                 has_neg = True
 
-        feasible = True
-        for x in hit_neg_union.search(1):
-            missers = [p for p in all_progs if not self.neg_exs_covered[p][x]]
-            if not missers:
-                feasible = False
-                break
-            for p in all_progs:
-                if self.neg_exs_covered[p][x]:
-                    facts.append(f'hits_neg({p},{x}).')
-                    has_neg = True
+    #     if not feasible or not has_neg:
+    #         return fragments
 
-        if not feasible or not has_neg:
-            return fragments
+    #     # Positive example facts: covers(P, E) for scoping per iteration
+    #     for p in all_progs:
+    #         for e in self.pos_exs_covered[p].search(1):
+    #             facts.append(f'covers_pos({p},{e}).')
 
-        # Positive example facts: covers(P, E) for scoping per iteration
-        for p in all_progs:
-            for e in self.pos_exs_covered[p].search(1):
-                facts.append(f'covers_pos({p},{e}).')
+    #     ASP_GREEDY = """
+    #     #show select/1.
+    #     2 { select(P) : program(P) }.
+    #     is_safe(E) :- select(P), hits_neg(_,E), not hits_neg(P, E).
+    #     :- select(P), hits_neg(P, E), not is_safe(E).
+    #     """
+    #     encoding = "\n".join(facts) + '\n' + ASP_GREEDY
 
-        ASP_GREEDY = """
-        #show select/1.
-        2 { select(P) : program(P) }.
-        is_safe(E) :- select(P), hits_neg(_,E), not hits_neg(P, E).
-        :- select(P), hits_neg(P, E), not is_safe(E).
-        """
-        encoding = "\n".join(facts) + '\n' + ASP_GREEDY
+    #     ctl = clingo.Control(['--warn=none'])
+    #     ctl.add("base", [], encoding)
+    #     ctl.ground([("base", [])])
 
-        ctl = clingo.Control(['--warn=none'])
-        ctl.add("base", [], encoding)
-        ctl.ground([("base", [])])
+    #     while uncovered.any():
+    #         solved = False
+    #         for e in uncovered.search(1):
+    #             # Scope to programs covering e via assumptions
+    #             assumptions = []
+    #             for p in all_progs:
+    #                 atom = clingo.Function('program', [clingo.Number(p)])
+    #                 if self.pos_exs_covered[p][e]:
+    #                     assumptions.append((atom, True))
+    #                 else:
+    #                     assumptions.append((atom, False))
 
-        while uncovered.any():
-            solved = False
-            for e in uncovered.search(1):
-                # Scope to programs covering e via assumptions
-                assumptions = []
-                for p in all_progs:
-                    atom = clingo.Function('program', [clingo.Number(p)])
-                    if self.pos_exs_covered[p][e]:
-                        assumptions.append((atom, True))
-                    else:
-                        assumptions.append((atom, False))
+    #             optimal_selected = []
+    #             def on_model(m):
+    #                 nonlocal optimal_selected
+    #                 optimal_selected = [
+    #                     a.arguments[0].number
+    #                     for a in m.symbols(atoms=True)
+    #                     if a.name == "select"
+    #                 ]
 
-                optimal_selected = []
-                def on_model(m):
-                    nonlocal optimal_selected
-                    optimal_selected = [
-                        a.arguments[0].number
-                        for a in m.symbols(atoms=True)
-                        if a.name == "select"
-                    ]
+    #             result = ctl.solve(assumptions=assumptions, on_model=on_model)
 
-                result = ctl.solve(assumptions=assumptions, on_model=on_model)
+    #             if not optimal_selected:
+    #                 continue
 
-                if not optimal_selected:
-                    continue
+    #             pos_covered = bitarray(self.pos_exs_covered[optimal_selected[0]].copy())
+    #             for s in optimal_selected[1:]:
+    #                 pos_covered &= self.pos_exs_covered[s]
 
-                pos_covered = bitarray(self.pos_exs_covered[optimal_selected[0]].copy())
-                for s in optimal_selected[1:]:
-                    pos_covered &= self.pos_exs_covered[s]
+    #             if not pos_covered.any():
+    #                 continue
 
-                if not pos_covered.any():
-                    continue
+    #             uncovered &= ~pos_covered
+    #             unfolded_prog = self.build_unfolded_program(optimal_selected)
+    #             fragments.append([unfolded_prog, frozenbitarray(pos_covered)])
+    #             solved = True
+    #             break
 
-                uncovered &= ~pos_covered
-                unfolded_prog = self.build_unfolded_program(optimal_selected)
-                fragments.append([unfolded_prog, frozenbitarray(pos_covered)])
-                solved = True
-                break
+    #         if not solved:
+    #             break
 
-            if not solved:
-                break
-
-        logger.debug(f"number of fragments found with joiner: {len(fragments)}")
-        return fragments
+    #     logger.debug(f"number of fragments found with joiner: {len(fragments)}")
+    #     return fragments
 
     def solve_complete(self):
         state = self.state
-        # uncovered = state.uncovered.copy()
         fragments = []
 
         all_progs = list(self.program_selected_var)
         if len(all_progs) < 2:
             return fragments
 
+        sizes = []
+
         # Build static facts once
         facts = []
         for p in all_progs:
             facts.append(f'program({p}).')
-            prog = self.progid_to_prog[p]
-            facts.append(f'size({p}, {calc_prog_size(prog.rules)}).')
+            size = self.progid_to_size[p]
+            # prog = self.progid_to_prog[p] # can drop
+            # size_ = calc_prog_size(prog.rules) # can drop
+            # assert(size == size_) #can drop
+            sizes.append(size)
+            facts.append(f'size({p}, {size}).')
 
         # Negative example facts over all programs
         has_neg = False
-        hit_neg_union = bitarray(len(self.neg_index))
-        hit_neg_union.setall(0)
+        hit_neg_union = zeros(len(self.neg_index))
         for p in all_progs:
             hit_neg_union |= self.neg_exs_covered[p]
 
@@ -620,31 +608,20 @@ class Joiner:
         # Positive example facts: covers(P, E) for scoping per iteration
         for p in all_progs:
             for e in self.pos_exs_covered[p].search(1):
-                facts.append(f'covers_pos({p},{e}).')
+                facts.append(f'hits_pos({p},{e}).')
 
         ASP_COMPLETE = """
         #show select/1.
         2 { select(P) : program(P) }.
-        is_safe(E) :- select(P), hits_neg(_,E), not hits_neg(P, E).
-        :- select(P), hits_neg(P, E), not is_safe(E).
-        pos(E):- covers_pos(_,E).
-        missed_pos(E):- select(P), pos(E), not covers_pos(P,E).
-        good_pos(E):- select(P), pos(E), covers_pos(P,E), not missed_pos(E).
 
-        subset(H):-
-            good_pos(E),
-            h_covers(H,E).
+        covered_pos(E) :- hits_pos(_, E), hits_pos(P, E) : select(P).
+        covered_neg(E) :- hits_neg(_, E), hits_neg(P, E) : select(P).
 
-        not_subset(H):-
-            h_covers(H,_),
-            good_pos(E),
-            not h_covers(H,E).
+        :- not covered_pos(_).    % Must cover at least one positive
+        :- covered_neg(_).        % Must NOT cover any negative
 
-        selection_differs(H):- h_covers(H,_), good_pos(E), not h_covers(H,E).
-        :- h_covers(H,_), not selection_differs(H).
-
-        :- not good_pos(_).
-
+        selection_differs(H):- consistent_covers(H,_), covered_pos(E), not consistent_covers(H,E).
+        :- consistent_covers(H,_), not selection_differs(H).
         """
 
         encoding = "\n".join(facts) + '\n' + ASP_COMPLETE
@@ -652,25 +629,44 @@ class Joiner:
 
         coverage_facts = []
         seen_selected = []
+        max_sat_time = 0.0
+        max_unsat_time = 0.0
+        debug_dir = 'asp_debug'
+        os.makedirs(debug_dir, exist_ok=True)
+
+        def dump_slowest_encoding(kind, elapsed, loop_encoding):
+            filename = f"{kind.lower()}_{time.strftime('%Y%m%d_%H%M%S')}_{time.time_ns()}.pl"
+            path = os.path.join(debug_dir, filename)
+            with open(path, 'w') as f:
+                f.write(loop_encoding)
+            print(f'{kind} max {elapsed:.6f}s {path}')
 
 
-
+        sizes = sorted(sizes)
+        # min size of a fragment is the two smallest rules - 1 (since we drop a head literal)
+        min_size = sizes[0] + sizes[1] - 1
+        print(f'MIN_SIZE: {min_size}')
 
         seen = set()
 
-        for i in range(1, self.state.max_literals):
-
+        for i in range(min_size, self.state.max_literals+1):
             seen_size_atoms = []
 
-            for j in range(0, i):
+            for j in range(1, i+1):
                 for old_prog, old_pos_covered in enumerate(self.existing_consistent[j]):
-                    k = f'old_{old_prog}'
+                    k = f'old_{j}_{old_prog}'
+                    # print(k, j)
                     for e in old_pos_covered.search(1):
-                        seen_size_atoms.append(f'h_covers({k},{e}).')
+                        seen_size_atoms.append(f'consistent_covers({k},{e}).')
+
+            if not seen_size_atoms:
+                continue
+
+            print(f'size: {i} - seen_size_atoms {len(seen_size_atoms)}')
 
             seen_size_atoms_enc = '\n'.join(seen_size_atoms)
             while True:
-                print('size', i)
+                # print('limiting max size', i)
                 # "size(N):- #sum{K : selected(P), size(P,K)} == N, N < 10."
 
                 coverage_encoding = '\n'.join(coverage_facts)
@@ -679,9 +675,10 @@ class Joiner:
                 loop_encoding = '\n'.join([encoding, seen_size_atoms_enc, coverage_encoding, seen_selected_enc, size_con])
                 # loop_encoding = '\n'.join([encoding, coverage_encoding, seen_selected_enc, size_con])
 
-                # with open('loop_encoding.pl', 'w') as f:
-                    # f.write(loop_encoding)
+                with open('loop_encoding.pl', 'w') as f:
+                    f.write(loop_encoding)
 
+                start_time = time.perf_counter()
                 ctl = clingo.Control(['--warn=none'])
                 ctl.add("base", [], loop_encoding)
                 ctl.ground([("base", [])])
@@ -691,6 +688,7 @@ class Joiner:
                     nonlocal optimal_selected
                     optimal_selected = [a.arguments[0].number for a in m.symbols(atoms=True)if a.name == "select"]
                 result = ctl.solve(on_model=on_model)
+                elapsed = time.perf_counter() - start_time
 
 
 
@@ -703,7 +701,14 @@ class Joiner:
 
                 # print('1')
                 if not optimal_selected:
+                    if elapsed > max_unsat_time:
+                        dump_slowest_encoding('UNSAT', elapsed, loop_encoding)
+                        max_unsat_time = elapsed
                     break
+
+                if elapsed > max_sat_time:
+                    dump_slowest_encoding('SAT', elapsed, loop_encoding)
+                    max_sat_time = elapsed
 
                 pos_covered = bitarray(self.pos_exs_covered[optimal_selected[0]].copy())
                 for s in optimal_selected[1:]:
@@ -717,7 +722,7 @@ class Joiner:
                 unfolded_prog = self.build_unfolded_program(optimal_selected)
                 unfolded_prog = inline_logic_rules_ast(unfolded_prog, self.head_pred)
 
-                print('size', i, optimal_selected,  calc_prog_size(unfolded_prog), tuple(pos_covered.search(1)))
+                print('found model size', i, optimal_selected,  calc_prog_size(unfolded_prog), tuple(pos_covered.search(1)))
 
                 # print('2')
                 if not pos_covered.any():
@@ -730,7 +735,7 @@ class Joiner:
                 seen_selected.append(','.join(f'select({i})' for i in optimal_selected) + ".")
 
                 for e in pos_covered.search(1):
-                    coverage_facts.append(f'h_covers({k},{e}).')
+                    coverage_facts.append(f'consistent_covers({k},{e}).')
 
                 # print('3')
                 seen.add(frozenset(optimal_selected))
@@ -825,3 +830,390 @@ def inline_logic_rules_ast(program_, target_predicate):
 
     return frozenset({inlined_rule})
 
+
+
+"""
+Enumerate non-subsumed good fragments using Formal Concept Analysis.
+
+A good fragment is a non-empty set S of positive examples such that:
+  1. some program selection T (|T| >= 2) has pos-intersection equal to S,
+  2. that selection has empty neg-intersection (consistency),
+  3. no other good fragment covers a strict superset of S.
+
+The enumeration uses Close-by-One (CbO) over the formal context
+    (programs, positive examples, "covers"),
+with consistency pruning: if a supporter's neg-intersection is non-empty,
+every super-intent inherits a non-empty neg-intersection, so the whole
+subtree is cut. A concept is emitted only when no valid extension exists,
+i.e. it is a maximal good fragment (the local roof of the consistent
+region in the intent lattice).
+"""
+
+from bitarray import bitarray, frozenbitarray
+
+
+def find_good_fragments(program_ids, pos_covers, neg_covers, num_pos,
+                        blocked_coverages=None):
+    """
+    Enumerate maximal good fragments.
+
+    Parameters
+    ----------
+    program_ids : iterable
+        Hashable program identifiers.
+    pos_covers : Mapping[id, bitarray]
+        Positive-example coverage per program (length num_pos).
+    neg_covers : Mapping[id, bitarray]
+        Negative-example coverage per program.
+    num_pos : int
+        Number of positive examples.
+    blocked_coverages : Iterable[bitarray], optional
+        Positive-coverage sets of already-known good fragments. Any
+        coverage S satisfying S ⊆ K for some K in blocked_coverages is
+        suppressed (both at emission and via subtree pruning when every
+        program in the current extent stays within K).
+
+    Yields
+    ------
+    (extent, intent) : tuple[tuple, frozenbitarray]
+        `extent` is a tuple of program ids whose pos-intersection equals
+        `intent` and whose neg-intersection is empty. Only non-subsumed
+        fragments are yielded.
+    """
+    # Filter blocked to maximal elements only (drop any K ⊆ K').
+    blocked = []
+    if blocked_coverages:
+        raw = [bitarray(b) for b in blocked_coverages]
+        for i, b in enumerate(raw):
+            dominated = False
+            for j, c in enumerate(raw):
+                if i == j:
+                    continue
+                # b ⊆ c strictly, or (b == c and j < i) to keep one copy.
+                if (b | c) == c and (b != c or j < i):
+                    dominated = True
+                    break
+            if not dominated:
+                blocked.append(b)
+
+    def subsumed(S):
+        for K in blocked:
+            if (S | K) == K:
+                return True
+        return False
+
+    # Dedup: programs with identical (pos, neg) coverage are interchangeable.
+    seen = {}
+    unique = []
+    for pid in program_ids:
+        key = (frozenbitarray(pos_covers[pid]), frozenbitarray(neg_covers[pid]))
+        if key not in seen:
+            seen[key] = pid
+            unique.append(pid)
+
+    if len(unique) < 2:
+        return
+
+    def pos_intersect(T):
+        it = iter(T)
+        acc = bitarray(pos_covers[next(it)])
+        for p in it:
+            acc &= pos_covers[p]
+        return acc
+
+    def neg_intersect(T):
+        it = iter(T)
+        acc = bitarray(neg_covers[next(it)])
+        for p in it:
+            acc &= neg_covers[p]
+        return acc
+
+    def pos_union(T):
+        acc = bitarray(num_pos)
+        acc.setall(False)
+        for p in T:
+            acc |= pos_covers[p]
+        return acc
+
+    def generate(T, S, next_e):
+        # Invariant: len(T) >= 2 and neg_intersect(T) has no 1s.
+        # Subsumption prune: if S ⊆ K for some blocked K and no program in
+        # T covers anything outside K, every descendant intent stays ⊆ K,
+        # so nothing non-subsumed lives in this subtree.
+        if blocked:
+            trapping = [K for K in blocked if (S | K) == K]
+            if trapping:
+                U = pos_union(T)
+                if any((U | K) == K for K in trapping):
+                    return
+
+        canonical = []
+        any_extension = False
+
+        for e in range(num_pos):
+            if S[e]:
+                continue
+            T_e = [p for p in T if pos_covers[p][e]]
+            if len(T_e) < 2:
+                continue
+            if neg_intersect(T_e).any():
+                continue
+            # At this point T_e is a valid extension (consistent, |T_e| >= 2).
+            any_extension = True
+            if e < next_e:
+                # Non-canonical direction in CbO's lectic order: the
+                # corresponding concept is reached via a different parent.
+                continue
+            S_e = pos_intersect(T_e)
+            # Canonicity: closure added no attribute strictly below e.
+            is_canonical = True
+            for a in range(e):
+                if S_e[a] and not S[a]:
+                    is_canonical = False
+                    break
+            if is_canonical:
+                canonical.append((e, T_e, S_e))
+
+        # Maximal iff no extension (canonical or otherwise) is consistent.
+        if not any_extension and S.any() and not subsumed(S):
+            yield tuple(T), frozenbitarray(S)
+
+        for e, T_e, S_e in canonical:
+            yield from generate(T_e, S_e, e + 1)
+
+    T0 = list(unique)
+    if neg_intersect(T0).any():
+        # Bottom of the intent lattice is already inconsistent: every
+        # smaller extent has neg-intersection at least as large, so no
+        # consistent concept exists anywhere in the lattice.
+        return
+
+    S0 = pos_intersect(T0)
+    yield from generate(T0, S0, 0)
+
+
+def _collect_blocked(joiner):
+    """Collect all known good-fragment pos-coverages from the joiner."""
+    blocked = []
+    existing = getattr(joiner, 'existing_consistent', None)
+    if existing:
+        for covs in existing.values():
+            blocked.extend(covs)
+    return blocked
+
+
+def _shrink_selection(U, intent, pos_covers, neg_covers, progid_to_size):
+    """
+    Greedily drop programs from U while preserving
+    (i)  pos-intersection == intent,
+    (ii) neg-intersection empty,
+    (iii) |T| >= 2.
+
+    Drops the heaviest program first; each drop is kept only if the
+    invariants still hold. Runs in O(|U|^2) bitarray ops — cheap
+    compared to unfolding and well below MaxSAT cost.
+    """
+    T = list(U)
+    T.sort(key=lambda p: progid_to_size[p], reverse=True)
+
+    def pos_inter(items):
+        it = iter(items)
+        acc = bitarray(pos_covers[next(it)])
+        for p in it:
+            acc &= pos_covers[p]
+        return acc
+
+    def neg_inter(items):
+        it = iter(items)
+        acc = bitarray(neg_covers[next(it)])
+        for p in it:
+            acc &= neg_covers[p]
+        return acc
+
+    changed = True
+    while changed and len(T) > 2:
+        changed = False
+        for p in list(T):
+            if len(T) <= 2:
+                break
+            trial = [q for q in T if q != p]
+            if neg_inter(trial).any():
+                continue
+            if pos_inter(trial) != intent:
+                continue
+            T = trial
+            changed = True
+    return T
+
+
+def find_good_fragments_from_joiner(joiner, max_size=None):
+    """
+    Convenience wrapper: enumerate maximal good fragments from a Joiner's
+    accumulated program state, and print the size and coverage of the
+    unfolded program for each.
+
+    The closure extent Sup(S) is the *largest* consistent selection; it
+    gives the most bloated unfolded program. We shrink it greedily (size
+    preserved: any consistent T ⊆ Sup(S) with |T|>=2 has Pos(T)=S because
+    S is non-subsumed) before unfolding.
+
+    Parameters
+    ----------
+    max_size : int, optional
+        Drop any fragment whose unfolded size is > max_size. Also skips
+        unfolding when a cheap lower bound on the unfolded size already
+        exceeds max_size (the two smallest individual program sizes in
+        the shrunk selection sum to > max_size + 1, accounting for the
+        one-literal overlap from inlining one head).
+
+    Reads `joiner.progid_to_prog`, `joiner.pos_exs_covered`,
+    `joiner.neg_exs_covered`, `joiner.progid_to_size`,
+    and `joiner.tester.num_pos`.
+    """
+    from .util import calc_prog_size
+    from .joiner import inline_logic_rules_ast
+
+    program_ids = list(joiner.progid_to_prog.keys())
+    for extent, intent in find_good_fragments(
+        program_ids,
+        joiner.pos_exs_covered,
+        joiner.neg_exs_covered,
+        joiner.tester.num_pos,
+        blocked_coverages=_collect_blocked(joiner),
+    ):
+        selection = _shrink_selection(
+            list(extent),
+            intent,
+            joiner.pos_exs_covered,
+            joiner.neg_exs_covered,
+            joiner.progid_to_size,
+        )
+        if max_size is not None:
+            sizes = sorted(joiner.progid_to_size[p] for p in selection)
+            # Any unfolded program has |T| top-level rules, each inheriting
+            # body literals from its defining program; two-program lower
+            # bound is the sum of the two smallest sizes minus 1 (one
+            # shared invented-head literal).
+            if sizes[0] + sizes[1] - 1 > max_size:
+                continue
+        unfolded = joiner.build_unfolded_program(selection)
+        unfolded = inline_logic_rules_ast(unfolded, joiner.head_pred)
+        size = calc_prog_size(unfolded)
+        if max_size is not None and size > max_size:
+            continue
+        coverage = tuple(intent.search(1))
+        print(f'fragment size={size} coverage={coverage} |T|={len(selection)}')
+        yield tuple(selection), intent, unfolded, size
+
+
+def find_optimal_fragments_from_joiner(joiner, max_size=None):
+    """
+    For each non-subsumed good coverage set S, enumerate all minimum-size
+    fragments realising S.
+
+    A selection T is *good* iff ``Pos(T) != {}`` and ``Neg(T) = {}``.
+    A fragment p (the unfolded program built from T) is *optimal for S*
+    iff its selection is good, ``Pos(T) = S`` and ``size(p) <= size(q)``
+    for every good fragment q with the same coverage S.
+
+    Pipeline:
+      1. Close-by-One enumerates the non-subsumed good coverage sets S,
+         each with its closure extent ``U = Sup(S)``.
+      2. Because S is non-subsumed, any consistent ``T ⊆ U`` with
+         ``|T| >= 2`` automatically has ``Pos(T) = S`` (a strict superset
+         would contradict S's maximality). So within each U we just need
+         minimum-weight consistent selections.
+      3. A weighted MaxSAT (RC2) instance encodes per-U:
+           - hard: for each neg n covered by some p in U, at least one
+             p in U missing n must be selected
+           - hard: at least 2 programs selected
+           - soft: cost of selecting p is ``size(p) - 1``
+             (approximating the unfolded-program size contribution;
+             exact size is recomputed after unfolding)
+         All models with the optimal cost are enumerated.
+
+    Yields
+    ------
+    (extent, intent, unfolded, size)
+        One tuple per optimal fragment.
+    """
+    from pysat.examples.rc2 import RC2
+    from pysat.formula import WCNF
+    from pysat.card import CardEnc, EncType
+    from .util import calc_prog_size
+    from .joiner import inline_logic_rules_ast
+
+    num_neg = joiner.tester.num_neg
+    num_pos = joiner.tester.num_pos
+    program_ids = list(joiner.progid_to_prog.keys())
+
+    for extent, intent in find_good_fragments(
+        program_ids,
+        joiner.pos_exs_covered,
+        joiner.neg_exs_covered,
+        num_pos,
+        blocked_coverages=_collect_blocked(joiner),
+    ):
+        U = list(extent)
+        var = {p: i + 1 for i, p in enumerate(U)}
+        top_id = len(U)
+
+        wcnf = WCNF()
+
+        # Consistency: for each negative covered by some p in U, at least
+        # one program in U that misses n must be selected.
+        for n in range(num_neg):
+            missers = [var[p] for p in U if not joiner.neg_exs_covered[p][n]]
+            if missers and len(missers) < len(U):
+                wcnf.append(missers)
+
+        # |T| >= 2
+        card = CardEnc.atleast(
+            lits=list(var.values()),
+            bound=2,
+            top_id=top_id,
+            encoding=EncType.seqcounter,
+        )
+        for cl in card.clauses:
+            wcnf.append(cl)
+
+        # Soft: penalty (size_p - 1) per selected program.
+        for p, v in var.items():
+            w = max(joiner.progid_to_size[p] - 1, 1)
+            wcnf.append([-v], weight=w)
+
+        coverage = tuple(intent.search(1))
+
+        # Cost-side prune: min-cost selection is at least (2 smallest
+        # progid_to_size[p] - 1 each). If that already exceeds the size
+        # budget, skip the solver call.
+        if max_size is not None:
+            sizes = sorted(joiner.progid_to_size[p] for p in U)
+            if len(sizes) < 2 or (sizes[0] - 1) + (sizes[1] - 1) > max_size - 1:
+                continue
+
+        with RC2(wcnf) as solver:
+            opt_cost = None
+            seen = set()
+            for model in solver.enumerate():
+                cost = solver.cost
+                # Cost approximates unfolded size; cap at max_size - 1
+                # (the soft weights are size(p) - 1 per selected program).
+                if max_size is not None and cost > max_size - 1:
+                    break
+                if opt_cost is None:
+                    opt_cost = cost
+                elif cost > opt_cost:
+                    break
+                model_set = set(model)
+                selected = tuple(sorted(p for p, v in var.items() if v in model_set))
+                if selected in seen:
+                    continue
+                seen.add(selected)
+                unfolded = joiner.build_unfolded_program(list(selected))
+                unfolded = inline_logic_rules_ast(unfolded, joiner.head_pred)
+                size = calc_prog_size(unfolded)
+                if max_size is not None and size > max_size:
+                    continue
+                print(f'optimal fragment size={size} coverage={coverage}')
+                yield selected, intent, unfolded, size
