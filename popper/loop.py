@@ -36,7 +36,7 @@ def check_size_change(state, prog_size):
     if state.search_depth == prog_size:
         return False
     state.search_depth = prog_size
-    logger.out(f'Generating hypotheses of size: {prog_size}')
+    logger.out(f'Generating partial hypotheses of size: {prog_size}')
     return True
 
 def popper(settings, tester, state, bkcons):
@@ -305,8 +305,10 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
 
     if tp > 0 and state.success_sets and fp == 0:
         with stats.duration('check subsumed and covers_too_few'):
-            # subsumed = pos_covered in state.success_sets or any(subset(pos_covered, xs) for xs in state.success_sets)
-            subsumed = (pos_covered in state.success_sets and state.success_sets[pos_covered] <= prog_size) or any(state.success_sets[xs] <= prog_size and subset(pos_covered, xs) for xs in state.success_sets)
+            if settings.joiner:
+                subsumed = (pos_covered in state.success_sets and state.success_sets[pos_covered] <= prog_size) or any(state.success_sets[xs] <= prog_size and subset(pos_covered, xs) for xs in state.success_sets)
+            else:
+                subsumed = pos_covered in state.success_sets or any(subset(pos_covered, xs) for xs in state.success_sets)
             subsumed_by_two = not subsumed and subsumer.check_subsumed_by_two(pos_covered, prog_size)
 
         if subsumed or subsumed_by_two:
