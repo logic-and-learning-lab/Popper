@@ -232,7 +232,9 @@ class Tester():
         )
 
     # used when learning programs with recursion
+    # also used by the subsumption checker
     # just checks whether they entail a negative example
+    @cache
     def test_prog_inconsistent(self, prog):
         if self.num_neg == 0:
             return False
