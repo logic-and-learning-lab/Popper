@@ -1,9 +1,31 @@
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, get_raw_prog, Literal, canonicalise, format_prog, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions
-from bitarray import bitarray
-from bitarray.util import subset, any_and, ones, zeros
-from itertools import chain, combinations, permutations
-from . import stats
+from itertools import permutations
 
+from bitarray import bitarray
+from bitarray.util import subset, zeros
+
+from . import stats
+from .util import (
+    Constraint,
+    Literal,
+    calc_prog_size,
+    canonicalise,
+    connected,
+    format_literal,
+    format_prog,
+    format_rule,
+    generalisations,
+    get_raw_prog,
+    has_valid_directions,
+    head_connected,
+    mdl_score,
+    non_empty_powerset,
+    prog_has_invention,
+    prog_is_recursive,
+    rule_is_recursive,
+    theory_subsumes,
+    timeout,
+)
+from .weighted_set_cover import solve_weighted_set_cover_cp_sat
 
 # ==========================================================================
 # Debug flag: set to False to silence the [SUBSUME] logging completely.
@@ -12,8 +34,8 @@ from . import stats
 # ==========================================================================
 SUBSUME_DEBUG = False
 
-class SubsumeChecker:
 
+class SubsumeChecker:
     def __init__(self, settings, tester, state):
         self.settings = settings
         self.tester = tester
@@ -22,46 +44,15 @@ class SubsumeChecker:
         self.tmp2 = set()
         self.pruned2 = set()
 
-        # per-checker counters for debugging the new bounds
-        self.bound_stats = {
-            'calls': 0,
-            'keep_full_cover': 0,
-            'keep_search_depth': 0,
-            'prune_min_size': 0,
-            'joiner_calls': 0,
-            'forced_total_rules': 0,
-            'forced_calls_with_commit': 0,
-            'forced_prune': 0,
-            'forced_covers_U': 0,
-            'post_forced_min_size_prune': 0,
-            'bound_A_prune': 0,
-            'bound_B_prune_beyond_A': 0,
-            'bound_C_prune_beyond_AB': 0,
-            'card_refined': 0,
-            'card_prune_beyond_old': 0,
-            'enum_prune': 0,
-            'enum_prune_beyond_old_givenup': 0,
-            'enum_keep': 0,
-        }
-
-    def _dbg(self, msg):
-        if SUBSUME_DEBUG:
-            print(f'[SUBSUME] {msg}')
-
-    def dump_bound_stats(self):
-        """Print aggregate counters of how often each bound fired."""
-        print('[SUBSUME] -------- aggregate bound stats --------')
-        width = max(len(k) for k in self.bound_stats)
-        for k, v in self.bound_stats.items():
-            print(f'[SUBSUME]   {k.ljust(width)}  {v}')
-
     def subsumed_or_covers_too_few(self, prog, seen=None):
+        # print('subsumed_or_covers_too_few', format_prog(prog))
         if seen is None:
             seen = set()
 
         head, body = next(iter(prog))
 
         if len(body) < 2:
+            # print('return []')
             return []
 
         state = self.state
@@ -78,13 +69,21 @@ class SubsumeChecker:
             new_rule = (head, new_body)
             new_prog = frozenset({new_rule})
 
-            if not self.settings.non_datalog_flag and not any(x in head_vars for literal in new_body for x in literal.arguments):
+            if not self.settings.non_datalog_flag and not any(
+                x in head_vars for literal in new_body for x in literal.arguments
+            ):
                 continue
 
-            if any(hash(frozenset(x)) in self.pruned2 for x in non_empty_powerset(new_body)):
+            if any(
+                hash(frozenset(x)) in self.pruned2 for x in non_empty_powerset(new_body)
+            ):
                 continue
 
-            if not head_connected(new_rule) or not has_valid_directions(new_rule) or self.tester.has_redundant_literal(new_prog):
+            # if not head_connected(new_rule) or not has_valid_directions(new_rule) or self.tester.has_redundant_literal(new_prog):
+            #     out.update(self.subsumed_or_covers_too_few(new_prog, seen))
+            #     continue
+
+            if not head_connected(new_rule) or not has_valid_directions(new_rule):
                 out.update(self.subsumed_or_covers_too_few(new_prog, seen))
                 continue
 
@@ -92,7 +91,7 @@ class SubsumeChecker:
             sub_prog_pos_covered = self.tester.get_pos_covered(new_prog)
 
             if self.settings.joiner:
-                subsumed = sub_prog_pos_covered in state.success_sets and state.success_sets[sub_prog_pos_covered] <= new_prog_size
+                subsumed = (sub_prog_pos_covered in state.success_sets and state.success_sets[sub_prog_pos_covered] <= new_prog_size)
                 subsumed = subsumed or any(size <= new_prog_size and subset(sub_prog_pos_covered, xs) for xs, size in state.success_sets.items())
             else:
                 subsumed = sub_prog_pos_covered in state.success_sets or any(subset(sub_prog_pos_covered, xs) for xs in state.success_sets)
@@ -112,11 +111,11 @@ class SubsumeChecker:
                 self.pruned2.add(hash(x))
 
             if subsumed:
-                out.add((new_prog, 'SUBSUMED (GENERALISATION)'))
+                out.add((new_prog, "SUBSUMED (GENERALISATION)"))
             elif subsumed_by_two:
-                out.add((new_prog, 'SUBSUMED BY TWO (GENERALISATION)'))
+                out.add((new_prog, "SUBSUMED BY TWO (GENERALISATION)"))
             else:
-                out.add((new_prog, 'COVERS TOO FEW (GENERALISATION)'))
+                out.add((new_prog, "COVERS TOO FEW (GENERALISATION)"))
 
         return out
 
@@ -129,355 +128,101 @@ class SubsumeChecker:
                     return True
         return False
 
-    # -------------------------------------------------------------------
-    # Debug log tags emitted by check_covers_too_few:
-    #
-    #   FORCED committed N rules                   -> propagation fired
-    #   FORCED infeasible                          -> OLD WOULD NOT CATCH
-    #   FORCED covers U                            -> keep, no enum needed
-    #   PRUNE Bound-A  (M > S)                     -> fair-old catches this too
-    #   PRUNE Bound-B  (lb_B > S, M <= S)          -> OLD WOULD NOT CATCH
-    #   PRUNE Bound-C  (lb_C > S, A & B don't)     -> OLD WOULD NOT CATCH
-    #   CARD refined   (old_max_k -> new_max_k)    -> tighter enumeration depth
-    #   CARD prune     (new_max_k < 1)             -> may go beyond old
-    #   ENUM prune                                 -> residual enum failed
-    #   ENUM prune beyond old_max_k >= 4           -> OLD WOULD NOT CATCH
-    #                                                 (propagation shrank the
-    #                                                  problem into enum range)
-    # -------------------------------------------------------------------
     def check_covers_too_few(self, prog_size, pos_covered, prog):
-        self.bound_stats['calls'] += 1
-        call_id = self.bound_stats['calls']
+        # a = self.check_covers_too_few_v3(prog_size, pos_covered, prog, with_inconsistent=True, with_min_size=True, with_forced=True)
+        return self.check_covers_too_few_v3(prog_size, pos_covered, prog, with_inconsistent=True, with_min_size=True, with_forced=True)
 
-        num_pos = self.tester.num_pos
+    def _forced_propagation(
+        self,
+        space_remaining: int,
+        uncovered: bitarray,
+        affordable_all: list[tuple[int, bitarray]],
+    ) -> tuple[int, bitarray, bool, int]:
+        """
+        Constraint propagation (similar to unit propagation) for the set cover problem.
+        Identifies rules that MUST be in any valid hypothesis because they are the only
+        ones covering a specific example.
 
-        if pos_covered.count(1) == num_pos:
-            self.bound_stats['keep_full_cover'] += 1
-            return False
+        Args:
+            space_remaining: Current budget of literals.
+            uncovered: Bitarray of positive examples yet to be covered.
+            affordable_all: List of (size, coverage) tuples representing consistent rules that fit within the initial budget.
 
-        max_literals = self.state.max_literals
-        space_remaining = max_literals - prog_size
-
-        if self.tester.test_prog_inconsistent(prog):
-            space_remaining -= 1
-
-        if space_remaining >= self.state.search_depth:
-            self.bound_stats['keep_search_depth'] += 1
-            return False
-
-        min_size = self.state.min_size
-
-        if min_size > space_remaining:
-            self.bound_stats['prune_min_size'] += 1
-            return True
-
-        uncovered = self.tester.pos_examples_ & ~pos_covered
-        pre_U_card = uncovered.count(1)
-
-        affordable_all = sorted(
-            ((size, cov) for cov, size in self.state.success_sets.items()
-             if size <= space_remaining),
-            key=lambda x: x[0]
-        )
-
-        if self.settings.joiner:
-            self.bound_stats['joiner_calls'] += 1
-            max_additional_rules = space_remaining // min_size
-            if max_additional_rules < 1:
-                return True
-            return self._enumerate_extensions(
-                uncovered, space_remaining, affordable_all, min_size,
-                max_additional_rules, bottleneck=None
-            )
-
-        # ---- (1) Forced-set propagation ----
-        S, U, pruned, forced_count = self._forced_propagation(
-            space_remaining, uncovered, affordable_all
-        )
-        post_U_card = U.count(1)
-        committed_cost = space_remaining - S
-
-        if forced_count > 0:
-            self.bound_stats['forced_calls_with_commit'] += 1
-            self.bound_stats['forced_total_rules'] += forced_count
-            self._dbg(
-                f'#{call_id} FORCED committed {forced_count} rules, '
-                f'space {space_remaining}->{S} (cost {committed_cost}), '
-                f'|U| {pre_U_card}->{post_U_card}'
-            )
-
-        if pruned:
-            self.bound_stats['forced_prune'] += 1
-            self._dbg(
-                f'#{call_id} PRUNE forced-propagation infeasible '
-                f'(OLD WOULD NOT CATCH: no propagation in old code)'
-            )
-            return True
-
-        if not U.any():
-            self.bound_stats['forced_covers_U'] += 1
-            if forced_count > 0:
-                self._dbg(f'#{call_id} KEEP forced-propagation covered U entirely')
-            return False
-
-        if S < min_size:
-            self.bound_stats['post_forced_min_size_prune'] += 1
-            self._dbg(
-                f'#{call_id} PRUNE post-forced S={S} < min_size={min_size}'
-                + (' (OLD WOULD NOT CATCH: propagation created the gap)'
-                   if forced_count > 0 else '')
-            )
-            return True
-
-        affordable = [
-            (size, cov) for size, cov in affordable_all
-            if size <= S and (cov & U).any()
-        ]
-        if not affordable:
-            self._dbg(f'#{call_id} PRUNE no affordable rule intersects residual U')
-            return True
-
-        # ---- (2) Bound A: per-example true minimum ----
-        U_indices = list(U.search(1))
-        m = {}
-        for size, cov in affordable:
-            inter = U & cov
-            if not inter.any():
-                continue
-            for e in inter.search(1):
-                if e not in m:
-                    m[e] = size
-
-        if any(e not in m for e in U_indices):
-            self._dbg(f'#{call_id} PRUNE some e in residual U has no affordable cover')
-            return True
-
-        M = max(m[e] for e in U_indices)
-        if M > S:
-            self.bound_stats['bound_A_prune'] += 1
-            self._dbg(f'#{call_id} PRUNE Bound-A M={M} > S={S} (fair-old catches this too)')
-            return True
-
-        # ---- (3) Bound B: rule-disjoint independent set ----
-        neighbourhood = {e: None for e in U_indices}
-        for size, cov in affordable:
-            inter = cov & U
-            if not inter.any():
-                continue
-            for e in inter.search(1):
-                if neighbourhood[e] is None:
-                    neighbourhood[e] = bitarray(inter)
-                else:
-                    neighbourhood[e] |= inter
-
-        excluded = zeros(num_pos)
-        I = []
-        for e in sorted(U_indices, key=lambda x: -m[x]):
-            if excluded[e]:
-                continue
-            I.append(e)
-            excluded |= neighbourhood[e]
-
-        lb_B = sum(m[e] for e in I)
-        if lb_B > S:
-            self.bound_stats['bound_B_prune_beyond_A'] += 1
-            self._dbg(
-                f'#{call_id} PRUNE Bound-B lb_B={lb_B} > S={S} '
-                f'(|I|={len(I)}, m_I={[m[e] for e in I]}, '
-                f'Bound-A M={M} <= S, OLD WOULD NOT CATCH)'
-            )
-            return True
-
-        # ---- (4) Bound C: LP-style sum / Delta ----
-        total_m = sum(m[e] for e in U_indices)
-        Delta = max((cov & U).count(1) for _, cov in affordable)
-        lb_C = -(-total_m // Delta) if Delta > 0 else 0
-        if lb_C > S:
-            self.bound_stats['bound_C_prune_beyond_AB'] += 1
-            self._dbg(
-                f'#{call_id} PRUNE Bound-C lb_C={lb_C} > S={S} '
-                f'(sum_m={total_m}, Delta={Delta}; '
-                f'A M={M}, B lb_B={lb_B} both <= S, OLD WOULD NOT CATCH)'
-            )
-            return True
-
-        # cardinality comparison: old fair bottleneck bound vs new refined one
-        old_max_k = 1 + (S - M) // min_size
-        new_max_k = len(I) + (S - lb_B) // min_size
-
-        if new_max_k < old_max_k:
-            self.bound_stats['card_refined'] += 1
-            self._dbg(
-                f'#{call_id} CARD refined: old_max_k={old_max_k} -> '
-                f'new_max_k={new_max_k} (|I|={len(I)}, M={M}, lb_B={lb_B})'
-            )
-
-        if new_max_k < 1:
-            if old_max_k >= 1:
-                self.bound_stats['card_prune_beyond_old'] += 1
-                self._dbg(
-                    f'#{call_id} PRUNE cardinality new_max_k={new_max_k} '
-                    f'(OLD WOULD NOT CATCH: old_max_k={old_max_k})'
-                )
-            else:
-                self._dbg(
-                    f'#{call_id} PRUNE cardinality new_max_k={new_max_k} '
-                    f'(old would also catch)'
-                )
-            return True
-
-        # ---- Exact enumeration on residual (U, S) ----
-        result = self._enumerate_extensions(
-            U, S, affordable, min_size, new_max_k, bottleneck=M
-        )
-        if result:
-            self.bound_stats['enum_prune'] += 1
-            if old_max_k >= 4 and new_max_k <= 3:
-                self.bound_stats['enum_prune_beyond_old_givenup'] += 1
-                self._dbg(
-                    f'#{call_id} PRUNE enum at residual max_k={new_max_k} '
-                    f'(OLD WOULD NOT CATCH: old_max_k={old_max_k}>=4 would have kept)'
-                )
-            elif forced_count > 0:
-                self._dbg(
-                    f'#{call_id} PRUNE enum at residual max_k={new_max_k} '
-                    f'after {forced_count} forced commits'
-                )
-        else:
-            self.bound_stats['enum_keep'] += 1
-        return result
-
-    def _forced_propagation(self, space_remaining, uncovered, affordable_all):
+        Returns:
+            S: Updated budget after committing to forced rules.
+            U: Updated uncovered examples.
+            pruned: True if it's impossible to cover all examples within the budget.
+            forced_count: Number of rules forced and committed.
+        """
         S = space_remaining
         U = bitarray(uncovered)
         forced_count = 0
 
         while True:
+            # Filter affordable rules for the CURRENT remaining budget S
             current = [(size, cov) for size, cov in affordable_all if size <= S]
 
-            cover_count = {}
-            unique_cover = {}
+            cover_count = {}  # example index -> number of rules that cover it
+            unique_cover = {}  # example index -> (size, cov) of the only rule that covers it
             for size, cov in current:
                 inter = U & cov
                 if not inter.any():
                     continue
+                # For each example covered by this rule
                 for e in inter.search(1):
                     c = cover_count.get(e, 0) + 1
                     cover_count[e] = c
                     if c == 1:
+                        # First time seeing this example, potential unique cover
                         unique_cover[e] = (size, cov)
                     elif c == 2:
+                        # Second time seeing it, not unique anymore
                         unique_cover[e] = None
 
+            # 1. PRUNING: Check for any example that CANNOT be covered
             for e in U.search(1):
                 if cover_count.get(e, 0) == 0:
+                    # No affordable rule covers this uncovered example
                     return S, U, True, forced_count
 
+            # 2. PROPAGATION: Find examples covered by only ONE rule
             seen_keys = set()
             forced = []
-            for e, rule in unique_cover.items():
+            for _e, rule in unique_cover.items():
                 if rule is None:
                     continue
                 size, cov = rule
+                # Deduplicate forced rules (multiple examples might force the same rule)
                 key = (size, cov.tobytes())
                 if key in seen_keys:
                     continue
                 seen_keys.add(key)
                 forced.append(rule)
 
+            # If no propagation is possible, stop iterating
             if not forced:
                 return S, U, False, forced_count
 
+            # 3. COMMITMENT: Add forced rules to the hypothesis
             for size, cov in forced:
                 S -= size
                 forced_count += 1
                 if S < 0:
+                    # Forced rules exceed the budget
                     return S, U, True, forced_count
-                U &= ~cov
+                U &= ~cov  # Update residual uncovered examples
                 if not U.any():
+                    # All examples covered
                     return S, U, False, forced_count
 
-    def _enumerate_extensions(self, U, S, affordable, min_size, max_k, bottleneck=None):
-        if max_k >= 4:
-            return False
-
-        M = bottleneck if (bottleneck is not None and bottleneck > min_size) else min_size
-
-        succ = [(cov, size) for size, cov in affordable]
-        n = len(succ)
-
-        def need(chosen_sizes):
-            if M > min_size and all(s < M for s in chosen_sizes):
-                return M
-            return min_size
-
-        if max_k == 1:
-            for cov2, size2 in succ:
-                if size2 > S:
-                    break
-                if subset(U, cov2):
-                    return False
-            return True
-
-        if max_k == 2:
-            for i in range(n):
-                cov2, size2 = succ[i]
-                if size2 > S:
-                    break
-                if subset(U, cov2):
-                    return False
-                S_ = S - size2
-                if S_ < need([size2]):
-                    continue
-                U2 = U & ~cov2
-                if not U2.any():
-                    return False
-                for j in range(i + 1, n):
-                    cov3, size3 = succ[j]
-                    if size3 > S_:
-                        break
-                    if subset(U2, cov3):
-                        return False
-            return True
-
-        # max_k == 3
-        for i in range(n):
-            cov2, size2 = succ[i]
-            if size2 > S:
-                break
-            if subset(U, cov2):
-                return False
-            S_ = S - size2
-            if S_ < need([size2]):
-                continue
-            U2 = U & ~cov2
-            if not U2.any():
-                return False
-            for j in range(i + 1, n):
-                cov3, size3 = succ[j]
-                if size3 > S_:
-                    break
-                if subset(U2, cov3):
-                    return False
-                S__ = S_ - size3
-                if S__ < need([size2, size3]):
-                    continue
-                U3 = U2 & ~cov3
-                if not U3.any():
-                    return False
-                for k in range(j + 1, n):
-                    cov4, size4 = succ[k]
-                    if size4 > S__:
-                        break
-                    if subset(U3, cov4):
-                        return False
-        return True
 
     def find_variants(self, rule):
         head, body = rule
         _head_pred, head_args = head
         head_arity = len(head_args)
-        body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head_arity)
+        body_vars = frozenset(
+            x for literal in body for x in literal.arguments if x >= head_arity
+        )
         subset_vars = range(head_arity, self.settings.max_vars)
         for xs in permutations(subset_vars, len(body_vars)):
             xs = head_args + xs
@@ -487,3 +232,246 @@ class SubsumeChecker:
                 new_literal = (pred, new_args)
                 new_body.append(new_literal)
             yield frozenset(new_body)
+
+    # given a new program found by the generate stage, this method determines whether the program could be used to find a better (smaller) hypothesis than the current best
+    # return value of False means the program is still useful
+    # return value of True means the program cannot be in a better hypothesis
+    # here we assume no noise and search for a hypothesis that covers all the pos examples, none of the neg examples, and is minimal in size (literals)
+    def check_covers_too_few_v3(
+        self, prog_size, pos_covered, prog, with_inconsistent=False, with_min_size=False, with_forced=False):
+        num_pos = self.tester.num_pos
+
+        # if the program covers all the examples, then
+        if pos_covered.count(1) == num_pos:
+            return False
+
+        max_literals = self.state.max_literals
+
+        # if we are here, we assume we need this new prog and we now look whether it can only be used with an existing rule
+
+        # determine how much more space there is to improve after using this new prog
+        space_remaining = max_literals - prog_size
+
+
+        # NEW IDEA 1
+        # if prog is inconsistent, we need at least one more literal to specialise the prog, so the available space remaining goes down by 1
+        if with_inconsistent:
+            inconsistent = self.tester.test_prog_inconsistent(prog)
+            if inconsistent:
+                space_remaining -= 1
+
+        # if we could still find a good rule with the available space, then prog could still be good
+        if space_remaining >= self.state.search_depth:
+            return False
+
+        # the smallest consistent rule we have seen
+        min_size = self.state.min_size
+
+        # if we need more space than the smallest rule then new prog is not good
+        if min_size > space_remaining:
+            return True
+
+        # determine how many additional rules we could use
+        max_additional_rules = (space_remaining) // min_size
+
+        # if no space, return
+        if max_additional_rules < 1:
+            return True
+
+        # we now try to find the smallest rule for an example not covered by this prog
+        uncovered = self.tester.pos_examples_ & ~pos_covered
+
+        # NEW IDEA 2
+        if with_min_size and not self.settings.joiner:
+
+            # find the smallest existing rule that covers an example not coverd by this program
+            best_size_for_ex = [None] * self.tester.num_pos
+            for cov, size in sorted(self.state.success_sets.items(), key=lambda x: x[1]):
+                overlap = uncovered & cov
+                if not overlap.any():
+                    continue
+                for e in overlap.search(1):
+                    if best_size_for_ex[e] is None:
+                        best_size_for_ex[e] = size
+            # we update the minimum size rule we ever need to learn
+            valid_sizes = [x for x in best_size_for_ex if x is not None]
+            if not valid_sizes:
+                return True # Cannot cover all examples with existing rules, prune!
+            min_uncovered_size = max(valid_sizes)
+
+            # then update the max possible additional rules
+            max_additional_rules = (1 + (space_remaining - min_uncovered_size) // min_size)
+        else:
+            min_uncovered_size = min_size
+
+        # try to skip again early
+        if max_additional_rules < 1:
+            return True
+
+        # new idea 3
+        # this idea is to find an uncovered example that is covered by only one rule, which must therefore be in the hypothesis
+        if with_forced:
+            affordable_all = sorted(((size, cov) for cov, size in self.state.success_sets.items() if size <= space_remaining), key=lambda x: x[0])
+            new_budget, new_uncovered, pruned, forced_count = self._forced_propagation(space_remaining, uncovered, affordable_all)
+
+            if pruned:
+                return True
+
+            # if any examples are forced, then we update the space, uncovered, and
+            if forced_count:
+                # print('SOMETHING FORCED!!!!!!!!', forced_count)
+                # print('\t space:', space_remaining, new_budget)
+                # print('\t uncovered:', uncovered.count(1), new_uncovered.count(1))
+                uncovered = new_uncovered
+                space_remaining = new_budget
+                max_additional_rules = (space_remaining) // min_size
+
+            # check whether everything is covered
+            if not uncovered.any():
+                return False
+
+        # MAX TOTAL RULES = 1
+        # if this prog + the minimum size prog is too big then this prog must be a single rule hypothesis
+        if max_additional_rules < 1:
+            # if so, this prog must cover all the positive examples, which it does not (see above check)
+            return True
+
+        # AC: COULD FILTR HERE BY SPACE SPACE_REMAINING
+        success_sets = sorted(self.state.success_sets.items(), key=lambda x: x[1])
+        n = len(success_sets)
+
+        # MAX TOTAL RULES = 2
+        # this prog must be used with an existing prog
+        # if so, there must be a rule that covers all the uncovered examples
+        if max_additional_rules == 1:
+            for pos_covered2, size2 in success_sets:
+                if size2 > space_remaining:
+                    break
+                if subset(uncovered, pos_covered2):
+                    return False
+            # if we get here, the program cannot be useful
+            return True
+
+        # MAX TOTAL RULES = 3
+        # this prog must be used with 1 or 2 existing progs
+        # we try to determine if it is possible
+        if max_additional_rules == 2:
+            # loop through other programs that are known to be consistent
+            for i in range(n):
+                # i denotes prog2
+                pos_covered2, size2 = success_sets[i]
+                if size2 > space_remaining:
+                    break
+
+                # if prog2  covers the uncovered examples, then prog can be good
+                if subset(uncovered, pos_covered2):
+                    return False
+
+                # assume prog2 is in the hypothesis, so deduct its size
+                space_remaining_ = space_remaining - size2
+
+                if space_remaining_ < min_size:
+                    continue
+
+                # TMP!!!!
+                tmp = min_size
+                if size2 < min_uncovered_size:
+                    tmp = min_uncovered_size
+                if space_remaining_ < tmp:
+                    # print("SKIP1")
+                    continue
+
+                # assume prog2 is in the hypothesis, so derive a new uncovered set
+                uncovered2 = uncovered & ~pos_covered2
+
+                # loop through other programs that are known to be consistent
+                for j in range(i + 1, n):
+                    # j denotes prog3
+                    pos_covered3, size3 = success_sets[j]
+                    if size3 > space_remaining_:
+                        break
+
+                    # tmp = min_size
+                    # if size2 < min_uncovered_size and size3 < min_uncovered_size:
+                    #     tmp = min_uncovered_size
+                    # if space_remaining_ < tmp:
+                    #     print('SKIP2')
+                    #     continue
+
+                    # if prog3  covers the uncovered examples, then prog can be good
+                    if subset(uncovered2, pos_covered3):
+                        return False
+
+            # if we get here, the program cannot be useful
+            return True
+
+        # MAX TOTAL RULES = 4
+        # this prog must be used with 1 or 2 or 3 existing progs
+        # we try to determine if it is possible
+        if max_additional_rules == 3:
+            # loop through other programs that are known to be consistent
+            for i in range(n):
+                # i denotes prog2
+                pos_covered2, size2 = success_sets[i]
+                if size2 > space_remaining:
+                    break
+
+                # if prog2  covers the uncovered examples, then prog can be good
+                if subset(uncovered, pos_covered2):
+                    return False
+
+                # assume prog2 is in the hypothesis, so deduct its size
+                space_remaining_ = space_remaining - size2
+
+                if space_remaining_ < min_size:
+                    continue
+
+                # TMP!!!!
+                tmp = min_size
+                if size2 < min_uncovered_size:
+                    tmp = min_uncovered_size
+                if space_remaining_ < tmp:
+                    print("SKIP3")
+                    continue
+
+                # assume prog2 is in the hypothesis, so derive a new uncovered set
+                uncovered2 = uncovered & ~pos_covered2
+
+                # loop through other programs that are known to be consistent
+                for j in range(i + 1, n):
+                    # j denotes prog3
+                    pos_covered3, size3 = success_sets[j]
+                    if size3 > space_remaining_:
+                        break
+
+                    # if prog3  covers the uncovered examples, then prog can be good
+                    if subset(uncovered2, pos_covered3):
+                        return False
+
+                    # assume prog3 is in the hypothesis, so deduct its size
+                    space_remaining__ = space_remaining_ - size3
+
+                    if space_remaining__ < min_size:
+                        continue
+
+                    tmp = min_size
+                    if size2 < min_uncovered_size and size3 < min_uncovered_size:
+                        tmp = min_uncovered_size
+                    if space_remaining__ < tmp:
+                        # print("SKIP4")
+                        continue
+
+                    # assume prog3 is in the hypothesis, so derive a new uncovered set
+                    uncovered3 = uncovered2 & ~pos_covered3
+
+                    for k in range(j + 1, n):
+                        pos_covered4, size4 = success_sets[k]
+                        if size4 > space_remaining__:
+                            break
+                        if subset(uncovered3, pos_covered4):
+                            return False
+
+            # if we get here, the program cannot be useful
+            return True
+
+        return False

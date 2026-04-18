@@ -194,7 +194,7 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
             add_to_combiner_ = False
 
             if not has_invention and not is_recursive:
-                with stats.duration('find most   subsumed/covers_too_few'):
+                with stats.duration('find most subsumed/covers_too_few'):
                     subsumed_progs = subsumer.subsumed_or_covers_too_few(prog, seen=set())
                 pruned_more_general = len(subsumed_progs) > 0
 
@@ -208,7 +208,7 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
 
                 for subsumed_prog, message in subsumed_progs:
                     if settings.verbosity > 2:
-                        logger.debug(f'\t {message}: \t {format_prog(prog)}')
+                        logger.debug(f'\t {message}: \t {format_prog(subsumed_prog)}')
                     subsumed_prog_ = frozenset(canonicalise(rule) for rule in subsumed_prog)
                     new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
 
