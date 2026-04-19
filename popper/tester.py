@@ -12,6 +12,33 @@ from typing import NamedTuple
 from . recalls import recalls
 from . import logger
 
+# Prolog helpers that accept head/body as strings so the query_once call string
+# is always constant — prevents SWI-Prolog from interning a new atom per unique query.
+_FIXED_QUERY_HELPERS = """
+% RuleStr is "head:-body" so a single term_string call keeps variables shared.
+find_pos_covered(RuleStr, S) :-
+    term_string((Head :- Body), RuleStr),
+    findall(ID, (pos_index(ID, Head), (Body -> true)), S).
+
+find_neg_covered(RuleStr, S) :-
+    term_string((Head :- Body), RuleStr),
+    findall(ID, (neg_index(ID, Head), (Body -> true)), S).
+
+find_neg_firstn(K, RuleStr, S) :-
+    term_string((Head :- Body), RuleStr),
+    findfirstn(K, ID, (neg_index(ID, Head), (Body -> true)), S).
+
+pos_succeeds_k(RuleStr, K) :-
+    term_string((Head :- Body), RuleStr),
+    succeeds_k_times(pos_index(_ID, Head), Body, K).
+
+% Wraps term_string+redundant_literal so the parsed list (with unbound vars)
+% never surfaces to Python as an output variable.
+redundant_literal_str(S) :-
+    term_string(L, S),
+    redundant_literal(L).
+"""
+
 # MAXIMUM TESTING TIME FOR A RECURSIVE HYPOTHESIS
 EVAL_TIMEOUT=0.001
 
@@ -30,7 +57,7 @@ class TestResult(NamedTuple):
     too_many_fp: bool = False
 
 def bool_query(query):
-    return query_once(query)['truth']
+    return query_once('term_string(_G, QStr), call(_G)', {'QStr': query})['truth']
 
 @cache
 def format_literal_janus(literal):
@@ -61,10 +88,25 @@ def rule_has_redundant_literal(rule):
     lits = tuple(format_literal_janus(lit) for lit in body)
     if head:
         lits = (f"not_{format_literal_janus(head)}",) + lits
-    return query_once(f"redundant_literal([{','.join(lits)}])")["truth"]
+    lits_str = f"[{','.join(lits)}]"
+    return query_once('redundant_literal_str(S)', {'S': lits_str})['truth']
+
+import os
+import psutil
+# import gc
+
+def get_mem():
+    return psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+
+# def print_mem(label):
+    # Query SWI-Prolog's internal atom count
 
 def janus_clear_cache():
-    return query_once('retractall(janus:py_call_cache(_String,_Input,_TV,_M,_Goal,_Dict,_Truth,_OutVars))')
+    pass
+    # print('hello')
+    # atoms = query_once('statistics(atoms, Atoms)')['Atoms']
+    # print(f"OS RAM: {get_mem():.2f} MB | SWI Atoms: {atoms}")
+    # return query_once('retractall(janus:py_call_cache(_String,_Input,_TV,_M,_Goal,_Dict,_Truth,_OutVars))')
 
 def frozen_bits_from_indices(size, indices):
     bits = zeros(size)
@@ -92,6 +134,7 @@ class Tester():
 
         logger.info(f'Loading examples')
         query_once('load_examples')
+        consult('janus_fixed_queries', _FIXED_QUERY_HELPERS)
 
         neg_literal = Literal('neg_fact', tuple(range(len(self.settings.head_literal.arguments))))
         self.neg_fact_str = format_literal_janus(neg_literal)
@@ -146,7 +189,7 @@ class Tester():
                 pos_covered_list = query_once('pos_covered(S)')['S']
                 if self.num_neg > 0:
                     inconsistent = bool_query("inconsistent")
-            
+
             if not pos_covered_list:
                 pos_covered = self.empty_pos_covered
             else:
@@ -192,8 +235,7 @@ class Tester():
                 neg_covered = []
                 if self.num_neg > 0:
                     atom_str, body_str = parse_single_rule(prog)
-                    q = f'findfirstn(K, _ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
-                    neg_covered = query_once(q, {'K':max_k_neg})['S']
+                    neg_covered = query_once('find_neg_firstn(K, R, S)', {'K': max_k_neg, 'R': f'{atom_str}:-{body_str}'})['S']
                 neg_covered = frozen_bits_from_indices(self.num_neg, neg_covered)
                 if neg_covered.count(1) == max_k_neg:
                     too_many_fp = True
@@ -271,17 +313,16 @@ class Tester():
             (rule,) = prog
             head, _body = rule
             new_head = f'pos_index(_ID, {format_literal_janus(head)})'
+            head_str = format_literal_janus(head)
             _, ordered_body = _parse_rule_cached(rule)
             if self.settings.noisy:
-                q = f'succeeds_k_times({new_head},({ordered_body}),K)'
-                return query_once(q, {'K':calc_rule_size(rule)})['truth']
+                return query_once('pos_succeeds_k(R, K)', {'R': f'{head_str}:-{ordered_body}', 'K': calc_rule_size(rule)})['truth']
             else:
                 if self.state.min_pos_coverage == 1:
                     q = f'{new_head},{ordered_body}'
                     return bool_query(q)
                 else:
-                    q = f'succeeds_k_times({new_head},({ordered_body}),K)'
-                    return query_once(q, {'K':self.state.min_pos_coverage})['truth']
+                    return query_once('pos_succeeds_k(R, K)', {'R': f'{head_str}:-{ordered_body}', 'K': self.state.min_pos_coverage})['truth']
         else:
             with self.using(prog):
                 if self.settings.noisy:
@@ -322,8 +363,7 @@ class Tester():
 
         if len(prog) == 1:
             atom_str, body_str = parse_single_rule(prog)
-            q = f'findall(_ID, (pos_index(_ID, {atom_str}),({body_str}->  true)), S)'
-            pos_covered = query_once(q)['S']
+            pos_covered = query_once('find_pos_covered(R, S)', {'R': f'{atom_str}:-{body_str}'})['S']
         else:
             with self.using(prog):
                 pos_covered = query_once('pos_covered(S)')['S']
@@ -340,8 +380,7 @@ class Tester():
             atom_str, body_str = parse_single_rule(prog)
             neg_covered = []
             if self.num_neg > 0:
-                q = f'findall(_ID, (neg_index(_ID, {atom_str}),({body_str}->  true)), S)'
-                neg_covered = query_once(q)['S']
+                neg_covered = query_once('find_neg_covered(R, S)', {'R': f'{atom_str}:-{body_str}'})['S']
         else:
             with self.using(prog):
                 res = query_once(f'neg_covered(S2)')
