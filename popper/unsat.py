@@ -50,16 +50,19 @@ class UnsatCoreFinder:
 
         for subprog in generalisations(prog, allow_headless=True, recursive=has_recursion):
             subprog = frozenset(subprog)
+            subprog_key = hash(subprog)
 
-            if subprog in self.seen_prog:
+            if subprog_key in self.seen_prog:
                 continue
 
             raw_prog = get_raw_prog(subprog)
-            if raw_prog in self.seen_raw_prog:
+            raw_prog_key = hash(raw_prog)
+
+            if raw_prog_key in self.seen_raw_prog:
                 continue
 
-            self.seen_prog.add(subprog)
-            self.seen_raw_prog.add(raw_prog)
+            self.seen_prog.add(subprog_key)
+            self.seen_raw_prog.add(raw_prog_key)
 
             if self._should_skip(subprog):
                 continue

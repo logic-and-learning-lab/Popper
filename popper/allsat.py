@@ -43,16 +43,17 @@ class AllSatCoreFinder:
         if not body:
             return out
 
-        prog_key = (body, literal)
+        prog_key = hash((body, literal))
         if prog_key in self.seen_allsat:
             return out
 
         _, b = canonicalise((None, body | {literal}))
-        if b in self.seen_allsat:
+        b_key = hash(b)
+        if b_key in self.seen_allsat:
             return out
 
         self.seen_allsat.add(prog_key)
-        self.seen_allsat.add(b)
+        self.seen_allsat.add(b_key)
 
         body_vars = {x for atom in body for x in atom.arguments}
 

@@ -91,12 +91,12 @@ def rule_has_redundant_literal(rule):
     lits_str = f"[{','.join(lits)}]"
     return query_once('redundant_literal_str(S)', {'S': lits_str})['truth']
 
-import os
-import psutil
+# import os
+# import psutil
 # import gc
 
-def get_mem():
-    return psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+# def get_mem():
+#     return psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
 
 # def print_mem(label):
     # Query SWI-Prolog's internal atom count
@@ -439,8 +439,10 @@ class Tester():
     def reduce_inconsistent(self, program):
         if len(program) < 3:
             return program
-        for i in range(len(program)):
-            subprog = program[:i] + program[i+1:]
+        for rule in program:
+            subprog = program - {rule}
+        # for i in range(len(program)):
+            # subprog = program[:i] + program[i+1:]
             if not prog_is_recursive(subprog):
                 continue
             with self.using(subprog):

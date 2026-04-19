@@ -484,7 +484,7 @@ class CombinerSize:
                 break
 
             rules = [rule_id for rule_id in ruleid_to_rule if model[rule_var[rule_id]-1] > 0]
-            model_prog = [ruleid_to_rule[k] for k in rules]
+            model_prog = frozenset(ruleid_to_rule[k] for k in rules)
 
             # REDUNDANCY FIXED: Flattened the acceptance logic
             if (not prog_is_recursive(model_prog) and not prog_has_invention(model_prog)) or \
