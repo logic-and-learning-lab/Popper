@@ -54,7 +54,7 @@ class SubsumeChecker:
                 continue
 
             new_prog_size = calc_prog_size(new_prog)
-            sub_prog_pos_covered = self.tester.get_pos_covered(new_prog)
+            sub_prog_pos_covered = self.tester._test_prog_pos(new_prog)
 
             if self.settings.joiner:
                 subsumed = (sub_prog_pos_covered in state.success_sets and state.success_sets[sub_prog_pos_covered] <= new_prog_size)

@@ -1,6 +1,6 @@
 from bitarray.util import subset, ones
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, canonicalise, format_prog, print_incomplete_solution2
-from . tester import Tester, janus_clear_cache
+from . tester import Tester
 from . bkcons import get_bk_cons
 from . unsat import UnsatCoreFinder
 from . allsat import AllSatCoreFinder
@@ -60,10 +60,6 @@ def popper(settings, tester, state, bkcons):
 
     for prog in generator.get_prog():
         stats.stats.total_programs += 1
-
-        # HORRIBLE HACK DUE TO PROLOG MEMORY LEAK
-        if stats.stats.total_programs % 10000 == 0:
-            janus_clear_cache()
 
         prog_size = calc_prog_size(prog)
         size_change = check_size_change(state, prog_size)

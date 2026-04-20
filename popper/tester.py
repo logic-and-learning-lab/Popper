@@ -74,10 +74,6 @@ def _parse_rule_cached(rule):
 def parse_body(body):
     return _parse_rule_cached((None, body))[1]
 
-def parse_single_rule(prog):
-    (rule,) = prog
-    return _parse_rule_cached(rule)
-
 def parse_rule_for_recursion(rule):
     return format_rule(order_rule(rule))[:-1]
 
@@ -89,23 +85,6 @@ def rule_has_redundant_literal(rule):
         lits = (f"not_{format_literal_janus(head)}",) + lits
     lits_str = f"[{','.join(lits)}]"
     return query_once('redundant_literal_str(S)', {'S': lits_str})['truth']
-
-# import os
-# import psutil
-# import gc
-
-# def get_mem():
-#     return psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
-
-# def print_mem(label):
-    # Query SWI-Prolog's internal atom count
-
-def janus_clear_cache():
-    pass
-    # print('hello')
-    # atoms = query_once('statistics(atoms, Atoms)')['Atoms']
-    # print(f"OS RAM: {get_mem():.2f} MB | SWI Atoms: {atoms}")
-    # return query_once('retractall(janus:py_call_cache(_String,_Input,_TV,_M,_Goal,_Dict,_Truth,_OutVars))')
 
 def frozen_bits_from_indices(size, indices):
     bits = zeros(size)
@@ -167,36 +146,13 @@ class Tester():
         if self.settings.recursion_enabled:
             query_once(f'assert(timeout({EVAL_TIMEOUT})), fail')
 
-    # main entry point for calling prolog without noise
-    # we call this method for every program
+    # main entry point for calling prolog without noise and we call this method for every program
     def test_prog(self, prog, prog_size=None):
         inconsistent = False
 
-        if len(prog) == 1:
-            pos_covered = self._test_prog_pos(prog)
-            if self.num_neg > 0 and pos_covered.any():
-                if self.settings.has_directions:
-                    atom_str, body_str = parse_single_rule(prog)
-                    q = f'neg_index(_ID, {atom_str}), {body_str}'
-                else:
-                    (rule,) = prog
-                    _, body = rule
-                    q = parse_body(body.union(self.neg_literal_set))
-                inconsistent = bool_query(q)
-        else:
-            with self.using(prog):
-                pos_covered_list = query_once('pos_covered(S)')['S']
-                if self.num_neg > 0:
-                    inconsistent = bool_query("inconsistent")
-
-            if not pos_covered_list:
-                pos_covered = self.empty_pos_covered
-            else:
-                pos_covered = frozen_bits_from_indices(self.num_pos, pos_covered_list)
-
-        # cache results
-        prog_key = hash(prog)
-        self.cached_pos_covered[prog_key] = pos_covered
+        pos_covered = self._test_prog_pos(prog, first_time=True)
+        if self.num_neg > 0 and (len(prog) > 1 or pos_covered.any()):
+            inconsistent = self.test_prog_inconsistent(prog)
 
         tp = pos_covered.count(1)
         fn = self.num_pos - tp
@@ -234,7 +190,8 @@ class Tester():
                 max_k_neg = max(max_k_neg1, max_k_neg2)
                 neg_covered = []
                 if self.num_neg > 0:
-                    atom_str, body_str = parse_single_rule(prog)
+                    (rule,) = prog
+                    atom_str, body_str = _parse_rule_cached(rule)
                     neg_covered = query_once('find_neg_firstn(K, R, S)', {'K': max_k_neg, 'R': f'{atom_str}:-{body_str}'})['S']
                 neg_covered = frozen_bits_from_indices(self.num_neg, neg_covered)
                 if neg_covered.count(1) == max_k_neg:
@@ -282,7 +239,8 @@ class Tester():
             return False
 
         if len(prog) == 1:
-            atom_str, body_str = parse_single_rule(prog)
+            (rule,) = prog
+            atom_str, body_str = _parse_rule_cached(rule)
             q = f'neg_index(_ID, {atom_str}), {body_str}'
             return bool_query(q)
 
@@ -362,8 +320,17 @@ class Tester():
     # ONLY CALLED BY THIS CLASS
     def _test_prog_pos(self, prog):
 
+        prog_key = hash(prog)
+        if prog_key in self.cached_pos_covered:
+            return self.cached_pos_covered[prog_key]
+
+        raw_prog_key = hash(get_raw_prog(prog))
+        if raw_prog_key in self.cached_pos_covered:
+            return self.cached_pos_covered[raw_prog_key]
+
         if len(prog) == 1:
-            atom_str, body_str = parse_single_rule(prog)
+            (rule,) = prog
+            atom_str, body_str = _parse_rule_cached(rule)
             pos_covered = query_once('find_pos_covered(R, S)', {'R': f'{atom_str}:-{body_str}'})['S']
         else:
             with self.using(prog):
@@ -372,13 +339,18 @@ class Tester():
         if not pos_covered:
             return self.empty_pos_covered
 
-        return frozen_bits_from_indices(self.num_pos, pos_covered)
+        pos_covered = frozen_bits_from_indices(self.num_pos, pos_covered)
+        self.cached_pos_covered[prog_key] = pos_covered
+        self.cached_pos_covered[raw_prog_key] = pos_covered
+
+        return pos_covered
 
     # ONLY CALLED BY JOINER AND THIS CLASS
     def test_prog_neg(self, prog):
 
         if len(prog) == 1:
-            atom_str, body_str = parse_single_rule(prog)
+            (rule,) = prog
+            atom_str, body_str = _parse_rule_cached(rule)
             neg_covered = []
             if self.num_neg > 0:
                 neg_covered = query_once('find_neg_covered(R, S)', {'R': f'{atom_str}:-{body_str}'})['S']
@@ -395,23 +367,12 @@ class Tester():
     def has_redundant_literal(self, prog):
         return any(rule_has_redundant_literal(rule) for rule in prog)
 
-    # THIS IS CALLED BY THE SUBSUMER CHECKER
-    # FOR EACH RULE, WE CHECK WHAT THE SUBRULES ENTAIL:
-    def get_pos_covered(self, prog):
+    # # THIS IS CALLED BY THE SUBSUMER CHECKER
+    # # FOR EACH RULE, WE CHECK WHAT THE SUBRULES ENTAIL:
+    # def get_pos_covered(self, prog):
 
-        prog_key = hash(prog)
-        if prog_key in self.cached_pos_covered:
-            return self.cached_pos_covered[prog_key]
 
-        raw_prog_key = hash(get_raw_prog(prog))
-        if raw_prog_key in self.cached_pos_covered:
-            return self.cached_pos_covered[raw_prog_key]
-
-        pos_covered = self._test_prog_pos(prog)
-        self.cached_pos_covered[prog_key] = pos_covered
-        self.cached_pos_covered[raw_prog_key] = pos_covered
-
-        return pos_covered
+    #     return pos_covered
 
     @contextmanager
     def using(self, prog):
