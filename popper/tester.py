@@ -78,7 +78,6 @@ def parse_single_rule(prog):
     (rule,) = prog
     return _parse_rule_cached(rule)
 
-@cache
 def parse_rule_for_recursion(rule):
     return format_rule(order_rule(rule))[:-1]
 
