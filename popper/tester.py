@@ -142,6 +142,7 @@ class Tester():
         self.empty_neg_covered = frozenbitarray(self.num_neg)
 
         self.cached_pos_covered = {}
+        self.cached_prog_inconsistent = {}
 
         if self.settings.recursion_enabled:
             query_once(f'assert(timeout({EVAL_TIMEOUT})), fail')
@@ -150,7 +151,7 @@ class Tester():
     def test_prog(self, prog, prog_size=None):
         inconsistent = False
 
-        pos_covered = self._test_prog_pos(prog, first_time=True)
+        pos_covered = self._test_prog_pos(prog)
         if self.num_neg > 0 and (len(prog) > 1 or pos_covered.any()):
             inconsistent = self.test_prog_inconsistent(prog)
 
@@ -230,22 +231,28 @@ class Tester():
             too_many_fp=too_many_fp
         )
 
-    # used when learning programs with recursion
-    # also used by the subsumption checker
-    # just checks whether they entail a negative example
-    @cache
     def test_prog_inconsistent(self, prog):
         if self.num_neg == 0:
             return False
+
+        prog_key = hash(prog)
+        if prog_key in self.cached_prog_inconsistent:
+            return self.cached_prog_inconsistent[prog_key]
+
+        # AC: MAYBE ADD CANONICAL FORM
 
         if len(prog) == 1:
             (rule,) = prog
             atom_str, body_str = _parse_rule_cached(rule)
             q = f'neg_index(_ID, {atom_str}), {body_str}'
-            return bool_query(q)
+            res = bool_query(q)
+        else:
+            with self.using(prog):
+                res = bool_query("inconsistent")
 
-        with self.using(prog):
-            return bool_query("inconsistent")
+        self.cached_prog_inconsistent[prog_key] = res
+
+        return res
 
     # used by the unsat core checker to see if a body is satisfiable
     def is_body_sat(self, body):
