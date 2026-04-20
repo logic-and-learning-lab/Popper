@@ -196,7 +196,8 @@ class Tester():
                 pos_covered = frozen_bits_from_indices(self.num_pos, pos_covered_list)
 
         # cache results
-        self.cached_pos_covered[prog] = pos_covered
+        prog_key = hash(prog)
+        self.cached_pos_covered[prog_key] = pos_covered
 
         tp = pos_covered.count(1)
         fn = self.num_pos - tp
@@ -302,12 +303,13 @@ class Tester():
     # used by the unsat core checker to see if a rule is satisfiable
     def is_sat(self, prog):
 
-        if prog in self.cached_pos_covered:
-            return self.cached_pos_covered[prog].any()
+        prog_key = hash(prog)
+        if prog_key in self.cached_pos_covered:
+            return self.cached_pos_covered[prog_key].any()
 
-        k = get_raw_prog(prog)
-        if k in self.cached_pos_covered:
-            return self.cached_pos_covered[k].any()
+        raw_prog_key = hash(get_raw_prog(prog))
+        if raw_prog_key in self.cached_pos_covered:
+            return self.cached_pos_covered[raw_prog_key].any()
 
         if len(prog) == 1:
             (rule,) = prog
@@ -398,16 +400,18 @@ class Tester():
     # FOR EACH RULE, WE CHECK WHAT THE SUBRULES ENTAIL:
     def get_pos_covered(self, prog):
 
-        if prog in self.cached_pos_covered:
-            return self.cached_pos_covered[prog]
+        prog_key = hash(prog)
+        if prog_key in self.cached_pos_covered:
+            return self.cached_pos_covered[prog_key]
 
-        k = get_raw_prog(prog)
-        if k in self.cached_pos_covered:
-            return self.cached_pos_covered[k]
+        raw_prog_key = hash(get_raw_prog(prog))
+        if raw_prog_key in self.cached_pos_covered:
+            return self.cached_pos_covered[raw_prog_key]
 
         pos_covered = self._test_prog_pos(prog)
-        self.cached_pos_covered[k] = pos_covered
-        self.cached_pos_covered[prog] = pos_covered
+        self.cached_pos_covered[prog_key] = pos_covered
+        self.cached_pos_covered[raw_prog_key] = pos_covered
+
         return pos_covered
 
     @contextmanager
