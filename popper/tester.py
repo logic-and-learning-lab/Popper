@@ -70,12 +70,9 @@ def _parse_rule_cached(rule):
     body_str = ','.join(format_literal_janus(lit) for lit in ordered_body)
     return atom_str, body_str
 
-@cache
+# @cache
 def parse_body(body):
     return _parse_rule_cached((None, body))[1]
-
-def parse_rule_for_recursion(rule):
-    return format_rule(order_rule(rule))[:-1]
 
 @cache
 def rule_has_redundant_literal(rule):
@@ -392,7 +389,8 @@ class Tester():
         current_clauses = set()
         for rule in prog:
             head, _body = rule
-            x = parse_rule_for_recursion(rule)
+            x = format_rule(order_rule(rule))[:-1]
+            # x = parse_rule_for_recursion(rule)
             str_prog.append(x)
             current_clauses.add((head.predicate, len(head.arguments)))
 
