@@ -73,8 +73,7 @@ class SubsumeChecker:
                 out.update(xs)
                 continue
 
-            for x in self.find_variants(canonicalise(new_rule)):
-                self.pruned2.add(hash(x))
+            self.pruned2.update(self.find_variant_hashes(canonicalise(new_rule)))
 
             if subsumed:
                 out.add((new_prog, "SUBSUMED (GENERALISATION)"))
@@ -188,13 +187,11 @@ class SubsumeChecker:
                     # All examples successfully covered
                     return remaining_budget, remaining_uncovered, False, forced_count
 
-    def find_variants(self, rule):
+    def find_variant_hashes(self, rule):
         head, body = rule
         _head_pred, head_args = head
         head_arity = len(head_args)
-        body_vars = frozenset(
-            x for literal in body for x in literal.arguments if x >= head_arity
-        )
+        body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head_arity)
         subset_vars = range(head_arity, self.settings.max_vars)
         for xs in permutations(subset_vars, len(body_vars)):
             xs = head_args + xs
@@ -203,7 +200,7 @@ class SubsumeChecker:
                 new_args = tuple(xs[arg] for arg in args)
                 new_literal = (pred, new_args)
                 new_body.append(new_literal)
-            yield frozenset(new_body)
+            yield hash(frozenset(new_body))
 
     # given a new program found by the generate stage, this method determines whether the program could be used to find a better (smaller) hypothesis than the current best
     # return value of False means the program is still useful
