@@ -1,6 +1,6 @@
 from itertools import permutations
 from bitarray import bitarray
-from bitarray.util import subset, zeros
+from bitarray.util import subset, zeros, any_and
 from bisect import bisect_right
 from operator import itemgetter
 from . import stats
@@ -140,7 +140,9 @@ class SubsumeChecker:
 
         for i in range(sym_hi):
             p2, s2 = success_sets[i]
-            if not (p2 & pos_covered).any():
+            # from bitarray.util import
+            # if not (p2 & pos_covered).any():
+            if not any_and(p2, pos_covered):
                 continue
             uncovered = pos_covered & ~p2
             unc_count = uncovered.count()
@@ -213,7 +215,7 @@ class SubsumeChecker:
                     
             # 1. PRUNING: Check for any example that CANNOT be covered by any affordable rule
             # If there's a bit set in remaining_uncovered that is NOT set in covered_once, it's impossible to cover.
-            if (remaining_uncovered & ~covered_once).any():
+            if any_and(remaining_uncovered, ~covered_once):
                 return remaining_budget, remaining_uncovered, True, forced_count
                 
             # 2. PROPAGATION: Find examples covered by EXACTLY ONE rule
@@ -226,7 +228,7 @@ class SubsumeChecker:
             # Identify the specific rules that uniquely cover these examples
             forced_rules = []
             for size, coverage in current_affordable:
-                if (exactly_once & coverage).any():
+                if any_and(exactly_once, coverage):
                     forced_rules.append((size, coverage))
                     # Deduplicate: removing this rule's coverage from exactly_once ensures
                     # we don't count the same rule multiple times if it uniquely covers multiple examples
@@ -331,7 +333,7 @@ class SubsumeChecker:
             still_uncovered = uncovered.copy()
             min_uncovered_size = 0
             for cov, size in sorted_success_sets:
-                if (still_uncovered & cov).any():
+                if any_and(still_uncovered, cov):
                     min_uncovered_size = size
                     still_uncovered &= ~cov
                     if not still_uncovered.any():
@@ -405,7 +407,7 @@ class SubsumeChecker:
                 if size2 > space_remaining:
                     break
 
-                if not (pos_covered2 & uncovered).any():
+                if not any_and(pos_covered2 & uncovered):
                     continue
 
                 # if prog2  covers the uncovered examples, then prog can be good
@@ -436,7 +438,7 @@ class SubsumeChecker:
                     if size3 > space_remaining_:
                         break
 
-                    if not (pos_covered3 & uncovered2).any():
+                    if not any_and(pos_covered3, uncovered2):
                         continue
 
                     # if prog3  covers the uncovered examples, then prog can be good
@@ -457,7 +459,7 @@ class SubsumeChecker:
                 if size2 > space_remaining:
                     break
 
-                if not (pos_covered2 & uncovered).any():
+                if not any_and(pos_covered2, uncovered):
                     continue
 
                 # if prog2  covers the uncovered examples, then prog can be good
@@ -488,7 +490,7 @@ class SubsumeChecker:
                     if size3 > space_remaining_:
                         break
 
-                    if not (pos_covered3 & uncovered2).any():
+                    if not any_and(pos_covered3, uncovered2):
                         continue
 
                     # if prog3  covers the uncovered examples, then prog can be good
@@ -516,7 +518,7 @@ class SubsumeChecker:
                         if size4 > space_remaining__:
                             break
 
-                        if not (pos_covered4 & uncovered3).any():
+                        if not any_and(pos_covered4, uncovered3):
                             continue
 
                         if subset(uncovered3, pos_covered4):
