@@ -307,7 +307,8 @@ class SubsumeChecker:
         # we now try to find the smallest rule for an example not covered by this prog
         uncovered = self.tester.pos_examples_ & ~pos_covered
 
-        sorted_success_sets = sorted(self.state.success_sets.items(), key=lambda x: x[1])
+        # sorted_success_sets = sorted(self.state.success_sets.items(), key=lambda x: x[1])
+        sorted_success_sets, _, _ = self._get_sorted_success_sets()
 
         # NEW IDEA 2
         if not self.settings.joiner:
