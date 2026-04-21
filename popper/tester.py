@@ -88,6 +88,9 @@ def frozen_bits_from_indices(size, indices):
     bits[indices] = 1
     return frozenbitarray(bits)
 
+def _intern(pool, ba):
+    return pool.setdefault(ba, ba)
+
 class Tester():
 
     def __init__(self, settings, state):
@@ -140,6 +143,7 @@ class Tester():
 
         self.cached_pos_covered = {}
         self.cached_prog_inconsistent = {}
+        self._interned_bitarrays: dict = {}
 
         if self.settings.recursion_enabled:
             query_once(f'assert(timeout({EVAL_TIMEOUT})), fail')
@@ -343,7 +347,7 @@ class Tester():
         if not pos_covered:
             return self.empty_pos_covered
 
-        pos_covered = frozen_bits_from_indices(self.num_pos, pos_covered)
+        pos_covered = _intern(self._interned_bitarrays, frozen_bits_from_indices(self.num_pos, pos_covered))
         self.cached_pos_covered[prog_key] = pos_covered
         self.cached_pos_covered[raw_prog_key] = pos_covered
 
@@ -366,7 +370,7 @@ class Tester():
         if not neg_covered:
             return self.empty_neg_covered
 
-        return frozen_bits_from_indices(self.num_neg, neg_covered)
+        return _intern(self._interned_bitarrays, frozen_bits_from_indices(self.num_neg, neg_covered))
 
     def has_redundant_literal(self, prog):
         return any(rule_has_redundant_literal(rule) for rule in prog)
