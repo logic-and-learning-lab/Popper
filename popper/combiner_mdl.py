@@ -367,11 +367,6 @@ class CombinerMDL:
             if fp == 0:
                 self.state.success_sets[pos_covered] = prog_size
                 self.state.success_sets_version += 1
-                # for p, s in self.state.success_sets.items():
-                #     if p == pos_covered:
-                #         continue
-                #     self.state.paired_success_sets[s + prog_size].add(p | pos_covered)
-
 
             return not ignore_this_prog
 

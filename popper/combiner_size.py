@@ -127,11 +127,6 @@ class CombinerSize:
         self.coverage_pos[k] = pos_covered
         self.prog_lookup[k] = prog
 
-        # for p, s in self.state.success_sets.items():
-            # if p == pos_covered:
-                # continue
-            # self.state.paired_success_sets[s + prog_size].add(p | pos_covered)
-
         self.to_combine.add(hash(prog))
 
         if state.solution_found:

@@ -4,12 +4,8 @@ from . util import print_incomplete_solution2, mdl_score
 
 class SearchState:
     def __init__(self):
-        # pos_covered_bit_array -> prog_size+prog_size2
-        # it only maintains success sets for pairs of programs where fp = 0
-        self.paired_success_sets = defaultdict(set)
-
         # pos_covered_bit_array -> prog_size
-        # it only maintains success sets for programs where fp = 0
+        # only save success sets for programs where fp = 0
         self.success_sets = {}
         self.success_sets_version = 0
 
@@ -66,9 +62,3 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
         # if we use joiner, then we do not learn rules in increasing size order, so skip min coverage pruning
         if not settings.joiner:
             state.min_pos_coverage = 2
-
-    # prune stale paired_success_sets buckets
-    stale = [k for k in state.paired_success_sets if k > state.max_literals]
-    for k in stale:
-        # print('DELETE state.paired_success_set')
-        del state.paired_success_sets[k]
