@@ -1,4 +1,5 @@
-from functools import cache
+from functools import cache, lru_cache
+from itertools import product
 import clingo
 import signal
 import argparse
@@ -346,9 +347,9 @@ def init_settings(in_settings=None):
     return settings
 
 def generate_binary_strings(bit_count):
-    from itertools import product
     return list(product((0,1), repeat=bit_count))[1:-1]
 
+@lru_cache(maxsize=100000)
 def canonicalise(rule):
     head, body = rule
     head_vars = set(head.arguments) if head else set()
