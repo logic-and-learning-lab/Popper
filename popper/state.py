@@ -11,6 +11,7 @@ class SearchState:
         # pos_covered_bit_array -> prog_size
         # it only maintains success sets for programs where fp = 0
         self.success_sets = {}
+        self.success_sets_version = 0
 
         # (pos_covered_bit_array, neg_covered_bitarray) -> prog_size
         self.success_sets_noise = {}

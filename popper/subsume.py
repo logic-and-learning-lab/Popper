@@ -1,8 +1,9 @@
 from itertools import permutations
-
 from bitarray import bitarray
 from bitarray.util import subset, zeros
-
+from bisect import bisect_right
+from operator import itemgetter
+from . import stats
 from .util import (
     Constraint,
     calc_prog_size,
@@ -19,6 +20,19 @@ class SubsumeChecker:
         self.state = state
         self.pruned2 = set()
         self._covers_too_few_true_cache = set()
+        self._cached_success_sets = None
+        self._cached_sizes = None
+        self._cached_counts = None
+        self._cached_success_sets_version = -1
+
+    def _get_sorted_success_sets(self):
+        if self.state.success_sets_version != self._cached_success_sets_version:
+            items = tuple(sorted(self.state.success_sets.items(), key=itemgetter(1)))
+            self._cached_success_sets = items
+            self._cached_sizes = tuple(size for _, size in items)
+            self._cached_counts = tuple(cov.count(1) for cov, _ in items)
+            self._cached_success_sets_version = self.state.success_sets_version
+        return self._cached_success_sets, self._cached_sizes, self._cached_counts
 
     def subsumed_or_covers_too_few(self, prog, seen=None):
         if seen is None:
@@ -84,12 +98,57 @@ class SubsumeChecker:
 
         return out
 
+
+    # def check_subsumed_by_two(self, pos_covered, prog_size):
+    #     with stats.duration('v1'):
+    #         a = self.check_subsumed_by_two_a(pos_covered, prog_size)
+    #     with stats.duration('v2'):
+    #         b = self.check_subsumed_by_two_b(pos_covered, prog_size)
+    #     if a!=b:
+    #         print(a)
+    #         print(b)
+    #         assert(a == b)
+    #     return a
+
+    # def check_subsumed_by_two_a(self, pos_covered, prog_size):
+    #     for i in range(2, prog_size + 1):
+    #         if pos_covered in self.state.paired_success_sets[i]:
+    #             return True
+    #         for x in self.state.paired_success_sets[i]:
+    #             if subset(pos_covered, x):
+    #                 return True
+    #     return False
+
     def check_subsumed_by_two(self, pos_covered, prog_size):
-        for i in range(2, prog_size + 1):
-            if pos_covered in self.state.paired_success_sets[i]:
-                return True
-            for x in self.state.paired_success_sets[i]:
-                if subset(pos_covered, x):
+        """
+        Key optimisation: symmetry breaking.
+
+        For a valid pair (P1, P2) with sizes sorted ascending (i < j means
+        sizes[i] <= sizes[j]), we need sizes[i] + sizes[j] <= prog_size.
+        Since sizes[j] >= sizes[i], we have 2*sizes[i] <= prog_size, i.e.
+        sizes[i] <= prog_size // 2.  The outer loop therefore only needs to
+        iterate items up to that boundary instead of all items up to prog_size.
+        On real data this shrinks the outer loop from O(N) to O(few items).
+
+        Secondary optimisation: popcount pruning.
+        If counts[j] (total bits in P2) < uncovered_count, P2 cannot possibly
+        cover all uncovered bits, so skip the subset() call.
+        """
+        success_sets, sizes, counts = self._get_sorted_success_sets()
+        full_hi = bisect_right(sizes, prog_size)
+        sym_hi  = bisect_right(sizes, prog_size // 2)
+
+        for i in range(sym_hi):
+            p2, s2 = success_sets[i]
+            if not (p2 & pos_covered).any():
+                continue
+            uncovered = pos_covered & ~p2
+            unc_count = uncovered.count()
+            inner_hi = bisect_right(sizes, prog_size - s2, lo=i + 1, hi=full_hi)
+            for j in range(i + 1, inner_hi):
+                if counts[j] < unc_count:
+                    continue
+                if subset(uncovered, success_sets[j][0]):
                     return True
         return False
 

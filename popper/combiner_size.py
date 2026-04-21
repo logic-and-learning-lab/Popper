@@ -122,14 +122,15 @@ class CombinerSize:
 
         k = hash(prog)
         state.success_sets[pos_covered] = prog_size
+        state.success_sets_version += 1
         self.success_sets_aux[pos_covered] = k
         self.coverage_pos[k] = pos_covered
         self.prog_lookup[k] = prog
 
-        for p, s in self.state.success_sets.items():
-            if p == pos_covered:
-                continue
-            self.state.paired_success_sets[s + prog_size].add(p | pos_covered)
+        # for p, s in self.state.success_sets.items():
+            # if p == pos_covered:
+                # continue
+            # self.state.paired_success_sets[s + prog_size].add(p | pos_covered)
 
         self.to_combine.add(hash(prog))
 
@@ -189,6 +190,7 @@ class CombinerSize:
             else:
                 assert False
             del self.state.success_sets[pos_covered2]
+            self.state.success_sets_version += 1
             del self.success_sets_aux[pos_covered2]
             del self.coverage_pos[prog2_hash]
             del self.prog_lookup[prog2_hash]
