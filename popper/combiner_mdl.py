@@ -14,7 +14,6 @@ from . import stats
 from . import logger
 from bitarray.util import subset, any_and, ones, zeros, count_and, count_or
 from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution2
-import time
 from . state import update_best_hypothesis
 
 POS_EXAMPLE_WEIGHT = 1
@@ -34,13 +33,7 @@ class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
         self.settings = settings
         self.state = state
 
-        self.start_time = time.time()
-        self.solution_count = 0
-
     def on_solution_callback(self):
-        self.solution_count += 1
-        elapsed_time = time.time() - self.start_time
-
         # 1. Calculate Complexity (Size) directly from variables
         # We sum the size of every rule where the Boolean variable is True
         current_hypothesis_size = sum(
@@ -81,8 +74,6 @@ class OptPrinter(cp_model.CpSolverSolutionCallback):
         self.ruleid_to_size = ruleid_to_size # Needed for size calculation
         self.state = state
         self.best_hash = hash(frozenset(state.best_hypothesis))
-        # self.start_time = time.time()
-        # self.solution_count = 0
 
     def on_solution_callback(self):
    # 4. Reconstruct Hypothesis

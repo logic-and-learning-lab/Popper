@@ -59,14 +59,6 @@ def _update_search_bounds(settings, state, hypothesis_size, conf_matrix, mdl):
     if not settings.joiner:
         state.min_pos_coverage = 2
 
-def _should_announce_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix, mdl):
-    return (
-        hypothesis != state.best_hypothesis
-        or conf_matrix != state.best_hypothesis_score
-        or hypothesis_size != state.best_hypothesis_size
-        or (settings.noisy and mdl != state.best_hypothesis_mdl)
-    )
-
 def _is_better_hypothesis(settings, state, hypothesis_size, conf_matrix, mdl):
     if state.best_hypothesis_score is None:
         return True
@@ -99,24 +91,6 @@ def _is_better_hypothesis(settings, state, hypothesis_size, conf_matrix, mdl):
 
     return hypothesis_size < state.best_hypothesis_size
 
-def _store_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix, mdl=None):
-    _, fn, _, fp = conf_matrix
-
-    if settings.noisy and mdl is None:
-        mdl = mdl_score(fn, fp, hypothesis_size)
-
-    if _should_announce_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix, mdl):
-        print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
-
-    state.best_hypothesis_score = conf_matrix
-    state.best_hypothesis_size = hypothesis_size
-    state.best_hypothesis = hypothesis
-
-    if settings.noisy:
-        state.best_hypothesis_mdl = mdl
-
-    _update_search_bounds(settings, state, hypothesis_size, conf_matrix, mdl)
-
 def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix):
     _, fn, _, fp = conf_matrix
 
@@ -127,11 +101,12 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
     if not _is_better_hypothesis(settings, state, hypothesis_size, conf_matrix, mdl):
         return
 
-    _store_best_hypothesis(
-        settings,
-        state,
-        hypothesis,
-        hypothesis_size,
-        conf_matrix,
-        mdl=mdl,
-    )
+    print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
+    state.best_hypothesis_score = conf_matrix
+    state.best_hypothesis_size = hypothesis_size
+    state.best_hypothesis = hypothesis
+
+    if settings.noisy:
+        state.best_hypothesis_mdl = mdl
+
+    _update_search_bounds(settings, state, hypothesis_size, conf_matrix, mdl)

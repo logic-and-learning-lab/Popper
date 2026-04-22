@@ -14,7 +14,7 @@ from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, cal
 
 class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
     def __init__(self, rule_vars, num_pos, num_neg,
-                 ruleid_to_rule, ruleid_to_size, settings, state):
+                 ruleid_to_rule, settings, state):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self.rule_vars = rule_vars
         self.num_pos = num_pos
@@ -24,9 +24,6 @@ class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
         self.state = state
 
     def on_solution_callback(self):
-        # self.solution_count += 1
-        # elapsed_time = time.time() - self.start_time
-
         hypothesis = [self.ruleid_to_rule[k] for k, var in self.rule_vars.items() if self.Value(var)]
         current_hypothesis_size = int(self.ObjectiveValue())
 
@@ -57,9 +54,6 @@ class AllOptPrinter(cp_model.CpSolverSolutionCallback):
         self.best_hash = hash(frozenset(state.best_hypothesis))
 
     def on_solution_callback(self):
-        # self.solution_count += 1
-        # elapsed_time = time.time() - self.start_time
-
         hypothesis = frozenset([self.ruleid_to_rule[k] for k, var in self.rule_vars.items() if self.Value(var)])
         # current_hypothesis_size = int(self.ObjectiveValue())
         current_hypothesis_size = calc_prog_size(hypothesis)
@@ -115,7 +109,7 @@ class CombinerSize:
         state = self.state
         pos_covered = test_result.pos_covered
         
-        self.filter_combine_programs(prog, prog_size, pos_covered)
+        self.filter_combine_programs(prog_size, pos_covered)
 
         # UPDATE STATE
         # MOVE SOMEWHERE ELSE LATER
@@ -165,7 +159,7 @@ class CombinerSize:
         return False
 
     # delete programs from the combiner (or the list of programs to be combined) which are worse than this new program
-    def filter_combine_programs(self, prog, prog_size, pos_covered):
+    def filter_combine_programs(self, prog_size, pos_covered):
         if self.settings.recursion_enabled:
             return
 
@@ -289,7 +283,6 @@ class CombinerSize:
             num_pos=self.tester.num_pos,
             num_neg=self.tester.num_neg,
             ruleid_to_rule=ruleid_to_rule,
-            ruleid_to_size=ruleid_to_size,
             settings=self.settings,
             state=self.state,
         )
