@@ -467,8 +467,9 @@ def build_cons_previous_hypotheses(score, best_size, num_pos, num_neg, state):
                 spec_size = score - mdl + num_pos + best_size
                 if spec_size <= size:
                     to_delete.append([prog, tp, fn, tn, fp, size])
-                # print('SPEC', format_prog(prog), score, best_size, spec_size)
-                cons.append((Constraint.SPECIALISATION, prog, spec_size))
+                    cons.append((Constraint.SPECIALISATION, prog))
+                else:
+                    cons.append((Constraint.SPECIALISATION, prog, spec_size))
         for to_del in to_delete:
             seen_hyp_spec[k].remove(to_del)
 
@@ -481,8 +482,9 @@ def build_cons_previous_hypotheses(score, best_size, num_pos, num_neg, state):
                 gen_size = score - mdl + num_neg + best_size
                 if gen_size <= size:
                     to_delete.append([prog, tp, fn, tn, fp, size])
-                # print('GEN', format_prog(prog), score, best_size, gen_size)
-                cons.append((Constraint.GENERALISATION, prog, gen_size))
+                    cons.append((Constraint.GENERALISATION, prog))
+                else:
+                    cons.append((Constraint.GENERALISATION, prog, gen_size))
         for to_del in to_delete:
             seen_hyp_gen[k].remove(to_del)
 
