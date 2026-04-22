@@ -163,6 +163,28 @@ class CombinerMDL:
                 state.min_size = prog_size
             self.to_combine.add(hash(prog))
 
+    def _remove_prog(self, prog_hash):
+        if prog_hash in self.saved_progs:
+            self.saved_progs.remove(prog_hash)
+        else:
+            self.to_combine.remove(prog_hash)
+
+        k_pos = self.coverage_pos.pop(prog_hash)
+        k_neg = self.coverage_neg.pop(prog_hash)
+
+        self.state.success_sets_noise.pop((k_pos, k_neg), None)
+        if self.state.success_sets.pop(k_pos, None) is not None:
+            self.state.success_sets_version += 1
+
+        for ex in k_pos.search(1):
+            self.covered_by_pos[ex].remove(prog_hash)
+        for ex in k_neg.search(1):
+            self.covered_by_neg[ex].remove(prog_hash)
+
+        del self.scores[prog_hash]
+        del self.cached_prog_size[prog_hash]
+        del self.prog_lookup[prog_hash]
+
     def combine(self, size_change, last_combine_stage=False):        
         
         call_combine = len(self.to_combine) > 0 and (len(self.to_combine) >= self.settings.batch_size or size_change)
@@ -313,25 +335,7 @@ class CombinerMDL:
 
         for k in local_delete:
             # assert(not ignore_this_prog)
-            assert k in (self.saved_progs | self.to_combine)
-            if k in self.saved_progs:
-                self.saved_progs.remove(k)
-            elif k in self.to_combine:
-                self.to_combine.remove(k)
-
-            k_pos, k_neg = self.coverage_pos[k], self.coverage_neg[k]
-            del self.state.success_sets_noise[(k_pos, k_neg)]
-            for ex, ex_cov in enumerate(k_pos):
-                if ex_cov == 1:
-                    self.covered_by_pos[ex].remove(k)
-            for ex, ex_cov in enumerate(k_neg):
-                if ex_cov == 1:
-                    self.covered_by_neg[ex].remove(k)
-            del self.coverage_pos[k]
-            del self.coverage_neg[k]
-            del self.scores[k]
-            del self.cached_prog_size[k]
-            del self.prog_lookup[k]
+            self._remove_prog(k)
 
         if not ignore_this_prog:
             self.state.success_sets_noise[(pos_covered, neg_covered)] = (prog, prog_size, fn, fp, tp)
@@ -370,10 +374,7 @@ class CombinerMDL:
                 continue
 
         for prog_hash in to_delete:
-            if prog_hash in self.saved_progs:
-                self.saved_progs.remove(prog_hash)
-            else:
-                to_combine_set.remove(prog_hash)
+            self._remove_prog(prog_hash)
 
     def add_inconsistent(self, prog_hash):
         self.inconsistent.add(prog_hash)
