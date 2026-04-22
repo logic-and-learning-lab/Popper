@@ -1,7 +1,7 @@
 import os
 from importlib import resources
 from janus_swi import query_once, consult
-from functools import cache
+from functools import cache, lru_cache
 from contextlib import contextmanager
 from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, get_raw_prog, format_rule, Literal, mdl_score, order_rule, generate_binary_strings
 from bitarray import frozenbitarray
@@ -64,17 +64,16 @@ def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
     return f'{literal.predicate}({args})'
 
-def _parse_rule_cached(rule):
+@lru_cache(maxsize=100000)
+def parse_rule(rule):
     head, ordered_body = order_rule(rule)
     atom_str = format_literal_janus(head) if head else ""
     body_str = ','.join(format_literal_janus(lit) for lit in ordered_body)
     return atom_str, body_str
 
-# @cache
 def parse_body(body):
-    return _parse_rule_cached((None, body))[1]
+    return parse_rule((None, body))[1]
 
-@cache
 def rule_has_redundant_literal(rule):
     head, body = rule
     lits = tuple(format_literal_janus(lit) for lit in body)
@@ -193,7 +192,7 @@ class Tester():
                 neg_covered = []
                 if self.num_neg > 0:
                     (rule,) = prog
-                    atom_str, body_str = _parse_rule_cached(rule)
+                    atom_str, body_str = parse_rule(rule)
                     neg_covered = query_once('find_neg_firstn(K, R, S)', {'K': max_k_neg, 'R': f'{atom_str}:-{body_str}'})['S']
                 neg_covered = frozen_bits_from_indices(self.num_neg, neg_covered)
                 if neg_covered.count(1) == max_k_neg:
@@ -244,7 +243,7 @@ class Tester():
 
         if len(prog) == 1:
             (rule,) = prog
-            atom_str, body_str = _parse_rule_cached(rule)
+            atom_str, body_str = parse_rule(rule)
             q = f'neg_index(_ID, {atom_str}), {body_str}'
             res = bool_query(q)
         else:
@@ -281,7 +280,7 @@ class Tester():
             head, _body = rule
             new_head = f'pos_index(_ID, {format_literal_janus(head)})'
             head_str = format_literal_janus(head)
-            _, ordered_body = _parse_rule_cached(rule)
+            _, ordered_body = parse_rule(rule)
             if self.settings.noisy:
                 return query_once('pos_succeeds_k(R, K)', {'R': f'{head_str}:-{ordered_body}', 'K': calc_rule_size(rule)})['truth']
             else:
@@ -338,7 +337,7 @@ class Tester():
 
         if len(prog) == 1:
             (rule,) = prog
-            atom_str, body_str = _parse_rule_cached(rule)
+            atom_str, body_str = parse_rule(rule)
             pos_covered = query_once('find_pos_covered(R, S)', {'R': f'{atom_str}:-{body_str}'})['S']
         else:
             with self.using(prog):
@@ -358,7 +357,7 @@ class Tester():
 
         if len(prog) == 1:
             (rule,) = prog
-            atom_str, body_str = _parse_rule_cached(rule)
+            atom_str, body_str = parse_rule(rule)
             neg_covered = []
             if self.num_neg > 0:
                 neg_covered = query_once('find_neg_covered(R, S)', {'R': f'{atom_str}:-{body_str}'})['S']

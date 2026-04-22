@@ -88,7 +88,10 @@ def format_rule(rule):
     return f'{head_str}:- {body_str}.'
 
 def calc_prog_size(prog):
-    return sum(calc_rule_size(rule) for rule in prog)
+    total = 0
+    for _head, body in prog:
+        total += 1 + len(body)
+    return total
 
 def calc_rule_size(rule):
     head, body = rule

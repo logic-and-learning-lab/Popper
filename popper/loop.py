@@ -1,4 +1,4 @@
-from bitarray.util import subset, ones
+from bitarray.util import ones
 from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, canonicalise, format_prog, print_incomplete_solution2
 from . tester import Tester
 from . bkcons import get_bk_cons
@@ -176,12 +176,7 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
         pos_covered = test_result.pos_covered
 
         with stats.duration('check subsumed and covers_too_few'):
-            if settings.joiner:
-                # joiner can learn bigger rules than ones we have seen so we need to take into account program size
-                subsumed = (pos_covered in state.success_sets and state.success_sets[pos_covered] <= prog_size) or any(size <= prog_size and subset(pos_covered, xs) for xs, size in state.success_sets.items())
-            else:
-                subsumed = pos_covered in state.success_sets or any(subset(pos_covered, xs) for xs in state.success_sets)
-                        
+            subsumed = subsumer.check_subsumed(pos_covered, prog_size)
             subsumed_by_two = not subsumed and subsumer.check_subsumed_by_two(pos_covered, prog_size)
             covers_too_few = not subsumed and not subsumed_by_two and subsumer.check_covers_too_few(prog_size, pos_covered, prog)
 
@@ -301,10 +296,7 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
 
     if tp > 0 and state.success_sets and fp == 0:
         with stats.duration('check subsumed and covers_too_few'):
-            if settings.joiner:
-                subsumed = (pos_covered in state.success_sets and state.success_sets[pos_covered] <= prog_size) or any(state.success_sets[xs] <= prog_size and subset(pos_covered, xs) for xs in state.success_sets)
-            else:
-                subsumed = pos_covered in state.success_sets or any(subset(pos_covered, xs) for xs in state.success_sets)
+            subsumed = subsumer.check_subsumed(pos_covered, prog_size)
             subsumed_by_two = not subsumed and subsumer.check_subsumed_by_two(pos_covered, prog_size)
 
         if subsumed or subsumed_by_two:

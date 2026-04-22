@@ -34,6 +34,15 @@ class SubsumeChecker:
             self._cached_success_sets_version = self.state.success_sets_version
         return self._cached_success_sets, self._cached_sizes, self._cached_counts
 
+    def check_subsumed(self, pos_covered, prog_size):
+        success_sets = self.state.success_sets
+
+        if self.settings.joiner:
+            # Joiner can learn larger rules than ones we have seen, so take program size into account.
+            return ((pos_covered in success_sets and success_sets[pos_covered] <= prog_size) or any(size <= prog_size and subset(pos_covered, xs) for xs, size in success_sets.items()))
+
+        return pos_covered in success_sets or any(subset(pos_covered, xs) for xs in success_sets)
+
     def subsumed_or_covers_too_few(self, prog, seen=None):
         if seen is None:
             seen = set()
@@ -69,13 +78,7 @@ class SubsumeChecker:
 
             new_prog_size = calc_prog_size(new_prog)
             sub_prog_pos_covered = self.tester._test_prog_pos(new_prog)
-
-            if self.settings.joiner:
-                subsumed = (sub_prog_pos_covered in state.success_sets and state.success_sets[sub_prog_pos_covered] <= new_prog_size)
-                subsumed = subsumed or any(size <= new_prog_size and subset(sub_prog_pos_covered, xs) for xs, size in state.success_sets.items())
-            else:
-                subsumed = sub_prog_pos_covered in state.success_sets or any(subset(sub_prog_pos_covered, xs) for xs in state.success_sets)
-
+            subsumed = self.check_subsumed(sub_prog_pos_covered, new_prog_size)
             subsumed_by_two = not subsumed and self.check_subsumed_by_two(sub_prog_pos_covered, new_prog_size)
             covers_too_few = not subsumed and not subsumed_by_two and self.check_covers_too_few(new_prog_size, sub_prog_pos_covered, new_prog)
 
@@ -99,25 +102,7 @@ class SubsumeChecker:
         return out
 
 
-    # def check_subsumed_by_two(self, pos_covered, prog_size):
-    #     with stats.duration('v1'):
-    #         a = self.check_subsumed_by_two_a(pos_covered, prog_size)
-    #     with stats.duration('v2'):
-    #         b = self.check_subsumed_by_two_b(pos_covered, prog_size)
-    #     if a!=b:
-    #         print(a)
-    #         print(b)
-    #         assert(a == b)
-    #     return a
 
-    # def check_subsumed_by_two_a(self, pos_covered, prog_size):
-    #     for i in range(2, prog_size + 1):
-    #         if pos_covered in self.state.paired_success_sets[i]:
-    #             return True
-    #         for x in self.state.paired_success_sets[i]:
-    #             if subset(pos_covered, x):
-    #                 return True
-    #     return False
 
     def check_subsumed_by_two(self, pos_covered, prog_size):
         """
@@ -407,7 +392,7 @@ class SubsumeChecker:
                 if size2 > space_remaining:
                     break
 
-                if not any_and(pos_covered2 & uncovered):
+                if not any_and(pos_covered2, uncovered):
                     continue
 
                 # if prog2  covers the uncovered examples, then prog can be good
