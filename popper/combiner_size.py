@@ -198,8 +198,7 @@ class CombinerSize:
             filename_prefix = "kbpath"
 
         self.sat_dump_count += 1
-        root_dir = os.path.dirname(os.path.dirname(__file__))
-        return os.path.join(root_dir, "debug", f"{filename_prefix}_{self.sat_dump_count}.wcnf")
+        return os.path.join(os.getcwd(), "debug", f"{filename_prefix}_{self.sat_dump_count}.wcnf")
 
     def dump_norec_maxsat_encoding(self):
         encoding, soft_clauses, weights, _ruleid_to_rule, _ruleid_to_size = self._build_norec_maxsat_encoding()
