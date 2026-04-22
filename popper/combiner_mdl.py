@@ -6,6 +6,7 @@
 # Céline Hocquette, Andreas Niskanen, Matti Järvisalo, Andrew Cropper:
 # Learning MDL Logic Programs from Noisy Data. AAAI 2024: 10553-10561
 
+import os
 from collections import defaultdict
 from . import maxsat
 from ortools.sat.python import cp_model
@@ -149,6 +150,7 @@ class CombinerMDL:
         self.to_combine = set()
 
         self.inconsistent = set()
+        self.sat_dump_count = 0
 
         # self.load_solver()
 
@@ -376,7 +378,23 @@ class CombinerMDL:
     def add_inconsistent(self, prog_hash):
         self.inconsistent.add(prog_hash)
 
-    def find_combination_norec_maxsat(self, last_combine_stage=False):
+    def _sat_dump_path(self):
+        kbpath = self.settings.kbpath or os.path.dirname(self.settings.bk_file or "")
+        filename_prefix = kbpath.strip("/\\").replace("/", "_").replace("\\", "_")
+        if not filename_prefix:
+            filename_prefix = "kbpath"
+
+        self.sat_dump_count += 1
+        root_dir = os.path.dirname(os.path.dirname(__file__))
+        return os.path.join(root_dir, "debug", f"{filename_prefix}_{self.sat_dump_count}.wcnf")
+
+    def dump_norec_maxsat_encoding(self):
+        encoding, soft_clauses, weights, _ruleid_to_rule, _ruleid_to_size = self._build_norec_maxsat_encoding()
+        dump_path = self._sat_dump_path()
+        maxsat.save_wcnf(encoding, soft_clauses, weights, dump_path)
+        return dump_path
+
+    def _build_norec_maxsat_encoding(self):
         encoding = []
         ruleid_to_rule = {}
         ruleid_to_size = {}
@@ -466,6 +484,11 @@ class CombinerMDL:
         #             r2 = hash_to_ruleid[h2]
         #             if r1 < r2:
         #                 encoding.append([-r1, -r2])  # hard clause
+
+        return encoding, soft_clauses, weights, ruleid_to_rule, ruleid_to_size
+
+    def find_combination_norec_maxsat(self, last_combine_stage=False):
+        encoding, soft_clauses, weights, ruleid_to_rule, ruleid_to_size = self._build_norec_maxsat_encoding()
 
         if last_combine_stage or not self.settings.nuwls:
             _, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights)
@@ -903,6 +926,10 @@ class CombinerMDL:
         if self.settings.recursion_enabled:
             new_solution, cost = self.find_combination(last_combine_stage)
         else:
+            if self.settings.sat_dump:
+                dump_path = self.dump_norec_maxsat_encoding()
+                logger.info(f'Saved MaxSAT encoding to {dump_path}')
+
             # do a quick greedy search to determine an upperbound
             new_hyp_found = self.greedy_upper_bound()
 
@@ -914,6 +941,8 @@ class CombinerMDL:
                     logger.info(f'Calling CP solver to find all optimal hypotheses')
                     self._enumerate_all_optimal()
             else:
+                if self.settings.sat_dump:
+                    return new_hyp_found
                 if last_combine_stage:
                     logger.info(f'Calling MaxSAT solver for final noisy combine stage with {len(self.saved_progs)} rules')
                 new_solution, cost = self.find_combination_norec_maxsat(last_combine_stage)

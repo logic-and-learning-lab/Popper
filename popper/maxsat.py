@@ -19,6 +19,11 @@ def new_wcnf_to_file(hard_clauses, soft_clauses, weights, file):
         file.write(str(w) + " " + " ".join(map(str, clause)) + " 0" + "\n")
     file.flush()
 
+def save_wcnf(hard_clauses, soft_clauses, weights, path):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as file:
+        new_wcnf_to_file(hard_clauses, soft_clauses, weights, file)
+
 def exact_maxsat_solve(hard_clauses, soft_clauses, weights):
     wcnf = WCNF()
     for clause in hard_clauses:

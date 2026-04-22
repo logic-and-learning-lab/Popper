@@ -2,6 +2,7 @@
 # Andrew Cropper, Céline Hocquette: # Learning Logic Programs by Combining Programs. ECAI 2023: 501-508
 # Céline Hocquette, Andreas Niskanen, Matti Järvisalo, Andrew Cropper: # Learning MDL Logic Programs from Noisy Data. AAAI 2024: 10553-10561
 
+import os
 from collections import defaultdict
 from ortools.sat.python import cp_model
 from . import maxsat
@@ -102,6 +103,7 @@ class CombinerSize:
         self.to_combine = set()
 
         self.inconsistent = set()
+        self.sat_dump_count = 0
 
         # self.load_solver()
 
@@ -189,9 +191,25 @@ class CombinerSize:
     def add_inconsistent(self, prog_hash):
         self.inconsistent.add(prog_hash)
 
+    def _sat_dump_path(self):
+        kbpath = self.settings.kbpath or os.path.dirname(self.settings.bk_file or "")
+        filename_prefix = kbpath.strip("/\\").replace("/", "_").replace("\\", "_")
+        if not filename_prefix:
+            filename_prefix = "kbpath"
+
+        self.sat_dump_count += 1
+        root_dir = os.path.dirname(os.path.dirname(__file__))
+        return os.path.join(root_dir, "debug", f"{filename_prefix}_{self.sat_dump_count}.wcnf")
+
+    def dump_norec_maxsat_encoding(self):
+        encoding, soft_clauses, weights, _ruleid_to_rule, _ruleid_to_size = self._build_norec_maxsat_encoding()
+        dump_path = self._sat_dump_path()
+        maxsat.save_wcnf(encoding, soft_clauses, weights, dump_path)
+        return dump_path
+
     # maxsat code to find a good combination of rules
     # assumes no recursion to make it easier to understand
-    def find_combination_norec_maxsat(self, last_combine_stage=False):
+    def _build_norec_maxsat_encoding(self):
         encoding = []
 
         ruleid_to_rule = {}
@@ -237,6 +255,11 @@ class CombinerSize:
         # SOFT CONSTRAINT: Minimise the total size of the selected rules
         # The base solver expects a list of clauses, so we wrap each literal in a list
         soft_clauses = [[lit] for lit in rule_soft_lits]
+
+        return encoding, soft_clauses, weights, ruleid_to_rule, ruleid_to_size
+
+    def find_combination_norec_maxsat(self, last_combine_stage=False):
+        encoding, soft_clauses, weights, ruleid_to_rule, ruleid_to_size = self._build_norec_maxsat_encoding()
 
         if last_combine_stage or not self.settings.nuwls:
             # call the exact maxsat solver
@@ -505,6 +528,10 @@ class CombinerSize:
         if self.settings.recursion_enabled:
             new_solution, size = self.find_combination(last_combine_stage)
         else:
+            if self.settings.sat_dump:
+                dump_path = self.dump_norec_maxsat_encoding()
+                logger.info(f'Saved MaxSAT encoding to {dump_path}')
+
             if not self.settings.nuwls:
                 if last_combine_stage:
                     logger.info(f'Calling CP solver for final combine stage with {len(self.saved_progs)} rules')
@@ -513,6 +540,8 @@ class CombinerSize:
                     logger.info(f'Calling CP solver to find all optimal hypotheses')
                     self._enumerate_all_optimal()
             else:
+                if self.settings.sat_dump:
+                    return False
                 if last_combine_stage:
                     logger.info(f'Calling MaxSAT solver for final noiseless combine stage with {len(self.saved_progs)} rules')
                 new_solution, cost = self.find_combination_norec_maxsat(last_combine_stage)
