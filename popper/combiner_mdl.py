@@ -22,7 +22,7 @@ NEG_EXAMPLE_WEIGHT = 1
 
 class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
     def __init__(self, rule_vars, fn_vars, fp_vars, num_pos, num_neg,
-                 ruleid_to_rule, ruleid_to_size, state):
+                 ruleid_to_rule, ruleid_to_size, settings, state):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self.rule_vars = rule_vars
         self.fn_vars = fn_vars
@@ -31,6 +31,7 @@ class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
         self.num_neg = num_neg
         self.ruleid_to_rule = ruleid_to_rule
         self.ruleid_to_size = ruleid_to_size # Needed for size calculation
+        self.settings = settings
         self.state = state
 
         self.start_time = time.time()
@@ -54,23 +55,16 @@ class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
         tp_count = self.num_pos - fn_count
         tn_count = self.num_neg - fp_count
 
-        # 3. Objective Value (Total MDL)
-        # current_cost should be equal to (current_hypothesis_size + fn_count + fp_count)
-        current_cost = int(self.ObjectiveValue())
-
         # 4. Reconstruct Hypothesis
-        hypothesis = [
-            self.ruleid_to_rule[k]
-            for k, var in self.rule_vars.items()
-            if self.Value(var)
-        ]
+        hypothesis = [self.ruleid_to_rule[k] for k, var in self.rule_vars.items() if self.Value(var)]
 
-        # 5. Update State
-        self.state.best_hypothesis_score = (tp_count, fn_count, tn_count, fp_count)
-        self.state.best_hypothesis_size = current_hypothesis_size
-        self.state.best_hypothesis = hypothesis
-        self.state.best_hypothesis_mdl = current_cost
-        print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count))
+        update_best_hypothesis(
+            self.settings,
+            self.state,
+            hypothesis,
+            current_hypothesis_size,
+            (tp_count, fn_count, tn_count, fp_count),
+        )
 
 
 
@@ -543,6 +537,7 @@ class CombinerMDL:
             num_neg=self.tester.num_neg,
             ruleid_to_rule=ruleid_to_rule,
             ruleid_to_size=ruleid_to_size,
+            settings=self.settings,
             state=self.state,
         )
 
@@ -894,14 +889,14 @@ class CombinerMDL:
         tp = self.tester.num_pos - fn
         tn = self.tester.num_neg - fp
 
-        # 5. Update State
-        self.state.best_hypothesis_score = (tp, fn, tn, fp)
-        self.state.best_hypothesis_size = total_size
-        self.state.best_hypothesis = prog
-        self.state.best_hypothesis_mdl = prog_mdl
-
+        update_best_hypothesis(
+            self.settings,
+            self.state,
+            prog,
+            total_size,
+            (tp, fn, tn, fp),
+        )
         logger.info(f'New bound from greedy search: {prog_mdl}')
-        print_incomplete_solution2(prog, total_size, (tp, fn, tn, fp))
 
         return True
 

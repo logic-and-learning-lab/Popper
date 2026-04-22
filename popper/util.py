@@ -210,7 +210,7 @@ class Settings:
         self._deduce_directions(solver)
         self._deduce_head_and_max_bounds(solver)
         self._validate_directions()
-        self._initialize_caches(solver)
+        self._initialise_caches(solver)
         self._deduce_types(solver)
 
         self.single_solve = not (self.recursion_enabled or self.pi_enabled)
@@ -288,7 +288,7 @@ class Settings:
                     logger.out(f'ERROR: missing directions for {pred}/{arity}')
                     exit()
 
-    def _initialize_caches(self, solver):
+    def _initialise_caches(self, solver):
         max_arity = max((arity for (pred, arity) in self.body_preds), default=0)
         if self.head_literal:
             max_arity = max(max_arity, len(self.head_literal.arguments))
@@ -502,7 +502,7 @@ def order_rule_datalog(head, body):
     # Literals that are fully grounded
     grounded_queue = [lit for lit in pending_lits if remaining_count[lit] == 0]
     
-    # Sort for deterministic behavior in slow path
+    # Sort for deterministic behaviour in slow path
     all_pending_sorted = sorted(list(pending_lits))
     
     while pending_lits:

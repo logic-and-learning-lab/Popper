@@ -554,7 +554,7 @@ class SubsumeChecker:
     #     # NEW IDEA 2: Independent Set and Delta Bounds
     #     if with_min_size and not self.settings.joiner:
     #         min_rule_size_for_ex = {}
-    #         shared_rule_neighborhood = {}
+    #         shared_rule_neighbourhood = {}
     #         max_rule_coverage = 0
             
     #         for size, cov in affordable_all:
@@ -572,11 +572,11 @@ class SubsumeChecker:
     #                 if e not in min_rule_size_for_ex or size < min_rule_size_for_ex[e]:
     #                     min_rule_size_for_ex[e] = size
                         
-    #                 # shared_rule_neighborhood[e] tracks examples it shares affordable rules with
-    #                 if e not in shared_rule_neighborhood:
-    #                     shared_rule_neighborhood[e] = bitarray(overlap)
+    #                 # shared_rule_neighbourhood[e] tracks examples it shares affordable rules with
+    #                 if e not in shared_rule_neighbourhood:
+    #                     shared_rule_neighbourhood[e] = bitarray(overlap)
     #                 else:
-    #                     shared_rule_neighborhood[e] |= overlap
+    #                     shared_rule_neighbourhood[e] |= overlap
 
     #         # 1. Impossible to cover check: if any uncovered example has no affordable rule
     #         if any(e not in min_rule_size_for_ex for e in uncovered.search(1)):
@@ -596,7 +596,7 @@ class SubsumeChecker:
     #         for e in sorted(uncovered.search(1), key=lambda x: min_rule_size_for_ex[x], reverse=True):
     #             if not covered_by_disjoint_set[e]:
     #                 rule_disjoint_examples.append(e)
-    #                 covered_by_disjoint_set |= shared_rule_neighborhood[e]
+    #                 covered_by_disjoint_set |= shared_rule_neighbourhood[e]
                     
     #         disjoint_set_cost = sum(min_rule_size_for_ex[e] for e in rule_disjoint_examples)
     #         if disjoint_set_cost > space_remaining:

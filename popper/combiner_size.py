@@ -14,12 +14,13 @@ from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, cal
 
 class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
     def __init__(self, rule_vars, num_pos, num_neg,
-                 ruleid_to_rule, ruleid_to_size, state):
+                 ruleid_to_rule, ruleid_to_size, settings, state):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self.rule_vars = rule_vars
         self.num_pos = num_pos
         self.num_neg = num_neg
         self.ruleid_to_rule = ruleid_to_rule
+        self.settings = settings
         self.state = state
 
     def on_solution_callback(self):
@@ -35,12 +36,13 @@ class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
         tp_count = self.num_pos
         tn_count = self.num_neg
 
-        # 5. Update State
-        self.state.best_hypothesis_score = (tp_count, fn_count, tn_count, fp_count)
-        self.state.best_hypothesis_size = current_hypothesis_size
-        self.state.best_hypothesis = hypothesis
-        # self.state.best_hypothesis_mdl = current_cost
-        print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count))
+        update_best_hypothesis(
+            self.settings,
+            self.state,
+            hypothesis,
+            current_hypothesis_size,
+            (tp_count, fn_count, tn_count, fp_count),
+        )
 
         # print('MOOOOO')
 
@@ -288,6 +290,7 @@ class CombinerSize:
             num_neg=self.tester.num_neg,
             ruleid_to_rule=ruleid_to_rule,
             ruleid_to_size=ruleid_to_size,
+            settings=self.settings,
             state=self.state,
         )
 

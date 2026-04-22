@@ -39,26 +39,99 @@ class SearchState:
         time_spent = time_now - self._start_time
         return max(int(timeout-time_spent), 1)
 
-def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix):
+def initialise_noisy_best_hypothesis(state, num_pos, num_neg):
+    state.best_hypothesis_score = (0, num_pos, num_neg, 0)
+    state.best_hypothesis_mdl = num_pos
+
+def _update_search_bounds(settings, state, hypothesis_size, conf_matrix, mdl):
     _, fn, _, fp = conf_matrix
 
     if settings.noisy:
-        mdl = mdl_score(fn, fp, hypothesis_size)
-        if state.best_hypothesis_mdl is not None and mdl >= state.best_hypothesis_mdl:
-            return
+        state.max_literals = mdl - 1
+        return
 
-    if hypothesis != state.best_hypothesis and conf_matrix != state.best_hypothesis_score:
+    if fp != 0 or fn != 0:
+        return
+
+    state.solution_found = True
+    state.max_literals = hypothesis_size - 1
+    # if we use joiner, then we do not learn rules in increasing size order, so skip min coverage pruning
+    if not settings.joiner:
+        state.min_pos_coverage = 2
+
+def _should_announce_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix, mdl):
+    return (
+        hypothesis != state.best_hypothesis
+        or conf_matrix != state.best_hypothesis_score
+        or hypothesis_size != state.best_hypothesis_size
+        or (settings.noisy and mdl != state.best_hypothesis_mdl)
+    )
+
+def _is_better_hypothesis(settings, state, hypothesis_size, conf_matrix, mdl):
+    if state.best_hypothesis_score is None:
+        return True
+
+    tp, _fn, _tn, fp = conf_matrix
+    best_tp, best_fn, _best_tn, best_fp = state.best_hypothesis_score
+
+    if settings.noisy:
+        is_perfect = conf_matrix[1] == 0 and fp == 0
+        current_is_perfect = best_fn == 0 and best_fp == 0
+
+        # A perfect noisy hypothesis is always better than any imperfect one,
+        # even if the initial seeded MDL bound is tighter than its size.
+        if is_perfect and not current_is_perfect:
+            return True
+
+        if state.best_hypothesis_mdl is None:
+            return True
+
+        return mdl < state.best_hypothesis_mdl
+
+    if tp != best_tp:
+        return tp > best_tp
+
+    if fp != best_fp:
+        return fp < best_fp
+
+    if state.best_hypothesis_size is None:
+        return True
+
+    return hypothesis_size < state.best_hypothesis_size
+
+def _store_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix, mdl=None):
+    _, fn, _, fp = conf_matrix
+
+    if settings.noisy and mdl is None:
+        mdl = mdl_score(fn, fp, hypothesis_size)
+
+    if _should_announce_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix, mdl):
         print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
+
     state.best_hypothesis_score = conf_matrix
     state.best_hypothesis_size = hypothesis_size
     state.best_hypothesis = hypothesis
 
     if settings.noisy:
         state.best_hypothesis_mdl = mdl
-        state.max_literals = mdl - 1
-    elif fp == 0 and fn == 0:
-        state.solution_found = True
-        state.max_literals = hypothesis_size - 1
-        # if we use joiner, then we do not learn rules in increasing size order, so skip min coverage pruning
-        if not settings.joiner:
-            state.min_pos_coverage = 2
+
+    _update_search_bounds(settings, state, hypothesis_size, conf_matrix, mdl)
+
+def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_matrix):
+    _, fn, _, fp = conf_matrix
+
+    mdl = None
+    if settings.noisy:
+        mdl = mdl_score(fn, fp, hypothesis_size)
+
+    if not _is_better_hypothesis(settings, state, hypothesis_size, conf_matrix, mdl):
+        return
+
+    _store_best_hypothesis(
+        settings,
+        state,
+        hypothesis,
+        hypothesis_size,
+        conf_matrix,
+        mdl=mdl,
+    )

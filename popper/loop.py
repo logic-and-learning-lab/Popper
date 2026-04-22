@@ -5,7 +5,7 @@ from . bkcons import get_bk_cons
 from . unsat import UnsatCoreFinder
 from . allsat import AllSatCoreFinder
 from . subsume import SubsumeChecker
-from . state import SearchState, update_best_hypothesis
+from . state import SearchState, initialise_noisy_best_hypothesis, update_best_hypothesis
 from . import logger
 from . import stats
 
@@ -50,8 +50,7 @@ def popper(settings, tester, state, bkcons):
     noisy = settings.noisy
 
     if noisy:
-        state.best_hypothesis_score = (0, num_pos, num_neg, 0)
-        state.best_hypothesis_mdl = num_pos
+        initialise_noisy_best_hypothesis(state, num_pos, num_neg)
         build_constraints = build_constraints_noisy
         test_prog = tester.test_prog_noisy
     else:
@@ -77,8 +76,7 @@ def popper(settings, tester, state, bkcons):
 
         # if non-separable hypothesis is perfect, stop
         if not test_result.inconsistent and test_result.tp == num_pos:
-            state.best_hypothesis = prog
-            state.best_hypothesis_score = (num_pos, 0, num_neg, 0)
+            update_best_hypothesis(settings, state, prog, prog_size, (num_pos, 0, num_neg, 0))
             return
 
         # BUILD CONSTRAINTS
