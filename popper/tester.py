@@ -141,7 +141,9 @@ class Tester():
         self.empty_neg_covered = frozenbitarray(self.num_neg)
 
         self.cached_pos_covered = {}
+        self.cached_pos_covered_raw_prog = {}
         self.cached_prog_inconsistent = {}
+        self.cached_prog_inconsistent_raw_prog = {}
         self._interned_bitarrays: dict = {}
 
         if self.settings.recursion_enabled:
@@ -239,7 +241,9 @@ class Tester():
         if prog_key in self.cached_prog_inconsistent:
             return self.cached_prog_inconsistent[prog_key]
 
-        # AC: MAYBE ADD CANONICAL FORM
+        raw_prog_key = hash(get_raw_prog(prog))
+        if raw_prog_key in self.cached_prog_inconsistent_raw_prog:
+            return self.cached_prog_inconsistent_raw_prog[raw_prog_key]
 
         if len(prog) == 1:
             (rule,) = prog
@@ -251,6 +255,7 @@ class Tester():
                 res = bool_query("inconsistent")
 
         self.cached_prog_inconsistent[prog_key] = res
+        self.cached_prog_inconsistent_raw_prog[raw_prog_key] = res
 
         return res
 
@@ -272,8 +277,8 @@ class Tester():
             return self.cached_pos_covered[prog_key].any()
 
         raw_prog_key = hash(get_raw_prog(prog))
-        if raw_prog_key in self.cached_pos_covered:
-            return self.cached_pos_covered[raw_prog_key].any()
+        if raw_prog_key in self.cached_pos_covered_raw_prog:
+            return self.cached_pos_covered_raw_prog[raw_prog_key].any()
 
         if len(prog) == 1:
             (rule,) = prog
@@ -332,8 +337,8 @@ class Tester():
             return self.cached_pos_covered[prog_key]
 
         raw_prog_key = hash(get_raw_prog(prog))
-        if raw_prog_key in self.cached_pos_covered:
-            return self.cached_pos_covered[raw_prog_key]
+        if raw_prog_key in self.cached_pos_covered_raw_prog:
+            return self.cached_pos_covered_raw_prog[raw_prog_key]
 
         if len(prog) == 1:
             (rule,) = prog
@@ -348,7 +353,7 @@ class Tester():
 
         pos_covered = _intern(self._interned_bitarrays, frozen_bits_from_indices(self.num_pos, pos_covered))
         self.cached_pos_covered[prog_key] = pos_covered
-        self.cached_pos_covered[raw_prog_key] = pos_covered
+        self.cached_pos_covered_raw_prog[raw_prog_key] = pos_covered
 
         return pos_covered
 

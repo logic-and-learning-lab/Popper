@@ -8,6 +8,7 @@ class AllSatCoreFinder:
         self.settings = settings
         self.tester = tester
         self.seen_allsat = set()
+        self.seen_allsat_canonicalise = set()
 
     def check_redundant_literal(self, prog):
         if len(prog) > 1:
@@ -49,11 +50,11 @@ class AllSatCoreFinder:
 
         _, b = canonicalise((None, body | {literal}))
         b_key = hash(b)
-        if b_key in self.seen_allsat:
+        if b_key in self.seen_allsat_canonicalise:
             return out
 
         self.seen_allsat.add(prog_key)
-        self.seen_allsat.add(b_key)
+        self.seen_allsat_canonicalise.add(b_key)
 
         body_vars = {x for atom in body for x in atom.arguments}
 
