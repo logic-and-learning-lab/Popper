@@ -1,4 +1,3 @@
-from functools import cache, lru_cache
 from itertools import product
 import clingo
 import signal
@@ -9,6 +8,7 @@ from itertools import permutations, chain, combinations
 from collections import defaultdict
 from typing import NamedTuple
 from . recalls import recalls
+from . _canonicalise_hash import canonicalise_prog_hash_cython as canonicalise_prog_hash
 
 class Literal(NamedTuple):
     predicate: str
@@ -352,7 +352,6 @@ def init_settings(in_settings=None):
 def generate_binary_strings(bit_count):
     return list(product((0,1), repeat=bit_count))[1:-1]
 
-@lru_cache(maxsize=100000)
 def canonicalise(rule):
     head, body = rule
     head_vars = set(head.arguments) if head else set()
@@ -372,8 +371,8 @@ def canonicalise(rule):
 def get_raw_prog(prog):
     return frozenset(canonicalise(rule) for rule in prog)
 
-def prog_hash(prog):
-    return hash(get_raw_prog(prog))
+# def prog_hash(prog):
+#     return hash(get_raw_prog(prog))
 
 def format_prog(prog):
     return '\n'.join(format_rule(rule) for rule in prog)
@@ -630,7 +629,6 @@ def has_valid_directions(rule):
         return has_valid_directions_(rule)
     return True
 
-@cache
 def has_valid_directions_(rule):
     head, body = rule
     lit_inputs = settings.literal_inputs

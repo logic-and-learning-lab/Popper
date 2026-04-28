@@ -1,9 +1,9 @@
 import os
 from importlib import resources
 from janus_swi import query_once, consult
-from functools import cache, lru_cache
+from functools import cache
 from contextlib import contextmanager
-from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, get_raw_prog, format_rule, Literal, mdl_score, order_rule, generate_binary_strings
+from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, get_raw_prog, format_rule, Literal, mdl_score, order_rule, generate_binary_strings, canonicalise_prog_hash
 from bitarray import frozenbitarray
 from bitarray.util import ones, zeros
 from collections import defaultdict
@@ -11,33 +11,6 @@ from itertools import combinations
 from typing import NamedTuple
 from . recalls import recalls
 from . import logger
-
-# Prolog helpers that accept head/body as strings so the query_once call string
-# is always constant — prevents SWI-Prolog from interning a new atom per unique query.
-_FIXED_QUERY_HELPERS = """
-% RuleStr is "head:-body" so a single term_string call keeps variables shared.
-find_pos_covered(RuleStr, S) :-
-    term_string((Head :- Body), RuleStr),
-    findall(ID, (pos_index(ID, Head), (Body -> true)), S).
-
-find_neg_covered(RuleStr, S) :-
-    term_string((Head :- Body), RuleStr),
-    findall(ID, (neg_index(ID, Head), (Body -> true)), S).
-
-find_neg_firstn(K, RuleStr, S) :-
-    term_string((Head :- Body), RuleStr),
-    findfirstn(K, ID, (neg_index(ID, Head), (Body -> true)), S).
-
-pos_succeeds_k(RuleStr, K) :-
-    term_string((Head :- Body), RuleStr),
-    succeeds_k_times(pos_index(_ID, Head), Body, K).
-
-% Wraps term_string+redundant_literal so the parsed list (with unbound vars)
-% never surfaces to Python as an output variable.
-redundant_literal_str(S) :-
-    term_string(L, S),
-    redundant_literal(L).
-"""
 
 # MAXIMUM TESTING TIME FOR A RECURSIVE HYPOTHESIS
 EVAL_TIMEOUT=0.001
@@ -64,7 +37,6 @@ def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
     return f'{literal.predicate}({args})'
 
-@lru_cache(maxsize=100000)
 def parse_rule(rule):
     head, ordered_body = order_rule(rule)
     atom_str = format_literal_janus(head) if head else ""
@@ -111,7 +83,6 @@ class Tester():
 
         logger.info(f'Loading examples')
         query_once('load_examples')
-        consult('janus_fixed_queries', _FIXED_QUERY_HELPERS)
 
         neg_literal = Literal('neg_fact', tuple(range(len(self.settings.head_literal.arguments))))
         self.neg_fact_str = format_literal_janus(neg_literal)
@@ -141,9 +112,7 @@ class Tester():
         self.empty_neg_covered = frozenbitarray(self.num_neg)
 
         self.cached_pos_covered = {}
-        self.cached_pos_covered_raw_prog = {}
         self.cached_prog_inconsistent = {}
-        self.cached_prog_inconsistent_raw_prog = {}
         self._interned_bitarrays: dict = {}
 
         if self.settings.recursion_enabled:
@@ -237,13 +206,9 @@ class Tester():
         if self.num_neg == 0:
             return False
 
-        prog_key = hash(prog)
-        if prog_key in self.cached_prog_inconsistent:
-            return self.cached_prog_inconsistent[prog_key]
-
-        raw_prog_key = hash(get_raw_prog(prog))
-        if raw_prog_key in self.cached_prog_inconsistent_raw_prog:
-            return self.cached_prog_inconsistent_raw_prog[raw_prog_key]
+        prog_hash = canonicalise_prog_hash(prog, self.settings.max_vars)
+        if prog_hash in self.cached_prog_inconsistent:
+            return self.cached_prog_inconsistent[prog_hash]
 
         if len(prog) == 1:
             (rule,) = prog
@@ -254,9 +219,7 @@ class Tester():
             with self.using(prog):
                 res = bool_query("inconsistent")
 
-        self.cached_prog_inconsistent[prog_key] = res
-        self.cached_prog_inconsistent_raw_prog[raw_prog_key] = res
-
+        self.cached_prog_inconsistent[prog_hash] = res
         return res
 
     # used by the unsat core checker to see if a body is satisfiable
@@ -272,13 +235,9 @@ class Tester():
     # used by the unsat core checker to see if a rule is satisfiable
     def is_sat(self, prog):
 
-        prog_key = hash(prog)
-        if prog_key in self.cached_pos_covered:
-            return self.cached_pos_covered[prog_key].any()
-
-        raw_prog_key = hash(get_raw_prog(prog))
-        if raw_prog_key in self.cached_pos_covered_raw_prog:
-            return self.cached_pos_covered_raw_prog[raw_prog_key].any()
+        prog_hash = canonicalise_prog_hash(prog, self.settings.max_vars)
+        if prog_hash in self.cached_pos_covered:
+            return self.cached_pos_covered[prog_hash].any()
 
         if len(prog) == 1:
             (rule,) = prog
@@ -286,6 +245,7 @@ class Tester():
             new_head = f'pos_index(_ID, {format_literal_janus(head)})'
             head_str = format_literal_janus(head)
             _, ordered_body = parse_rule(rule)
+
             if self.settings.noisy:
                 return query_once('pos_succeeds_k(R, K)', {'R': f'{head_str}:-{ordered_body}', 'K': calc_rule_size(rule)})['truth']
             else:
@@ -331,14 +291,9 @@ class Tester():
 
     # ONLY CALLED BY THIS CLASS
     def _test_prog_pos(self, prog):
-
-        prog_key = hash(prog)
-        if prog_key in self.cached_pos_covered:
-            return self.cached_pos_covered[prog_key]
-
-        raw_prog_key = hash(get_raw_prog(prog))
-        if raw_prog_key in self.cached_pos_covered_raw_prog:
-            return self.cached_pos_covered_raw_prog[raw_prog_key]
+        prog_hash = canonicalise_prog_hash(prog, self.settings.max_vars)
+        if prog_hash in self.cached_pos_covered:
+            return self.cached_pos_covered[prog_hash]
 
         if len(prog) == 1:
             (rule,) = prog
@@ -352,9 +307,7 @@ class Tester():
             return self.empty_pos_covered
 
         pos_covered = _intern(self._interned_bitarrays, frozen_bits_from_indices(self.num_pos, pos_covered))
-        self.cached_pos_covered[prog_key] = pos_covered
-        self.cached_pos_covered_raw_prog[raw_prog_key] = pos_covered
-
+        self.cached_pos_covered[prog_hash] = pos_covered
         return pos_covered
 
     # ONLY CALLED BY JOINER AND THIS CLASS
@@ -378,13 +331,6 @@ class Tester():
 
     def has_redundant_literal(self, prog):
         return any(rule_has_redundant_literal(rule) for rule in prog)
-
-    # # THIS IS CALLED BY THE SUBSUMER CHECKER
-    # # FOR EACH RULE, WE CHECK WHAT THE SUBRULES ENTAIL:
-    # def get_pos_covered(self, prog):
-
-
-    #     return pos_covered
 
     @contextmanager
     def using(self, prog):
@@ -428,19 +374,19 @@ class Tester():
         return program
 
 
-    def find_redundant_rules(self, prog):
-        base = []
-        step = []
-        for rule in prog:
-            if rule_is_recursive(rule):
-                step.append(rule)
-            else:
-                base.append(rule)
-        if len(base) > 1 and self.has_redundant_rule(base):
-            return self.find_redundant_rule_(base)
-        if len(step) > 1 and self.has_redundant_rule(step):
-            return self.find_redundant_rule_(step)
-        return None
+    # def find_redundant_rules(self, prog):
+    #     base = []
+    #     step = []
+    #     for rule in prog:
+    #         if rule_is_recursive(rule):
+    #             step.append(rule)
+    #         else:
+    #             base.append(rule)
+    #     if len(base) > 1 and self.has_redundant_rule(base):
+    #         return self.find_redundant_rule_(base)
+    #     if len(step) > 1 and self.has_redundant_rule(step):
+    #         return self.find_redundant_rule_(step)
+    #     return None
 
     def find_pointless_relations(self):
         settings = self.settings
