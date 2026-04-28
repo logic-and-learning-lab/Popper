@@ -9,6 +9,7 @@ from collections import defaultdict
 from typing import NamedTuple
 from . recalls import recalls
 from . _canonicalise_hash import canonicalise_prog_hash_cython as canonicalise_prog_hash
+from . _canonicalise_hash import canonicalise_rule_hash_cython as canonicalise_rule_hash
 
 class Literal(NamedTuple):
     predicate: str

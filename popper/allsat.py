@@ -1,14 +1,13 @@
 # Code and idea from the paper: # Andrew Cropper, David M. Cerna: # Efficient rule induction by ignoring pointless rules. AAAI 2026.
 # allsay.py takes a rule and tries to identify literals implied by the other literals in the rule, e.g. in r = f(A):- int(A), even(A)  then even(A) implies int(A), so int(A) is redundant
 
-from popper.util import connected, has_valid_directions, canonicalise
+from popper.util import connected, has_valid_directions, canonicalise_rule_hash
 
 class AllSatCoreFinder:
     def __init__(self, settings, tester):
         self.settings = settings
         self.tester = tester
-        self.seen_allsat = set()
-        self.seen_allsat_canonicalise = set()
+        self.seen_prog_hash = set()
 
     def check_redundant_literal(self, prog):
         if len(prog) > 1:
@@ -44,17 +43,10 @@ class AllSatCoreFinder:
         if not body:
             return out
 
-        prog_key = hash((body, literal))
-        if prog_key in self.seen_allsat:
+        rule_hash = hash((canonicalise_rule_hash((None, body), self.settings.max_vars), literal))
+        if rule_hash in self.seen_prog_hash:
             return out
-
-        _, b = canonicalise((None, body | {literal}))
-        b_key = hash(b)
-        if b_key in self.seen_allsat_canonicalise:
-            return out
-
-        self.seen_allsat.add(prog_key)
-        self.seen_allsat_canonicalise.add(b_key)
+        self.seen_prog_hash.add(rule_hash)
 
         body_vars = {x for atom in body for x in atom.arguments}
 
