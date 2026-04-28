@@ -349,7 +349,8 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
 
         if not add_gen and gen_size and gen_size <= state.max_literals and (settings.recursion_enabled or settings.pi_enabled):
             new_cons.append((Constraint.GENERALISATION, prog, gen_size))
-            seen_hyp_gen[fn + prog_size + mdl].append([prog, tp, fn, tn, fp, prog_size])
+            if mdl is not None:
+                seen_hyp_gen[fn + prog_size + mdl].append([prog, tp, fn, tn, fp, prog_size])
             # print('seen_hyp_gen', format_prog(prog), fn, prog_size, mdl)
 
         if add_gen:
