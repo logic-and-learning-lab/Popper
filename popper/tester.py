@@ -110,7 +110,6 @@ class Tester():
 
         self.empty_pos_covered = frozenbitarray(self.num_pos)
         self.empty_neg_covered = frozenbitarray(self.num_neg)
-
         self.cached_pos_covered = {}
         self.cached_prog_inconsistent = {}
         self._interned_bitarrays: dict = {}

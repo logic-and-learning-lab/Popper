@@ -1,13 +1,12 @@
 # Code and idea from the paper: Andrew Cropper, Céline Hocquette: Learning Logic Programs by Finding Minimal Unsatisfiable Subprograms. ECAI 2024: 4295-4302
 
 from . import logger
-from . util import rule_is_recursive, prog_is_recursive, format_rule, Constraint, get_raw_prog, canonicalise, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions, Literal
+from . util import rule_is_recursive, prog_is_recursive, format_rule, Constraint, get_raw_prog, canonicalise, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions, Literal, canonicalise_prog_hash
 
 class UnsatCoreFinder:
     def __init__(self, settings, tester):
         self.settings = settings
-        self.seen_prog = set()
-        self.seen_raw_prog = set()
+        self.seen_prog_hash = set()
         self.unsat_prog = set()
         self.unsat_raw_prog = set()
         self.tester = tester
@@ -49,28 +48,23 @@ class UnsatCoreFinder:
         out = []
 
         for subprog in generalisations(prog, allow_headless=True, recursive=has_recursion):
+
+            # check we have not seen this subprog or a variant before
+            prog_hash = canonicalise_prog_hash(subprog, self.settings.max_vars)
+            if prog_hash in self.seen_prog_hash:
+                continue
+            self.seen_prog_hash.add(prog_hash)
+
             subprog = frozenset(subprog)
-            subprog_key = hash(subprog)
-
-            if subprog_key in self.seen_prog:
-                continue
-
-            raw_prog = get_raw_prog(subprog)
-            raw_prog_key = hash(raw_prog)
-
-            if raw_prog_key in self.seen_raw_prog:
-                continue
-
-            self.seen_prog.add(subprog_key)
-            self.seen_raw_prog.add(raw_prog_key)
-
             if self._should_skip(subprog):
                 continue
 
-            if seen_more_general_unsat(raw_prog, seen_raw_unsat):
+            if seen_more_general_unsat(subprog, seen_unsat_theory):
                 continue
 
-            if seen_more_general_unsat(subprog, seen_unsat_theory):
+            raw_prog = get_raw_prog(subprog)
+
+            if seen_more_general_unsat(raw_prog, seen_raw_unsat):
                 continue
 
             if not self.prog_is_ok(subprog):
