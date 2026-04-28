@@ -9,8 +9,8 @@ class SearchState:
         self.success_sets = {}
         self.success_sets_version = 0
 
-        # (pos_covered_bit_array, neg_covered_bitarray) -> prog_size
-        self.success_sets_noise = {}
+        # (pos_covered_bit_array, neg_covered_bitarray) pairs seen for noisy programs
+        self.success_sets_noise = set()
 
         self.search_depth = None
 

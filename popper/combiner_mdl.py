@@ -131,9 +131,6 @@ class CombinerMDL:
         # maps hypothesis_hash:int -> neg_covered:bitarray
         self.coverage_neg = {}
 
-        # maps hypothesis_hash:int -> hypothesis_size:int
-        self.cached_prog_size = {}
-
         # maps hypothesis_hash:int -> hypothesis
         self.prog_lookup = {}
 
@@ -170,7 +167,7 @@ class CombinerMDL:
         k_pos = self.coverage_pos.pop(prog_hash)
         k_neg = self.coverage_neg.pop(prog_hash)
 
-        self.state.success_sets_noise.pop((k_pos, k_neg), None)
+        self.state.success_sets_noise.discard((k_pos, k_neg))
         if self.state.success_sets.pop(k_pos, None) is not None:
             self.state.success_sets_version += 1
 
@@ -180,7 +177,6 @@ class CombinerMDL:
             self.covered_by_neg[ex].remove(prog_hash)
 
         del self.scores[prog_hash]
-        del self.cached_prog_size[prog_hash]
         del self.prog_lookup[prog_hash]
 
     def combine(self, size_change, last_combine_stage=False):        
@@ -270,7 +266,7 @@ class CombinerMDL:
                 n1 = self.coverage_neg[old_prog]
                 # check whether old program covers a subset of the negative examples
                 if subset(n1, neg_covered):
-                    # we can skip checking size because we know that prog_size => self.cached_prog_size[old_prog]
+                    # we can skip checking size because programs are considered in size order.
                     ignore_this_prog = True
                     break
 
@@ -336,7 +332,7 @@ class CombinerMDL:
             self._remove_prog(k)
 
         if not ignore_this_prog:
-            self.state.success_sets_noise[(pos_covered, neg_covered)] = (prog, prog_size, fn, fp, tp)
+            self.state.success_sets_noise.add((pos_covered, neg_covered))
             add_to_combiner = True
             k = hash(prog)
 
@@ -349,7 +345,6 @@ class CombinerMDL:
 
             self.coverage_pos[k] = pos_covered
             self.coverage_neg[k] = neg_covered
-            self.cached_prog_size[k] = prog_size
             self.scores[k] = (prog_size, tp, fp)
             self.prog_lookup[k] = prog
 
@@ -361,7 +356,7 @@ class CombinerMDL:
 
     def filter_combine_programs(self, to_combine_set):
         xs = self.saved_progs | to_combine_set
-        min_sz = min(self.cached_prog_size[prog] for prog in xs)
+        min_sz = min(self.scores[prog][0] for prog in xs)
         must_beat = self.state.best_hypothesis_mdl - min_sz
 
         to_delete = set()

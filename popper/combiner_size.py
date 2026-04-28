@@ -84,9 +84,6 @@ class CombinerSize:
         # maps hypothesis_hash:int -> pos_covered:bitarray
         self.coverage_pos = {}
 
-        # maps hypothesis_hash:int -> hypothesis_size:int
-        self.cached_prog_size = {}
-
         # maps hypothesis_hash:int -> hypothesis
         self.prog_lookup = {}
 
