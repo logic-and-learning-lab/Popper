@@ -164,7 +164,7 @@ class Tester():
                     (rule,) = prog
                     atom_str, body_str = parse_rule(rule)
                     neg_covered = query_once('find_neg_firstn(K, R, S)', {'K': max_k_neg, 'R': f'{atom_str}:-{body_str}'})['S']
-                neg_covered = frozen_bits_from_indices(self.num_neg, neg_covered)
+                neg_covered = _intern(self._interned_bitarrays, frozen_bits_from_indices(self.num_neg, neg_covered))
                 if neg_covered.count(1) == max_k_neg:
                     too_many_fp = True
 
