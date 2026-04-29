@@ -11,6 +11,8 @@ from itertools import combinations
 from typing import NamedTuple
 from . recalls import recalls
 from . import logger
+import numpy as np
+from . compact_hash import CompactHashTable, IndexedInternPool
 
 # MAXIMUM TESTING TIME FOR A RECURSIVE HYPOTHESIS
 EVAL_TIMEOUT=0.001
@@ -59,8 +61,6 @@ def frozen_bits_from_indices(size, indices):
     bits[indices] = 1
     return frozenbitarray(bits)
 
-def _intern(pool, ba):
-    return pool.setdefault(ba, ba)
 
 class Tester():
 
@@ -110,9 +110,9 @@ class Tester():
 
         self.empty_pos_covered = frozenbitarray(self.num_pos)
         self.empty_neg_covered = frozenbitarray(self.num_neg)
-        self.cached_pos_covered = {}
-        self.cached_prog_inconsistent = {}
-        self._interned_bitarrays: dict = {}
+        self.compact_pos_covered = CompactHashTable(np.int32)
+        self.compact_prog_inconsistent = CompactHashTable(np.uint8)
+        self._intern_pool = IndexedInternPool()
 
         if self.settings.recursion_enabled:
             query_once(f'assert(timeout({EVAL_TIMEOUT})), fail')
@@ -164,7 +164,7 @@ class Tester():
                     (rule,) = prog
                     atom_str, body_str = parse_rule(rule)
                     neg_covered = query_once('find_neg_firstn(K, R, S)', {'K': max_k_neg, 'R': f'{atom_str}:-{body_str}'})['S']
-                neg_covered = _intern(self._interned_bitarrays, frozen_bits_from_indices(self.num_neg, neg_covered))
+                neg_covered = self._intern_pool.intern_get(frozen_bits_from_indices(self.num_neg, neg_covered))
                 if neg_covered.count(1) == max_k_neg:
                     too_many_fp = True
 
@@ -206,8 +206,9 @@ class Tester():
             return False
 
         prog_hash = canonicalise_prog_hash(prog, self.settings.max_vars)
-        if prog_hash in self.cached_prog_inconsistent:
-            return self.cached_prog_inconsistent[prog_hash]
+        res = self.compact_prog_inconsistent.get(prog_hash)
+        if res is not None:
+            return bool(res)
 
         if len(prog) == 1:
             (rule,) = prog
@@ -218,7 +219,7 @@ class Tester():
             with self.using(prog):
                 res = bool_query("inconsistent")
 
-        self.cached_prog_inconsistent[prog_hash] = res
+        self.compact_prog_inconsistent[prog_hash] = int(res)
         return res
 
     # used by the unsat core checker to see if a body is satisfiable
@@ -235,8 +236,9 @@ class Tester():
     def is_sat(self, prog):
 
         prog_hash = canonicalise_prog_hash(prog, self.settings.max_vars)
-        if prog_hash in self.cached_pos_covered:
-            return self.cached_pos_covered[prog_hash].any()
+        idx = self.compact_pos_covered.get(prog_hash, -1)
+        if idx >= 0:
+            return self._intern_pool.lookup(idx).any()
 
         if len(prog) == 1:
             (rule,) = prog
@@ -291,8 +293,9 @@ class Tester():
     # ONLY CALLED BY THIS CLASS
     def _test_prog_pos(self, prog):
         prog_hash = canonicalise_prog_hash(prog, self.settings.max_vars)
-        if prog_hash in self.cached_pos_covered:
-            return self.cached_pos_covered[prog_hash]
+        idx = self.compact_pos_covered.get(prog_hash, -1)
+        if idx >= 0:
+            return self._intern_pool.lookup(idx)
 
         if len(prog) == 1:
             (rule,) = prog
@@ -303,11 +306,14 @@ class Tester():
                 pos_covered = query_once('pos_covered(S)')['S']
 
         if not pos_covered:
+            idx = self._intern_pool.intern(self.empty_pos_covered)
+            self.compact_pos_covered[prog_hash] = idx
             return self.empty_pos_covered
 
-        pos_covered = _intern(self._interned_bitarrays, frozen_bits_from_indices(self.num_pos, pos_covered))
-        self.cached_pos_covered[prog_hash] = pos_covered
-        return pos_covered
+        pos_covered = frozen_bits_from_indices(self.num_pos, pos_covered)
+        idx = self._intern_pool.intern(pos_covered)
+        self.compact_pos_covered[prog_hash] = idx
+        return self._intern_pool.lookup(idx)
 
     # ONLY CALLED BY JOINER AND THIS CLASS
     def test_prog_neg(self, prog):
@@ -324,9 +330,9 @@ class Tester():
             neg_covered = res['S2']
         
         if not neg_covered:
-            return self.empty_neg_covered
+            return self._intern_pool.intern_get(self.empty_neg_covered)
 
-        return _intern(self._interned_bitarrays, frozen_bits_from_indices(self.num_neg, neg_covered))
+        return self._intern_pool.intern_get(frozen_bits_from_indices(self.num_neg, neg_covered))
 
     def has_redundant_literal(self, prog):
         return any(rule_has_redundant_literal(rule) for rule in prog)
