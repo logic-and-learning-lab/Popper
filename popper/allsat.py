@@ -43,13 +43,6 @@ class AllSatCoreFinder:
         if not body:
             return out
 
-        rule_hash = hash((canonicalise_rule_hash((None, body), self.settings.max_vars), literal))
-        if rule_hash in self.seen_prog_hash:
-            return out
-        self.seen_prog_hash.add(rule_hash)
-
-        body_vars = {x for atom in body for x in atom.arguments}
-
         if not set(literal.arguments).issubset(body_vars):
             return out
 
@@ -58,6 +51,14 @@ class AllSatCoreFinder:
                 new_body = body - {atom}
                 out.extend(self.check_redundant_literal_aux(new_body, literal, allsat_cache, not_all_sat_cache, True))
             return out
+
+        rule_hash = hash((canonicalise_rule_hash((None, body), self.settings.max_vars), literal))
+        if rule_hash in self.seen_prog_hash:
+            return out
+        self.seen_prog_hash.add(rule_hash)
+
+        body_vars = {x for atom in body for x in atom.arguments}
+
 
         if any(body.issubset(seen_body) for seen_body in not_all_sat_cache):
             return out
