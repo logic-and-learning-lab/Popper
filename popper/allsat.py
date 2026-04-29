@@ -43,6 +43,7 @@ class AllSatCoreFinder:
         if not body:
             return out
 
+        body_vars = {x for atom in body for x in atom.arguments}
         if not set(literal.arguments).issubset(body_vars):
             return out
 
@@ -57,7 +58,7 @@ class AllSatCoreFinder:
             return out
         self.seen_prog_hash.add(rule_hash)
 
-        body_vars = {x for atom in body for x in atom.arguments}
+
 
 
         if any(body.issubset(seen_body) for seen_body in not_all_sat_cache):
