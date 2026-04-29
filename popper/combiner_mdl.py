@@ -119,12 +119,6 @@ class CombinerMDL:
         self.tester = tester
         self.state = state
 
-        # a positive example is covered by a hypothesis_hash
-        self.covered_by_pos = defaultdict(set)
-
-        # a negative example is covered by a hypothesis_hash
-        self.covered_by_neg = defaultdict(set)
-
         # maps hypothesis_hash:int -> pos_covered:bitarray
         self.coverage_pos = {}
 
@@ -170,11 +164,6 @@ class CombinerMDL:
         self.state.success_sets_noise.discard((k_pos, k_neg))
         if self.state.success_sets.pop(k_pos, None) is not None:
             self.state.success_sets_version += 1
-
-        for ex in k_pos.search(1):
-            self.covered_by_pos[ex].remove(prog_hash)
-        for ex in k_neg.search(1):
-            self.covered_by_neg[ex].remove(prog_hash)
 
         del self.scores[prog_hash]
         del self.prog_lookup[prog_hash]
@@ -260,7 +249,7 @@ class CombinerMDL:
         # old_pos ⊇ new_pos, old_neg ⊆ new_neg, old_size <= new_size
         if not ignore_this_prog:
             # find programs that cover at least the same pos examples as new prog
-            s_pos = set.intersection(*(self.covered_by_pos[ex] for ex in pos_covered.search(1)))
+            s_pos = {ph for ph in self.coverage_pos if subset(pos_covered, self.coverage_pos[ph])}
 
             for old_prog in s_pos:
                 n1 = self.coverage_neg[old_prog]
@@ -273,7 +262,7 @@ class CombinerMDL:
         # find programs that cover at least the same neg examples as new prog
         # new_pos ⊇ old_pos, new_neg ⊆ old_neg, new_size <= old_size
         if not ignore_this_prog and (inconsistent or fp > 0):
-            s_neg = set.intersection(*(self.covered_by_neg[ex] for ex in neg_covered.search(1)))
+            s_neg = {ph for ph in self.coverage_neg if subset(neg_covered, self.coverage_neg[ph])}
 
             for old_prog in s_neg:
                 # check whether old program covers a subset of the pos examples covered by the new prog
@@ -304,15 +293,7 @@ class CombinerMDL:
 
         # “If the new program is at least as good as an old one on positive coverage, and is no worse in size and FP, then delete the old one.”
         if not inconsistent:
-            # find examples not covered by this new prog
-            not_covered = self.tester.pos_examples_ ^ pos_covered
-
-            # find all old programs that are not subsumed by the new program
-            progs_not_subsumed = set.union(*(self.covered_by_pos[ex] for ex in not_covered.search(1)))
-
-            all_progs = set.union(*(self.covered_by_pos[ex] for ex, ex_cov in enumerate(self.tester.pos_examples_) if ex_cov == 1))
-
-            s_pos2 = all_progs.difference(progs_not_subsumed)
+            s_pos2 = {ph for ph in self.coverage_pos if subset(self.coverage_pos[ph], pos_covered)}
             for prog1 in s_pos2:
                 size1, tp1, fp1 = self.scores[prog1]
                 # if size1 >= prog_size:
@@ -335,13 +316,6 @@ class CombinerMDL:
             self.state.success_sets_noise.add((pos_covered, neg_covered))
             add_to_combiner = True
             k = hash(prog)
-
-            for ex, x in enumerate(pos_covered):
-                if x == 1:
-                    self.covered_by_pos[ex].add(k)
-            for ex, x in enumerate(neg_covered):
-                if x == 1:
-                    self.covered_by_neg[ex].add(k)
 
             self.coverage_pos[k] = pos_covered
             self.coverage_neg[k] = neg_covered
