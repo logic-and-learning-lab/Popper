@@ -27,26 +27,6 @@ cdef inline unsigned long long final_mix(unsigned long long value) noexcept:
     value ^= value >> 16
     return value
 
-
-cdef object _canonicalise_v4_python(object rule, int max_vars):
-    head, body = rule
-    head_vars = set(head.arguments) if head else set()
-    next_var = len(head_vars)
-    lookup = {v: v for v in head_vars}
-    new_body = []
-
-    for lit in sorted(body):
-        new_args = []
-        for var in lit.arguments:
-            if var not in lookup:
-                lookup[var] = next_var
-                next_var += 1
-            new_args.append(lookup[var])
-        new_body.append((lit.predicate, tuple(new_args)))
-
-    return head, frozenset(new_body)
-
-
 cdef unsigned long long _canonicalise_rule_hash(object rule, int max_vars) except? 0:
     cdef int i, v, mapped, next_var, arity
     cdef int lookup[128]
@@ -68,7 +48,7 @@ cdef unsigned long long _canonicalise_rule_hash(object rule, int max_vars) excep
     head, body = rule
 
     if max_vars > 128 or max_vars < 0:
-        return <unsigned long long>hash(_canonicalise_v4_python(rule, max_vars))
+        raise ValueError(f"max_vars must be between 0 and 128, got {max_vars}")
 
     memset(lookup, -1, max_vars * sizeof(int))
 
@@ -89,7 +69,7 @@ cdef unsigned long long _canonicalise_rule_hash(object rule, int max_vars) excep
             if v == -1 and PyErr_Occurred():
                 raise
             if v < 0 or v >= max_vars:
-                return <unsigned long long>hash(_canonicalise_v4_python(rule, max_vars))
+                raise ValueError(f"variable {v} out of range for max_vars={max_vars}")
             lookup[v] = v
             h = mix_hash(h, <unsigned long long>v)
         next_var = arity
@@ -115,7 +95,7 @@ cdef unsigned long long _canonicalise_rule_hash(object rule, int max_vars) excep
             if v == -1 and PyErr_Occurred():
                 raise
             if v < 0 or v >= max_vars:
-                return <unsigned long long>hash(_canonicalise_v4_python(rule, max_vars))
+                raise ValueError(f"variable {v} out of range for max_vars={max_vars}")
             mapped = lookup[v]
 
             if mapped == -1:
@@ -125,9 +105,10 @@ cdef unsigned long long _canonicalise_rule_hash(object rule, int max_vars) excep
 
             lit_hash = mix_hash(lit_hash, <unsigned long long>mapped)
 
-        body_hash ^= final_mix(lit_hash)
+        body_hash = mix_hash(body_hash, final_mix(lit_hash))
 
-    return mix_hash(h, body_hash)
+    body_hash = mix_hash(body_hash, <unsigned long long>body_len)
+    return final_mix(mix_hash(h, body_hash))
 
 
 def canonicalise_rule_hash_cython(rule, int max_vars):
@@ -135,18 +116,21 @@ def canonicalise_rule_hash_cython(rule, int max_vars):
 
 
 def canonicalise_prog_hash_cython(prog, int max_vars):
-    cdef Py_ssize_t rule_count = 0
+    cdef unsigned long long prog_hash = 0
     cdef unsigned long long rule_hash
-    cdef unsigned long long mixed
-    cdef unsigned long long hash_xor = 0
-    cdef unsigned long long hash_sum = 0
     cdef object rule
+    cdef object rule_hashes
+    cdef object h
 
+    rule_hashes = []
     for rule in prog:
         rule_hash = _canonicalise_rule_hash(rule, max_vars)
-        mixed = final_mix(rule_hash)
-        hash_xor ^= mixed
-        hash_sum += mixed
-        rule_count += 1
+        rule_hashes.append(rule_hash)
 
-    return final_mix(mix_hash(mix_hash(hash_sum, hash_xor), <unsigned long long>rule_count))
+    rule_hashes.sort()
+
+    for h in rule_hashes:
+        prog_hash = mix_hash(prog_hash, <unsigned long long>h)
+
+    prog_hash = mix_hash(prog_hash, <unsigned long long>len(rule_hashes))
+    return final_mix(prog_hash)
