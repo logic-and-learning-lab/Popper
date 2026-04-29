@@ -61,7 +61,6 @@ def frozen_bits_from_indices(size, indices):
     bits[indices] = 1
     return frozenbitarray(bits)
 
-
 class Tester():
 
     def __init__(self, settings, state):
@@ -164,7 +163,7 @@ class Tester():
                     (rule,) = prog
                     atom_str, body_str = parse_rule(rule)
                     neg_covered = query_once('find_neg_firstn(K, R, S)', {'K': max_k_neg, 'R': f'{atom_str}:-{body_str}'})['S']
-                neg_covered = self._intern_pool.intern_get(frozen_bits_from_indices(self.num_neg, neg_covered))
+                neg_covered = frozen_bits_from_indices(self.num_neg, neg_covered)
                 if neg_covered.count(1) == max_k_neg:
                     too_many_fp = True
 
@@ -330,9 +329,9 @@ class Tester():
             neg_covered = res['S2']
         
         if not neg_covered:
-            return self._intern_pool.intern_get(self.empty_neg_covered)
+            return self.empty_neg_covered
 
-        return self._intern_pool.intern_get(frozen_bits_from_indices(self.num_neg, neg_covered))
+        return frozen_bits_from_indices(self.num_neg, neg_covered)
 
     def has_redundant_literal(self, prog):
         return any(rule_has_redundant_literal(rule) for rule in prog)
