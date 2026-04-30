@@ -69,10 +69,13 @@ def find_variants_ids(
     cdef list body_list = []
     cdef list new_body
     cdef list tmp
-    cdef int k, n_args
+    cdef list tmp_bufs
+    cdef int j, k, n_args
 
     for lit_id in body_ids:
         args = literal_id_to_args[lit_id]
+        pred = literal_id_to_pred[lit_id]
+        body_list.append((pred, args))
         for var in args:
             if var >= head_arity:
                 body_vars.add(var)
@@ -82,15 +85,16 @@ def find_variants_ids(
     else:
         var_range = range(head_arity, max_vars)
 
-    for lit_id in body_ids:
-        body_list.append((literal_id_to_pred[lit_id], literal_id_to_args[lit_id]))
+    tmp_bufs = [[None] * len(args) for _, args in body_list]
 
     for perm in permutations(var_range, len(body_vars)):
         xs = head_args + perm
         new_body = []
+        j = 0
         for pred, args in body_list:
-            n_args = len(args)
-            tmp = [None] * n_args
+            tmp = tmp_bufs[j]
+            j += 1
+            n_args = len(tmp)
             for k in range(n_args):
                 tmp[k] = xs[args[k]]
             new_args = tuple(tmp)
@@ -190,6 +194,7 @@ def unsat_constraint_ids(
     cdef object clingo_literal_get = body_literal_id_to_clingo.get
     cdef list rule
     cdef list tmp
+    cdef list body_pre
     cdef int k, n_args
 
     if len(body_types) == 0:
@@ -199,6 +204,12 @@ def unsat_constraint_ids(
             literal_id_to_args,
             literal_id_by_pred_args,
         )
+
+    body_pre = []
+    for lit_id in body_ids:
+        pred = literal_id_to_pred[lit_id]
+        args = literal_id_to_args[lit_id]
+        body_pre.append((pred, args, [None] * len(args)))
 
     for assignment in find_deep_bindings_ids(
         body_ids,
@@ -210,11 +221,8 @@ def unsat_constraint_ids(
         literal_id_to_args,
     ):
         rule = []
-        for lit_id in body_ids:
-            pred = literal_id_to_pred[lit_id]
-            args = literal_id_to_args[lit_id]
-            n_args = len(args)
-            tmp = [None] * n_args
+        for pred, args, tmp in body_pre:
+            n_args = len(tmp)
             for k in range(n_args):
                 tmp[k] = assignment[args[k]]
             args2 = tuple(tmp)
@@ -325,6 +333,8 @@ def constrain(
     cdef object rule
     cdef object ground_body
 
+    if not cons:
+        return
     native_control.begin_clause_batch()
     try:
         for xs in cons:

@@ -10,7 +10,6 @@ ctypedef unsigned char cbool
 
 
 cdef extern from "clingo.h":
-    ctypedef uint64_t clingo_symbol_t
     ctypedef int clingo_symbol_type_t
     ctypedef int clingo_warning_t
     ctypedef unsigned clingo_show_type_bitset_t
@@ -247,6 +246,9 @@ cdef class NativeNoRecControl:
         self._batch_control = NULL
         self._clause_buffer = NULL
         self._clause_capacity = 0
+        self._model_symbols = NULL
+        self._model_symbols_capacity = 0
+        self._symbol_to_literal_id = {}
 
     def __init__(self, str encoding):
         cdef const char *args[3]
@@ -279,6 +281,7 @@ cdef class NativeNoRecControl:
         cdef dict body_literal_id_to_clingo = {}
         cdef dict special_atoms = {}
 
+        self._symbol_to_literal_id = {}
         _check(clingo_control_symbolic_atoms(self._control, &atoms))
         _check(clingo_symbolic_atoms_begin(atoms, NULL, &it))
         _check(clingo_symbolic_atoms_end(atoms, &end))
@@ -293,6 +296,7 @@ cdef class NativeNoRecControl:
             lit_id = _body_literal_id(symbol, literal_id_by_pred_args)
             if lit_id is not None:
                 body_literal_id_to_clingo[lit_id] = literal
+                self._symbol_to_literal_id[symbol] = lit_id
             else:
                 special_key = _special_atom_key(symbol)
                 if special_key is not None:
@@ -316,6 +320,10 @@ cdef class NativeNoRecControl:
             free(self._clause_buffer)
             self._clause_buffer = NULL
             self._clause_capacity = 0
+        if self._model_symbols != NULL:
+            free(self._model_symbols)
+            self._model_symbols = NULL
+            self._model_symbols_capacity = 0
 
     cdef void _close_handle(self):
         if self._handle != NULL:
@@ -337,26 +345,41 @@ cdef class NativeNoRecControl:
                 &self._handle,
             ))
 
-    cdef list _model_body_ids(self, const clingo_model_t *model, object literal_id_by_pred_args):
+    cdef void _ensure_model_symbol_capacity(self, size_t size) except *:
+        cdef clingo_symbol_t *new_buffer = NULL
+        cdef size_t new_cap
+
+        if size <= self._model_symbols_capacity:
+            return
+
+        new_cap = self._model_symbols_capacity if self._model_symbols_capacity > 0 else 8
+        while new_cap < size:
+            new_cap *= 2
+
+        new_buffer = <clingo_symbol_t *>realloc(
+            self._model_symbols,
+            new_cap * sizeof(clingo_symbol_t),
+        )
+        if new_buffer == NULL:
+            raise MemoryError()
+
+        self._model_symbols = new_buffer
+        self._model_symbols_capacity = new_cap
+
+    cdef list _model_body_ids(self, const clingo_model_t *model):
         cdef size_t size = 0
         cdef size_t i
-        cdef clingo_symbol_t *symbols = NULL
         cdef object lit_id
+        cdef object symbol_to_literal_id_get = self._symbol_to_literal_id.get
         cdef list out = []
 
         _check(clingo_model_symbols_size(model, clingo_show_type_shown, &size))
-        symbols = <clingo_symbol_t *>malloc(size * sizeof(clingo_symbol_t))
-        if symbols == NULL and size != 0:
-            raise MemoryError()
-
-        try:
-            _check(clingo_model_symbols(model, clingo_show_type_shown, symbols, size))
-            for i in range(size):
-                lit_id = _body_literal_id(symbols[i], literal_id_by_pred_args)
-                if lit_id is not None:
-                    out.append(lit_id)
-        finally:
-            free(symbols)
+        self._ensure_model_symbol_capacity(size)
+        _check(clingo_model_symbols(model, clingo_show_type_shown, self._model_symbols, size))
+        for i in range(size):
+            lit_id = symbol_to_literal_id_get(self._model_symbols[i])
+            if lit_id is not None:
+                out.append(lit_id)
 
         return out
 
@@ -364,7 +387,7 @@ cdef class NativeNoRecControl:
         self._close_handle()
         self._ensure_handle()
 
-    def next_model_body_ids(self, object literal_id_by_pred_args):
+    def next_model_body_ids(self):
         cdef const clingo_model_t *model = NULL
 
         self._ensure_handle()
@@ -380,23 +403,28 @@ cdef class NativeNoRecControl:
 
         self._model = model
         self._needs_resume = True
-        return self._model_body_ids(model, literal_id_by_pred_args)
+        return self._model_body_ids(model)
 
     cdef void _ensure_clause_capacity(self, size_t size) except *:
         cdef clingo_literal_t *new_buffer = NULL
+        cdef size_t new_cap
 
         if size <= self._clause_capacity:
             return
 
+        new_cap = self._clause_capacity if self._clause_capacity > 0 else 8
+        while new_cap < size:
+            new_cap *= 2
+
         new_buffer = <clingo_literal_t *>realloc(
             self._clause_buffer,
-            size * sizeof(clingo_literal_t),
+            new_cap * sizeof(clingo_literal_t),
         )
-        if new_buffer == NULL and size != 0:
+        if new_buffer == NULL:
             raise MemoryError()
 
         self._clause_buffer = new_buffer
-        self._clause_capacity = size
+        self._clause_capacity = new_cap
 
     cdef void begin_clause_batch(self) except *:
         if self._model == NULL:
@@ -429,7 +457,7 @@ cdef class NativeNoRecControl:
         finally:
             self.end_clause_batch()
 
-    def first_model_body_ids(self, object literal_id_by_pred_args):
+    def first_model_body_ids(self):
         if self._handle != NULL:
             self._close_handle()
-        return self.next_model_body_ids(literal_id_by_pred_args)
+        return self.next_model_body_ids()

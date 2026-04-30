@@ -133,8 +133,6 @@ class Generator:
         return order_cons
 
     def _build_native_caches(self):
-        self.symbol_to_literal = {}
-        self.symbol_to_literal_id = {}
         body_cache, special_cache = self.native_control.build_literal_caches(self.settings.literal_id_by_pred_args)
         self.body_literal_id_to_clingo = body_cache
         for (pred, args), lit in special_cache.items():
@@ -145,11 +143,10 @@ class Generator:
         head = self.settings.head_literal
         gen_timer = stats.duration('generate')
         literal_id_to_literal = self._literal_id_to_literal
-        literal_id_by_pred_args = self._literal_id_by_pred_args
 
         while True:
             with gen_timer:
-                body_ids = self.native_control.next_model_body_ids(literal_id_by_pred_args)
+                body_ids = self.native_control.next_model_body_ids()
                 if body_ids is None:
                     return
                 rule = head, frozenset(literal_id_to_literal[lit_id] for lit_id in body_ids)
@@ -184,17 +181,17 @@ class Generator:
         )
 
     def body_to_literal_ids(self, body):
-        return _gen_norec_id_native.body_to_literal_ids(body, self.settings.literal_to_id)
+        return _gen_norec_id_native.body_to_literal_ids(body, self._literal_to_id)
 
     def prog_to_id_rule(self, prog):
-        return _gen_norec_id_native.prog_to_id_rule(prog, self.settings.literal_to_id)
+        return _gen_norec_id_native.prog_to_id_rule(prog, self._literal_to_id)
 
     def remap_body_literal_ids(self, body_ids):
         return _gen_norec_id_native.remap_body_literal_ids(
             body_ids,
-            self.settings.literal_id_to_pred,
-            self.settings.literal_id_to_args,
-            self.settings.literal_id_by_pred_args,
+            self._literal_id_to_pred,
+            self._literal_id_to_args,
+            self._literal_id_by_pred_args,
         )
 
     def unsat_constraint(self, body):
@@ -203,13 +200,13 @@ class Generator:
     def unsat_constraint_ids(self, body_ids):
         yield from _gen_norec_id_native.unsat_constraint_ids(
             body_ids,
-            self.settings.max_vars,
-            self.settings.head_literal.arguments,
-            self.settings.head_types,
-            self.settings.body_types,
-            self.settings.literal_id_to_pred,
-            self.settings.literal_id_to_args,
-            self.settings.literal_id_by_pred_args,
+            self._max_vars,
+            self._head_args,
+            self._head_types,
+            self._body_types,
+            self._literal_id_to_pred,
+            self._literal_id_to_args,
+            self._literal_id_by_pred_args,
             self.body_literal_id_to_clingo,
         )
 
@@ -220,10 +217,10 @@ class Generator:
         yield from _gen_norec_id_native.build_specialisation_constraint_ids(
             rule,
             size,
-            self.settings.max_vars,
-            self.settings.literal_id_to_pred,
-            self.settings.literal_id_to_args,
-            self.settings.literal_id_by_pred_args,
+            self._max_vars,
+            self._literal_id_to_pred,
+            self._literal_id_to_args,
+            self._literal_id_by_pred_args,
             self.body_literal_id_to_clingo,
             self.cached_clingo_atoms,
         )
@@ -235,10 +232,10 @@ class Generator:
         yield from _gen_norec_id_native.build_generalisation_constraint_ids(
             rule,
             size,
-            self.settings.max_vars,
-            self.settings.literal_id_to_pred,
-            self.settings.literal_id_to_args,
-            self.settings.literal_id_by_pred_args,
+            self._max_vars,
+            self._literal_id_to_pred,
+            self._literal_id_to_args,
+            self._literal_id_by_pred_args,
             self.body_literal_id_to_clingo,
             self.cached_clingo_atoms,
         )
@@ -251,11 +248,11 @@ class Generator:
         yield from _gen_norec_id_native.find_variants_ids(
             head.arguments,
             body_ids,
-            self.settings.max_vars,
+            self._max_vars,
             max_rule_vars,
-            self.settings.literal_id_to_pred,
-            self.settings.literal_id_to_args,
-            self.settings.literal_id_by_pred_args,
+            self._literal_id_to_pred,
+            self._literal_id_to_args,
+            self._literal_id_by_pred_args,
             self.body_literal_id_to_clingo,
         )
 
@@ -265,10 +262,10 @@ class Generator:
     def find_deep_bindings_ids(self, body_ids):
         yield from _gen_norec_id_native.find_deep_bindings_ids(
             body_ids,
-            self.settings.max_vars,
-            self.settings.head_literal.arguments,
-            self.settings.head_types,
-            self.settings.body_types,
-            self.settings.literal_id_to_pred,
-            self.settings.literal_id_to_args,
+            self._max_vars,
+            self._head_args,
+            self._head_types,
+            self._body_types,
+            self._literal_id_to_pred,
+            self._literal_id_to_args,
         )
