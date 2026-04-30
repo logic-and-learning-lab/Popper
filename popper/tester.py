@@ -16,6 +16,10 @@ from . compact_hash import CompactHashTable, IndexedInternPool
 
 # MAXIMUM TESTING TIME FOR A RECURSIVE HYPOTHESIS
 EVAL_TIMEOUT=0.001
+COMPACT_CACHE_EXPECTED_ENTRIES = 1_000_000
+
+def compact_capacity_for_entries(expected_entries):
+    return (expected_entries * 4) // 3 + 1
 
 # should be immutable
 class TestResult(NamedTuple):
@@ -110,8 +114,9 @@ class Tester():
         self.pos_examples_ = ones(self.num_pos)
         self.empty_pos_covered = frozenbitarray(self.num_pos)
         self.empty_neg_covered = frozenbitarray(self.num_neg)
-        self.compact_pos_covered = CompactHashTable(np.int32)
-        self.compact_prog_inconsistent = CompactHashTable(np.uint8)
+        compact_cache_capacity = compact_capacity_for_entries(COMPACT_CACHE_EXPECTED_ENTRIES)
+        self.compact_pos_covered = CompactHashTable(np.int32, compact_cache_capacity)
+        self.compact_prog_inconsistent = CompactHashTable(np.uint8, compact_cache_capacity)
         self._intern_pool = IndexedInternPool()
 
         if self.settings.recursion_enabled:
@@ -434,4 +439,3 @@ class Tester():
                     pointless.add(b)
 
         return pointless
-
