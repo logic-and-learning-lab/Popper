@@ -3,7 +3,8 @@ from importlib import resources
 from janus_swi import query_once, consult
 from functools import cache, lru_cache
 from contextlib import contextmanager
-from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, get_raw_prog, format_rule, Literal, mdl_score, order_rule, generate_binary_strings, canonicalise_prog_hash
+from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, get_raw_prog, format_rule, Literal, mdl_score, order_rule, canonicalise_prog_hash
+from . bkcons import deduce_neg_example_recalls
 from bitarray import frozenbitarray
 from bitarray.util import ones, zeros
 from collections import defaultdict
@@ -38,19 +39,6 @@ def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
     return f'{literal.predicate}({args})'
 
-@lru_cache(50_000)
-def parse_rule(rule, settings):
-    head, ordered_body = order_rule(rule, settings)
-    atom_str = format_literal_janus(head) if head else ""
-    body_str = ','.join(format_literal_janus(lit) for lit in ordered_body)
-    return atom_str, body_str
-
-@lru_cache(50_000)
-def parse_body(body, settings):
-    _, ordered_body = order_rule((None, body), settings)
-    body_str = ','.join(format_literal_janus(lit) for lit in ordered_body)
-    return body_str
-
 def rule_has_redundant_literal(rule):
     head, body = rule
     lits = tuple(format_literal_janus(lit) for lit in body)
@@ -65,6 +53,17 @@ def frozen_bits_from_indices(size, indices):
     return frozenbitarray(bits)
 
 class Tester():
+
+    @lru_cache(50_000)
+    def parse_rule(self, rule):
+        head, ordered_body = order_rule(rule, self.settings)
+        atom_str = format_literal_janus(head) if head else ""
+        body_str = ','.join(format_literal_janus(lit) for lit in ordered_body)
+        return atom_str, body_str
+
+    @lru_cache(50_000)
+    def parse_body(self, body):
+        return self.parse_rule((None, body))[1]
 
     def __init__(self, settings, state):
         self.settings = settings
@@ -109,7 +108,6 @@ class Tester():
         self.num_neg = query_once('findall(_K, neg_index(_K, _Atom), _S), length(_S, N)')['N']
 
         self.pos_examples_ = ones(self.num_pos)
-
         self.empty_pos_covered = frozenbitarray(self.num_pos)
         self.empty_neg_covered = frozenbitarray(self.num_neg)
         self.compact_pos_covered = CompactHashTable(np.int32)
@@ -164,7 +162,7 @@ class Tester():
                 neg_covered = []
                 if self.num_neg > 0:
                     (rule,) = prog
-                    atom_str, body_str = parse_rule(rule, self.settings)
+                    atom_str, body_str = self.parse_rule(rule)
                     neg_covered = query_once('find_neg_firstn(K, R, S)', {'K': max_k_neg, 'R': f'{atom_str}:-{body_str}'})['S']
                 neg_covered = frozen_bits_from_indices(self.num_neg, neg_covered)
                 if neg_covered.count(1) == max_k_neg:
@@ -214,7 +212,7 @@ class Tester():
 
         if len(prog) == 1:
             (rule,) = prog
-            atom_str, body_str = parse_rule(rule, self.settings)
+            atom_str, body_str = self.parse_rule(rule)
             q = f'neg_index(_ID, {atom_str}), {body_str}'
             res = bool_query(q)
         else:
@@ -227,7 +225,7 @@ class Tester():
     # used by the unsat core checker to see if a body is satisfiable
     def is_body_sat(self, body):
         if len(body) > 1:
-            q = parse_body(body, self.settings)
+            q = self.parse_body(body)
         else:
             (lit,) = body
             q = format_literal_janus(lit)
@@ -245,16 +243,14 @@ class Tester():
         if len(prog) == 1:
             (rule,) = prog
             head, _body = rule
-            new_head = f'pos_index(_ID, {format_literal_janus(head)})'
             head_str = format_literal_janus(head)
-            _, ordered_body = parse_rule(rule, self.settings)
+            _, ordered_body = self.parse_rule(rule)
 
             if self.settings.noisy:
                 return query_once('pos_succeeds_k(R, K)', {'R': f'{head_str}:-{ordered_body}', 'K': calc_rule_size(rule)})['truth']
             else:
                 if self.state.min_pos_coverage == 1:
-                    q = f'{new_head},{ordered_body}'
-                    return bool_query(q)
+                    return bool_query(f'pos_index(_ID, {head_str}),{ordered_body}')
                 else:
                     return query_once('pos_succeeds_k(R, K)', {'R': f'{head_str}:-{ordered_body}', 'K': self.state.min_pos_coverage})['truth']
         else:
@@ -268,7 +264,7 @@ class Tester():
     # tries to determine whether literal is implied by body for the negative examples
     # AC: we do not cache as we can never see body + neg_literal again
     def is_neg_reducible(self, body, literal):
-        body_str = parse_body(body.union(self.neg_literal_set), self.settings)
+        body_str = self.parse_body(body.union(self.neg_literal_set))
         literal_str = format_literal_janus(literal)
         q = f'{body_str}, \\+ {literal_str}'
         return not bool_query(q)
@@ -276,7 +272,7 @@ class Tester():
     # called by the allsat code
     # checks whether a literal is implied by the body
     def is_literal_redundant(self, body, literal):
-        q = f'{parse_body(body, self.settings)}, \\+ {format_literal_janus(literal)}'
+        q = f'{self.parse_body(body)}, \\+ {format_literal_janus(literal)}'
         return not bool_query(q)
 
     # also called by the allsat code
@@ -301,7 +297,7 @@ class Tester():
 
         if len(prog) == 1:
             (rule,) = prog
-            atom_str, body_str = parse_rule(rule, self.settings)
+            atom_str, body_str = self.parse_rule(rule)
             pos_covered = query_once('find_pos_covered(R, S)', {'R': f'{atom_str}:-{body_str}'})['S']
         else:
             with self.using(prog):
@@ -322,14 +318,11 @@ class Tester():
 
         if len(prog) == 1:
             (rule,) = prog
-            atom_str, body_str = parse_rule(rule, self.settings)
-            neg_covered = []
-            if self.num_neg > 0:
-                neg_covered = query_once('find_neg_covered(R, S)', {'R': f'{atom_str}:-{body_str}'})['S']
+            atom_str, body_str = self.parse_rule(rule)
+            neg_covered = query_once('find_neg_covered(R, S)', {'R': f'{atom_str}:-{body_str}'})['S'] if self.num_neg > 0 else []
         else:
             with self.using(prog):
-                res = query_once(f'neg_covered(S2)')
-            neg_covered = res['S2']
+                neg_covered = query_once('neg_covered(S2)')['S2']
         
         if not neg_covered:
             return self.empty_neg_covered
@@ -449,33 +442,3 @@ class Tester():
 
         return pointless
 
-def deduce_neg_example_recalls(settings, atoms):
-    # Jan Struyf, Hendrik Blockeel: Query Optimization in Inductive Logic Programming by Reordering Literals. ILP 2003: 329-346
-
-    arity = len(settings.head_literal.arguments)
-    binary_strings = generate_binary_strings(arity)
-    counts = {var_subset: defaultdict(set) for var_subset in binary_strings}
-
-    for var_subset in binary_strings:
-        d1 = counts[var_subset]
-        for args in atoms:
-            key = []
-            value = []
-            for i in range(arity):
-                if var_subset[i]:
-                    key.append(args[i])
-                else:
-                    value.append(args[i])
-            key = tuple(key)
-            value = tuple(value)
-            d2 = d1[key]
-            d2.add(value)
-
-    all_recalls = {}
-    pred = 'neg_fact'
-    all_recalls[(pred, (0,)*arity)] = len(atoms)
-    for args, d2 in counts.items():
-        recall = max(len(xs) for xs in d2.values())
-        all_recalls[(pred, args)] = recall
-
-    settings.recalls.update(all_recalls)

@@ -1,5 +1,5 @@
 from bitarray.util import ones
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, Constraint, mdl_score, canonicalise, format_prog, print_incomplete_solution2
+from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, mdl_score, canonicalise, format_prog
 from . tester import Tester
 from . bkcons import get_bk_cons
 from . unsat import UnsatCoreFinder
@@ -199,7 +199,7 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
                     if settings.verbosity > 2:
                         logger.debug(f'\t {message}: \t {format_prog(subsumed_prog)}')
                     subsumed_prog_ = frozenset(canonicalise(rule) for rule in subsumed_prog)
-                    new_cons.append((Constraint.SPECIALISATION, subsumed_prog_))
+                    new_cons.append((SPECIALISATION, subsumed_prog_))
 
     # if hypothesis is inconsistent, prune generalisations and do not add to the combiner
     if test_result.inconsistent:
@@ -229,18 +229,18 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
     # BUILD CONSTRAINTS
     if not pruned_more_general:
         if add_gen and (settings.recursion_enabled or settings.pi_enabled) and not pruned_sub_inconsistent:
-            new_cons.append((Constraint.GENERALISATION, prog))
+            new_cons.append((GENERALISATION, prog))
         elif not add_spec:
-            new_cons.append((Constraint.GENERALISATION, prog))
+            new_cons.append((GENERALISATION, prog))
 
         if add_spec and not add_redund2:
-            new_cons.append((Constraint.SPECIALISATION, prog))
+            new_cons.append((SPECIALISATION, prog))
 
         if add_redund1:
-            new_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, prog))
+            new_cons.append((REDUNDANCY_CONSTRAINT1, prog))
 
         if add_redund2:
-            new_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, prog))
+            new_cons.append((REDUNDANCY_CONSTRAINT2, prog))
 
     return new_cons, add_to_combiner_
 
@@ -339,29 +339,29 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
     if not pruned_more_general:
 
         if add_spec and not add_redund2:
-            new_cons.append((Constraint.SPECIALISATION, prog))
+            new_cons.append((SPECIALISATION, prog))
 
         if not too_few_tp and not add_spec and spec_size and spec_size <= state.max_literals and (is_recursive or has_invention or spec_size <= settings.max_body):
-            new_cons.append((Constraint.SPECIALISATION, prog, spec_size))
+            new_cons.append((SPECIALISATION, prog, spec_size))
             seen_hyp_spec[fp + prog_size + mdl].append([prog, tp, fn, tn, fp, prog_size])
 
         if not add_gen and gen_size and gen_size <= state.max_literals and (settings.recursion_enabled or settings.pi_enabled):
-            new_cons.append((Constraint.GENERALISATION, prog, gen_size))
+            new_cons.append((GENERALISATION, prog, gen_size))
             if mdl is not None:
                 seen_hyp_gen[fn + prog_size + mdl].append([prog, tp, fn, tn, fp, prog_size])
             # print('seen_hyp_gen', format_prog(prog), fn, prog_size, mdl)
 
         if add_gen:
-            new_cons.append((Constraint.GENERALISATION, prog))
+            new_cons.append((GENERALISATION, prog))
 
         if add_redund1:
-            new_cons.append((Constraint.REDUNDANCY_CONSTRAINT1, prog))
+            new_cons.append((REDUNDANCY_CONSTRAINT1, prog))
 
         if add_redund2:
-            new_cons.append((Constraint.REDUNDANCY_CONSTRAINT2, prog))
+            new_cons.append((REDUNDANCY_CONSTRAINT2, prog))
 
     if not add_spec and not add_gen:
-        new_cons.append((Constraint.BANISH, prog))
+        new_cons.append((BANISH, prog))
 
     add_to_combiner = (not too_few_tp) and (not too_many_fp) and (not is_recursive) and (not has_invention) and tp > prog_size + fp and fp + prog_size < state.best_hypothesis_mdl and (not noisy_subsumed)
 
@@ -382,7 +382,7 @@ def explain_inconsistent(tester, prog):
         subprog = frozenset([rule])
         if tester.test_prog_inconsistent(subprog):
             pruned_base = True
-            yield (Constraint.GENERALISATION, subprog)
+            yield (GENERALISATION, subprog)
 
     if pruned_base or len(rec) == 1:
         return
@@ -391,7 +391,7 @@ def explain_inconsistent(tester, prog):
         for r2 in rec:
             subprog = frozenset([r1, r2])
             if tester.test_prog_inconsistent(subprog):
-                yield (Constraint.GENERALISATION, subprog)
+                yield (GENERALISATION, subprog)
 
 def check_recursive_redundancy(settings, tester, prog):
     new_cons = []
@@ -402,13 +402,13 @@ def check_recursive_redundancy(settings, tester, prog):
             continue
         if tester.has_redundant_literal(frozenset([rule])):
             add_gen = True
-            new_cons.append((Constraint.GENERALISATION, [rule]))
+            new_cons.append((GENERALISATION, [rule]))
             if settings.verbosity > 2:
                 logger.debug(f'\t {format_rule(rule)} \t has_redundant_literal')
 
     # remove a subset of theta-subsumed rules when learning recursive programs with more than two rules
     if settings.max_rules > 2:
-        new_cons.append((Constraint.TMP_ANDY, prog))
+        new_cons.append((TMP_ANDY, prog))
 
     return new_cons, add_gen
 
@@ -430,7 +430,7 @@ def check_redundant_literals(settings, allsatcore_finder, prog, add_spec, pruned
                 if settings.verbosity > 2:
                     _tmp = ','.join(format_literal(literal) for literal in x)
                     logger.debug(f'\t REDUCIBLE_1 \t {_tmp}')
-                new_cons.append((Constraint.UNSAT, x))
+                new_cons.append((UNSAT, x))
 
     # check whether a rule contains an indiscriminate literal
     # https://arxiv.org/pdf/2502.01232
@@ -443,7 +443,7 @@ def check_redundant_literals(settings, allsatcore_finder, prog, add_spec, pruned
                 pruned_more_general = True
                 if settings.verbosity > 2:
                     logger.debug(f'\t REDUCIBLE_2: \t {format_prog(bad_prog)}')
-                new_cons.append((Constraint.SPECIALISATION, bad_prog))
+                new_cons.append((SPECIALISATION, bad_prog))
 
     return new_cons, add_spec, pruned_more_general, add_to_combiner_
 
@@ -466,9 +466,9 @@ def build_cons_previous_hypotheses(score, best_size, num_pos, num_neg, state):
                 spec_size = score - mdl + num_pos + best_size
                 if spec_size <= size:
                     to_delete.append([prog, tp, fn, tn, fp, size])
-                    cons.append((Constraint.SPECIALISATION, prog))
+                    cons.append((SPECIALISATION, prog))
                 else:
-                    cons.append((Constraint.SPECIALISATION, prog, spec_size))
+                    cons.append((SPECIALISATION, prog, spec_size))
         for to_del in to_delete:
             seen_hyp_spec[k].remove(to_del)
 
@@ -481,9 +481,9 @@ def build_cons_previous_hypotheses(score, best_size, num_pos, num_neg, state):
                 gen_size = score - mdl + num_neg + best_size
                 if gen_size <= size:
                     to_delete.append([prog, tp, fn, tn, fp, size])
-                    cons.append((Constraint.GENERALISATION, prog))
+                    cons.append((GENERALISATION, prog))
                 else:
-                    cons.append((Constraint.GENERALISATION, prog, gen_size))
+                    cons.append((GENERALISATION, prog, gen_size))
         for to_del in to_delete:
             seen_hyp_gen[k].remove(to_del)
 
@@ -508,7 +508,7 @@ def build_cons_previous_hypotheses(score, best_size, num_pos, num_neg, state):
 #     for rule in base:
 #         subprog = frozenset([rule])
 #         if tester.is_non_functional(subprog):
-#             new_cons.append((Constraint.GENERALISATION, subprog))
+#             new_cons.append((GENERALISATION, subprog))
 #             pruned_subprog = True
 
 #     if pruned_subprog:
@@ -521,6 +521,6 @@ def build_cons_previous_hypotheses(score, best_size, num_pos, num_neg, state):
 #         for r2 in rec:
 #             subprog = frozenset([r1,r2])
 #             if tester.is_non_functional(subprog):
-#                 new_cons.append((Constraint.GENERALISATION, subprog))
+#                 new_cons.append((GENERALISATION, subprog))
 
 #     return new_cons

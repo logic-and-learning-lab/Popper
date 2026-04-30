@@ -5,7 +5,6 @@ from bisect import bisect_right
 from operator import itemgetter
 from . import stats
 from .util import (
-    Constraint,
     calc_prog_size,
     canonicalise,
     has_valid_directions,

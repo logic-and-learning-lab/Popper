@@ -10,7 +10,7 @@ from . import stats
 from . import logger
 from . state import update_best_hypothesis
 from bitarray.util import subset, any_and
-from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution2
+from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution
 
 class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
     def __init__(self, rule_vars, num_pos, num_neg,
@@ -69,7 +69,7 @@ class AllOptPrinter(cp_model.CpSolverSolutionCallback):
         tn_count = self.num_neg
         print('OPTTTTTTT')
 
-        print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count), self.settings, self.settings.noisy)
+        print_incomplete_solution(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count), self.settings, self.settings.noisy)
 
 
 class CombinerSize:

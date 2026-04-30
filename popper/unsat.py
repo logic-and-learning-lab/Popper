@@ -1,7 +1,7 @@
 # Code and idea from the paper: Andrew Cropper, Céline Hocquette: Learning Logic Programs by Finding Minimal Unsatisfiable Subprograms. ECAI 2024: 4295-4302
 
 from . import logger
-from . util import rule_is_recursive, prog_is_recursive, format_rule, Constraint, get_raw_prog, canonicalise, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions, Literal, canonicalise_prog_hash
+from . util import rule_is_recursive, prog_is_recursive, format_rule, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, get_raw_prog, canonicalise, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions, Literal, canonicalise_prog_hash
 
 class UnsatCoreFinder:
     def __init__(self, settings, tester):
@@ -25,18 +25,18 @@ class UnsatCoreFinder:
             if is_headless_unsat:
                 # If a headless version (just the body) is unsat, it's a strong UNSAT constraint
                 _, body = next(iter(subprog))
-                yield (Constraint.UNSAT, body)
+                yield (UNSAT, body)
                 continue
 
             # Standard specialisation/redundancy constraints
             if not (self.settings.recursion_enabled or self.settings.pi_enabled):
-                yield (Constraint.SPECIALISATION, [canonicalise(rule) for rule in subprog])
+                yield (SPECIALISATION, [canonicalise(rule) for rule in subprog])
                 continue
 
             if len(subprog) == 1:
-                yield (Constraint.REDUNDANCY_CONSTRAINT1, [canonicalise(rule) for rule in subprog])
+                yield (REDUNDANCY_CONSTRAINT1, [canonicalise(rule) for rule in subprog])
 
-            yield (Constraint.REDUNDANCY_CONSTRAINT2, [canonicalise(rule) for rule in subprog])
+            yield (REDUNDANCY_CONSTRAINT2, [canonicalise(rule) for rule in subprog])
 
     def explain_totally_incomplete(self, prog):
         """Entry point for the recursive unsat core search."""

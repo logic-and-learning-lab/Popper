@@ -9,7 +9,7 @@ import numbers
 import clingo.script
 from importlib import resources
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, Literal
+from . util import rule_is_recursive, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, Literal
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
@@ -316,32 +316,32 @@ class Generator:
             con_type = xs[0]
             con_prog = xs[1]
 
-            if con_type == Constraint.GENERALISATION:
+            if con_type == GENERALISATION:
                 con_size = None
                 if self.settings.noisy and len(xs)>2:
                     con_size = xs[2]
                 xs = set(self.build_generalisation_constraint3(con_prog, con_size))
                 new_cons.update(xs)
-            elif con_type == Constraint.SPECIALISATION:
+            elif con_type == SPECIALISATION:
                 con_size = None
                 if self.settings.noisy and len(xs)>2:
                     con_size = xs[2]
                 xs = set(self.build_specialisation_constraint3(con_prog, con_size))
                 new_cons.update(xs)
-            elif con_type == Constraint.UNSAT:
+            elif con_type == UNSAT:
                 new_cons.update(self.unsat_constraint2(con_prog))
-            elif con_type == Constraint.REDUNDANCY_CONSTRAINT1:
+            elif con_type == REDUNDANCY_CONSTRAINT1:
                 xs = set(self.redundancy_constraint1(con_prog))
                 new_cons.update(xs)
-            elif con_type == Constraint.REDUNDANCY_CONSTRAINT2:
+            elif con_type == REDUNDANCY_CONSTRAINT2:
                 if len(con_prog) == 1:
                     xs = set(self.redundancy_constraint1(con_prog))
                 else:
                     xs = set(self.build_specialisation_constraint3(con_prog))
                 new_cons.update(xs)
-            elif con_type == Constraint.TMP_ANDY:
+            elif con_type == TMP_ANDY:
                 assert(False)
-            elif con_type == Constraint.BANISH:
+            elif con_type == BANISH:
                 xs = set(self.build_banish_constraint(con_prog))
                 new_cons.update(xs)
 

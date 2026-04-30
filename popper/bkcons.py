@@ -335,3 +335,30 @@ def get_bk_cons(settings, tester):
         bkcons.extend(results)
 
     return bkcons
+
+def deduce_neg_example_recalls(settings, atoms):
+    # Jan Struyf, Hendrik Blockeel: Query Optimization in Inductive Logic Programming by Reordering Literals. ILP 2003: 329-346
+    arity = len(settings.head_literal.arguments)
+    binary_strings = generate_binary_strings(arity)
+    counts = {var_subset: defaultdict(set) for var_subset in binary_strings}
+
+    for var_subset in binary_strings:
+        d1 = counts[var_subset]
+        for args in atoms:
+            key = []
+            value = []
+            for i in range(arity):
+                if var_subset[i]:
+                    key.append(args[i])
+                else:
+                    value.append(args[i])
+            key = tuple(key)
+            value = tuple(value)
+            d1[key].add(value)
+
+    pred = 'neg_fact'
+    all_recalls = {(pred, (0,)*arity): len(atoms)}
+    for args, d2 in counts.items():
+        all_recalls[(pred, args)] = max(len(xs) for xs in d2.values())
+
+    settings.recalls.update(all_recalls)

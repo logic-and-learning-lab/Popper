@@ -20,14 +20,13 @@ MAX_BODY=10
 ANYTIME_TIMEOUT=10
 BATCH_SIZE=1000
 
-class Constraint:
-    GENERALISATION = 1
-    SPECIALISATION = 2
-    UNSAT = 3
-    REDUNDANCY_CONSTRAINT1 = 4
-    REDUNDANCY_CONSTRAINT2 = 5
-    TMP_ANDY = 6
-    BANISH = 7
+GENERALISATION = 1
+SPECIALISATION = 2
+UNSAT = 3
+REDUNDANCY_CONSTRAINT1 = 4
+REDUNDANCY_CONSTRAINT2 = 5
+TMP_ANDY = 6
+BANISH = 7
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper is an ILP system based on learning from failures')
@@ -42,20 +41,21 @@ def parse_args():
     parser.add_argument('-j', dest='joiner', default=False, action='store_true', help='Use join stage (default: False)')
     return parser.parse_args()
 
+class _TimeoutError(Exception):
+    pass
+
 def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
     timeout_duration = max(timeout_duration, 1)
     result = None
-    class TimeoutError(Exception):
-        pass
 
     def handler(signum, frame):
-        raise TimeoutError()
+        raise _TimeoutError()
 
     signal.signal(signal.SIGALRM, handler)
     signal.alarm(timeout_duration)
     try:
         result = func(*args, **kwargs)
-    except TimeoutError as _exc:
+    except _TimeoutError:
         logger.out(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
         return result
     except AttributeError as moo:
@@ -573,7 +573,7 @@ def order_rule(rule, settings):
 
     return head, tuple(ordered_body)
 
-def print_incomplete_solution2(prog, size, conf_matrix, settings, noisy: bool):
+def print_incomplete_solution(prog, size, conf_matrix, settings, noisy: bool):
     tp, fn, tn, fp = conf_matrix
     logger.out('*'*20)
     logger.out('New best hypothesis:')
@@ -598,17 +598,14 @@ def print_prog_score(prog, score, settings, noisy: bool):
     if noisy:
         logger.out(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size} MDL:{size+fn+fp}')
     else:
-      logger.out(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
+        logger.out(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
     for rule in order_prog(prog):
         logger.out(format_rule(order_rule(rule, settings)))
     logger.out('*'*30)
 
 def has_valid_directions(rule, settings):
-    if settings.has_directions:
-        return has_valid_directions_(rule, settings)
-    return True
-
-def has_valid_directions_(rule, settings):
+    if not settings.has_directions:
+        return True
     head, body = rule
     lit_inputs = settings.literal_inputs
     lit_outputs = settings.literal_outputs
