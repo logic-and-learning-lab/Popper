@@ -222,15 +222,8 @@ class Tester():
         self.compact_prog_inconsistent[prog_hash] = int(res)
         return res
 
-    # used by the unsat core checker to see if a body is satisfiable
     def is_body_sat(self, body):
-        if len(body) > 1:
-            q = self.parse_body(body)
-        else:
-            (lit,) = body
-            q = format_literal_janus(lit)
-
-        return bool_query(q)
+        return bool_query(self.parse_body(body))
 
     # used by the unsat core checker to see if a rule is satisfiable
     def is_sat(self, prog):
