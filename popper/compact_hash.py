@@ -128,16 +128,6 @@ class IndexedInternPool:
             self._list.append(ba)
         return idx
 
-    def intern_get(self, ba):
-        idx = self._map.get(ba)
-        if idx is None:
-            idx = len(self._list)
-            if idx > self._max_index:
-                raise OverflowError("IndexedInternPool index exceeds configured maximum")
-            self._map[ba] = idx
-            self._list.append(ba)
-        return self._list[idx]
-
     def lookup(self, idx):
         return self._list[int(idx)]
 

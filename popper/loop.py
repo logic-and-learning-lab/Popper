@@ -228,10 +228,8 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
 
     # BUILD CONSTRAINTS
     if not pruned_more_general:
-        # if add_gen and not pruned_sub_inconsistent:
         if add_gen and (settings.recursion_enabled or settings.pi_enabled) and not pruned_sub_inconsistent:
-            if settings.recursion_enabled or settings.pi_enabled:
-                new_cons.append((Constraint.GENERALISATION, prog))
+            new_cons.append((Constraint.GENERALISATION, prog))
         elif not add_spec:
             new_cons.append((Constraint.GENERALISATION, prog))
 

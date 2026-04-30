@@ -1,10 +1,9 @@
-from itertools import product
+from itertools import chain, combinations, permutations, product
 import clingo
 import signal
 import argparse
 import os
 from . import logger
-from itertools import permutations, chain, combinations
 from collections import defaultdict
 from typing import NamedTuple
 from functools import lru_cache
@@ -145,7 +144,7 @@ def get_body_preds(solver):
         pred = x.symbol.arguments[0].name
         arity = x.symbol.arguments[1].number
         body_preds_.add((pred, arity))
-    return set(body_preds_)
+    return body_preds_
 
 class Settings:
 
@@ -388,7 +387,7 @@ def rule_subsumes(r1, r2):
     # r1 subsumes r2 if r1 is a subset of r2
     h1, b1 = r1
     h2, b2 = r2
-    if h1 != None and h2 == None:
+    if h1 is not None and h2 is None:
         return False
     return b1.issubset(b2)
 
@@ -396,46 +395,32 @@ def rule_subsumes(r1, r2):
 def theory_subsumes(prog1, prog2):
     return all(any(rule_subsumes(r1, r2) for r1 in prog1) for r2 in prog2)
 
-def head_connected(rule):
-    head, body = rule
-    head_connected_vars = set(head.arguments)
-    body_literals = list(body)
-
+def _all_literals_reachable(seen_vars, body_literals):
+    body_literals = list(body_literals)
     while body_literals:
         progress = False
         next_body_literals = []
         for literal in body_literals:
-            if not head_connected_vars.isdisjoint(literal.arguments):
-                head_connected_vars.update(literal.arguments)
+            if not seen_vars.isdisjoint(literal.arguments):
+                seen_vars.update(literal.arguments)
                 progress = True
             else:
                 next_body_literals.append(literal)
-        if not progress and body_literals:
+        if not progress:
             return False
         body_literals = next_body_literals
     return True
+
+def head_connected(rule):
+    head, body = rule
+    return _all_literals_reachable(set(head.arguments), body)
 
 def connected(body):
     if len(body) <= 1:
         return True
 
     it = iter(body)
-    connected_vars = set(next(it).arguments)
-    body_literals = list(it)
-
-    while body_literals:
-        progress = False
-        next_body_literals = []
-        for literal in body_literals:
-            if not connected_vars.isdisjoint(literal.arguments):
-                connected_vars.update(literal.arguments)
-                progress = True
-            else:
-                next_body_literals.append(literal)
-        if not progress and body_literals:
-            return False
-        body_literals = next_body_literals
-    return True
+    return _all_literals_reachable(set(next(it).arguments), it)
 
 def non_empty_powerset(iterable):
     s = tuple(iterable)
@@ -581,11 +566,11 @@ def order_rule(rule):
                 # find the first ground non-recursive body literal and stop
                 selected_literal = literal
                 break
-            elif selected_literal == None:
+            elif selected_literal is None:
                 # otherwise use the recursive body literal
                 selected_literal = literal
 
-        if selected_literal == None:
+        if selected_literal is None:
             message = f'{selected_literal} in clause {format_rule(rule)} could not be grounded'
             raise ValueError(message)
 
