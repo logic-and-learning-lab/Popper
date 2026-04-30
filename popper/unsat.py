@@ -75,16 +75,15 @@ class UnsatCoreFinder:
                 out.extend(self.explain_totally_incomplete_aux(subprog, seen_unsat_theory, seen_raw_unsat))
                 continue
 
-            # Standardise literals for testing
-            test_prog = build_test_prog(subprog)
+            # Check satisfiability of the generalisation
             headless = any(head is None for head, body in subprog)
 
             if headless:
-                _, body = next(iter(test_prog))
+                _, body = next(iter(subprog))
                 if self.tester.is_body_sat(body):
                     continue
             else:
-                if self.tester.is_sat(test_prog):
+                if self.tester.is_sat(subprog):
                     continue
 
             # Found an unsatisfiable generalisation
@@ -183,7 +182,3 @@ class UnsatCoreFinder:
 def seen_more_general_unsat(prog, unsat_set):
     """Check if any theory in the unsat_set subsumes the given program."""
     return any(theory_subsumes(seen, prog) for seen in unsat_set)
-
-def build_test_prog(subprog):
-    """Convert a raw subprogram into a frozenset of (Literal, frozenset(Literal)) for testing."""
-    return frozenset((head if head else False, body) for head, body in subprog)
