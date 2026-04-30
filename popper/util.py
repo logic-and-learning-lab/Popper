@@ -7,6 +7,7 @@ from . import logger
 from itertools import permutations, chain, combinations
 from collections import defaultdict
 from typing import NamedTuple
+from functools import lru_cache
 from . recalls import recalls
 from . _canonicalise_hash import canonicalise_prog_hash_cython as canonicalise_prog_hash
 from . _canonicalise_hash import canonicalise_rule_hash_cython as canonicalise_rule_hash
@@ -353,6 +354,7 @@ def init_settings(in_settings=None):
 def generate_binary_strings(bit_count):
     return list(product((0,1), repeat=bit_count))[1:-1]
 
+@lru_cache(50_000)
 def canonicalise(rule):
     head, body = rule
     head_vars = set(head.arguments) if head else set()

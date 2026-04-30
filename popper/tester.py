@@ -1,7 +1,7 @@
 import os
 from importlib import resources
 from janus_swi import query_once, consult
-from functools import cache
+from functools import cache, lru_cache
 from contextlib import contextmanager
 from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, get_raw_prog, format_rule, Literal, mdl_score, order_rule, generate_binary_strings, canonicalise_prog_hash
 from bitarray import frozenbitarray
@@ -39,14 +39,18 @@ def format_literal_janus(literal):
     args = ','.join(f'_V{i}' for i in literal.arguments)
     return f'{literal.predicate}({args})'
 
+@lru_cache(50_000)
 def parse_rule(rule):
     head, ordered_body = order_rule(rule)
     atom_str = format_literal_janus(head) if head else ""
     body_str = ','.join(format_literal_janus(lit) for lit in ordered_body)
     return atom_str, body_str
 
+@lru_cache(50_000)
 def parse_body(body):
-    return parse_rule((None, body))[1]
+    _, ordered_body = order_rule((None, body))
+    body_str = ','.join(format_literal_janus(lit) for lit in ordered_body)
+    return body_str
 
 def rule_has_redundant_literal(rule):
     head, body = rule
