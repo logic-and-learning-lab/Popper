@@ -45,12 +45,13 @@ class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
 
 
 class AllOptPrinter(cp_model.CpSolverSolutionCallback):
-    def __init__(self, rule_vars, ruleid_to_rule, num_pos, num_neg, state):
+    def __init__(self, rule_vars, ruleid_to_rule, num_pos, num_neg, settings, state):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self.rule_vars = rule_vars
         self.ruleid_to_rule = ruleid_to_rule
         self.num_pos=num_pos
         self.num_neg=num_neg
+        self.settings = settings
         self.best_hash = hash(frozenset(state.best_hypothesis))
 
     def on_solution_callback(self):
@@ -68,7 +69,7 @@ class AllOptPrinter(cp_model.CpSolverSolutionCallback):
         tn_count = self.num_neg
         print('OPTTTTTTT')
 
-        print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count))
+        print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count), self.settings, self.settings.noisy)
 
 
 class CombinerSize:
@@ -316,6 +317,7 @@ class CombinerSize:
             ruleid_to_rule=ruleid_to_rule,
             num_pos=self.tester.num_pos,
             num_neg=self.tester.num_neg,
+            settings=self.settings,
             state=self.state,
         )
 

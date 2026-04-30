@@ -9,7 +9,6 @@ from bitarray.util import ones, zeros
 from collections import defaultdict
 from itertools import combinations
 from typing import NamedTuple
-from . recalls import recalls
 from . import logger
 import numpy as np
 from . compact_hash import CompactHashTable, IndexedInternPool
@@ -40,15 +39,15 @@ def format_literal_janus(literal):
     return f'{literal.predicate}({args})'
 
 @lru_cache(50_000)
-def parse_rule(rule):
-    head, ordered_body = order_rule(rule)
+def parse_rule(rule, settings):
+    head, ordered_body = order_rule(rule, settings)
     atom_str = format_literal_janus(head) if head else ""
     body_str = ','.join(format_literal_janus(lit) for lit in ordered_body)
     return atom_str, body_str
 
 @lru_cache(50_000)
-def parse_body(body):
-    _, ordered_body = order_rule((None, body))
+def parse_body(body, settings):
+    _, ordered_body = order_rule((None, body), settings)
     body_str = ','.join(format_literal_janus(lit) for lit in ordered_body)
     return body_str
 
@@ -165,7 +164,7 @@ class Tester():
                 neg_covered = []
                 if self.num_neg > 0:
                     (rule,) = prog
-                    atom_str, body_str = parse_rule(rule)
+                    atom_str, body_str = parse_rule(rule, self.settings)
                     neg_covered = query_once('find_neg_firstn(K, R, S)', {'K': max_k_neg, 'R': f'{atom_str}:-{body_str}'})['S']
                 neg_covered = frozen_bits_from_indices(self.num_neg, neg_covered)
                 if neg_covered.count(1) == max_k_neg:
@@ -215,7 +214,7 @@ class Tester():
 
         if len(prog) == 1:
             (rule,) = prog
-            atom_str, body_str = parse_rule(rule)
+            atom_str, body_str = parse_rule(rule, self.settings)
             q = f'neg_index(_ID, {atom_str}), {body_str}'
             res = bool_query(q)
         else:
@@ -228,7 +227,7 @@ class Tester():
     # used by the unsat core checker to see if a body is satisfiable
     def is_body_sat(self, body):
         if len(body) > 1:
-            q = parse_body(body)
+            q = parse_body(body, self.settings)
         else:
             (lit,) = body
             q = format_literal_janus(lit)
@@ -248,7 +247,7 @@ class Tester():
             head, _body = rule
             new_head = f'pos_index(_ID, {format_literal_janus(head)})'
             head_str = format_literal_janus(head)
-            _, ordered_body = parse_rule(rule)
+            _, ordered_body = parse_rule(rule, self.settings)
 
             if self.settings.noisy:
                 return query_once('pos_succeeds_k(R, K)', {'R': f'{head_str}:-{ordered_body}', 'K': calc_rule_size(rule)})['truth']
@@ -269,7 +268,7 @@ class Tester():
     # tries to determine whether literal is implied by body for the negative examples
     # AC: we do not cache as we can never see body + neg_literal again
     def is_neg_reducible(self, body, literal):
-        body_str = parse_body(body.union(self.neg_literal_set))
+        body_str = parse_body(body.union(self.neg_literal_set), self.settings)
         literal_str = format_literal_janus(literal)
         q = f'{body_str}, \\+ {literal_str}'
         return not bool_query(q)
@@ -277,7 +276,7 @@ class Tester():
     # called by the allsat code
     # checks whether a literal is implied by the body
     def is_literal_redundant(self, body, literal):
-        q = f'{parse_body(body)}, \\+ {format_literal_janus(literal)}'
+        q = f'{parse_body(body, self.settings)}, \\+ {format_literal_janus(literal)}'
         return not bool_query(q)
 
     # also called by the allsat code
@@ -302,7 +301,7 @@ class Tester():
 
         if len(prog) == 1:
             (rule,) = prog
-            atom_str, body_str = parse_rule(rule)
+            atom_str, body_str = parse_rule(rule, self.settings)
             pos_covered = query_once('find_pos_covered(R, S)', {'R': f'{atom_str}:-{body_str}'})['S']
         else:
             with self.using(prog):
@@ -323,7 +322,7 @@ class Tester():
 
         if len(prog) == 1:
             (rule,) = prog
-            atom_str, body_str = parse_rule(rule)
+            atom_str, body_str = parse_rule(rule, self.settings)
             neg_covered = []
             if self.num_neg > 0:
                 neg_covered = query_once('find_neg_covered(R, S)', {'R': f'{atom_str}:-{body_str}'})['S']
@@ -351,7 +350,7 @@ class Tester():
         current_clauses = set()
         for rule in prog:
             head, _body = rule
-            x = format_rule(order_rule(rule))[:-1]
+            x = format_rule(order_rule(rule, self.settings))[:-1]
             # x = parse_rule_for_recursion(rule)
             str_prog.append(x)
             current_clauses.add((head.predicate, len(head.arguments)))
@@ -479,4 +478,4 @@ def deduce_neg_example_recalls(settings, atoms):
         recall = max(len(xs) for xs in d2.values())
         all_recalls[(pred, args)] = recall
 
-    recalls.update(all_recalls)
+    settings.recalls.update(all_recalls)

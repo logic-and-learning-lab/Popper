@@ -9,7 +9,6 @@ from itertools import permutations, combinations
 from . util import generate_binary_strings
 from . import logger
 from . import stats
-from . recalls import recalls
 
 
 def format_tuple(items):
@@ -128,7 +127,7 @@ def deduce_recalls(settings, solver):
             recall = max((len(vals) for vals in key_map.values()), default=0)
             all_recalls[(pred, var_subset)] = recall
 
-    recalls.update(all_recalls)
+    settings.recalls.update(all_recalls)
 
     out = []
     for (pred, key), recall in all_recalls.items():

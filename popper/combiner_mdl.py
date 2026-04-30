@@ -63,7 +63,7 @@ class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
 
 class OptPrinter(cp_model.CpSolverSolutionCallback):
     def __init__(self, rule_vars, fn_vars, fp_vars, num_pos, num_neg,
-                 ruleid_to_rule, ruleid_to_size, state):
+                 ruleid_to_rule, ruleid_to_size, settings, state):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self.rule_vars = rule_vars
         self.fn_vars = fn_vars
@@ -72,6 +72,7 @@ class OptPrinter(cp_model.CpSolverSolutionCallback):
         self.num_neg = num_neg
         self.ruleid_to_rule = ruleid_to_rule
         self.ruleid_to_size = ruleid_to_size # Needed for size calculation
+        self.settings = settings
         self.state = state
         self.best_hash = hash(frozenset(state.best_hypothesis))
 
@@ -110,7 +111,7 @@ class OptPrinter(cp_model.CpSolverSolutionCallback):
         # self.state.best_hypothesis = hypothesis
         # self.state.best_hypothesis_mdl = current_cost
         # print("OPT")
-        print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count))
+        print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count), self.settings, self.settings.noisy)
 
 class CombinerMDL:
 
@@ -536,6 +537,7 @@ class CombinerMDL:
             num_neg=self.tester.num_neg,
             ruleid_to_rule=ruleid_to_rule,
             ruleid_to_size=ruleid_to_size,
+            settings=self.settings,
             state=self.state,
         )
 

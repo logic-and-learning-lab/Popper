@@ -7,7 +7,6 @@ from . import logger
 from collections import defaultdict
 from typing import NamedTuple
 from functools import lru_cache
-from . recalls import recalls
 from . _canonicalise_hash import canonicalise_prog_hash_cython as canonicalise_prog_hash
 from . _canonicalise_hash import canonicalise_rule_hash_cython as canonicalise_rule_hash
 
@@ -136,8 +135,6 @@ def rule_is_invented(rule):
 def mdl_score(fn, fp, size):
     return fn + fp + size
 
-settings = None
-
 def get_body_preds(solver):
     body_preds_ = set()
     for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
@@ -193,6 +190,7 @@ class Settings:
         self.literal_outputs = {}
         self.cached_atom_args = {}
         self.cached_literals = {}
+        self.recalls = {}
         self.head_types = None
         self.body_types = {}
         self.max_rules = 1
@@ -343,13 +341,6 @@ class Settings:
                     logger.out(f'WARNING: MISSING BODY TYPE FOR {p}')
                     exit()
 
-def init_settings(in_settings=None):
-    global settings
-    assert(settings is None)
-    if in_settings is None:
-        settings = Settings.from_args()
-    return settings
-
 def generate_binary_strings(bit_count):
     return list(product((0,1), repeat=bit_count))[1:-1]
 
@@ -459,7 +450,7 @@ def generalisations(prog, allow_headless=True, recursive=False):
                 yield new_prog
 
 
-def order_rule_datalog(head, body):
+def order_rule_datalog(head, body, settings):
     seen_vars = set(head.arguments) if head else set()
     recursive_literals = []
     pending_lits = set()
@@ -484,7 +475,7 @@ def order_rule_datalog(head, body):
                 var_to_lits[v].add(lit)
 
     ordered_body = []
-    local_recalls = recalls
+    local_recalls = settings.recalls
     
     # Literals that are fully grounded
     grounded_queue = [lit for lit in pending_lits if remaining_count[lit] == 0]
@@ -524,14 +515,14 @@ def order_rule_datalog(head, body):
 
     return head, tuple(ordered_body) + tuple(recursive_literals)
 
-def order_rule(rule):
+def order_rule(rule, settings):
     head, body = rule
 
     if settings.pi_enabled:
         return rule
 
     if settings.datalog:
-        return order_rule_datalog(head, body)
+        return order_rule_datalog(head, body, settings)
 
     if not settings.has_directions:
         return rule
@@ -582,19 +573,19 @@ def order_rule(rule):
 
     return head, tuple(ordered_body)
 
-def print_incomplete_solution2(prog, size, conf_matrix):
+def print_incomplete_solution2(prog, size, conf_matrix, settings, noisy: bool):
     tp, fn, tn, fp = conf_matrix
     logger.out('*'*20)
     logger.out('New best hypothesis:')
-    if settings.noisy:
+    if noisy:
         logger.out(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} mdl:{size+fn+fp}')
     else:
         logger.out(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size}')
     for rule in order_prog(prog):
-        logger.out(format_rule(order_rule(rule)))
+        logger.out(format_rule(order_rule(rule, settings)))
     logger.out('*'*20)
 
-def print_prog_score(prog, score):
+def print_prog_score(prog, score, settings, noisy: bool):
     tp, fn, tn, fp = score
     size = calc_prog_size(prog)
     precision = 'n/a'
@@ -604,20 +595,20 @@ def print_prog_score(prog, score):
     if (tp+fn) > 0:
         recall = f'{tp / (tp+fn):0.2f}'
     logger.out('*'*10 + ' SOLUTION ' + '*'*10)
-    if settings.noisy:
+    if noisy:
         logger.out(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size} MDL:{size+fn+fp}')
     else:
       logger.out(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
     for rule in order_prog(prog):
-        logger.out(format_rule(order_rule(rule)))
+        logger.out(format_rule(order_rule(rule, settings)))
     logger.out('*'*30)
 
-def has_valid_directions(rule):
+def has_valid_directions(rule, settings):
     if settings.has_directions:
-        return has_valid_directions_(rule)
+        return has_valid_directions_(rule, settings)
     return True
 
-def has_valid_directions_(rule):
+def has_valid_directions_(rule, settings):
     head, body = rule
     lit_inputs = settings.literal_inputs
     lit_outputs = settings.literal_outputs

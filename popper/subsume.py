@@ -72,7 +72,7 @@ class SubsumeChecker:
             if any(hash(frozenset(x)) in self.pruned2 for x in non_empty_powerset(new_body)):
                 continue
 
-            if not head_connected(new_rule) or not has_valid_directions(new_rule):
+            if not head_connected(new_rule) or not has_valid_directions(new_rule, self.settings):
                 out.update(self.subsumed_or_covers_too_few(new_prog, seen))
                 continue
 

@@ -101,7 +101,7 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
     if not _is_better_hypothesis(settings, state, hypothesis_size, conf_matrix, mdl):
         return
 
-    print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
+    print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix, settings, settings.noisy)
     state.best_hypothesis_score = conf_matrix
     state.best_hypothesis_size = hypothesis_size
     state.best_hypothesis = hypothesis

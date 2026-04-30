@@ -129,7 +129,7 @@ class UnsatCoreFinder:
             if not head and not connected(body):
                 return False
 
-            if not has_valid_directions(rule):
+            if not has_valid_directions(rule, self.settings):
                 return False
                 
             if head is None: # Headless rules not allowed in multi-rule programs here
