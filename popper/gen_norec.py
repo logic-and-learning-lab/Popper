@@ -1,36 +1,10 @@
 import re
-import clingo
 from importlib import resources
-from . util import GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, Literal
+from . util import GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH
 from itertools import permutations
 from . import stats
-
-def _unpack_symbol(sym):
-    if sym.type == clingo.SymbolType.Number:
-        return sym.number
-    if sym.type == clingo.SymbolType.String:
-        return sym.string
-    if sym.type == clingo.SymbolType.Function:
-        if len(sym.arguments) == 0:
-            return sym.name
-        if sym.name == "":
-            return tuple(_unpack_symbol(a) for a in sym.arguments)
-        return (sym.name, tuple(_unpack_symbol(a) for a in sym.arguments))
-    return str(sym)
-
-def _remap_body_variables(body):
-    lookup = {}
-    next_var = 0
-    new_body = set()
-    for pred, args in body:
-        new_args = []
-        for var in args:
-            if var not in lookup:
-                lookup[var] = next_var
-                next_var += 1
-            new_args.append(lookup[var])
-        new_body.add(Literal(pred, tuple(new_args)))
-    return frozenset(new_body)
+from . import _gen_norec_id_native
+from ._gen_norec_clingo_capi import NativeNoRecControl
 
 class Generator:
 
@@ -40,13 +14,19 @@ class Generator:
         self.pruned_sizes = set()
 
         encoding = self._build_encoding(bkcons or [])
-        solver = clingo.Control(['--heuristic=Domain', '-Wnone'])
-        solver.configuration.solve.models = 0
-        solver.add('base', [], encoding)
-        solver.ground([('base', [])])
-        self.solver = solver
+        self.encoding = encoding
+        self.native_control = NativeNoRecControl(encoding)
+        self._build_native_caches()
 
-        self._build_caches()
+        self._max_vars = settings.max_vars
+        self._head_args = settings.head_literal.arguments
+        self._head_types = settings.head_types
+        self._body_types = settings.body_types
+        self._literal_to_id = settings.literal_to_id
+        self._literal_id_to_pred = settings.literal_id_to_pred
+        self._literal_id_to_args = settings.literal_id_to_args
+        self._literal_id_by_pred_args = settings.literal_id_by_pred_args
+        self._literal_id_to_literal = settings.literal_id_to_literal
 
     def _build_encoding(self, bkcons):
         encoding = []
@@ -152,33 +132,27 @@ class Generator:
 
         return order_cons
 
-    def _build_caches(self):
+    def _build_native_caches(self):
         self.symbol_to_literal = {}
-        for sym_atom in self.solver.symbolic_atoms:
-            sym = sym_atom.symbol
-            args = tuple(_unpack_symbol(a) for a in sym.arguments)
-            pos_id = sym_atom.literal
-            self.cached_clingo_atoms[(True, sym.name, args)] = pos_id
-            self.cached_clingo_atoms[(False, sym.name, args)] = -pos_id
-            if sym.name == "body_literal" and len(sym.arguments) == 4:
-                raw_args = sym.arguments
-                predicate = raw_args[1].name
-                atom_args = tuple(raw_args[3].arguments)
-                self.symbol_to_literal[sym] = self.settings.cached_literals[predicate, atom_args]
+        self.symbol_to_literal_id = {}
+        body_cache, special_cache = self.native_control.build_literal_caches(self.settings.literal_id_by_pred_args)
+        self.body_literal_id_to_clingo = body_cache
+        for (pred, args), lit in special_cache.items():
+            self.cached_clingo_atoms[(True, pred, args)] = lit
+            self.cached_clingo_atoms[(False, pred, args)] = -lit
 
     def get_prog(self):
-        handle = iter(self.solver.solve(yield_=True))
         head = self.settings.head_literal
         gen_timer = stats.duration('generate')
-        symbol_to_literal = self.symbol_to_literal
+        literal_id_to_literal = self._literal_id_to_literal
+        literal_id_by_pred_args = self._literal_id_by_pred_args
 
         while True:
             with gen_timer:
-                model = next(handle, None)
-                if model is None:
+                body_ids = self.native_control.next_model_body_ids(literal_id_by_pred_args)
+                if body_ids is None:
                     return
-                self.model = model
-                rule = head, frozenset([symbol_to_literal[atom] for atom in model.symbols(shown=True)])
+                rule = head, frozenset(literal_id_to_literal[lit_id] for lit_id in body_ids)
             yield frozenset((rule,))
 
     def prune_size(self, size):
@@ -187,110 +161,114 @@ class Generator:
         self.pruned_sizes.add(size)
         atom = self.cached_clingo_atoms.get((True, "size", (size,)))
         if atom:
-            self.model.context.add_nogood([atom])
+            self.native_control.add_nogood([atom])
 
     def constrain(self, cons):
-        add_nogood = self.model.context.add_nogood
-        for xs in cons:
-            con_type = xs[0]
-            con_prog = xs[1]
-            con_size = xs[2] if len(xs) > 2 else None
-            if con_type == SPECIALISATION:
-                ground_cons = self.build_specialisation_constraint(con_prog, con_size)
-            elif con_type == UNSAT:
-                ground_cons = self.unsat_constraint(con_prog)
-            elif con_type in (BANISH, GENERALISATION):
-                ground_cons = self.build_generalisation_constraint(con_prog, con_size)
-            for ground_body in ground_cons:
-                add_nogood(ground_body)
+        _gen_norec_id_native.constrain(
+            cons,
+            self.native_control,
+            self._max_vars,
+            self._head_args,
+            self._head_types,
+            self._body_types,
+            self._literal_to_id,
+            self._literal_id_to_pred,
+            self._literal_id_to_args,
+            self._literal_id_by_pred_args,
+            self.body_literal_id_to_clingo,
+            self.cached_clingo_atoms,
+            SPECIALISATION,
+            UNSAT,
+            BANISH,
+            GENERALISATION,
+        )
+
+    def body_to_literal_ids(self, body):
+        return _gen_norec_id_native.body_to_literal_ids(body, self.settings.literal_to_id)
+
+    def prog_to_id_rule(self, prog):
+        return _gen_norec_id_native.prog_to_id_rule(prog, self.settings.literal_to_id)
+
+    def remap_body_literal_ids(self, body_ids):
+        return _gen_norec_id_native.remap_body_literal_ids(
+            body_ids,
+            self.settings.literal_id_to_pred,
+            self.settings.literal_id_to_args,
+            self.settings.literal_id_by_pred_args,
+        )
 
     def unsat_constraint(self, body):
-        if len(self.settings.body_types) == 0:
-            body = _remap_body_variables(body)
-        cache = self.cached_clingo_atoms
-        for assignment in self.find_deep_bindings(body):
-            rule = []
-            for pred, args in body:
-                args2 = tuple(assignment[x] for x in args)
-                clingo_literal = cache.get((True, 'body_literal', (0, pred, len(args), args2)))
-                if clingo_literal is None:
-                    break
-                rule.append(clingo_literal)
-            else:
-                yield rule
+        yield from self.unsat_constraint_ids(self.body_to_literal_ids(body))
+
+    def unsat_constraint_ids(self, body_ids):
+        yield from _gen_norec_id_native.unsat_constraint_ids(
+            body_ids,
+            self.settings.max_vars,
+            self.settings.head_literal.arguments,
+            self.settings.head_types,
+            self.settings.body_types,
+            self.settings.literal_id_to_pred,
+            self.settings.literal_id_to_args,
+            self.settings.literal_id_by_pred_args,
+            self.body_literal_id_to_clingo,
+        )
 
     def build_specialisation_constraint(self, prog, size=None):
-        rule = next(iter(prog))
-        if not size:
-            yield from self.find_variants(rule)
-            return
-        size_literal = self.cached_clingo_atoms[(True, 'program_size_at_least', (size,))]
-        for body in self.find_variants(rule):
-            yield body + [size_literal]
+        yield from self.build_specialisation_constraint_ids(self.prog_to_id_rule(prog), size)
+
+    def build_specialisation_constraint_ids(self, rule, size=None):
+        yield from _gen_norec_id_native.build_specialisation_constraint_ids(
+            rule,
+            size,
+            self.settings.max_vars,
+            self.settings.literal_id_to_pred,
+            self.settings.literal_id_to_args,
+            self.settings.literal_id_by_pred_args,
+            self.body_literal_id_to_clingo,
+            self.cached_clingo_atoms,
+        )
 
     def build_generalisation_constraint(self, prog, size=None):
-        rule = next(iter(prog))
-        for body in self.find_variants(rule, max_rule_vars=True):
-            body.append(self.cached_clingo_atoms[(True, 'body_size', (0, len(body)))])
-            if size:
-                body.append(self.cached_clingo_atoms[(True, 'program_size_at_least', (size,))])
-            yield body
+        yield from self.build_generalisation_constraint_ids(self.prog_to_id_rule(prog), size)
+
+    def build_generalisation_constraint_ids(self, rule, size=None):
+        yield from _gen_norec_id_native.build_generalisation_constraint_ids(
+            rule,
+            size,
+            self.settings.max_vars,
+            self.settings.literal_id_to_pred,
+            self.settings.literal_id_to_args,
+            self.settings.literal_id_by_pred_args,
+            self.body_literal_id_to_clingo,
+            self.cached_clingo_atoms,
+        )
 
     def find_variants(self, rule, max_rule_vars=False):
-        head, body = rule
-        body_vars = {x for literal in body for x in literal.arguments if x >= len(head.arguments)}
-        if max_rule_vars:
-            var_range = range(len(head.arguments), len(body_vars | set(head.arguments)))
-        else:
-            var_range = range(len(head.arguments), self.settings.max_vars)
-        cache_get = self.cached_clingo_atoms.get
-        body_list = [(lit.predicate, lit.arguments, len(lit.arguments)) for lit in body]
-        for xs in permutations(var_range, len(body_vars)):
-            xs = head.arguments + xs
-            new_body = []
-            for pred, args, arity in body_list:
-                new_args = tuple(xs[arg] for arg in args)
-                clingo_literal = cache_get((True, 'body_literal', (0, pred, arity, new_args)))
-                if clingo_literal is None:
-                    break
-                new_body.append(clingo_literal)
-            else:
-                yield new_body
+        yield from self.find_variants_ids((rule[0], self.body_to_literal_ids(rule[1])), max_rule_vars)
+
+    def find_variants_ids(self, rule, max_rule_vars=False):
+        head, body_ids = rule
+        yield from _gen_norec_id_native.find_variants_ids(
+            head.arguments,
+            body_ids,
+            self.settings.max_vars,
+            max_rule_vars,
+            self.settings.literal_id_to_pred,
+            self.settings.literal_id_to_args,
+            self.settings.literal_id_by_pred_args,
+            self.body_literal_id_to_clingo,
+        )
 
     def find_deep_bindings(self, body):
-        head_types = self.settings.head_types
-        body_types = self.settings.body_types
+        yield from self.find_deep_bindings_ids(self.body_to_literal_ids(body))
 
-        if len(body_types) == 0 or head_types is None:
-            num_vars = len({var for atom in body for var in atom.arguments})
-            for xs in permutations(range(self.settings.max_vars), num_vars):
-                yield {i: xs[i] for i in range(num_vars)}
-            return
-
-        var_type_lookup = {i: t for i, t in enumerate(head_types)}
-        head_vars = set(range(len(self.settings.head_literal.arguments)))
-        body_vars = set()
-
-        for pred, args in body:
-            for i, x in enumerate(args):
-                body_vars.add(x)
-                if x not in head_vars and pred in body_types:
-                    var_type_lookup[x] = body_types[pred][i]
-
-        bad_type_matching = {
-            (x, y)
-            for x in body_vars if x in var_type_lookup
-            for y in head_vars if y in var_type_lookup
-            if var_type_lookup[x] != var_type_lookup[y]
-        }
-
-        lookup = {x: i for i, x in enumerate(body_vars)}
-        for xs in permutations(range(self.settings.max_vars), len(lookup)):
-            assignment = {}
-            for x in body_vars:
-                v = xs[lookup[x]]
-                if (x, v) in bad_type_matching:
-                    break
-                assignment[x] = v
-            else:
-                yield assignment
+    def find_deep_bindings_ids(self, body_ids):
+        yield from _gen_norec_id_native.find_deep_bindings_ids(
+            body_ids,
+            self.settings.max_vars,
+            self.settings.head_literal.arguments,
+            self.settings.head_types,
+            self.settings.body_types,
+            self.settings.literal_id_to_pred,
+            self.settings.literal_id_to_args,
+        )

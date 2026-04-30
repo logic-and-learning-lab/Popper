@@ -106,7 +106,7 @@ def reduce_prog(prog):
     return reduced.values()
 
 def order_prog(prog):
-    return sorted(list(prog), key=lambda rule: (rule_is_recursive(rule), len(rule[1])))
+    return sorted(prog, key=lambda rule: (rule_is_recursive(rule), len(rule[1])))
 
 def rule_is_recursive(rule):
     head, body = rule
@@ -190,6 +190,12 @@ class Settings:
         self.literal_outputs = {}
         self.cached_atom_args = {}
         self.cached_literals = {}
+        self.cached_literal_ids = {}
+        self.literal_to_id = {}
+        self.literal_id_to_literal = []
+        self.literal_id_to_pred = []
+        self.literal_id_to_args = []
+        self.literal_id_by_pred_args = {}
         self.recalls = {}
         self.head_types = None
         self.body_types = {}
@@ -310,7 +316,9 @@ class Settings:
                 if len(args) != arity:
                     continue
                 literal = Literal(pred, args)
+                literal_id = self._intern_literal(literal)
                 self.cached_literals[(pred, k)] = literal
+                self.cached_literal_ids[(pred, k)] = literal_id
                 if self.has_directions:
                     self.literal_inputs[(pred, args)] = frozenset(arg for i, arg in enumerate(args) if self.directions[pred][i] == '+')
                     self.literal_outputs[(pred, args)] = frozenset(arg for i, arg in enumerate(args) if self.directions[pred][i] == '-')
@@ -320,7 +328,22 @@ class Settings:
             head_pred, head_arity = self.head_literal.predicate, len(self.head_literal.arguments)
             for k, args in self.cached_atom_args.items():
                 if len(args) == head_arity:
-                    self.cached_literals[(head_pred, k)] = Literal(head_pred, args)
+                    literal = Literal(head_pred, args)
+                    literal_id = self._intern_literal(literal)
+                    self.cached_literals[(head_pred, k)] = literal
+                    self.cached_literal_ids[(head_pred, k)] = literal_id
+
+    def _intern_literal(self, literal):
+        literal_id = self.literal_to_id.get(literal)
+        if literal_id is not None:
+            return literal_id
+        literal_id = len(self.literal_id_to_literal)
+        self.literal_to_id[literal] = literal_id
+        self.literal_id_to_literal.append(literal)
+        self.literal_id_to_pred.append(literal.predicate)
+        self.literal_id_to_args.append(literal.arguments)
+        self.literal_id_by_pred_args[(literal.predicate, literal.arguments)] = literal_id
+        return literal_id
 
     def _deduce_types(self, solver):
         head_pred = self.head_literal.predicate if self.head_literal else None
@@ -481,7 +504,7 @@ def order_rule_datalog(head, body, settings):
     grounded_queue = [lit for lit in pending_lits if remaining_count[lit] == 0]
     
     # Sort for deterministic behaviour in slow path
-    all_pending_sorted = sorted(list(pending_lits))
+    all_pending_sorted = sorted(pending_lits)
     
     while pending_lits:
         if grounded_queue:
