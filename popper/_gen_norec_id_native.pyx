@@ -58,19 +58,23 @@ def find_variants_ids(
     cdef object args
     cdef int var
     cdef object var_range
-    cdef object xs
     cdef tuple perm
     cdef object pred
+    cdef object plan
+    cdef object item
     cdef tuple new_args
     cdef object literal_id
     cdef object clingo_literal
     cdef object literal_id_get = literal_id_by_pred_args.get
-    cdef object clingo_literal_get = body_literal_id_to_clingo.get
     cdef list body_list = []
     cdef list new_body
     cdef list tmp
     cdef list tmp_bufs
-    cdef int j, k, n_args
+    cdef dict body_var_to_perm_index
+    cdef Py_ssize_t body_literal_count = len(body_literal_id_to_clingo)
+    cdef Py_ssize_t literal_index
+    cdef int arg_pos
+    cdef int j
 
     for lit_id in body_ids:
         args = literal_id_to_args[lit_id]
@@ -85,23 +89,38 @@ def find_variants_ids(
     else:
         var_range = range(head_arity, max_vars)
 
-    tmp_bufs = [[None] * len(args) for _, args in body_list]
+    body_var_to_perm_index = {var: i for i, var in enumerate(sorted(body_vars))}
+    body_list = []
+    tmp_bufs = []
+    for lit_id in body_ids:
+        args = literal_id_to_args[lit_id]
+        pred = literal_id_to_pred[lit_id]
+        tmp = [None] * len(args)
+        plan = []
+        for arg_pos, var in enumerate(args):
+            if var < head_arity:
+                tmp[arg_pos] = head_args[var]
+            else:
+                plan.append((arg_pos, body_var_to_perm_index[var]))
+        body_list.append((pred, plan))
+        tmp_bufs.append(tmp)
 
     for perm in permutations(var_range, len(body_vars)):
-        xs = head_args + perm
         new_body = []
         j = 0
-        for pred, args in body_list:
+        for pred, plan in body_list:
             tmp = tmp_bufs[j]
             j += 1
-            n_args = len(tmp)
-            for k in range(n_args):
-                tmp[k] = xs[args[k]]
+            for item in plan:
+                tmp[item[0]] = perm[item[1]]
             new_args = tuple(tmp)
             literal_id = literal_id_get((pred, new_args))
             if literal_id is None:
                 break
-            clingo_literal = clingo_literal_get(literal_id)
+            literal_index = <Py_ssize_t>literal_id
+            if literal_index >= body_literal_count:
+                break
+            clingo_literal = body_literal_id_to_clingo[literal_index]
             if clingo_literal is None:
                 break
             new_body.append(clingo_literal)
@@ -191,10 +210,11 @@ def unsat_constraint_ids(
     cdef object literal_id
     cdef object clingo_literal
     cdef object literal_id_get = literal_id_by_pred_args.get
-    cdef object clingo_literal_get = body_literal_id_to_clingo.get
     cdef list rule
     cdef list tmp
     cdef list body_pre
+    cdef Py_ssize_t body_literal_count = len(body_literal_id_to_clingo)
+    cdef Py_ssize_t literal_index
     cdef int k, n_args
 
     if len(body_types) == 0:
@@ -229,7 +249,10 @@ def unsat_constraint_ids(
             literal_id = literal_id_get((pred, args2))
             if literal_id is None:
                 break
-            clingo_literal = clingo_literal_get(literal_id)
+            literal_index = <Py_ssize_t>literal_id
+            if literal_index >= body_literal_count:
+                break
+            clingo_literal = body_literal_id_to_clingo[literal_index]
             if clingo_literal is None:
                 break
             rule.append(clingo_literal)

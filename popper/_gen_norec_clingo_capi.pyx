@@ -325,13 +325,14 @@ cdef class NativeNoRecControl:
             self._model_symbols = NULL
             self._model_symbols_capacity = 0
 
-    cdef void _close_handle(self):
-        if self._handle != NULL:
-            _check(clingo_solve_handle_close(self._handle))
-            self._handle = NULL
+    cdef void _close_handle(self) except *:
+        cdef clingo_solve_handle_t *handle = self._handle
+        self._handle = NULL
         self._model = NULL
         self._needs_resume = False
         self._batch_control = NULL
+        if handle != NULL:
+            _check(clingo_solve_handle_close(handle))
 
     cdef void _ensure_handle(self):
         if self._handle == NULL:

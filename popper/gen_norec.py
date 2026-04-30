@@ -134,7 +134,10 @@ class Generator:
 
     def _build_native_caches(self):
         body_cache, special_cache = self.native_control.build_literal_caches(self.settings.literal_id_by_pred_args)
-        self.body_literal_id_to_clingo = body_cache
+        body_literal_id_to_clingo = [None] * len(self.settings.literal_id_to_literal)
+        for lit_id, lit in body_cache.items():
+            body_literal_id_to_clingo[lit_id] = lit
+        self.body_literal_id_to_clingo = body_literal_id_to_clingo
         for (pred, args), lit in special_cache.items():
             self.cached_clingo_atoms[(True, pred, args)] = lit
             self.cached_clingo_atoms[(False, pred, args)] = -lit
