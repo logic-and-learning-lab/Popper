@@ -142,6 +142,31 @@ call_firstn(Goal_0, N) :-
    call_nth(Goal_0, Nth),
    ( Nth == N -> ! ; true ).
 
+%% ==========
+
+find_pos_covered(RuleStr, S) :-
+    term_string((Head :- Body), RuleStr),
+    findall(ID, (pos_index(ID, Head), (Body -> true)), S).
+
+find_neg_covered(RuleStr, S) :-
+    term_string((Head :- Body), RuleStr),
+    findall(ID, (neg_index(ID, Head), (Body -> true)), S).
+
+find_neg_firstn(K, RuleStr, S) :-
+    term_string((Head :- Body), RuleStr),
+    findfirstn(K, ID, (neg_index(ID, Head), (Body -> true)), S).
+
+pos_succeeds_k(RuleStr, K) :-
+    term_string((Head :- Body), RuleStr),
+    succeeds_k_times(pos_index(_ID, Head), Body, K).
+
+% Wraps term_string+redundant_literal so the parsed list (with unbound vars)
+% never surfaces to Python as an output variable.
+redundant_literal_str(S) :-
+    term_string(L, S),
+    redundant_literal(L).
+
+
 
 %% ========== FUNCTIONAL CHECKS ==========
 non_functional:-

@@ -9,11 +9,13 @@ import numbers
 import clingo.script
 from importlib import resources
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, Literal, format_rule, remap_variables
+from . util import rule_is_recursive, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, Literal, format_rule, canonicalise
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
 import dataclasses
+from . import logger
+from . import stats
 
 @dataclasses.dataclass(frozen=True)
 class Var:
@@ -77,8 +79,8 @@ def build_rule_literals(rule, rule_var, pi=False):
 
 class Generator:
 
-    def __init__(self, settings, bkcons=[]):
-        self.savings = 0
+    def __init__(self, settings, state, bkcons=[]):
+        self.state = state
         self.settings = settings
         self.seen_handles = set()
         self.assigned = {}
@@ -149,8 +151,8 @@ class Generator:
         #             encoding.append(f'direction_({pred}, {i}, out).')
 
         max_size = (1 + settings.max_body) * settings.max_rules
-        if settings.max_literals < max_size:
-            encoding.append(f'custom_max_size({settings.max_literals}).')
+        # if state.max_literals < max_size:
+            # encoding.append(f'custom_max_size({state.max_literals}).')
 
         if settings.pi_enabled:
             encoding.append(f'#show head_literal/4.')
@@ -184,15 +186,6 @@ class Generator:
                 # """
 
                 # encoding.append(HSPACE_HEURISTIC)
-            elif settings.no_bias:
-                DEFAULT_HEURISTIC = """
-                size_vars(V):- #count{K : clause_var(_,K)} == V.
-                size_rules(R):- #count{K : clause(K)} == R.
-                #heuristic size_rules(R). [1500-R@30,true]
-                #heuristic size(N). [1000-N@20,true]
-                #heuristic size_vars(V). [500-V@10,true]
-                """
-                encoding.append(DEFAULT_HEURISTIC)
             else:
                 DEFAULT_HEURISTIC = """
                 #heuristic size(N). [1000-N,true]
@@ -217,27 +210,6 @@ class Generator:
             """
             solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
 
-            if self.settings.no_bias:
-                NUM_OF_VARS = """
-                %%% External atom for number of variables in the program %%%%%
-                #external size_in_vars(v).
-                :-
-                    size_in_vars(v),
-                    #max{V : clause_var(_,V)} != v - 1.
-                """
-                solver.add('number_of_vars', ['v'], NUM_OF_VARS)
-
-                NUM_OF_RULES = """
-                %%% External atom for number of rules in the program %%%%%
-                #external size_in_rules(r).
-                :-
-                    size_in_rules(r),
-                    #max{R : clause(R)} != r - 1.
-                """
-                solver.add('number_of_rules', ['r'], NUM_OF_RULES)
-
-
-
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
@@ -245,20 +217,44 @@ class Generator:
 
     # @profile
     def get_prog(self):
-        if self.handle is None:
-            self.handle = iter(self.solver.solve(yield_ = True))
-        self.model = next(self.handle, None)
-        if self.model is None:
-            return None
-        atoms = self.model.symbols(shown = True)
+        size = 0
+        while True:
+            if size > self.state.max_literals:
+                return
+            # self.settings.logger.out(f'Generating programs of size: {size}')
+            self.current_size = size
+            with stats.duration('init'):
+                self.update_solver(size)
+            size += 1
 
-        if self.settings.single_solve:
-            return self.parse_model_single_rule(atoms)
+            while True:
+                with stats.duration('generate'):
+                    if self.handle is None:
+                        self.handle = iter(self.solver.solve(yield_ = True))
 
-        if self.settings.pi_enabled:
-            return self.parse_model_pi(atoms)
 
-        return self.parse_model_recursion(atoms)
+                    self.model = next(self.handle, None)
+
+
+                    if self.model is None:
+                        break
+
+                    atoms = self.model.symbols(shown=True)
+                    # print(atoms)
+
+                    if self.settings.single_solve:
+                        assert(False)
+                        prog = self.parse_model_single_rule(atoms)
+                    elif self.settings.pi_enabled:
+                        prog = self.parse_model_pi(atoms)
+                    else:
+                        prog = self.parse_model_recursion(atoms)
+
+                    # Yield the generated program
+                    yield prog
+
+            # Yield None to signal to loop.py that the current size has finished generating
+            # yield None
 
     def gen_symbol(self, literal, backend):
         sign, pred, args = literal
@@ -391,9 +387,6 @@ class Generator:
             new_body = frozenset((True, pred, args) for pred, args in body)
             to_add.append((new_head, new_body))
 
-
-        if self.settings.no_bias:
-            self.bad_handles = []
         for handle in self.bad_handles:
             # print(handle)
             # if we know that rule_xyz is bad
@@ -546,19 +539,19 @@ class Generator:
             # if con_type not in (1, 2):
                 # print(con_type)
             # con_prog, con_prog_ordering
-            # if debug and con_type != Constraint.UNSAT:
+            # if debug and con_type != UNSAT:
                 # print('')
                 # print('\t','--', con_type)
                 # for rule in order_prog(con_prog):
                     # print('\t', format_rule(order_rule(rule)))
-            if con_type == Constraint.GENERALISATION:
+            if con_type == GENERALISATION:
                 con_size = None
                 if self.settings.noisy and len(xs)>2:
                     con_size = xs[2]
                 new_rule_handles2, con = self.build_generalisation_constraint2(con_prog, gen_size=con_size)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
-            elif con_type == Constraint.SPECIALISATION:
+            elif con_type == SPECIALISATION:
                 # con_size = xs[2]
                 con_size = None
                 if self.settings.noisy and len(xs)>2:
@@ -566,21 +559,21 @@ class Generator:
                 new_rule_handles2, con = self.build_specialisation_constraint2(con_prog, spec_size=con_size)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
-            elif con_type == Constraint.UNSAT:
+            elif con_type == UNSAT:
                 cons_ = self.unsat_constraint2(con_prog)
                 self.new_ground_cons.update(cons_)
-            elif con_type == Constraint.REDUNDANCY_CONSTRAINT1:
+            elif con_type == REDUNDANCY_CONSTRAINT1:
                 bad_handle, new_rule_handles2, con = self.redundancy_constraint1(con_prog)
                 self.bad_handles.add(bad_handle)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
-            elif con_type == Constraint.REDUNDANCY_CONSTRAINT2:
+            elif con_type == REDUNDANCY_CONSTRAINT2:
                 new_rule_handles2, cons = self.redundancy_constraint2(con_prog)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.update(cons)
-            elif con_type == Constraint.TMP_ANDY:
+            elif con_type == TMP_ANDY:
                 new_cons.update(self.andy_tmp_con(con_prog))
-            elif con_type == Constraint.BANISH:
+            elif con_type == BANISH:
                 new_rule_handles2, con = self.build_banish_constraint(con_prog)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
@@ -594,7 +587,7 @@ class Generator:
             for ground_rule in ground_rules:
                 _ground_head, ground_body = ground_rule
                 ground_bodies.add(ground_body)
-                # if con_type == Constraint.REDUNDANCY_CONSTRAINT1:
+                # if con_type == REDUNDANCY_CONSTRAINT1:
                 # print(sorted(ground_body))
                 self.all_ground_cons.add(frozenset(ground_body))
 
@@ -611,7 +604,7 @@ class Generator:
                 nogood.append(x)
             nogoods.append(nogood)
 
-        # with self.settings.stats.duration('constrain_clingo'):
+        # with stats.duration('constrain_clingo'):
         for x in nogoods:
             model.context.add_nogood(x)
 
@@ -929,7 +922,7 @@ class Generator:
 
     def unsat_constraint2(self, body):
         if len(self.settings.body_types) == 0:
-            _, body = remap_variables((None, body))
+            _, body = canonicalise((None, body))
 
         assignments = self.find_deep_bindings4(body)
         out = []

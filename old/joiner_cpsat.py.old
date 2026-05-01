@@ -1,0 +1,394 @@
+class VarArraySolutionPrinter(cp_model.CpSolverSolutionCallback):
+    def __init__(self):
+        cp_model.CpSolverSolutionCallback.__init__(self)
+        # self._variables_dict = variables_dict
+        self._start_time = time.time()
+        self.phase_name = ''
+        self._solution_count = 0
+
+    def on_solution_callback(self):
+        self._solution_count += 1
+        elapsed_time = time.time() - self._start_time
+
+        # Access the current objective value (the "cost")
+        # obj = self.ObjectiveValue()
+
+        # Get the IDs of the selected fragments
+        # selected = [p for p, var in self._variables_dict.items() if self.Value(var)]
+
+        # print(f"CPSAT {self.phase_name} model #{self._solution_count} | Cost: {obj:.2f} | Time: {elapsed_time:.3f}s")
+        # print(f"Selected Fragments: {selected}")
+
+
+def solve_encoding_suboptimal_cpsat(self):
+        state = self.state
+        fragments = []
+        uncovered = state.uncovered.copy()
+
+        while uncovered.any():
+            # Restrict to fragments that cover at least one currently uncovered example.
+            valid_progs = {
+                p for p in self.program_selected_var.keys()
+                if (self.pos_exs_covered[p] & uncovered).any()
+            }
+
+            if len(valid_progs) < 2:
+                break
+
+            uncovered_indices = list(uncovered.search(1))
+
+            # For each negative example, collect which valid fragments miss it.
+            # If no valid fragment misses a negative example, the join cannot be
+            # made safe (every selected fragment covers it, so the join covers it
+            # too), so we stop.
+            neg_missers = {}
+            for x in self.neg_index:
+                missers = [p for p in self.programs_not_covering_example[-x - 1] if p in valid_progs]
+                if missers:
+                    neg_missers[x] = missers
+
+            if not neg_missers:
+                break
+
+            # ------------------------------------------------------------------
+            # Build CP-SAT model
+            # ------------------------------------------------------------------
+            model = cp_model.CpModel()
+
+            # One boolean decision variable per valid fragment.
+            select = {p: model.new_bool_var(f's{p}') for p in valid_progs}
+
+            # Hard constraint: at least two fragments must be selected.
+            model.add(sum(select[p] for p in valid_progs) >= 2)
+
+            # Hard constraint: every negative example must be missed by at least
+            # one selected fragment (ensuring the join misses it too).
+            for x, missers in neg_missers.items():
+                model.add(sum(select[p] for p in missers) >= 1)
+
+            # Hard constraint (Datalog safety): every head argument must appear
+            # in the body of at least one selected fragment.
+            if not self.settings.non_datalog:
+                for arg in self.head_args:
+                    carriers = [p for p in self.programs_with_arg[arg] if p in valid_progs]
+                    if carriers:
+                        model.add(sum(select[p] for p in carriers) >= 1)
+
+            # Derived variable: covers_joined[e] is true iff no selected fragment
+            # misses positive example e (join semantics: all bodies must hold).
+            covers_joined = {}
+            for e in uncovered_indices:
+                cv = model.new_bool_var(f'c{e}')
+                covers_joined[e] = cv
+                missers = [p for p in self.programs_not_covering_example[e] if p in valid_progs]
+                if missers:
+                    # cv=1  =>  every misser is not selected
+                    model.add_bool_and([select[p].Not() for p in missers]).only_enforce_if(cv)
+                    # cv=0  =>  at least one misser is selected
+                    model.add_bool_or([select[p] for p in missers]).only_enforce_if(cv.Not())
+                else:
+                    # No valid fragment misses e, so the join always covers it.
+                    model.add(cv == 1)
+
+            # Hard constraint: the join must cover at least one uncovered example.
+            coverage_expr = sum(covers_joined[e] for e in uncovered_indices)
+            model.add(coverage_expr >= 1)
+
+            # Size cost: sum of (adjusted_size - 1) over selected fragments.
+            # The -1 reflects that body literals are concatenated (head counted once).
+            size_expr = sum(select[p] * (self.progid_to_size[p] - 1) for p in valid_progs)
+
+            solver = cp_model.CpSolver()
+
+            solution_printer = VarArraySolutionPrinter()
+            solution_printer.phase_name = 'max_cov'
+
+            # ------------------------------------------------------------------
+            # Phase 1: maximise coverage (primary objective).
+            # ------------------------------------------------------------------
+            model.maximize(coverage_expr)
+            status = solver.solve(model, solution_printer)
+
+            if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                break
+
+            best_coverage = int(solver.objective_value)
+
+            # ------------------------------------------------------------------
+            # Phase 2: fix coverage at the optimum, minimise size (secondary).
+            # ------------------------------------------------------------------
+            model.add(coverage_expr >= best_coverage)
+            model.minimize(size_expr)
+
+            solution_printer.phase_name = 'min_size'
+            status = solver.solve(model, solution_printer)
+
+            if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                break
+
+            optimal_selected = [p for p in valid_progs if solver.value(select[p])]
+
+            if not optimal_selected:
+                break
+
+            # Compute joint coverage: intersection across all selected fragments
+            # (AND semantics -- all body literals must hold simultaneously).
+            pos_covered = bitarray(self.pos_exs_covered[optimal_selected[0]].copy())
+            for s in optimal_selected[1:]:
+                pos_covered &= self.pos_exs_covered[s]
+
+            uncovered &= ~pos_covered
+            unfolded_prog = self.build_unfolded_program(optimal_selected)
+            fragments.append([unfolded_prog, pos_covered])
+
+            if (~pos_covered).count() > 0:
+                self.add_consistent_program(pos_covered, calc_prog_size(unfolded_prog))
+
+            # print('cpv1', pos_covered.count(1), calc_prog_size(unfolded_prog))
+
+        logger.debug(f"number of fragments found with joiner: {len(fragments)}")
+        return fragments
+
+    # def solve_encoding_suboptimal_cpsat_v2(self):
+    #     state = self.state
+    #     fragments = []
+    #     uncovered = state.uncovered.copy()
+
+    #     while uncovered.any():
+    #         # Restrict to fragments that cover at least one currently uncovered example.
+    #         valid_progs = {
+    #             p for p in self.program_selected_var.keys()
+    #             if (self.pos_exs_covered[p] & uncovered).any()
+    #         }
+
+    #         if len(valid_progs) < 2:
+    #             break
+
+    #         uncovered_indices = list(uncovered.search(1))
+
+    #         # For each negative example, collect which valid fragments miss it.
+    #         # If no valid fragment misses a negative example, the join cannot be
+    #         # made safe (every selected fragment covers it, so the join covers it
+    #         # too), so we stop.
+    #         neg_missers = {}
+    #         for x in self.neg_index:
+    #             missers = [p for p in self.programs_not_covering_example[-x - 1] if p in valid_progs]
+    #             if missers:
+    #                 neg_missers[x] = missers
+
+    #         if not neg_missers:
+    #             break
+
+    #         # ------------------------------------------------------------------
+    #         # Build CP-SAT model
+    #         # ------------------------------------------------------------------
+    #         model = cp_model.CpModel()
+
+    #         # One boolean decision variable per valid fragment.
+    #         select = {p: model.new_bool_var(f's{p}') for p in valid_progs}
+
+    #         # Hard constraint: at least two fragments must be selected.
+    #         model.add(sum(select[p] for p in valid_progs) >= 2)
+
+    #         # Hard constraint: every negative example must be missed by at least
+    #         # one selected fragment (ensuring the join misses it too).
+    #         for x, missers in neg_missers.items():
+    #             model.add(sum(select[p] for p in missers) >= 1)
+
+    #         # Hard constraint (Datalog safety): every head argument must appear
+    #         # in the body of at least one selected fragment.
+    #         if not self.settings.non_datalog:
+    #             for arg in self.head_args:
+    #                 carriers = [p for p in self.programs_with_arg[arg] if p in valid_progs]
+    #                 if carriers:
+    #                     model.add(sum(select[p] for p in carriers) >= 1)
+
+    #         # Derived variable: covers_joined[e] is true iff no selected fragment
+    #         # misses positive example e (join semantics: all bodies must hold).
+    #         covers_joined = {}
+    #         for e in uncovered_indices:
+    #             cv = model.new_bool_var(f'c{e}')
+    #             covers_joined[e] = cv
+    #             missers = [p for p in self.programs_not_covering_example[e] if p in valid_progs]
+    #             if missers:
+    #                 # cv=1  =>  every misser is not selected
+    #                 model.add_bool_and([select[p].Not() for p in missers]).only_enforce_if(cv)
+    #                 # cv=0  =>  at least one misser is selected
+    #                 model.add_bool_or([select[p] for p in missers]).only_enforce_if(cv.Not())
+    #             else:
+    #                 # No valid fragment misses e, so the join always covers it.
+    #                 model.add(cv == 1)
+
+    #         # Hard constraint: the join must cover at least one uncovered example.
+    #         coverage_expr = sum(covers_joined[e] for e in uncovered_indices)
+    #         model.add(coverage_expr >= 1)
+
+    #         # Size cost: sum of (adjusted_size - 1) over selected fragments.
+    #         # The -1 reflects that body literals are concatenated (head counted once).
+    #         size_expr = sum(select[p] * (self.progid_to_size[p] - 1) for p in valid_progs)
+
+    #         solver = cp_model.CpSolver()
+    #         solver.parameters.linearization_level = 2
+    #         solution_printer = VarArraySolutionPrinter()
+    #         solution_printer.phase_name = 'max_cov'
+
+    #         # ------------------------------------------------------------------
+    #         # Phase 1: maximise coverage (primary objective).
+    #         # ------------------------------------------------------------------
+    #         model.maximize(coverage_expr)
+    #         status = solver.solve(model, solution_printer)
+
+    #         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+    #             break
+
+    #         best_coverage = int(solver.objective_value)
+
+    #         # ------------------------------------------------------------------
+    #         # Phase 2: fix coverage at the optimum, minimise size (secondary).
+    #         # ------------------------------------------------------------------
+    #         model.add(coverage_expr >= best_coverage)
+    #         model.minimize(size_expr)
+
+    #         solution_printer.phase_name = 'min_size'
+    #         status = solver.solve(model, solution_printer)
+
+    #         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+    #             break
+
+    #         optimal_selected = [p for p in valid_progs if solver.value(select[p])]
+
+    #         if not optimal_selected:
+    #             break
+
+    #         # Compute joint coverage: intersection across all selected fragments
+    #         # (AND semantics -- all body literals must hold simultaneously).
+    #         pos_covered = bitarray(self.pos_exs_covered[optimal_selected[0]].copy())
+    #         for s in optimal_selected[1:]:
+    #             pos_covered &= self.pos_exs_covered[s]
+
+    #         uncovered &= ~pos_covered
+    #         unfolded_prog = self.build_unfolded_program(optimal_selected)
+    #         fragments.append([unfolded_prog, pos_covered])
+
+    #         if (~pos_covered).count() > 0:
+    #             self.add_consistent_program(pos_covered, calc_prog_size(unfolded_prog))
+
+    #         # print('cpv2', pos_covered.count(1), calc_prog_size(unfolded_prog))
+
+    #     logger.debug(f"number of fragments found with joiner: {len(fragments)}")
+    #     return fragments
+
+    def solve_encoding_suboptimal_cpsat_v3(self):
+        """
+        Single-solve variant of the CP-SAT joiner. Combines the two-phase
+        lexicographic objective into one weighted maximisation:
+
+            maximise  coverage * W  -  size_cost
+
+        where W = sum(adjusted_size - 1 for all valid fragments) + 1.
+
+        Because W exceeds the worst-case size_cost by construction, one extra
+        covered example always outweighs any size saving, so the ordering is
+        exactly lexicographic -- coverage first, size second -- with a single
+        solver call instead of two.
+        """
+        fragments = []
+        uncovered = self.state.uncovered.copy()
+
+        solver = cp_model.CpSolver()
+        solver.parameters.num_search_workers = 1
+
+        while uncovered.any():
+            valid_progs = {
+                p for p in self.program_selected_var.keys()
+                if (self.pos_exs_covered[p] & uncovered).any()
+            }
+
+            if len(valid_progs) < 2:
+                break
+
+            uncovered_indices = list(uncovered.search(1))
+
+            neg_missers = {}
+            for x in self.neg_index:
+                missers = [p for p in self.programs_not_covering_example[-x - 1] if p in valid_progs]
+                if missers:
+                    neg_missers[x] = missers
+
+            if not neg_missers:
+                break
+
+            # ------------------------------------------------------------------
+            # Build CP-SAT model
+            # ------------------------------------------------------------------
+            model = cp_model.CpModel()
+
+            select = {p: model.new_bool_var(f's{p}') for p in valid_progs}
+
+            # At least two fragments must be selected.
+            model.add(sum(select[p] for p in valid_progs) >= 2)
+
+            # Every negative example must be missed by at least one selected fragment.
+            for x, missers in neg_missers.items():
+                model.add(sum(select[p] for p in missers) >= 1)
+
+            # Datalog safety: every head argument must appear in at least one
+            # selected fragment's body.
+            if not self.settings.non_datalog:
+                for arg in self.head_args:
+                    carriers = [p for p in self.programs_with_arg[arg] if p in valid_progs]
+                    if carriers:
+                        model.add(sum(select[p] for p in carriers) >= 1)
+
+            # covers_joined[e] is true iff no selected fragment misses example e.
+            covers_joined = {}
+            for e in uncovered_indices:
+                cv = model.new_bool_var(f'c{e}')
+                covers_joined[e] = cv
+                missers = [p for p in self.programs_not_covering_example[e] if p in valid_progs]
+                if missers:
+                    model.add_bool_and([select[p].Not() for p in missers]).only_enforce_if(cv)
+                    model.add_bool_or([select[p] for p in missers]).only_enforce_if(cv.Not())
+                else:
+                    model.add(cv == 1)
+
+            coverage_expr = sum(covers_joined[e] for e in uncovered_indices)
+            model.add(coverage_expr >= 1)
+
+            size_expr = sum(select[p] * (self.progid_to_size[p] - 1) for p in valid_progs)
+
+            # W must exceed the maximum possible value of size_expr so that one
+            # extra covered example always dominates the full size penalty.
+            worst_case_size = sum(self.progid_to_size[p] - 1 for p in valid_progs)
+            coverage_weight = worst_case_size + 1
+
+            model.maximize(coverage_expr * coverage_weight - size_expr)
+
+            # ------------------------------------------------------------------
+            # Single solve call.
+            # ------------------------------------------------------------------
+            status = solver.solve(model)
+
+            if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                break
+
+            optimal_selected = [p for p in valid_progs if solver.value(select[p])]
+
+            if not optimal_selected:
+                break
+
+            pos_covered = bitarray(self.pos_exs_covered[optimal_selected[0]].copy())
+            for s in optimal_selected[1:]:
+                pos_covered &= self.pos_exs_covered[s]
+
+            uncovered &= ~pos_covered
+            unfolded_prog = self.build_unfolded_program(optimal_selected)
+            fragments.append([unfolded_prog, pos_covered])
+
+            if (~pos_covered).any():
+                self.add_consistent_program(pos_covered, calc_prog_size(unfolded_prog))
+
+            # print('cpv3', pos_covered.count(1), calc_prog_size(unfolded_prog))
+
+        logger.debug(f"number of fragments found with joiner (v2): {len(fragments)}")
+        return fragments

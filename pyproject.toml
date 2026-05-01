@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel", "Cython>=3.2.4"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "popper"
+version = "5.0.0"
+description = "Popper"
+readme = "README.md"
+authors = [
+  { name="Andrew Cropper", email="andrew.cropper@helsinki.fi" }
+]
+requires-python = ">=3.14"
+dependencies = [
+  "clingo",
+  "bitarray",
+  "janus_swi",
+  "python-sat",
+  "pypblib",
+  "ortools>=9.15.6755",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["popper*"]
+
+[tool.setuptools.package-data]
+popper = ["lp/*.pl"]
+
+[tool.uv]
+package = true

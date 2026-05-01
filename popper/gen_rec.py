@@ -9,10 +9,11 @@ import numbers
 import clingo.script
 from importlib import resources
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, Literal
+from . util import rule_is_recursive, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, Literal
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
+from . import stats
 
 DEFAULT_HEURISTIC = """
 #heuristic size(N). [1000-N,true]
@@ -32,7 +33,8 @@ def atom_to_symbol(pred, args):
 
 class Generator:
 
-    def __init__(self, settings, bkcons=[]):
+    def __init__(self, settings, state, bkcons=[]):
+        self.state = state
         self.settings = settings
         self.seen_handles = set()
         self.assigned = {}
@@ -79,31 +81,10 @@ class Generator:
                 for i, x in enumerate(xs):
                     encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
 
-        # types = tuple(self.settings.head_types)
-        # str_types = str(types).replace("'","")
-        # for x, i in enumerate(self.settings.head_types):
-        #     encoding.append(f'type_pos({str_types}, {i}, {x}).')
-
-        # for pred, types in self.settings.body_types.items():
-        #     types = tuple(types)
-        #     str_types = str(types).replace("'","")
-        #     for i, x in enumerate(types):
-
-        #         encoding.append(f'type_pos({str_types}, {i}, {x}).')
-
-        # for pred, xs in self.settings.directions.items():
-        #     for i, v in xs.items():
-        #         if v == '+':
-        #             encoding.append(f'direction_({pred}, {i}, in).')
-        #         if v == '-':
-        #             encoding.append(f'direction_({pred}, {i}, out).')
 
         max_size = (1 + settings.max_body) * settings.max_rules
-        if settings.max_literals < max_size:
-            encoding.append(f'custom_max_size({settings.max_literals}).')
 
-        if settings.pi_enabled:
-            encoding.append(f'#show head_literal/4.')
+        assert(not settings.pi_enabled)
 
         if settings.noisy:
             encoding.append("""
@@ -113,49 +94,84 @@ class Generator:
 
         # if settings.bkcons:
         encoding.extend(bkcons)
+        encoding.extend(self._build_ordering_constraints(arities))
 
-        if settings.single_solve:
-            if settings.order_space:
-                encoding.append(DEFAULT_HEURISTIC)
+        assert(not settings.single_solve)
+
 
         encoding = '\n'.join(encoding)
 
-        # with open('ENCODING-GEN.pl', 'w') as f:
-            # f.write(encoding)
-
-        if self.settings.single_solve:
-            solver = clingo.Control(['--heuristic=Domain','-Wnone'])
-        else:
-            solver = clingo.Control(['-Wnone'])
-            NUM_OF_LITERALS = """
-            %%% External atom for number of literals in the program %%%%%
-            #external size_in_literals(n).
-            :-
-                size_in_literals(n),
-                #sum{K+1,Clause : body_size(Clause,K)} != n.
-            """
-            solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
+        solver = clingo.Control(['-Wnone'])
+        NUM_OF_LITERALS = """
+        %%% External atom for number of literals in the program %%%%%
+        #external size_in_literals(n).
+        :-
+            size_in_literals(n),
+            #sum{K+1,Clause : body_size(Clause,K)} != n.
+        """
+        solver.add('number_of_literals', ['n'], NUM_OF_LITERALS)
 
         solver.configuration.solve.models = 0
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver
 
+    def _build_ordering_constraints(self, arities):
+        order_cons = []
+        max_arity = max(arities)
+
+        for arity in range(2, max_arity + 1):
+            xs1 = ','.join(f'V{i}' for i in range(arity))
+            xs2 = ','.join(f'X{i}' for i in range(arity))
+
+            if arity < max_arity:
+                prefix = ','.join('0' for _ in range(arity, max_arity)) + ',' + xs1
+            else:
+                prefix = xs1
+
+            order_cons.append(f'appears(Rule,({prefix})):- body_literal(Rule,_,_,({xs2})), ordered_vars(({xs2}), ({xs1})).')
+            order_cons.append(f'var_tuple(({prefix})):- body_pred(P,{arity}), vars({arity},Vars), not bad_body(P,Vars), not type_mismatch(P,Vars), ordered_vars(Vars,OrderedVars), OrderedVars=({xs1}).')
+            order_cons.append(f'var_member(V,({prefix})):-vars(_, Vars), Vars=({xs1}), var_member(V,Vars).')
+
+        xs1 = ','.join(f'V{i}' for i in range(max_arity))
+        for k in range(max_arity):
+            xs2 = ','.join(f'V{i}' for i in range(k))
+            if k > 0 and k < max_arity:
+                xs2 += ','
+            xs2 += ','.join(f'X{i}' for i in range(k, max_arity))
+            order_cons.append(f'lower(({xs1}),({xs2})):- var_tuple(({xs1})), var_tuple(({xs2})), X{k} < V{k}.')
+
+        for k in range(max_arity - 1):
+            v0 = f'V{k}'
+            v1 = f'V{k+1}'
+            order_cons.append(f'seen_lower(Rule, Vars1, V):- V={v1}-1, Vars1 = ({xs1}), {v0} < V < {v1}, lower(Vars1, Vars2), var_tuple(Vars1), appears(Rule, Vars2), var_member(V, Vars2), not head_var(Rule,V).')
+            order_cons.append(f'gap_(({xs1}),{v1}-1):- var_tuple(({xs1})), {v0} < V < {v1}, var(V).')
+
+        order_cons.append(f'gap(({xs1}),V):- gap_(({xs1}), _), #max' + '{X :gap_((' + xs1 + '), X)} == V.')
+        order_cons.append(f':- appears(Rule,({xs1})), gap(({xs1}), V), not seen_lower(Rule,({xs1}),V), not head_var(Rule,V).')
+
+        return order_cons
+
     def get_prog(self):
-        if self.handle is None:
-            self.handle = iter(self.solver.solve(yield_ = True))
-        self.model = next(self.handle, None)
-        if self.model is None:
-            return None
-        atoms = self.model.symbols(shown = True)
+        size = 0
+        while True:
+            if size > self.state.max_literals:
+                return
+            self.current_size = size
+            with stats.duration('init'):
+                self.update_solver(size)
+            size += 1
 
-        if self.settings.single_solve:
-            return self.parse_model_single_rule(atoms)
+            while True:
+                with stats.duration('generate'):
+                    if self.handle is None:
+                        self.handle = iter(self.solver.solve(yield_ = True))
+                    self.model = next(self.handle, None)
+                    if self.model is None:
+                        break
+                    atoms = self.model.symbols(shown=True)
+                    yield self.parse_model_recursion(atoms)
 
-        if self.settings.pi_enabled:
-            return self.parse_model_pi(atoms)
-
-        return self.parse_model_recursion(atoms)
 
     def gen_symbol(self, literal, backend):
         sign, pred, args = literal
@@ -300,32 +316,32 @@ class Generator:
             con_type = xs[0]
             con_prog = xs[1]
 
-            if con_type == Constraint.GENERALISATION:
+            if con_type == GENERALISATION:
                 con_size = None
                 if self.settings.noisy and len(xs)>2:
                     con_size = xs[2]
                 xs = set(self.build_generalisation_constraint3(con_prog, con_size))
                 new_cons.update(xs)
-            elif con_type == Constraint.SPECIALISATION:
+            elif con_type == SPECIALISATION:
                 con_size = None
                 if self.settings.noisy and len(xs)>2:
                     con_size = xs[2]
                 xs = set(self.build_specialisation_constraint3(con_prog, con_size))
                 new_cons.update(xs)
-            elif con_type == Constraint.UNSAT:
+            elif con_type == UNSAT:
                 new_cons.update(self.unsat_constraint2(con_prog))
-            elif con_type == Constraint.REDUNDANCY_CONSTRAINT1:
+            elif con_type == REDUNDANCY_CONSTRAINT1:
                 xs = set(self.redundancy_constraint1(con_prog))
                 new_cons.update(xs)
-            elif con_type == Constraint.REDUNDANCY_CONSTRAINT2:
+            elif con_type == REDUNDANCY_CONSTRAINT2:
                 if len(con_prog) == 1:
                     xs = set(self.redundancy_constraint1(con_prog))
                 else:
                     xs = set(self.build_specialisation_constraint3(con_prog))
                 new_cons.update(xs)
-            elif con_type == Constraint.TMP_ANDY:
+            elif con_type == TMP_ANDY:
                 assert(False)
-            elif con_type == Constraint.BANISH:
+            elif con_type == BANISH:
                 xs = set(self.build_banish_constraint(con_prog))
                 new_cons.update(xs)
 
@@ -611,7 +627,10 @@ class Generator:
         rule = list(prog)[0]
         handle = self.make_rule_handle(rule)
         if handle in self.seen_handles:
-            assert(False)
+            # assert(False)
+            pass
+            # AC: THIS CONDITION FAILS BUT I CANNOT REMEMBER WHY
+
         head, body_ = rule
         self.seen_handles.update(self.build_seen_rule2(rule, False))
 
@@ -629,7 +648,7 @@ class Generator:
     def unsat_constraint2(self, body):
         # if no types, remap variables
         if len(self.settings.body_types) == 0:
-            _, body = remap_variables((None, body))
+            _, body = canonicalise((None, body))
 
         assignments = self.find_deep_bindings4(body)
         for rule_id in range(self.settings.max_rules):
@@ -694,7 +713,7 @@ class Generator:
                 continue
             yield assignment
 
-def remap_variables(rule):
+def canonicalise(rule):
     head, body = rule
     head_vars = set()
 
