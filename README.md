@@ -65,29 +65,22 @@ Popper can learn from [noisy](https://arxiv.org/pdf/2308.09393.pdf) data with th
 
 **Settings**
 
- - `--noisy` learn from [noisy](https://arxiv.org/pdf/2308.09393.pdf) (misclassified examples) (default: false)
- - `--max_vars` maximum number of variables in a rule to `N` (default: 6)
- - `--max_body` maximum number of body literals in a rule to `N` (default: 10)
- - `--stats` shows runtime statistics (default: false)
- - `--timeout` maximum learning time (default: 3600 seconds)
- - `--verbose, -v        Increase verbosity (-v or -vv or -vvv)
- - `--nuwls` Use nuwls solver (default: False)
-
-
+ - `--noisy`, `-n` learn from [noisy](https://arxiv.org/pdf/2308.09393.pdf) data using an MDL cost function (default: false)
+ - `--max-vars N` maximum number of variables in a rule (default: 6)
+ - `--max-body N` maximum number of body literals in a rule (default: 10)
+ - `--timeout N` maximum learning time in seconds (default: 3600)
+ - `-v`, `-vv`, `-vvv` increase verbosity
+ - `--nuwls` use the NuWLS solver (default: false)
 
 **Solvers**
 
-Popper uses various MaxSAT solvers. By default, Popper uses the [RC2](https://alexeyignatiev.github.io/assets/pdf/imms-jsat19-preprint.pdf) exact solver provided by PySAT. Popper also supports these solvers:
-
-- [UWrMaxSat](https://github.com/marekpiotrow/UWrMaxSat) (exact)
-- [NuWLS](https://ojs.aaai.org/index.php/AAAI/article/view/25505) (anytime)
-
-You can download and compile these solvers from the [MaxSAT 2023 evaluation](https://maxsat-evaluations.github.io/2023/descriptions.html) website. **We strongly recommend using the anytime NuWLS** solver as it greatly improves the performance of Popper. To use them, ensure that the solver is available on your path.  See the [install solvers](solvers.md) file for help.
+Popper uses the [CPSAT](https://drops.dagstuhl.de/storage/00lipics/lipics-vol280-cp2023/LIPIcs.CP.2023.3/LIPIcs.CP.2023.3.pdf) solver by default for its combine stage.
+Popper also supports the [NuWLS](https://ojs.aaai.org/index.php/AAAI/article/view/25505) anytime MaxSAT sovler. You can download and compile this solver from the [MaxSAT 2023 evaluation](https://maxsat-evaluations.github.io/2023/descriptions.html) website. **We strongly recommend using  NuWLS** as it greatly improves the performance of Popper. To use them, ensure that the solver is available on your path.  See the [install solvers](solvers.md) file for help.
 
 
 **Recursion**
 
-Popper can learn recursive rules (where a predicate symbol appears in both the head and body), such as to find a duplicate element (`uv run popper.py examples/find-dupl`) in a list:
+Popper can learn recursive rules (where a predicate symbol appears in both the head and body), such as to find a duplicate element (`uv run popper.py examples/synthesis-finddupl`) in a list:
 ```prolog
 f(A,B):- tail(A,C),head(A,B),element(C,B).
 f(A,B):- tail(A,C),f(C,B).
@@ -133,7 +126,5 @@ Popper cannot learn with partial directions. If you provide them, you must provi
 
 - Transform your BK to Datalog, which allows Popper to perform preprocessing on the BK
 - Try the NuWLS anytime solver
-- Use 6 variables or fewer
+- Use 7 variables or fewer
 - Avoid recursion and predicate invention
-
-
