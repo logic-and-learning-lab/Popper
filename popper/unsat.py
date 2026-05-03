@@ -7,8 +7,8 @@ class UnsatCoreFinder:
     def __init__(self, settings, tester):
         self.settings = settings
         self.seen_prog_hash = set()
-        self.unsat_prog = set()
-        self.unsat_raw_prog = set()
+        # self.unsat_prog = set()
+        # self.unsat_raw_prog = set()
         self.tester = tester
 
     def explain_incomplete(self, prog):
@@ -56,8 +56,8 @@ class UnsatCoreFinder:
             self.seen_prog_hash.add(prog_hash)
 
             subprog = frozenset(subprog)
-            if self._should_skip(subprog):
-                continue
+            # if self._should_skip(subprog):
+                # continue
 
             if seen_more_general_unsat(subprog, seen_unsat_theory):
                 continue
@@ -89,8 +89,8 @@ class UnsatCoreFinder:
             # Found an unsatisfiable generalisation
             seen_raw_unsat.add(raw_prog)
             seen_unsat_theory.add(subprog)
-            self.unsat_raw_prog.add(raw_prog)
-            self.unsat_prog.add(subprog)
+            # self.unsat_raw_prog.add(raw_prog)
+            # self.unsat_prog.add(subprog)
 
             xs = self.explain_totally_incomplete_aux(subprog, seen_unsat_theory, seen_raw_unsat)
             if xs:
