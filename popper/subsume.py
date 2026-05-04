@@ -17,7 +17,7 @@ class SubsumeChecker:
         self.settings = settings
         self.tester = tester
         self.state = state
-        self.pruned2 = set()
+        # self.pruned2 = set()
         self._covers_too_few_true_cache = set()
         self._cached_success_sets = None
         self._cached_sizes = None
@@ -68,8 +68,8 @@ class SubsumeChecker:
             if not self.settings.non_datalog_flag and not any(x in head_vars for literal in new_body for x in literal.arguments):
                 continue
 
-            if any(hash(frozenset(x)) in self.pruned2 for x in non_empty_powerset(new_body)):
-                continue
+            # if any(hash(frozenset(x)) in self.pruned2 for x in non_empty_powerset(new_body)):
+                # continue
 
             if not head_connected(new_rule) or not has_valid_directions(new_rule, self.settings):
                 out.update(self.subsumed_or_covers_too_few(new_prog, seen))
@@ -89,7 +89,7 @@ class SubsumeChecker:
                 out.update(xs)
                 continue
 
-            self.pruned2.update(self.find_variant_hashes(canonicalise(new_rule)))
+            # self.pruned2.update(self.find_variant_hashes(canonicalise(new_rule)))
 
             if subsumed:
                 out.add((new_prog, "SUBSUMED (GENERALISATION)"))
@@ -232,20 +232,20 @@ class SubsumeChecker:
                     # All examples successfully covered
                     return remaining_budget, remaining_uncovered, False, forced_count
 
-    def find_variant_hashes(self, rule):
-        head, body = rule
-        _head_pred, head_args = head
-        head_arity = len(head_args)
-        body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head_arity)
-        subset_vars = range(head_arity, self.settings.max_vars)
-        for xs in permutations(subset_vars, len(body_vars)):
-            xs = head_args + xs
-            new_body = []
-            for pred, args in body:
-                new_args = tuple(xs[arg] for arg in args)
-                new_literal = (pred, new_args)
-                new_body.append(new_literal)
-            yield hash(frozenset(new_body))
+    # def find_variant_hashes(self, rule):
+    #     head, body = rule
+    #     _head_pred, head_args = head
+    #     head_arity = len(head_args)
+    #     body_vars = frozenset(x for literal in body for x in literal.arguments if x >= head_arity)
+    #     subset_vars = range(head_arity, self.settings.max_vars)
+    #     for xs in permutations(subset_vars, len(body_vars)):
+    #         xs = head_args + xs
+    #         new_body = []
+    #         for pred, args in body:
+    #             new_args = tuple(xs[arg] for arg in args)
+    #             new_literal = (pred, new_args)
+    #             new_body.append(new_literal)
+    #         yield hash(frozenset(new_body))
 
     # given a new program found by the generate stage, this method determines whether the program could be used to find a better (smaller) hypothesis than the current best
     # return value of False means the program is still useful
