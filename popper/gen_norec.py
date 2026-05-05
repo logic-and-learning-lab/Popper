@@ -42,6 +42,8 @@ class Generator:
         encoding = self._build_encoding(bkcons or [])
         solver = clingo.Control(['--heuristic=Domain', '-Wnone'])
         solver.configuration.solve.models = 0
+        with open('ENCODING-GEN.pl', 'w') as f:
+            f.write(encoding)
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver
