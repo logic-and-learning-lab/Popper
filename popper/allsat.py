@@ -3,11 +3,54 @@
 
 from popper.util import connected, has_valid_directions, canonicalise_rule_hash
 
+class BodyLiteralSeen:
+    """
+    A memory-optimised cache for tracking which literals have been checked
+    against specific rule bodies. Uses a bitmask approach to compress
+    the (body_hash, literal) space.
+    """
+    __slots__ = (
+        'body_to_mask',
+        'literal_to_id'
+    )
+
+    def __init__(self):
+        self.body_to_mask = {}
+        self.literal_to_id = {}
+
+    def seen_or_add(self, body_hash, literal) -> bool:
+        """
+        Checks if the (body_hash, literal) pair has been seen.
+        If not, it records the pair and returns False.
+        If it has, it returns True.
+        """
+        # 1. Get or assign an integer ID to the literal
+        lit_id = self.literal_to_id.get(literal)
+        if lit_id is None:
+            lit_id = len(self.literal_to_id)
+            self.literal_to_id[literal] = lit_id
+
+        # 2. Calculate the bit mask for this literal
+        bit = 1 << lit_id
+
+        # 3. Retrieve the current bitmask for the body_hash (default 0)
+        mask = self.body_to_mask.get(body_hash, 0)
+
+        # 4. Check if the literal's bit is already set in the body's mask
+        if mask & bit:
+            return True
+
+        # 5. Not seen: update the mask by setting the literal's bit
+        self.body_to_mask[body_hash] = mask | bit
+        return False
+
+
 class AllSatCoreFinder:
     def __init__(self, settings, tester):
         self.settings = settings
         self.tester = tester
-        self.seen_prog_hash = set()
+        # self.seen_prog_hash = set()
+        self.seen_progs = BodyLiteralSeen()
 
     def check_redundant_literal(self, prog):
         if len(prog) > 1:
@@ -53,13 +96,8 @@ class AllSatCoreFinder:
                 out.extend(self.check_redundant_literal_aux(new_body, literal, allsat_cache, not_all_sat_cache, True))
             return out
 
-        rule_hash = hash((canonicalise_rule_hash((None, body), self.settings.max_vars), literal))
-        if rule_hash in self.seen_prog_hash:
+        if self.seen_progs.seen_or_add(canonicalise_rule_hash((None, body), self.settings.max_vars), literal):
             return out
-        self.seen_prog_hash.add(rule_hash)
-
-
-
 
         if any(body.issubset(seen_body) for seen_body in not_all_sat_cache):
             return out
