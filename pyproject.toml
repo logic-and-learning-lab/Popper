@@ -18,6 +18,7 @@ dependencies = [
   "python-sat",
   "pypblib",
   "ortools>=9.15.6755",
+  "cykhash>=2.0.1",
 ]
 
 [tool.setuptools.packages.find]

@@ -2,6 +2,8 @@ import numpy as np
 
 _EMPTY = np.uint64(2**64 - 1)
 _EMPTY_INT = int(_EMPTY)
+_SIGN = 1 << 63
+_MASK = 1 << 64
 
 
 class CompactHashTable:
@@ -133,3 +135,26 @@ class IndexedInternPool:
 
     def __len__(self):
         return len(self._list)
+
+
+# AC: WE CAN DROP CASTING BY CHANGING THE CYTHON HASH FUNCTION
+class CompactHashSet:
+    """uint64 hash set backed by cykhash.Int64Set. Handles uint64->int64 reinterpretation.
+    Micro-optimised version.
+    """
+    __slots__ = ('_data',)
+
+    def __init__(self):
+        from cykhash import Int64Set
+        self._data = Int64Set()
+
+    def __contains__(self, key, _int=int, _S=_SIGN, _M=_MASK):
+        k = _int(key)
+        return (k if k < _S else k - _M) in self._data
+
+    def add(self, key, _int=int, _S=_SIGN, _M=_MASK):
+        k = _int(key)
+        self._data.add(k if k < _S else k - _M)
+
+    def __len__(self):
+        return len(self._data)
