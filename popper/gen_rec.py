@@ -170,7 +170,7 @@ class Generator:
                     if self.model is None:
                         break
                     atoms = self.model.symbols(shown=True)
-                    yield self.parse_model_recursion(atoms)
+                yield self.parse_model_recursion(atoms)
 
 
     def gen_symbol(self, literal, backend):

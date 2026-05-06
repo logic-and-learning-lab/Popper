@@ -251,7 +251,7 @@ class Generator:
                         prog = self.parse_model_recursion(atoms)
 
                     # Yield the generated program
-                    yield prog
+                yield prog
 
             # Yield None to signal to loop.py that the current size has finished generating
             # yield None
