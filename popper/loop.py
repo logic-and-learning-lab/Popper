@@ -1,5 +1,5 @@
 from bitarray.util import ones
-from . util import timeout, format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, mdl_score, canonicalise, format_prog
+from . util import format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, mdl_score, canonicalise, format_prog
 from . tester import Tester
 from . bkcons import get_bk_cons
 from . unsat import UnsatCoreFinder
@@ -126,15 +126,16 @@ def popper(settings, tester, state, bkcons):
     with stats.duration('combine'):
         combiner.update_best_prog(last_combine_stage=True)
 
-def learn_solution(settings):
-    state = SearchState()
+def learn_solution(settings, state=None):
+    if state is None:
+        state = SearchState()
     state.start_time()
     with stats.duration('load data'):
         tester = Tester(settings, state)
     # nasty
     state.uncovered = ones(tester.num_pos)
     bkcons = get_bk_cons(settings, tester)
-    timeout(settings, popper, (settings, tester, state, bkcons), timeout_duration=state.time_remaining(settings.timeout),)
+    popper(settings, tester, state, bkcons)
     return state.best_hypothesis, state.best_hypothesis_score
 
 def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result):

@@ -1,6 +1,5 @@
 from itertools import chain, combinations, permutations, product
 import clingo
-import signal
 import argparse
 import os
 from . import logger
@@ -40,33 +39,6 @@ def parse_args():
     parser.add_argument('-v', action='count', default=1, dest='verbosity', help='Increase verbosity (-v, -vv, or -vvv)')
     parser.add_argument('-j', dest='joiner', default=False, action='store_true', help='Use join stage (default: False)')
     return parser.parse_args()
-
-class _TimeoutError(Exception):
-    pass
-
-def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
-    timeout_duration = max(timeout_duration, 1)
-    result = None
-
-    def handler(signum, frame):
-        raise _TimeoutError()
-
-    signal.signal(signal.SIGALRM, handler)
-    signal.alarm(timeout_duration)
-    try:
-        result = func(*args, **kwargs)
-    except _TimeoutError:
-        logger.out(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
-        return result
-    except AttributeError as moo:
-        if '_SolveEventHandler' in str(moo):
-            logger.out(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
-            return result
-        raise moo
-    finally:
-        signal.alarm(0)
-
-    return result
 
 def load_kbpath(kbpath):
     def fix_path(filename):
