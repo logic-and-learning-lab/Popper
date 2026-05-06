@@ -109,9 +109,9 @@ def popper(settings, tester, state, bkcons):
         # IF NEW HYPOTHESIS
         if new_hyp_found:
             
-            # AC: TRY TO REFACTOR OUT
-            if noisy:
-                cons.extend(build_cons_previous_hypotheses(state.best_hypothesis_mdl, prog_size, num_pos, num_neg, state))
+            # # AC: TRY TO REFACTOR OUT
+            # if noisy:
+            #     cons.extend(build_cons_previous_hypotheses(state.best_hypothesis_mdl, prog_size, num_pos, num_neg, state))
 
             # PRUNE BIGGER SPACES
             if (noisy and settings.single_solve) or (not noisy and state.solution_found):
@@ -251,7 +251,7 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
     too_few_tp, too_many_fp = test_result.too_few_tp, test_result.too_many_fp
     num_pos, num_neg = tester.num_pos, tester.num_neg
     tp, fn, fp, tn = test_result.tp, test_result.fn, test_result.fp, test_result.tn
-    seen_hyp_spec, seen_hyp_gen = state.seen_hyp_spec, state.seen_hyp_gen
+    # seen_hyp_spec, seen_hyp_gen = state.seen_hyp_spec, state.seen_hyp_gen
     new_cons = []
     pruned_more_general = False
     add_spec = add_gen = add_redund1 = add_redund2 = False
@@ -264,7 +264,7 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
     # if non-separable hypothesis has better mdl score, update best prog
     if test_result.mdl is not None and test_result.mdl < state.best_hypothesis_mdl:
         update_best_hypothesis(settings, state, prog, prog_size, test_result.conf_matrix)
-        new_cons.extend(build_cons_previous_hypotheses(test_result.mdl, prog_size, num_pos, num_neg, state))
+        # new_cons.extend(build_cons_previous_hypotheses(test_result.mdl, prog_size, num_pos, num_neg, state))
 
     # if it does not cover enough example, prune specialisations
     if tp < state.min_pos_coverage:
@@ -343,12 +343,12 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
 
         if not too_few_tp and not add_spec and spec_size and spec_size <= state.max_literals and (is_recursive or has_invention or spec_size <= settings.max_body):
             new_cons.append((SPECIALISATION, prog, spec_size))
-            seen_hyp_spec[fp + prog_size + mdl].append((prog, fn, fp))
+            # seen_hyp_spec[fp + prog_size + mdl].append((prog, fn, fp))
 
         if not add_gen and gen_size and gen_size <= state.max_literals and (settings.recursion_enabled or settings.pi_enabled):
             new_cons.append((GENERALISATION, prog, gen_size))
-            if mdl is not None:
-                seen_hyp_gen[fn + prog_size + mdl].append((prog, fn, fp))
+            # if mdl is not None:
+                # seen_hyp_gen[fn + prog_size + mdl].append((prog, fn, fp))
             # print('seen_hyp_gen', format_prog(prog), fn, prog_size, mdl)
 
         if add_gen:
@@ -448,48 +448,48 @@ def check_redundant_literals(settings, allsatcore_finder, prog, add_spec, pruned
     return new_cons, add_spec, pruned_more_general, add_to_combiner_
 
 
-def build_cons_previous_hypotheses(score, best_size, num_pos, num_neg, state):
-    # code is a mess, check with CH what it all means
-    cons = []
+# def build_cons_previous_hypotheses(score, best_size, num_pos, num_neg, state):
+#     # code is a mess, check with CH what it all means
+#     cons = []
 
-    seen_hyp_spec, seen_hyp_gen = state.seen_hyp_spec, state.seen_hyp_gen
+#     seen_hyp_spec, seen_hyp_gen = state.seen_hyp_spec, state.seen_hyp_gen
 
-    if seen_hyp_spec is None or seen_hyp_gen is None:
-        return cons
+#     if seen_hyp_spec is None or seen_hyp_gen is None:
+#         return cons
 
-    # Prune Specialisations
-    for k in [k for k in seen_hyp_spec if k > score + num_pos + best_size]:
-        to_delete = []
-        for prog, fn, fp in seen_hyp_spec[k]:
-            size = calc_prog_size(prog)
-            mdl = mdl_score(fn, fp, size)
-            if score + num_pos + best_size < fp + size + mdl:
-                spec_size = score - mdl + num_pos + best_size
-                if spec_size <= size:
-                    to_delete.append((prog, fn, fp))
-                    cons.append((SPECIALISATION, prog))
-                else:
-                    cons.append((SPECIALISATION, prog, spec_size))
-        for to_del in to_delete:
-            seen_hyp_spec[k].remove(to_del)
+#     # Prune Specialisations
+#     for k in [k for k in seen_hyp_spec if k > score + num_pos + best_size]:
+#         to_delete = []
+#         for prog, fn, fp in seen_hyp_spec[k]:
+#             size = calc_prog_size(prog)
+#             mdl = mdl_score(fn, fp, size)
+#             if score + num_pos + best_size < fp + size + mdl:
+#                 spec_size = score - mdl + num_pos + best_size
+#                 if spec_size <= size:
+#                     to_delete.append((prog, fn, fp))
+#                     cons.append((SPECIALISATION, prog))
+#                 else:
+#                     cons.append((SPECIALISATION, prog, spec_size))
+#         for to_del in to_delete:
+#             seen_hyp_spec[k].remove(to_del)
 
-    # Prune Generalisations
-    for k in [k for k in seen_hyp_gen if k > score + num_neg + best_size]:
-        to_delete = []
-        for prog, fn, fp in seen_hyp_gen[k]:
-            size = calc_prog_size(prog)
-            mdl = mdl_score(fn, fp, size)
-            if score + num_neg + best_size < fn + size + mdl:
-                gen_size = score - mdl + num_neg + best_size
-                if gen_size <= size:
-                    to_delete.append((prog, fn, fp))
-                    cons.append((GENERALISATION, prog))
-                else:
-                    cons.append((GENERALISATION, prog, gen_size))
-        for to_del in to_delete:
-            seen_hyp_gen[k].remove(to_del)
+#     # Prune Generalisations
+#     for k in [k for k in seen_hyp_gen if k > score + num_neg + best_size]:
+#         to_delete = []
+#         for prog, fn, fp in seen_hyp_gen[k]:
+#             size = calc_prog_size(prog)
+#             mdl = mdl_score(fn, fp, size)
+#             if score + num_neg + best_size < fn + size + mdl:
+#                 gen_size = score - mdl + num_neg + best_size
+#                 if gen_size <= size:
+#                     to_delete.append((prog, fn, fp))
+#                     cons.append((GENERALISATION, prog))
+#                 else:
+#                     cons.append((GENERALISATION, prog, gen_size))
+#         for to_del in to_delete:
+#             seen_hyp_gen[k].remove(to_del)
 
-    return cons
+#     return cons
 
 
 # def explain_none_functional(settings, tester, prog):

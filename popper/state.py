@@ -11,14 +11,13 @@ class SearchState:
 
         # (pos_covered_bit_array, neg_covered_bitarray) pairs seen for noisy programs
         self.success_sets_noise = set()
-
         self.search_depth = None
 
         # save hypotheses for which we pruned spec / gen from a certain size only,
         # once we update the best mdl score, we can prune spec / gen from a better
         # size for some of these
-        self.seen_hyp_spec = defaultdict(list)
-        self.seen_hyp_gen = defaultdict(list)
+        # self.seen_hyp_spec = defaultdict(list)
+        # self.seen_hyp_gen = defaultdict(list)
 
         self.best_hypothesis = None
         self.best_hypothesis_size = None
