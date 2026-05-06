@@ -1,7 +1,7 @@
 import re
 import clingo
 from importlib import resources
-from . util import GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, Literal
+from . util import GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, BANISH, Literal
 from itertools import permutations
 from . import stats
 
@@ -42,8 +42,6 @@ class Generator:
         encoding = self._build_encoding(bkcons or [])
         solver = clingo.Control(['--heuristic=Domain', '-Wnone'])
         solver.configuration.solve.models = 0
-        with open('ENCODING-GEN.pl', 'w') as f:
-            f.write(encoding)
         solver.add('base', [], encoding)
         solver.ground([('base', [])])
         self.solver = solver
