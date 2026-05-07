@@ -9,7 +9,7 @@ import numbers
 import clingo.script
 from importlib import resources
 from collections import defaultdict
-from . util import rule_is_recursive, Constraint, Literal, format_rule, canonicalise
+from . util import rule_is_recursive, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, Literal, format_rule, canonicalise
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
@@ -251,7 +251,7 @@ class Generator:
                         prog = self.parse_model_recursion(atoms)
 
                     # Yield the generated program
-                    yield prog
+                yield prog
 
             # Yield None to signal to loop.py that the current size has finished generating
             # yield None
@@ -539,19 +539,19 @@ class Generator:
             # if con_type not in (1, 2):
                 # print(con_type)
             # con_prog, con_prog_ordering
-            # if debug and con_type != Constraint.UNSAT:
+            # if debug and con_type != UNSAT:
                 # print('')
                 # print('\t','--', con_type)
                 # for rule in order_prog(con_prog):
                     # print('\t', format_rule(order_rule(rule)))
-            if con_type == Constraint.GENERALISATION:
+            if con_type == GENERALISATION:
                 con_size = None
                 if self.settings.noisy and len(xs)>2:
                     con_size = xs[2]
                 new_rule_handles2, con = self.build_generalisation_constraint2(con_prog, gen_size=con_size)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
-            elif con_type == Constraint.SPECIALISATION:
+            elif con_type == SPECIALISATION:
                 # con_size = xs[2]
                 con_size = None
                 if self.settings.noisy and len(xs)>2:
@@ -559,21 +559,21 @@ class Generator:
                 new_rule_handles2, con = self.build_specialisation_constraint2(con_prog, spec_size=con_size)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
-            elif con_type == Constraint.UNSAT:
+            elif con_type == UNSAT:
                 cons_ = self.unsat_constraint2(con_prog)
                 self.new_ground_cons.update(cons_)
-            elif con_type == Constraint.REDUNDANCY_CONSTRAINT1:
+            elif con_type == REDUNDANCY_CONSTRAINT1:
                 bad_handle, new_rule_handles2, con = self.redundancy_constraint1(con_prog)
                 self.bad_handles.add(bad_handle)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
-            elif con_type == Constraint.REDUNDANCY_CONSTRAINT2:
+            elif con_type == REDUNDANCY_CONSTRAINT2:
                 new_rule_handles2, cons = self.redundancy_constraint2(con_prog)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.update(cons)
-            elif con_type == Constraint.TMP_ANDY:
+            elif con_type == TMP_ANDY:
                 new_cons.update(self.andy_tmp_con(con_prog))
-            elif con_type == Constraint.BANISH:
+            elif con_type == BANISH:
                 new_rule_handles2, con = self.build_banish_constraint(con_prog)
                 self.all_handles.update(new_rule_handles2)
                 new_cons.add(con)
@@ -587,7 +587,7 @@ class Generator:
             for ground_rule in ground_rules:
                 _ground_head, ground_body = ground_rule
                 ground_bodies.add(ground_body)
-                # if con_type == Constraint.REDUNDANCY_CONSTRAINT1:
+                # if con_type == REDUNDANCY_CONSTRAINT1:
                 # print(sorted(ground_body))
                 self.all_ground_cons.add(frozenset(ground_body))
 

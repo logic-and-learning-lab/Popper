@@ -1,12 +1,9 @@
-# logger.py
 import logging
 
 TRACE_LEVEL=4
 
-# 1. Create the instance
 logger = logging.getLogger("popper")
 
-# 2. Add your custom logic here (Formatter, Handlers, etc.)
 class SecondsFormatter(logging.Formatter):
     def format(self, record):
         record.elapsed_secs = record.relativeCreated / 1000.0
@@ -30,15 +27,10 @@ def set_verbosity(level):
     elif level >= 4:
         logger.setLevel(TRACE_LEVEL)
 
-# Trace needs a tiny helper to allow logger.trace() syntax
-# full debug (vvv)
 def trace(msg, *args, **kwargs):
     if logger.isEnabledFor(TRACE_LEVEL):
         logger.log(TRACE_LEVEL, msg, *args, **kwargs)
 
-# normal output
 out = logger.warning
-# a little more explaining what popper is doing (v)
 info = logger.info
-# a little more explaining what constraints popper found (vv)
 debug = logger.debug

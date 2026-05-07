@@ -1,6 +1,6 @@
 from collections import defaultdict
 import time
-from . util import print_incomplete_solution2, mdl_score
+from . util import print_incomplete_solution, mdl_score
 
 class SearchState:
     def __init__(self):
@@ -9,16 +9,15 @@ class SearchState:
         self.success_sets = {}
         self.success_sets_version = 0
 
-        # (pos_covered_bit_array, neg_covered_bitarray) -> prog_size
-        self.success_sets_noise = {}
-
+        # (pos_covered_bit_array, neg_covered_bitarray) pairs seen for noisy programs
+        self.success_sets_noise = set()
         self.search_depth = None
 
         # save hypotheses for which we pruned spec / gen from a certain size only,
         # once we update the best mdl score, we can prune spec / gen from a better
         # size for some of these
-        self.seen_hyp_spec = defaultdict(list)
-        self.seen_hyp_gen = defaultdict(list)
+        # self.seen_hyp_spec = defaultdict(list)
+        # self.seen_hyp_gen = defaultdict(list)
 
         self.best_hypothesis = None
         self.best_hypothesis_size = None
@@ -101,7 +100,7 @@ def update_best_hypothesis(settings, state, hypothesis, hypothesis_size, conf_ma
     if not _is_better_hypothesis(settings, state, hypothesis_size, conf_matrix, mdl):
         return
 
-    print_incomplete_solution2(hypothesis, hypothesis_size, conf_matrix)
+    print_incomplete_solution(hypothesis, hypothesis_size, conf_matrix, settings, settings.noisy)
     state.best_hypothesis_score = conf_matrix
     state.best_hypothesis_size = hypothesis_size
     state.best_hypothesis = hypothesis

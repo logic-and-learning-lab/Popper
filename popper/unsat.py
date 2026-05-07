@@ -1,15 +1,13 @@
 # Code and idea from the paper: Andrew Cropper, Céline Hocquette: Learning Logic Programs by Finding Minimal Unsatisfiable Subprograms. ECAI 2024: 4295-4302
 
 from . import logger
-from . util import rule_is_recursive, prog_is_recursive, format_rule, Constraint, get_raw_prog, canonicalise, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions, Literal
+from . compact_hash import CompactHashSet
+from . util import rule_is_recursive, prog_is_recursive, format_rule, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, get_raw_prog, canonicalise, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions, Literal, canonicalise_prog_hash
 
 class UnsatCoreFinder:
     def __init__(self, settings, tester):
         self.settings = settings
-        self.seen_prog = set()
-        self.seen_raw_prog = set()
-        self.unsat_prog = set()
-        self.unsat_raw_prog = set()
+        self.seen_prog_hash = CompactHashSet()
         self.tester = tester
 
     def explain_incomplete(self, prog):
@@ -26,18 +24,18 @@ class UnsatCoreFinder:
             if is_headless_unsat:
                 # If a headless version (just the body) is unsat, it's a strong UNSAT constraint
                 _, body = next(iter(subprog))
-                yield (Constraint.UNSAT, body)
+                yield (UNSAT, body)
                 continue
 
             # Standard specialisation/redundancy constraints
             if not (self.settings.recursion_enabled or self.settings.pi_enabled):
-                yield (Constraint.SPECIALISATION, [canonicalise(rule) for rule in subprog])
+                yield (SPECIALISATION, [canonicalise(rule) for rule in subprog])
                 continue
 
             if len(subprog) == 1:
-                yield (Constraint.REDUNDANCY_CONSTRAINT1, [canonicalise(rule) for rule in subprog])
+                yield (REDUNDANCY_CONSTRAINT1, [canonicalise(rule) for rule in subprog])
 
-            yield (Constraint.REDUNDANCY_CONSTRAINT2, [canonicalise(rule) for rule in subprog])
+            yield (REDUNDANCY_CONSTRAINT2, [canonicalise(rule) for rule in subprog])
 
     def explain_totally_incomplete(self, prog):
         """Entry point for the recursive unsat core search."""
@@ -49,28 +47,21 @@ class UnsatCoreFinder:
         out = []
 
         for subprog in generalisations(prog, allow_headless=True, recursive=has_recursion):
-            subprog = frozenset(subprog)
-            subprog_key = hash(subprog)
 
-            if subprog_key in self.seen_prog:
+            # check we have not seen this subprog or a variant before
+            prog_hash = canonicalise_prog_hash(subprog, self.settings.max_vars)
+            if prog_hash in self.seen_prog_hash:
+                continue
+            self.seen_prog_hash.add(prog_hash)
+
+            subprog = frozenset(subprog)
+
+            if seen_more_general_unsat(subprog, seen_unsat_theory):
                 continue
 
             raw_prog = get_raw_prog(subprog)
-            raw_prog_key = hash(raw_prog)
-
-            if raw_prog_key in self.seen_raw_prog:
-                continue
-
-            self.seen_prog.add(subprog_key)
-            self.seen_raw_prog.add(raw_prog_key)
-
-            if self._should_skip(subprog):
-                continue
 
             if seen_more_general_unsat(raw_prog, seen_raw_unsat):
-                continue
-
-            if seen_more_general_unsat(subprog, seen_unsat_theory):
                 continue
 
             if not self.prog_is_ok(subprog):
@@ -81,23 +72,20 @@ class UnsatCoreFinder:
                 out.extend(self.explain_totally_incomplete_aux(subprog, seen_unsat_theory, seen_raw_unsat))
                 continue
 
-            # Standardise literals for testing
-            test_prog = build_test_prog(subprog)
+            # Check satisfiability of the generalisation
             headless = any(head is None for head, body in subprog)
 
             if headless:
-                _, body = next(iter(test_prog))
+                _, body = next(iter(subprog))
                 if self.tester.is_body_sat(body):
                     continue
             else:
-                if self.tester.is_sat(test_prog):
+                if self.tester.is_sat(subprog):
                     continue
 
             # Found an unsatisfiable generalisation
             seen_raw_unsat.add(raw_prog)
             seen_unsat_theory.add(subprog)
-            self.unsat_raw_prog.add(raw_prog)
-            self.unsat_prog.add(subprog)
 
             xs = self.explain_totally_incomplete_aux(subprog, seen_unsat_theory, seen_raw_unsat)
             if xs:
@@ -136,7 +124,7 @@ class UnsatCoreFinder:
             if not head and not connected(body):
                 return False
 
-            if not has_valid_directions(rule):
+            if not has_valid_directions(rule, self.settings):
                 return False
                 
             if head is None: # Headless rules not allowed in multi-rule programs here
@@ -189,7 +177,3 @@ class UnsatCoreFinder:
 def seen_more_general_unsat(prog, unsat_set):
     """Check if any theory in the unsat_set subsumes the given program."""
     return any(theory_subsumes(seen, prog) for seen in unsat_set)
-
-def build_test_prog(subprog):
-    """Convert a raw subprogram into a frozenset of (Literal, frozenset(Literal)) for testing."""
-    return frozenset((head if head else False, body) for head, body in subprog)

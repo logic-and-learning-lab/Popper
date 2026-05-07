@@ -1,13 +1,56 @@
 # Code and idea from the paper: # Andrew Cropper, David M. Cerna: # Efficient rule induction by ignoring pointless rules. AAAI 2026.
 # allsay.py takes a rule and tries to identify literals implied by the other literals in the rule, e.g. in r = f(A):- int(A), even(A)  then even(A) implies int(A), so int(A) is redundant
 
-from popper.util import connected, has_valid_directions, canonicalise
+from popper.util import connected, has_valid_directions, canonicalise_rule_hash
+
+class BodyLiteralSeen:
+    """
+    A memory-optimised cache for tracking which literals have been checked
+    against specific rule bodies. Uses a bitmask approach to compress
+    the (body_hash, literal) space.
+    """
+    __slots__ = (
+        'body_to_mask',
+        'literal_to_id'
+    )
+
+    def __init__(self):
+        self.body_to_mask = {}
+        self.literal_to_id = {}
+
+    def seen_or_add(self, body_hash, literal) -> bool:
+        """
+        Checks if the (body_hash, literal) pair has been seen.
+        If not, it records the pair and returns False.
+        If it has, it returns True.
+        """
+        # 1. Get or assign an integer ID to the literal
+        lit_id = self.literal_to_id.get(literal)
+        if lit_id is None:
+            lit_id = len(self.literal_to_id)
+            self.literal_to_id[literal] = lit_id
+
+        # 2. Calculate the bit mask for this literal
+        bit = 1 << lit_id
+
+        # 3. Retrieve the current bitmask for the body_hash (default 0)
+        mask = self.body_to_mask.get(body_hash, 0)
+
+        # 4. Check if the literal's bit is already set in the body's mask
+        if mask & bit:
+            return True
+
+        # 5. Not seen: update the mask by setting the literal's bit
+        self.body_to_mask[body_hash] = mask | bit
+        return False
+
 
 class AllSatCoreFinder:
     def __init__(self, settings, tester):
         self.settings = settings
         self.tester = tester
-        self.seen_allsat = set()
+        # self.seen_prog_hash = set()
+        self.seen_progs = BodyLiteralSeen()
 
     def check_redundant_literal(self, prog):
         if len(prog) > 1:
@@ -43,20 +86,7 @@ class AllSatCoreFinder:
         if not body:
             return out
 
-        prog_key = hash((body, literal))
-        if prog_key in self.seen_allsat:
-            return out
-
-        _, b = canonicalise((None, body | {literal}))
-        b_key = hash(b)
-        if b_key in self.seen_allsat:
-            return out
-
-        self.seen_allsat.add(prog_key)
-        self.seen_allsat.add(b_key)
-
         body_vars = {x for atom in body for x in atom.arguments}
-
         if not set(literal.arguments).issubset(body_vars):
             return out
 
@@ -66,13 +96,16 @@ class AllSatCoreFinder:
                 out.extend(self.check_redundant_literal_aux(new_body, literal, allsat_cache, not_all_sat_cache, True))
             return out
 
+        if self.seen_progs.seen_or_add(canonicalise_rule_hash((None, body), self.settings.max_vars), literal):
+            return out
+
         if any(body.issubset(seen_body) for seen_body in not_all_sat_cache):
             return out
 
         if any(seen_body.issubset(body) for seen_body in allsat_cache):
             return out
 
-        if not has_valid_directions((None, body)):
+        if not has_valid_directions((None, body), self.settings):
             return out
 
         if not self.tester.is_literal_redundant(body, literal):
@@ -120,7 +153,7 @@ class AllSatCoreFinder:
 
                 new_rule = (head, body_)
 
-                if not has_valid_directions(new_rule):
+                if not has_valid_directions(new_rule, self.settings):
                     continue
 
                 if self.tester.is_neg_reducible(body_, literal):

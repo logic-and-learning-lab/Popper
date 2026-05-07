@@ -1,14 +1,13 @@
-from functools import cache, lru_cache
-from itertools import product
+from itertools import chain, combinations, permutations, product
 import clingo
-import signal
 import argparse
 import os
 from . import logger
-from itertools import permutations, chain, combinations
 from collections import defaultdict
 from typing import NamedTuple
-from . recalls import recalls
+from functools import lru_cache
+from . _canonicalise_hash import canonicalise_prog_hash_cython as canonicalise_prog_hash
+from . _canonicalise_hash import canonicalise_rule_hash_cython as canonicalise_rule_hash
 
 class Literal(NamedTuple):
     predicate: str
@@ -20,14 +19,13 @@ MAX_BODY=10
 ANYTIME_TIMEOUT=10
 BATCH_SIZE=1000
 
-class Constraint:
-    GENERALISATION = 1
-    SPECIALISATION = 2
-    UNSAT = 3
-    REDUNDANCY_CONSTRAINT1 = 4
-    REDUNDANCY_CONSTRAINT2 = 5
-    TMP_ANDY = 6
-    BANISH = 7
+GENERALISATION = 1
+SPECIALISATION = 2
+UNSAT = 3
+REDUNDANCY_CONSTRAINT1 = 4
+REDUNDANCY_CONSTRAINT2 = 5
+TMP_ANDY = 6
+BANISH = 7
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Popper is an ILP system based on learning from failures')
@@ -42,32 +40,6 @@ def parse_args():
     parser.add_argument('-v', action='count', default=1, dest='verbosity', help='Increase verbosity (-v, -vv, or -vvv)')
     parser.add_argument('-j', dest='joiner', default=False, action='store_true', help='Use join stage (default: False)')
     return parser.parse_args()
-
-def timeout(settings, func, args=(), kwargs={}, timeout_duration=1):
-    timeout_duration = max(timeout_duration, 1)
-    result = None
-    class TimeoutError(Exception):
-        pass
-
-    def handler(signum, frame):
-        raise TimeoutError()
-
-    signal.signal(signal.SIGALRM, handler)
-    signal.alarm(timeout_duration)
-    try:
-        result = func(*args, **kwargs)
-    except TimeoutError as _exc:
-        logger.out(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
-        return result
-    except AttributeError as moo:
-        if '_SolveEventHandler' in str(moo):
-            logger.out(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
-            return result
-        raise moo
-    finally:
-        signal.alarm(0)
-
-    return result
 
 def load_kbpath(kbpath):
     def fix_path(filename):
@@ -136,15 +108,13 @@ def rule_is_invented(rule):
 def mdl_score(fn, fp, size):
     return fn + fp + size
 
-settings = None
-
 def get_body_preds(solver):
     body_preds_ = set()
     for x in solver.symbolic_atoms.by_signature('body_pred', arity=2):
         pred = x.symbol.arguments[0].name
         arity = x.symbol.arguments[1].number
         body_preds_.add((pred, arity))
-    return set(body_preds_)
+    return body_preds_
 
 class Settings:
 
@@ -195,6 +165,7 @@ class Settings:
         self.literal_outputs = {}
         self.cached_atom_args = {}
         self.cached_literals = {}
+        self.recalls = {}
         self.head_types = None
         self.body_types = {}
         self.max_rules = 1
@@ -345,17 +316,10 @@ class Settings:
                     logger.out(f'WARNING: MISSING BODY TYPE FOR {p}')
                     exit()
 
-def init_settings(in_settings=None):
-    global settings
-    assert(settings is None)
-    if in_settings is None:
-        settings = Settings.from_args()
-    return settings
-
 def generate_binary_strings(bit_count):
     return list(product((0,1), repeat=bit_count))[1:-1]
 
-@lru_cache(maxsize=100000)
+@lru_cache(50_000)
 def canonicalise(rule):
     head, body = rule
     head_vars = set(head.arguments) if head else set()
@@ -375,8 +339,8 @@ def canonicalise(rule):
 def get_raw_prog(prog):
     return frozenset(canonicalise(rule) for rule in prog)
 
-def prog_hash(prog):
-    return hash(get_raw_prog(prog))
+# def prog_hash(prog):
+#     return hash(get_raw_prog(prog))
 
 def format_prog(prog):
     return '\n'.join(format_rule(rule) for rule in prog)
@@ -389,7 +353,7 @@ def rule_subsumes(r1, r2):
     # r1 subsumes r2 if r1 is a subset of r2
     h1, b1 = r1
     h2, b2 = r2
-    if h1 != None and h2 == None:
+    if h1 is not None and h2 is None:
         return False
     return b1.issubset(b2)
 
@@ -397,46 +361,32 @@ def rule_subsumes(r1, r2):
 def theory_subsumes(prog1, prog2):
     return all(any(rule_subsumes(r1, r2) for r1 in prog1) for r2 in prog2)
 
-def head_connected(rule):
-    head, body = rule
-    head_connected_vars = set(head.arguments)
-    body_literals = list(body)
-
+def _all_literals_reachable(seen_vars, body_literals):
+    body_literals = list(body_literals)
     while body_literals:
         progress = False
         next_body_literals = []
         for literal in body_literals:
-            if not head_connected_vars.isdisjoint(literal.arguments):
-                head_connected_vars.update(literal.arguments)
+            if not seen_vars.isdisjoint(literal.arguments):
+                seen_vars.update(literal.arguments)
                 progress = True
             else:
                 next_body_literals.append(literal)
-        if not progress and body_literals:
+        if not progress:
             return False
         body_literals = next_body_literals
     return True
+
+def head_connected(rule):
+    head, body = rule
+    return _all_literals_reachable(set(head.arguments), body)
 
 def connected(body):
     if len(body) <= 1:
         return True
 
     it = iter(body)
-    connected_vars = set(next(it).arguments)
-    body_literals = list(it)
-
-    while body_literals:
-        progress = False
-        next_body_literals = []
-        for literal in body_literals:
-            if not connected_vars.isdisjoint(literal.arguments):
-                connected_vars.update(literal.arguments)
-                progress = True
-            else:
-                next_body_literals.append(literal)
-        if not progress and body_literals:
-            return False
-        body_literals = next_body_literals
-    return True
+    return _all_literals_reachable(set(next(it).arguments), it)
 
 def non_empty_powerset(iterable):
     s = tuple(iterable)
@@ -475,7 +425,7 @@ def generalisations(prog, allow_headless=True, recursive=False):
                 yield new_prog
 
 
-def order_rule_datalog(head, body):
+def order_rule_datalog(head, body, settings):
     seen_vars = set(head.arguments) if head else set()
     recursive_literals = []
     pending_lits = set()
@@ -500,7 +450,7 @@ def order_rule_datalog(head, body):
                 var_to_lits[v].add(lit)
 
     ordered_body = []
-    local_recalls = recalls
+    local_recalls = settings.recalls
     
     # Literals that are fully grounded
     grounded_queue = [lit for lit in pending_lits if remaining_count[lit] == 0]
@@ -540,14 +490,14 @@ def order_rule_datalog(head, body):
 
     return head, tuple(ordered_body) + tuple(recursive_literals)
 
-def order_rule(rule):
+def order_rule(rule, settings):
     head, body = rule
 
     if settings.pi_enabled:
         return rule
 
     if settings.datalog:
-        return order_rule_datalog(head, body)
+        return order_rule_datalog(head, body, settings)
 
     if not settings.has_directions:
         return rule
@@ -582,11 +532,11 @@ def order_rule(rule):
                 # find the first ground non-recursive body literal and stop
                 selected_literal = literal
                 break
-            elif selected_literal == None:
+            elif selected_literal is None:
                 # otherwise use the recursive body literal
                 selected_literal = literal
 
-        if selected_literal == None:
+        if selected_literal is None:
             message = f'{selected_literal} in clause {format_rule(rule)} could not be grounded'
             raise ValueError(message)
 
@@ -598,19 +548,19 @@ def order_rule(rule):
 
     return head, tuple(ordered_body)
 
-def print_incomplete_solution2(prog, size, conf_matrix):
+def print_incomplete_solution(prog, size, conf_matrix, settings, noisy: bool):
     tp, fn, tn, fp = conf_matrix
     logger.out('*'*20)
     logger.out('New best hypothesis:')
-    if settings.noisy:
+    if noisy:
         logger.out(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size} mdl:{size+fn+fp}')
     else:
         logger.out(f'tp:{tp} fn:{fn} tn:{tn} fp:{fp} size:{size}')
     for rule in order_prog(prog):
-        logger.out(format_rule(order_rule(rule)))
+        logger.out(format_rule(order_rule(rule, settings)))
     logger.out('*'*20)
 
-def print_prog_score(prog, score):
+def print_prog_score(prog, score, settings, noisy: bool):
     tp, fn, tn, fp = score
     size = calc_prog_size(prog)
     precision = 'n/a'
@@ -620,21 +570,17 @@ def print_prog_score(prog, score):
     if (tp+fn) > 0:
         recall = f'{tp / (tp+fn):0.2f}'
     logger.out('*'*10 + ' SOLUTION ' + '*'*10)
-    if settings.noisy:
+    if noisy:
         logger.out(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size} MDL:{size+fn+fp}')
     else:
-      logger.out(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
+        logger.out(f'Precision:{precision} Recall:{recall} TP:{tp} FN:{fn} TN:{tn} FP:{fp} Size:{size}')
     for rule in order_prog(prog):
-        logger.out(format_rule(order_rule(rule)))
+        logger.out(format_rule(order_rule(rule, settings)))
     logger.out('*'*30)
 
-def has_valid_directions(rule):
-    if settings.has_directions:
-        return has_valid_directions_(rule)
-    return True
-
-@cache
-def has_valid_directions_(rule):
+def has_valid_directions(rule, settings):
+    if not settings.has_directions:
+        return True
     head, body = rule
     lit_inputs = settings.literal_inputs
     lit_outputs = settings.literal_outputs

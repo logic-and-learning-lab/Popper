@@ -11,7 +11,7 @@ from . import stats
 from . import logger
 from . state import update_best_hypothesis
 from bitarray.util import subset, any_and
-from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution2
+from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution
 
 class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
     def __init__(self, rule_vars, num_pos, num_neg,
@@ -46,12 +46,13 @@ class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
 
 
 class AllOptPrinter(cp_model.CpSolverSolutionCallback):
-    def __init__(self, rule_vars, ruleid_to_rule, num_pos, num_neg, state):
+    def __init__(self, rule_vars, ruleid_to_rule, num_pos, num_neg, settings, state):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self.rule_vars = rule_vars
         self.ruleid_to_rule = ruleid_to_rule
         self.num_pos=num_pos
         self.num_neg=num_neg
+        self.settings = settings
         self.best_hash = hash(frozenset(state.best_hypothesis))
 
     def on_solution_callback(self):
@@ -69,7 +70,7 @@ class AllOptPrinter(cp_model.CpSolverSolutionCallback):
         tn_count = self.num_neg
         print('OPTTTTTTT')
 
-        print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count))
+        print_incomplete_solution(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count), self.settings, self.settings.noisy)
 
 
 class CombinerSize:
@@ -84,9 +85,6 @@ class CombinerSize:
 
         # maps hypothesis_hash:int -> pos_covered:bitarray
         self.coverage_pos = {}
-
-        # maps hypothesis_hash:int -> hypothesis_size:int
-        self.cached_prog_size = {}
 
         # maps hypothesis_hash:int -> hypothesis
         self.prog_lookup = {}
@@ -341,6 +339,7 @@ class CombinerSize:
             ruleid_to_rule=ruleid_to_rule,
             num_pos=self.tester.num_pos,
             num_neg=self.tester.num_neg,
+            settings=self.settings,
             state=self.state,
         )
 

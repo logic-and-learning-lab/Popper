@@ -1,22 +1,3 @@
-# Install MaxSAT Solvers for Popper
-
-### UWrMaxSAT
-
-See the "quick install" section: <https://github.com/marekpiotrow/UWrMaxSat>
-
-Ensure that `uwrmaxsat` is correctly installed and add it to your PATH.
-
-### WMaxCDCL
-
-```bash
-wget https://maxsat-evaluations.github.io/2023/mse23-solver-src/exact/WMaxCDCL.zip
-unzip WMaxCDCL.zip
-cd WMaxCDCL/code/simp
-make
-```
-
-Ensure that `wmaxcdcl` is correctly installed and add it to your PATH.
-
 ### NuWLS-c
 
 ```bash

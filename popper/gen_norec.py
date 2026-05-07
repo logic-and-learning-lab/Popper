@@ -1,7 +1,7 @@
 import re
 import clingo
 from importlib import resources
-from . util import Constraint, Literal
+from . util import GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, BANISH, Literal
 from itertools import permutations
 from . import stats
 
@@ -195,13 +195,12 @@ class Generator:
             con_type = xs[0]
             con_prog = xs[1]
             con_size = xs[2] if len(xs) > 2 else None
-            match con_type:
-                case Constraint.SPECIALISATION:
-                    ground_cons = self.build_specialisation_constraint(con_prog, con_size)
-                case Constraint.UNSAT:
-                    ground_cons = self.unsat_constraint(con_prog)
-                case Constraint.BANISH | Constraint.GENERALISATION:
-                    ground_cons = self.build_generalisation_constraint(con_prog, con_size)
+            if con_type == SPECIALISATION:
+                ground_cons = self.build_specialisation_constraint(con_prog, con_size)
+            elif con_type == UNSAT:
+                ground_cons = self.unsat_constraint(con_prog)
+            elif con_type in (BANISH, GENERALISATION):
+                ground_cons = self.build_generalisation_constraint(con_prog, con_size)
             for ground_body in ground_cons:
                 add_nogood(ground_body)
 

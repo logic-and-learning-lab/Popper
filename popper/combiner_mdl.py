@@ -14,7 +14,7 @@ from pysat.formula import IDPool
 from . import stats
 from . import logger
 from bitarray.util import subset, any_and, ones, zeros, count_and, count_or
-from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution2
+from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution
 from . state import update_best_hypothesis
 
 POS_EXAMPLE_WEIGHT = 1
@@ -64,7 +64,7 @@ class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
 
 class OptPrinter(cp_model.CpSolverSolutionCallback):
     def __init__(self, rule_vars, fn_vars, fp_vars, num_pos, num_neg,
-                 ruleid_to_rule, ruleid_to_size, state):
+                 ruleid_to_rule, ruleid_to_size, settings, state):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self.rule_vars = rule_vars
         self.fn_vars = fn_vars
@@ -73,6 +73,7 @@ class OptPrinter(cp_model.CpSolverSolutionCallback):
         self.num_neg = num_neg
         self.ruleid_to_rule = ruleid_to_rule
         self.ruleid_to_size = ruleid_to_size # Needed for size calculation
+        self.settings = settings
         self.state = state
         self.best_hash = hash(frozenset(state.best_hypothesis))
 
@@ -111,7 +112,7 @@ class OptPrinter(cp_model.CpSolverSolutionCallback):
         # self.state.best_hypothesis = hypothesis
         # self.state.best_hypothesis_mdl = current_cost
         # print("OPT")
-        print_incomplete_solution2(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count))
+        print_incomplete_solution(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count), self.settings, self.settings.noisy)
 
 class CombinerMDL:
 
@@ -120,20 +121,11 @@ class CombinerMDL:
         self.tester = tester
         self.state = state
 
-        # a positive example is covered by a hypothesis_hash
-        self.covered_by_pos = defaultdict(set)
-
-        # a negative example is covered by a hypothesis_hash
-        self.covered_by_neg = defaultdict(set)
-
         # maps hypothesis_hash:int -> pos_covered:bitarray
         self.coverage_pos = {}
 
         # maps hypothesis_hash:int -> neg_covered:bitarray
         self.coverage_neg = {}
-
-        # maps hypothesis_hash:int -> hypothesis_size:int
-        self.cached_prog_size = {}
 
         # maps hypothesis_hash:int -> hypothesis
         self.prog_lookup = {}
@@ -172,17 +164,11 @@ class CombinerMDL:
         k_pos = self.coverage_pos.pop(prog_hash)
         k_neg = self.coverage_neg.pop(prog_hash)
 
-        self.state.success_sets_noise.pop((k_pos, k_neg), None)
+        self.state.success_sets_noise.discard((k_pos, k_neg))
         if self.state.success_sets.pop(k_pos, None) is not None:
             self.state.success_sets_version += 1
 
-        for ex in k_pos.search(1):
-            self.covered_by_pos[ex].remove(prog_hash)
-        for ex in k_neg.search(1):
-            self.covered_by_neg[ex].remove(prog_hash)
-
         del self.scores[prog_hash]
-        del self.cached_prog_size[prog_hash]
         del self.prog_lookup[prog_hash]
 
     def combine(self, size_change, last_combine_stage=False):        
@@ -266,20 +252,20 @@ class CombinerMDL:
         # old_pos ⊇ new_pos, old_neg ⊆ new_neg, old_size <= new_size
         if not ignore_this_prog:
             # find programs that cover at least the same pos examples as new prog
-            s_pos = set.intersection(*(self.covered_by_pos[ex] for ex in pos_covered.search(1)))
+            s_pos = {ph for ph in self.coverage_pos if subset(pos_covered, self.coverage_pos[ph])}
 
             for old_prog in s_pos:
                 n1 = self.coverage_neg[old_prog]
                 # check whether old program covers a subset of the negative examples
                 if subset(n1, neg_covered):
-                    # we can skip checking size because we know that prog_size => self.cached_prog_size[old_prog]
+                    # we can skip checking size because programs are considered in size order.
                     ignore_this_prog = True
                     break
 
         # find programs that cover at least the same neg examples as new prog
         # new_pos ⊇ old_pos, new_neg ⊆ old_neg, new_size <= old_size
         if not ignore_this_prog and (inconsistent or fp > 0):
-            s_neg = set.intersection(*(self.covered_by_neg[ex] for ex in neg_covered.search(1)))
+            s_neg = {ph for ph in self.coverage_neg if subset(neg_covered, self.coverage_neg[ph])}
 
             for old_prog in s_neg:
                 # check whether old program covers a subset of the pos examples covered by the new prog
@@ -310,15 +296,7 @@ class CombinerMDL:
 
         # “If the new program is at least as good as an old one on positive coverage, and is no worse in size and FP, then delete the old one.”
         if not inconsistent:
-            # find examples not covered by this new prog
-            not_covered = self.tester.pos_examples_ ^ pos_covered
-
-            # find all old programs that are not subsumed by the new program
-            progs_not_subsumed = set.union(*(self.covered_by_pos[ex] for ex in not_covered.search(1)))
-
-            all_progs = set.union(*(self.covered_by_pos[ex] for ex, ex_cov in enumerate(self.tester.pos_examples_) if ex_cov == 1))
-
-            s_pos2 = all_progs.difference(progs_not_subsumed)
+            s_pos2 = {ph for ph in self.coverage_pos if subset(self.coverage_pos[ph], pos_covered)}
             for prog1 in s_pos2:
                 size1, tp1, fp1 = self.scores[prog1]
                 # if size1 >= prog_size:
@@ -338,20 +316,12 @@ class CombinerMDL:
             self._remove_prog(k)
 
         if not ignore_this_prog:
-            self.state.success_sets_noise[(pos_covered, neg_covered)] = (prog, prog_size, fn, fp, tp)
+            self.state.success_sets_noise.add((pos_covered, neg_covered))
             add_to_combiner = True
             k = hash(prog)
 
-            for ex, x in enumerate(pos_covered):
-                if x == 1:
-                    self.covered_by_pos[ex].add(k)
-            for ex, x in enumerate(neg_covered):
-                if x == 1:
-                    self.covered_by_neg[ex].add(k)
-
             self.coverage_pos[k] = pos_covered
             self.coverage_neg[k] = neg_covered
-            self.cached_prog_size[k] = prog_size
             self.scores[k] = (prog_size, tp, fp)
             self.prog_lookup[k] = prog
 
@@ -363,7 +333,7 @@ class CombinerMDL:
 
     def filter_combine_programs(self, to_combine_set):
         xs = self.saved_progs | to_combine_set
-        min_sz = min(self.cached_prog_size[prog] for prog in xs)
+        min_sz = min(self.scores[prog][0] for prog in xs)
         must_beat = self.state.best_hypothesis_mdl - min_sz
 
         to_delete = set()
@@ -589,6 +559,7 @@ class CombinerMDL:
             num_neg=self.tester.num_neg,
             ruleid_to_rule=ruleid_to_rule,
             ruleid_to_size=ruleid_to_size,
+            settings=self.settings,
             state=self.state,
         )
 
