@@ -3,6 +3,7 @@ import clingo
 import argparse
 import os
 from . import logger
+from . import stats as _stats
 from collections import defaultdict
 from typing import NamedTuple
 from functools import lru_cache
@@ -421,17 +422,13 @@ def generalisations(prog, allow_headless=True, recursive=False):
                 new_prog = prog[:i] + new_subrule + prog[i+1:]
                 yield new_prog
 
-
 def order_rule_datalog(head, body, settings):
     seen_vars = set(head.arguments) if head else set()
     recursive_literals = []
     pending_lits = set()
-    
-    # literal -> set of its arguments
+
     lit_to_args = {}
-    # literal -> number of currently ungrounded arguments
     remaining_count = {}
-    # variable -> set of pending literals containing it
     var_to_lits = defaultdict(set)
 
     for lit in body:
@@ -448,18 +445,19 @@ def order_rule_datalog(head, body, settings):
 
     ordered_body = []
     local_recalls = settings.recalls
-    
-    # Literals that are fully grounded
+
     grounded_queue = [lit for lit in pending_lits if remaining_count[lit] == 0]
-    
-    # Sort for deterministic behaviour in slow path
-    all_pending_sorted = sorted(list(pending_lits))
-    
+
+    # Deferred: only computed if the slow path is actually reached
+    all_pending_sorted = None
+
     while pending_lits:
         if grounded_queue:
             selected = grounded_queue.pop()
         else:
             # SLOW PATH
+            if all_pending_sorted is None:
+                all_pending_sorted = sorted(list(pending_lits))
             best_score = float('inf')
             selected = None
             for lit in all_pending_sorted:
@@ -471,11 +469,10 @@ def order_rule_datalog(head, body, settings):
                         selected = lit
                     if score == 0:
                         break
-        
+
         pending_lits.remove(selected)
         ordered_body.append(selected)
-        
-        # Update groundedness
+
         new_vars = lit_to_args[selected] - seen_vars
         for v in new_vars:
             seen_vars.add(v)
@@ -486,6 +483,7 @@ def order_rule_datalog(head, body, settings):
                         grounded_queue.append(lit)
 
     return head, tuple(ordered_body) + tuple(recursive_literals)
+
 
 def order_rule(rule, settings):
     head, body = rule
