@@ -28,9 +28,6 @@ class SearchState:
         self.min_pos_coverage = 1
         self.min_size = None
         self.max_literals = 1000
-        self._start_time = None
-
-    def start_time(self):
         self._start_time = time.time()
 
     def time_remaining(self, timeout):

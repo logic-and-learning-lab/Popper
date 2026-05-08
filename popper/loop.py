@@ -1,3 +1,4 @@
+import time
 from bitarray.util import ones
 from . util import format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, mdl_score, canonicalise, format_prog
 from . tester import Tester
@@ -39,7 +40,13 @@ def check_size_change(state, prog_size):
     logger.out(f'Generating partial hypotheses of size: {prog_size}')
     return True
 
-def popper(settings, tester, state, bkcons):
+def popper(settings):
+    state = SearchState()
+    with stats.duration('load data'):
+        tester = Tester(settings, state)
+    # nasty as state needs tester and tester needs state
+    state.uncovered = ones(tester.num_pos)
+    bkcons = get_bk_cons(settings, tester)
     unsatcore_finder = UnsatCoreFinder(settings, tester)
     allsatcore_finder = AllSatCoreFinder(settings, tester)
     subsumer = SubsumeChecker(settings, tester, state)
@@ -58,6 +65,9 @@ def popper(settings, tester, state, bkcons):
         test_prog = tester.test_prog
 
     for prog in generator.get_prog():
+        if time.time() - state._start_time >= settings.timeout:
+            logger.out(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
+            break
         stats.stats.total_programs += 1
 
         prog_size = calc_prog_size(prog)
@@ -77,7 +87,7 @@ def popper(settings, tester, state, bkcons):
         # if non-separable hypothesis is perfect, stop
         if not test_result.inconsistent and test_result.tp == num_pos:
             update_best_hypothesis(settings, state, prog, prog_size, (num_pos, 0, num_neg, 0))
-            return
+            break
 
         # BUILD CONSTRAINTS
         cons, add_to_combiner = build_constraints(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combiner, test_result)
@@ -126,17 +136,8 @@ def popper(settings, tester, state, bkcons):
     with stats.duration('combine'):
         combiner.update_best_prog(last_combine_stage=True)
 
-def learn_solution(settings, state=None):
-    if state is None:
-        state = SearchState()
-    state.start_time()
-    with stats.duration('load data'):
-        tester = Tester(settings, state)
-    # nasty
-    state.uncovered = ones(tester.num_pos)
-    bkcons = get_bk_cons(settings, tester)
-    popper(settings, tester, state, bkcons)
     return state.best_hypothesis, state.best_hypothesis_score
+
 
 def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsatcore_finder, subsumer, prog, prog_size, combine_helper, test_result):
     new_cons = []
