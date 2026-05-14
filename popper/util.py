@@ -228,21 +228,24 @@ class Settings:
                     self.directions[pred][i] = arg_dir
 
     def _deduce_head_and_max_bounds(self, solver):
+        if not self.max_vars_override:
+            for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
+                self.max_vars = x.symbol.arguments[0].number
+
         max_arity = 0
         for x in solver.symbolic_atoms.by_signature('head_pred', arity=2):
-            max_arity = max(max_arity, x.symbol.arguments[1].number)
             head_pred = x.symbol.arguments[0].name
             head_arity = x.symbol.arguments[1].number
+            if head_arity > self.max_vars:
+                logger.out(f'ERROR: head_pred({head_pred},{head_arity}) has arity {head_arity} which exceeds max_vars {self.max_vars}')
+                exit()
+            max_arity = max(max_arity, head_arity)
             head_args = tuple(range(head_arity))
             self.head_literal = Literal(head_pred, head_args)
 
         if not self.max_body_override:
             for x in solver.symbolic_atoms.by_signature('max_body', arity=1):
                 self.max_body = x.symbol.arguments[0].number
-
-        if not self.max_vars_override:
-            for x in solver.symbolic_atoms.by_signature('max_vars', arity=1):
-                self.max_vars = x.symbol.arguments[0].number
 
         if self.recursion_enabled or self.pi_enabled:
             self.max_rules = 2
