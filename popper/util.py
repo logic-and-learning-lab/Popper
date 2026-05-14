@@ -38,7 +38,7 @@ def parse_args():
     parser.add_argument('--max-vars', type=int, default=None, help=f'Maximum number of variables allowed in rule (default: {MAX_VARS})')
     parser.add_argument('--nuwls', default=False, action='store_true', help='Use nuwls solver (default: False)')
     parser.add_argument('-v', action='count', default=1, dest='verbosity', help='Increase verbosity (-v, -vv, or -vvv)')
-    parser.add_argument('-j', dest='joiner', default=False, action='store_true', help='Use join stage (default: False)')
+    parser.add_argument('-j', dest='joiner', default=False, action='store_true', help=argparse.SUPPRESS)
     return parser.parse_args()
 
 def load_kbpath(kbpath):
