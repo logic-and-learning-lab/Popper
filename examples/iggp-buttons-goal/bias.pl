@@ -3,8 +3,6 @@
 %% https://arxiv.org/pdf/1906.09627.pdf
 %% Three buttons and three lights. The first button toggles the first light. The second button interchanges first and second lights. The third button interchanges the second and third lights. All lights initially off. The goal is to get them all on. The game terminates when all three lights are on or after 6 steps, whichever comes first.
 
-max_body(8).
-
 head_pred(goal,3).
 body_pred(my_input,2).
 body_pred(my_true,2).

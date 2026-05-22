@@ -3,7 +3,7 @@
 %% https://arxiv.org/pdf/1906.09627.pdf
 
 max_vars(7).
-max_body(10).
+
 constant(agent_black, agent).
 constant(action_left, action).
 constant(action_right, action).
