@@ -1,13 +1,14 @@
 # Code and idea from the paper: # Andrew Cropper, David M. Cerna: # Efficient rule induction by ignoring pointless rules. AAAI 2026.
 # allsay.py takes a rule and tries to identify literals implied by the other literals in the rule, e.g. in r = f(A):- int(A), even(A)  then even(A) implies int(A), so int(A) is redundant
 
-from popper.util import connected, has_valid_directions, canonicalise_rule_hash
+from popper.util import connected, has_valid_directions
 
 class BodyLiteralSeen:
     """
     A memory-optimised cache for tracking which literals have been checked
     against specific rule bodies. Uses a bitmask approach to compress
-    the (body_hash, literal) space.
+    the (body, literal) space. Bodies retain their original variable numbers
+    so the literal's relationship to the body is preserved.
     """
     __slots__ = (
         'body_to_mask',
@@ -18,9 +19,9 @@ class BodyLiteralSeen:
         self.body_to_mask = {}
         self.literal_to_id = {}
 
-    def seen_or_add(self, body_hash, literal) -> bool:
+    def seen_or_add(self, body, literal) -> bool:
         """
-        Checks if the (body_hash, literal) pair has been seen.
+        Checks if the (body, literal) pair has been seen.
         If not, it records the pair and returns False.
         If it has, it returns True.
         """
@@ -33,15 +34,15 @@ class BodyLiteralSeen:
         # 2. Calculate the bit mask for this literal
         bit = 1 << lit_id
 
-        # 3. Retrieve the current bitmask for the body_hash (default 0)
-        mask = self.body_to_mask.get(body_hash, 0)
+        # 3. Retrieve the current bitmask for the body (default 0)
+        mask = self.body_to_mask.get(body, 0)
 
         # 4. Check if the literal's bit is already set in the body's mask
         if mask & bit:
             return True
 
         # 5. Not seen: update the mask by setting the literal's bit
-        self.body_to_mask[body_hash] = mask | bit
+        self.body_to_mask[body] = mask | bit
         return False
 
 
@@ -96,7 +97,7 @@ class AllSatCoreFinder:
                 out.extend(self.check_redundant_literal_aux(new_body, literal, allsat_cache, not_all_sat_cache, True))
             return out
 
-        if self.seen_progs.seen_or_add(canonicalise_rule_hash((None, body), self.settings.max_vars), literal):
+        if self.seen_progs.seen_or_add(body, literal):
             return out
 
         if any(body.issubset(seen_body) for seen_body in not_all_sat_cache):
