@@ -87,6 +87,9 @@ def popper(settings):
         # if non-separable hypothesis is perfect, stop
         if not test_result.inconsistent and test_result.tp == num_pos:
             update_best_hypothesis(settings, state, prog, prog_size, (num_pos, 0, num_neg, 0))
+            if noisy:
+                with stats.duration('combine'):
+                    combiner.update_best_prog(last_combine_stage=True)
             return state.best_hypothesis, state.best_hypothesis_score
 
         max_literals_before = state.max_literals

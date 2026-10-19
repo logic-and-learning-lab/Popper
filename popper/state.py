@@ -66,15 +66,13 @@ def _is_better_hypothesis(settings, state, hypothesis_size, conf_matrix, mdl):
         is_perfect = conf_matrix[1] == 0 and fp == 0
         current_is_perfect = best_fn == 0 and best_fp == 0
 
-        # A perfect noisy hypothesis is always better than any imperfect one,
-        # even if the initial seeded MDL bound is tighter than its size.
-        if is_perfect and not current_is_perfect:
-            return True
-
         if state.best_hypothesis_mdl is None:
             return True
 
-        return mdl < state.best_hypothesis_mdl
+        # MDL is primary; prefer a perfect hypothesis only on equal cost.
+        if mdl != state.best_hypothesis_mdl:
+            return mdl < state.best_hypothesis_mdl
+        return is_perfect and not current_is_perfect
 
     if tp != best_tp:
         return tp > best_tp

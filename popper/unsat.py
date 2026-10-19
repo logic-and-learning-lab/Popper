@@ -9,6 +9,7 @@ class UnsatCoreFinder:
         self.settings = settings
         self.seen_prog_hash = CompactHashSet()
         self.tester = tester
+        self._seen_min_pos_coverage = tester.state.min_pos_coverage
 
     def explain_incomplete(self, prog):
         """Find and yield constraints based on minimal unsatisfiable subprograms."""
@@ -39,7 +40,12 @@ class UnsatCoreFinder:
 
     def explain_totally_incomplete(self, prog):
         """Entry point for the recursive unsat core search."""
-        return list(self.explain_totally_incomplete_aux(prog, set(), set()))
+        threshold = self.tester.state.min_pos_coverage
+        if threshold != self._seen_min_pos_coverage:
+            # Previously sufficient coverage may now fail the threshold.
+            self.seen_prog_hash = CompactHashSet()
+            self._seen_min_pos_coverage = threshold
+        return self.explain_totally_incomplete_aux(prog, set(), set())
 
     def explain_totally_incomplete_aux(self, prog, seen_unsat_theory, seen_raw_unsat):
         """Recursive search for minimal unsatisfiable generalisations."""

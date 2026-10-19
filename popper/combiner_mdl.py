@@ -163,8 +163,9 @@ class CombinerMDL:
         k_neg = self.coverage_neg.pop(prog_hash)
 
         self.state.success_sets_noise.discard((k_pos, k_neg))
-        if self.state.success_sets.pop(k_pos, None) is not None:
-            self.state.success_sets_version += 1
+        if not k_neg.any():
+            if self.state.success_sets.pop(k_pos, None) is not None:
+                self.state.success_sets_version += 1
 
         del self.scores[prog_hash]
         del self.prog_lookup[prog_hash]
@@ -291,6 +292,10 @@ class CombinerMDL:
                     # if tp >= tp1 and prog_size <= size1:
                     #     print('ASDA2')
                     #     local_delete.add(old_prog)
+
+        # Only delete old candidates if their replacement will be retained.
+        if ignore_this_prog:
+            return False
 
         # “If the new program is at least as good as an old one on positive coverage, and is no worse in size and FP, then delete the old one.”
         if not inconsistent:
@@ -752,7 +757,7 @@ class CombinerMDL:
         while True:
             model_found = False
 
-            if last_combine_stage:
+            if last_combine_stage or not self.settings.nuwls:
                 _, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights)
             else:
                 _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, self.settings.anytime_timeout)
