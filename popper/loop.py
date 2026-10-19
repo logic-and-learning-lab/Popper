@@ -85,7 +85,7 @@ def popper(settings):
             logger.trace(format_prog(prog))
 
         # if non-separable hypothesis is perfect, stop
-        if not test_result.inconsistent and test_result.tp == num_pos:
+        if not test_result.too_few_tp and not test_result.inconsistent and test_result.tp == num_pos:
             update_best_hypothesis(settings, state, prog, prog_size, (num_pos, 0, num_neg, 0))
             if noisy:
                 with stats.duration('combine'):
