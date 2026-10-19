@@ -2,7 +2,7 @@
 
 from . import logger
 from . compact_hash import CompactHashSet
-from . util import rule_is_recursive, prog_is_recursive, format_rule, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, get_raw_prog, canonicalise, connected, head_connected, theory_subsumes, non_empty_powerset, generalisations, has_valid_directions, Literal, canonicalise_prog_hash
+from . util import rule_is_recursive, prog_is_recursive, format_rule, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, get_raw_prog, canonicalise, connected, head_connected, theory_subsumes, generalisations, has_valid_directions, canonicalise_prog_hash
 
 class UnsatCoreFinder:
     def __init__(self, settings, tester):
@@ -95,23 +95,6 @@ class UnsatCoreFinder:
                 out.append((subprog, headless))
 
         return out
-
-    def _should_skip(self, subprog):
-        """Check if any subset of a single-rule program is already known to be unsat."""
-        if len(subprog) != 1:
-            return False
-
-        h_, b_ = next(iter(subprog))
-        for x in non_empty_powerset(b_):
-            # Check both headless and headed variants in the global unsat set
-            sub_variants = [[(None, x)], [(h_, x)]]
-            for sub_ in sub_variants:
-                fs_sub = frozenset(sub_)
-                if fs_sub in self.unsat_prog:
-                    return True
-                if get_raw_prog(fs_sub) in self.unsat_raw_prog:
-                    return True
-        return False
 
     def prog_is_ok(self, prog):
         """Check if a program satisfies basic sanity constraints (connectivity, directions)."""

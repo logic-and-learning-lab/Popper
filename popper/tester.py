@@ -236,7 +236,13 @@ class Tester():
         prog_hash = canonicalise_prog_hash(prog, self.settings.max_vars)
         idx = self.compact_pos_covered.get(prog_hash, -1)
         if idx >= 0:
-            return self._intern_pool.lookup(idx).any()
+            pos_covered = self._intern_pool.lookup(idx)
+            if self.settings.noisy:
+                return pos_covered.count(1) >= calc_prog_size(prog)
+            if len(prog) == 1 and self.state.min_pos_coverage > 1:
+                return pos_covered.count(1) >= self.state.min_pos_coverage
+            # Noiseless multi-rule queries only require one positive.
+            return pos_covered.any()
 
         if len(prog) == 1:
             (rule,) = prog
