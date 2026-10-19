@@ -107,6 +107,10 @@ class AllSatCoreFinder:
             return out
 
         if not has_valid_directions((None, body), self.settings):
+            # Removing a literal can remove an unbound input requirement.
+            for atom in body:
+                new_body = body - {atom}
+                out.extend(self.check_redundant_literal_aux(new_body, literal, allsat_cache, not_all_sat_cache, True))
             return out
 
         if not self.tester.is_literal_redundant(body, literal):
