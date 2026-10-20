@@ -154,22 +154,22 @@ class Generator:
 
     def _build_caches(self):
         self.symbol_to_literal = {}
-        cache_predicates = {
-            'body_literal', 'body_size', 'size', 'program_size_at_least',
-        }
-        for sym_atom in self.solver.symbolic_atoms:
-            sym = sym_atom.symbol
-            name = sym.name
-            if name not in cache_predicates:
-                continue
-            args = tuple(_unpack_symbol(a) for a in sym.arguments)
-            pos_id = sym_atom.literal
-            self.cached_clingo_atoms[(True, name, args)] = pos_id
-            if name == "body_literal" and len(sym.arguments) == 4:
-                raw_args = sym.arguments
-                predicate = raw_args[1].name
-                atom_args = tuple(raw_args[3].arguments)
-                self.symbol_to_literal[sym] = self.settings.cached_literals[predicate, atom_args]
+        cache_signatures = (
+            ('body_literal', 4),
+            ('body_size', 2),
+            ('size', 1),
+            ('program_size_at_least', 1),
+        )
+        for name, arity in cache_signatures:
+            for sym_atom in self.solver.symbolic_atoms.by_signature(name, arity):
+                sym = sym_atom.symbol
+                args = tuple(_unpack_symbol(a) for a in sym.arguments)
+                self.cached_clingo_atoms[(True, name, args)] = sym_atom.literal
+                if name == 'body_literal':
+                    raw_args = sym.arguments
+                    predicate = raw_args[1].name
+                    atom_args = tuple(raw_args[3].arguments)
+                    self.symbol_to_literal[sym] = self.settings.cached_literals[predicate, atom_args]
 
     def get_prog(self):
         handle = iter(self.solver.solve(yield_=True))

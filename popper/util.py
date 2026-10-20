@@ -276,9 +276,10 @@ class Settings:
                 self.literal_inputs[(head_pred, head_args)] = head_inputs
                 self.literal_outputs[(head_pred, head_args)] = head_outputs
 
+        numbers = tuple(clingo.Number(i) for i in range(self.max_vars))
         for i in range(1, max_arity + 1):
             for args in permutations(range(0, self.max_vars), i):
-                k = tuple(clingo.Number(x) for x in args)
+                k = tuple(numbers[x] for x in args)
                 self.cached_atom_args[k] = args
 
         for pred, arity in self.body_preds:
