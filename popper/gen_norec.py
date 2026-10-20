@@ -154,13 +154,18 @@ class Generator:
 
     def _build_caches(self):
         self.symbol_to_literal = {}
+        cache_predicates = {
+            'body_literal', 'body_size', 'size', 'program_size_at_least',
+        }
         for sym_atom in self.solver.symbolic_atoms:
             sym = sym_atom.symbol
+            name = sym.name
+            if name not in cache_predicates:
+                continue
             args = tuple(_unpack_symbol(a) for a in sym.arguments)
             pos_id = sym_atom.literal
-            self.cached_clingo_atoms[(True, sym.name, args)] = pos_id
-            self.cached_clingo_atoms[(False, sym.name, args)] = -pos_id
-            if sym.name == "body_literal" and len(sym.arguments) == 4:
+            self.cached_clingo_atoms[(True, name, args)] = pos_id
+            if name == "body_literal" and len(sym.arguments) == 4:
                 raw_args = sym.arguments
                 predicate = raw_args[1].name
                 atom_args = tuple(raw_args[3].arguments)

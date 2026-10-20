@@ -107,7 +107,7 @@ def deduce_recalls(settings, solver):
     if solver is None:
         return []
 
-    counts = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
+    counts = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     counts_all = defaultdict(int)
 
     for pred, arity in settings.body_preds:
@@ -117,14 +117,13 @@ def deduce_recalls(settings, solver):
             args = [str(arg) for arg in atom.symbol.arguments]
             for var_subset in binary_strings:
                 key = tuple(args[i] for i, bit in enumerate(var_subset) if bit)
-                val = tuple(args[i] for i, bit in enumerate(var_subset) if not bit)
-                counts[pred][var_subset][key].add(val)
+                counts[pred][var_subset][key] += 1
 
     all_recalls = {}
     for pred, arity in settings.body_preds:
         all_recalls[(pred, (0,) * arity)] = counts_all[pred]
         for var_subset, key_map in counts[pred].items():
-            recall = max((len(vals) for vals in key_map.values()), default=0)
+            recall = max(key_map.values(), default=0)
             all_recalls[(pred, var_subset)] = recall
 
     settings.recalls.update(all_recalls)
