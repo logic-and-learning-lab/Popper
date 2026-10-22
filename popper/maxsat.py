@@ -1,5 +1,5 @@
 # code written by Andreas Niskanen (andreas.niskanen@helsinki.fi)
-import os, subprocess, sys, tempfile
+import subprocess, tempfile
 
 from pysat.formula import WCNF
 from pysat.examples.rc2 import RC2Stratified

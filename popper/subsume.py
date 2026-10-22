@@ -1,15 +1,11 @@
-from itertools import permutations
 from bitarray import bitarray
 from bitarray.util import subset, zeros, any_and
 from bisect import bisect_right
 from operator import itemgetter
-from . import stats
 from .util import (
     calc_prog_size,
-    canonicalise,
     has_valid_directions,
     head_connected,
-    non_empty_powerset,
 )
 
 class SubsumeChecker:
@@ -51,7 +47,6 @@ class SubsumeChecker:
         if len(body) < 2:
             return []
 
-        state = self.state
         out = set()
         head_vars = set(head.arguments)
 

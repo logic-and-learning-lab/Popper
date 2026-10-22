@@ -1,7 +1,7 @@
 import re
 import clingo
 from importlib import resources
-from . util import GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, BANISH, Literal
+from . util import GENERALISATION, SPECIALISATION, UNSAT, BANISH, Literal
 from itertools import permutations
 from . import stats
 

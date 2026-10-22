@@ -1,6 +1,6 @@
 import time
 from bitarray.util import ones
-from . util import format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, mdl_score, canonicalise, format_prog
+from . util import format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, canonicalise, format_prog
 from . tester import Tester
 from . bkcons import get_bk_cons
 from . unsat import UnsatCoreFinder
@@ -256,8 +256,8 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
     inconsistent = test_result.inconsistent
     mdl = test_result.mdl
     too_few_tp, too_many_fp = test_result.too_few_tp, test_result.too_many_fp
-    num_pos, num_neg = tester.num_pos, tester.num_neg
-    tp, fn, fp, tn = test_result.tp, test_result.fn, test_result.fp, test_result.tn
+    num_pos = tester.num_pos
+    tp, fn, fp = test_result.tp, test_result.fn, test_result.fp
     # seen_hyp_spec, seen_hyp_gen = state.seen_hyp_spec, state.seen_hyp_gen
     new_cons = []
     pruned_more_general = False

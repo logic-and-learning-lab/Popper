@@ -3,12 +3,10 @@ import clingo
 import argparse
 import os
 from . import logger
-from . import stats as _stats
 from collections import defaultdict
 from typing import NamedTuple
 from functools import lru_cache
-from . _canonicalise_hash import canonicalise_prog_hash_cython as canonicalise_prog_hash
-from . _canonicalise_hash import canonicalise_rule_hash_cython as canonicalise_rule_hash
+from . _canonicalise_hash import canonicalise_prog_hash_cython as canonicalise_prog_hash  # noqa: F401 -- public re-export
 
 class Literal(NamedTuple):
     predicate: str

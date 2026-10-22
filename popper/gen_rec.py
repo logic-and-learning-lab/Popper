@@ -1,7 +1,4 @@
-import time
 import re
-from pysat.formula import CNF
-from pysat.solvers import Solver
 from pysat.card import *
 import clingo
 import operator
@@ -42,7 +39,6 @@ class Generator:
         self.cached_clingo_atoms = {}
         self.handle = None
         self.cached_handles = {}
-        self.cached4 = {}
         self.pruned_sizes = set()
 
 
@@ -81,8 +77,6 @@ class Generator:
                 for i, x in enumerate(xs):
                     encoding.append(f'var_pos({x}, {tuple(xs)}, {i}).')
 
-
-        max_size = (1 + settings.max_body) * settings.max_rules
 
         assert(not settings.pi_enabled)
 
@@ -157,7 +151,6 @@ class Generator:
         while True:
             if size > self.state.max_literals:
                 return
-            self.current_size = size
             with stats.duration('init'):
                 self.update_solver(size)
             size += 1
@@ -457,7 +450,7 @@ class Generator:
             return
 
         base = [rule for rule in prog if not rule_is_recursive(rule)][0]
-        base_head, base_body = base
+        _base_head, base_body = base
 
         bases = []
         handle = self.make_rule_handle(base)
@@ -475,7 +468,7 @@ class Generator:
                 bases.append(frozenset(con))
 
         rec = [rule for rule in prog if rule_is_recursive(rule)][0]
-        rec_head, rec_body = rec
+        _rec_head, rec_body = rec
         recs = []
         handle = self.make_rule_handle(rec)
         if handle in self.seen_handles:
@@ -526,7 +519,7 @@ class Generator:
             return
 
         base = [rule for rule in prog if not rule_is_recursive(rule)][0]
-        base_head, base_body = base
+        _base_head, base_body = base
 
         bases = []
         handle = self.make_rule_handle(base)
@@ -544,7 +537,7 @@ class Generator:
                 bases.append(frozenset(con))
 
         rec = [rule for rule in prog if rule_is_recursive(rule)][0]
-        rec_head, rec_body = rec
+        _rec_head, rec_body = rec
         recs = []
         handle = self.make_rule_handle(rec)
         if handle in self.seen_handles:

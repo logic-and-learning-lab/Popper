@@ -3,11 +3,10 @@ from importlib import resources
 from janus_swi import query_once, consult
 from functools import cache, lru_cache
 from contextlib import contextmanager
-from . util import order_prog, prog_is_recursive, rule_is_recursive, calc_rule_size, calc_prog_size, get_raw_prog, format_rule, Literal, mdl_score, order_rule, canonicalise_prog_hash
+from . util import order_prog, prog_is_recursive, calc_rule_size, calc_prog_size, format_rule, Literal, mdl_score, order_rule, canonicalise_prog_hash
 from . bkcons import deduce_neg_example_recalls
 from bitarray import frozenbitarray
 from bitarray.util import ones, zeros
-from collections import defaultdict
 from itertools import combinations
 from typing import NamedTuple
 from . import logger

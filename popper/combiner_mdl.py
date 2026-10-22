@@ -12,8 +12,8 @@ from ortools.sat.python import cp_model
 from pysat.formula import IDPool
 from . import stats
 from . import logger
-from bitarray.util import subset, any_and, ones, zeros, count_and, count_or
-from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution
+from bitarray.util import subset, zeros, count_and, count_or
+from . util import prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution
 from . state import update_best_hypothesis
 
 POS_EXAMPLE_WEIGHT = 1
@@ -101,16 +101,6 @@ class OptPrinter(cp_model.CpSolverSolutionCallback):
         tp_count = self.num_pos - fn_count
         tn_count = self.num_neg - fp_count
 
-        # 3. Objective Value (Total MDL)
-        # current_cost should be equal to (current_hypothesis_size + fn_count + fp_count)
-        current_cost = self.ObjectiveValue()
-
-        # 5. Update State
-        # self.state.best_hypothesis_score = (tp_count, fn_count, tn_count, fp_count)
-        # self.state.best_hypothesis_size = current_hypothesis_size
-        # self.state.best_hypothesis = hypothesis
-        # self.state.best_hypothesis_mdl = current_cost
-        # print("OPT")
         print_incomplete_solution(hypothesis, current_hypothesis_size, (tp_count, fn_count, tn_count, fp_count), self.settings, self.settings.noisy)
 
 class CombinerMDL:
@@ -231,7 +221,7 @@ class CombinerMDL:
 
     def decide_whether_to_combine(self, prog, prog_size, test_result):
         pos_covered, neg_covered = test_result.pos_covered, test_result.neg_covered
-        tp, fn, fp, tn =  test_result.tp, test_result.fn, test_result.fp, test_result.tn
+        tp, fp = test_result.tp, test_result.fp
         inconsistent = test_result.inconsistent
 
         best_mdl = self.state.best_hypothesis_mdl if self.state.best_hypothesis_mdl else float('inf')
@@ -320,7 +310,6 @@ class CombinerMDL:
 
         if not ignore_this_prog:
             self.state.success_sets_noise.add((pos_covered, neg_covered))
-            add_to_combiner = True
             k = hash(prog)
 
             self.coverage_pos[k] = pos_covered
@@ -370,7 +359,6 @@ class CombinerMDL:
         # VARIABLE OFFSET MATH:
         # Rules get IDs 1 to N. Pos examples start after N. Neg examples start after Pos.
         N = len(self.saved_progs)
-        pos_var = lambda ex: N + 1 + ex
         neg_var = lambda ex: N + num_pos + 1 + ex
 
 
@@ -616,9 +604,6 @@ class CombinerMDL:
         ruleid_to_size = {}
         rule_var = {}
 
-        base_rules = []
-        recursive_rules = []
-
         programs_covering_pos_example = {}
         programs_covering_neg_example = {}
         program_var = {}
@@ -682,7 +667,6 @@ class CombinerMDL:
             for rule in prog:
                 rule_hash = hash(rule)
                 rule_id = rulehash_to_id[rule_hash]
-                rule_size = ruleid_to_size[rule_id]
 
                 if rule_id not in rule_var:
                     rule_var[rule_id] = vpool.id("rule({0}))".format(rule_id))
@@ -755,8 +739,6 @@ class CombinerMDL:
             mdl_ = self.state.best_hypothesis_mdl
 
         while True:
-            model_found = False
-
             if last_combine_stage or not self.settings.nuwls:
                 _, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights)
             else:
@@ -773,8 +755,6 @@ class CombinerMDL:
             if self.state.best_hypothesis_score:
                 if mdl_ <= POS_EXAMPLE_WEIGHT * fn + NEG_EXAMPLE_WEIGHT * fp + size:
                     break
-
-            model_found = True
 
             rules = [rule_id for rule_id in ruleid_to_rule if model[rule_var[rule_id]-1] > 0]
             model_prog = [ruleid_to_rule[k] for k in rules]

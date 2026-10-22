@@ -3,6 +3,7 @@
 # Céline Hocquette, Andreas Niskanen, Matti Järvisalo, Andrew Cropper: # Learning MDL Logic Programs from Noisy Data. AAAI 2024: 10553-10561
 
 from collections import defaultdict
+from bitarray import bitarray
 from ortools.sat.python import cp_model
 from . import maxsat
 from pysat.formula import IDPool
@@ -10,7 +11,7 @@ from . import stats
 from . import logger
 from . state import update_best_hypothesis
 from bitarray.util import subset, any_and
-from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution
+from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, reduce_prog, calc_rule_size, print_incomplete_solution
 
 class SetCoverProgressPrinter(cp_model.CpSolverSolutionCallback):
     def __init__(self, rule_vars, num_pos, num_neg,
@@ -84,9 +85,6 @@ class CombinerSize:
         self.settings = settings
         self.tester = tester
         self.state = state
-
-        # a positive example is covered by a hypothesis_hash
-        self.covered_by_pos = defaultdict(set)
 
         # maps hypothesis_hash:int -> pos_covered:bitarray
         self.coverage_pos = {}

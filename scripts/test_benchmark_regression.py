@@ -216,7 +216,6 @@ def run_one(baseline, timeout, child_timeout):
             "output": output,
         }
 
-    problems = []
     if result["size"] != baseline["size"]:
         return {
             "status": "FAIL",

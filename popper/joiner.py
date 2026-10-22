@@ -2,7 +2,7 @@
 # Céline Hocquette, Andreas Niskanen, Rolf Morel, Matti Järvisalo, Andrew Cropper:
 # Learning Big Logical Rules by Joining Small Rules. IJCAI 2024: 3430-3438
 
-from pysat.solvers import Glucose3, Cadical153
+from pysat.solvers import Glucose3
 from pysat.card import CardEnc, EncType
 import clingo
 import os
@@ -11,34 +11,24 @@ import collections
 from collections import defaultdict
 from bitarray import bitarray, frozenbitarray
 from bitarray.util import ones, zeros, subset
-from pysat.solvers import Solver
 from typing import NamedTuple
-from functools import reduce
 from . tester import TestResult
 from . import stats
 from . import logger
-from ortools.sat.python import cp_model
 
 class Program(NamedTuple):
     rules: tuple
     negated: bool = False
 
-from . util import format_rule, calc_prog_size, format_prog, prog_is_recursive, prog_has_invention, Literal
+from . util import calc_prog_size, format_prog, Literal
 
-from . import maxsat
 from pysat.formula import IDPool
-from pysat.solvers import Solver
 from pysat.card import *
 from pysat.pb import *
 from pysat.formula import WCNF
 #from pysat.examples.rc2 import RC2
 
-import time
-from pysat.formula import WCNF, IDPool
-from pysat.examples.rc2 import RC2, RC2Stratified
-from pysat.card import CardEnc, EncType
-from bitarray import bitarray
-import re
+from pysat.examples.rc2 import RC2
 
 def get_rule_hash(rule):
     head, body = rule
@@ -102,7 +92,6 @@ class Joiner:
                 self.programs_with_arg[x] = []
 
         self.optimal_depth_search = 1
-        self.optimal = False
 
         # keep track of the minimum size of programs in the joiner
         # the first program added to the joiner is the one with minimal size
@@ -291,20 +280,6 @@ class Joiner:
             min_size = self.optimal_depth_search
         else:
             min_size = max(min_size, self.optimal_depth_search)
-
-        head_pred  = self.settings.head_literal.predicate
-
-        def test_it(x):
-            program_, coverage_ = x
-            program_ = inline_logic_rules_ast(program_, head_pred)
-
-            pos_, neg_ = self.tester.test_prog_all(program_)
-            if pos_.count(1) != coverage_.count(1):
-                print(format_prog(program_))
-                assert(False)
-            if neg_.count(1) != 0:
-                print(format_prog(program_), neg_.count(1))
-                assert(False)
 
         xs = self.solve_sat3()
 
@@ -565,7 +540,6 @@ class Joiner:
     #     return fragments
 
     def solve_complete(self):
-        state = self.state
         fragments = []
 
         all_progs = list(self.program_selected_var)
@@ -687,7 +661,7 @@ class Joiner:
                 def on_model(m):
                     nonlocal optimal_selected
                     optimal_selected = [a.arguments[0].number for a in m.symbols(atoms=True)if a.name == "select"]
-                result = ctl.solve(on_model=on_model)
+                ctl.solve(on_model=on_model)
                 elapsed = time.perf_counter() - start_time
 
 
@@ -849,7 +823,6 @@ i.e. it is a maximal good fragment (the local roof of the consistent
 region in the intent lattice).
 """
 
-from bitarray import bitarray, frozenbitarray
 
 
 def find_good_fragments(program_ids, pos_covers, neg_covers, num_pos,
@@ -1137,8 +1110,6 @@ def find_optimal_fragments_from_joiner(joiner, max_size=None):
     (extent, intent, unfolded, size)
         One tuple per optimal fragment.
     """
-    from pysat.examples.rc2 import RC2
-    from pysat.formula import WCNF
     from pysat.card import CardEnc, EncType
     from .util import calc_prog_size
     from .joiner import inline_logic_rules_ast

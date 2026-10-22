@@ -1,7 +1,4 @@
-import time
 import re
-from pysat.formula import CNF
-from pysat.solvers import Solver
 from pysat.card import *
 import clingo
 import operator
@@ -9,12 +6,11 @@ import numbers
 import clingo.script
 from importlib import resources
 from collections import defaultdict
-from . util import rule_is_recursive, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, Literal, format_rule, canonicalise
+from . util import rule_is_recursive, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, Literal, canonicalise
 clingo.script.enable_python()
 from clingo import Function, Number, Tuple_
 from itertools import permutations
 import dataclasses
-from . import logger
 from . import stats
 
 @dataclasses.dataclass(frozen=True)
@@ -64,7 +60,6 @@ def build_seen_rule_literal(handle, rule_var):
     return Literal('seen_rule', (handle, rule_var))
 
 def build_rule_literals(rule, rule_var, pi=False):
-    literals = []
     head, body = rule
     if pi:
         yield Literal('head_literal', (rule_var, head.predicate, len(head.arguments), tuple(vo_variable2(rule_var, v) for v in head.arguments)))
@@ -92,7 +87,6 @@ class Generator:
 
         # ex-grounder
         self.seen_assignments = {}
-        self.cached4 = {}
 
         # handles for rules that are minimal and unsatisfiable
         self.bad_handles = set()
@@ -149,10 +143,6 @@ class Generator:
         #             encoding.append(f'direction_({pred}, {i}, in).')
         #         if v == '-':
         #             encoding.append(f'direction_({pred}, {i}, out).')
-
-        max_size = (1 + settings.max_body) * settings.max_rules
-        # if state.max_literals < max_size:
-            # encoding.append(f'custom_max_size({state.max_literals}).')
 
         if settings.pi_enabled:
             encoding.append(f'#show head_literal/4.')
@@ -222,7 +212,6 @@ class Generator:
             if size > self.state.max_literals:
                 return
             # self.settings.logger.out(f'Generating programs of size: {size}')
-            self.current_size = size
             with stats.duration('init'):
                 self.update_solver(size)
             size += 1
@@ -348,10 +337,10 @@ class Generator:
         prog = []
 
         for rule_index in rule_index_to_head:
-            head_pred, head_args, head_arity = rule_index_to_head[rule_index]
+            head_pred, head_args, _head_arity = rule_index_to_head[rule_index]
             head = Literal(head_pred, head_args)
             body = set()
-            for (body_pred, body_args, body_arity) in rule_index_to_body[rule_index]:
+            for (body_pred, body_args, _body_arity) in rule_index_to_body[rule_index]:
                 body.add(Literal(body_pred, body_args))
             body = frozenset(body)
             rule = head, body
@@ -526,8 +515,6 @@ class Generator:
     def constrain(self, tmp_new_cons):
         model = self.model
         new_cons = set()
-        debug = True
-        # debug = False
 
         # for con_type, con_prog, con_prog_ordering in tmp_new_cons:
         for xs in tmp_new_cons:

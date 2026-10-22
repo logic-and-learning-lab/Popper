@@ -1,4 +1,3 @@
-from collections import defaultdict
 import time
 from . util import print_incomplete_solution, mdl_score
 
