@@ -130,8 +130,10 @@ def popper(settings):
 
             # PRUNE BIGGER SPACES
             if (noisy and settings.single_solve) or (not noisy and state.solution_found):
-                for i in range(state.max_literals+1, 1000):
-                    generator.prune_size(i)
+                max_program_size = settings.max_rules * (settings.max_body + 1)
+                upper = min(max_literals_before, max_program_size)
+                for size in range(state.max_literals + 1, upper + 1):
+                    generator.prune_size(size)
 
         # CONSTRAIN
         with stats.duration('constrain'):
