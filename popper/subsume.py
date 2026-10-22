@@ -348,6 +348,8 @@ class SubsumeChecker:
             uncovered = new_uncovered
             space_remaining = new_budget
             max_additional_rules = (space_remaining) // min_size
+            # the bound computed before propagation may have been for a rule that is now committed
+            min_uncovered_size = min_size
 
         # check whether everything is covered
         if not uncovered.any():
