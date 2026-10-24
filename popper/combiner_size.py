@@ -105,6 +105,11 @@ class CombinerSize:
 
         self.inconsistent = set()
 
+        # True when the last noiseless CP call proved that no hypothesis smaller than
+        # the best one exists using the saved rules. If so, any better hypothesis must
+        # use a newly added rule, so the next call can force it into the model.
+        self.proven = False
+
         # self.load_solver()
 
     def add_prog(self, prog, prog_size, test_result):
@@ -278,10 +283,12 @@ class CombinerSize:
         best_prog = [ruleid_to_rule[k] for k in selected]
         return best_prog, best_size
 
-    def find_combination_norec_cp(self, last_combine_stage=False):
+    def find_combination_norec_cp(self, last_combine_stage=False, new_progs=()):
         hard_coverage = self.state.solution_found
+        # only the last stage is always a full solve
+        must_use = new_progs if (hard_coverage and self.proven and not last_combine_stage) else ()
         cp_mod, rule_vars, ruleid_to_rule, ruleid_to_size, total_size_expr, covered_vars = \
-            self._build_set_cover_model(hard_coverage=hard_coverage)
+            self._build_set_cover_model(hard_coverage=hard_coverage, must_use=must_use)
 
         solver = cp_model.CpSolver()
         solver.parameters.num_search_workers = 1
@@ -320,6 +327,9 @@ class CombinerSize:
         )
 
         status = solver.Solve(cp_mod, printer)
+
+        # a timeout (UNKNOWN or merely FEASIBLE) proves nothing
+        self.proven = hard_coverage and status in (cp_model.OPTIMAL, cp_model.INFEASIBLE)
 
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return [], False
@@ -383,11 +393,13 @@ class CombinerSize:
         best_prog = [ruleid_to_rule[k] for k, var in rule_vars.items() if solver.Value(var)]
         return best_prog, optimal_size
 
-    def _build_set_cover_model(self, hard_coverage=True):
+    def _build_set_cover_model(self, hard_coverage=True, must_use=()):
         """Builds the CP-SAT model and returns it along with all the supporting data structures.
 
         When hard_coverage=False, each example gets a covered_var (BoolVar) instead of a hard
         constraint, so the solver can choose to leave examples uncovered at a penalty.
+
+        must_use is a collection of saved program hashes, at least one of which must be in the hypothesis.
         """
         cp_mod = cp_model.CpModel()
         ruleid_to_rule = {}
@@ -395,6 +407,7 @@ class CombinerSize:
         rules_covering_pos_example = defaultdict(list)
         rule_vars = {}
         covered_vars = {}
+        new_vars = []
 
         for k, prog_hash in enumerate(self.saved_progs, start=1):
             prog = self.prog_lookup[prog_hash]
@@ -403,8 +416,13 @@ class CombinerSize:
             ruleid_to_rule[k] = rule
             ruleid_to_size[k] = size
             rule_vars[k] = cp_mod.NewBoolVar(f'rule_{k}')
+            if prog_hash in must_use:
+                new_vars.append(rule_vars[k])
             for ex in self.coverage_pos[prog_hash].search(1):
                 rules_covering_pos_example[ex].append(k)
+
+        if new_vars:
+            cp_mod.AddBoolOr(new_vars)
 
         for ex in range(self.tester.num_pos):
             cov_clause = rules_covering_pos_example.get(ex, [])
@@ -531,7 +549,7 @@ class CombinerSize:
 
         while True:
 
-            if last_combine_stage:
+            if last_combine_stage or not self.settings.nuwls:
                 _, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights)
             else:
                 _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, self.settings.anytime_timeout)
@@ -577,7 +595,7 @@ class CombinerSize:
             if not self.settings.nuwls:
                 if last_combine_stage:
                     logger.info(f'Calling CP solver for final combine stage with {len(self.saved_progs)} rules')
-                new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
+                new_solution, cost = self.find_combination_norec_cp(last_combine_stage, new_progs)
                 if last_combine_stage and self.settings.all_opt:
                     logger.info(f'Calling CP solver to find all optimal hypotheses')
                     self._enumerate_all_optimal()
