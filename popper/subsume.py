@@ -1,5 +1,5 @@
 from bitarray import bitarray
-from bitarray.util import subset, zeros, any_and
+from bitarray.util import subset, zeros, any_and, count_and
 from bisect import bisect_right
 from operator import itemgetter
 from .util import (
@@ -133,8 +133,20 @@ class SubsumeChecker:
                     return True
         return False
 
-    def check_covers_too_few(self, prog_size, pos_covered, prog):
-        inconsistent = self.tester.test_prog_inconsistent(prog)
+    def check_covers_too_few(self, prog_size, pos_covered, prog, inconsistent=None):
+        if inconsistent is None:
+            if pos_covered.count(1) == self.tester.num_pos:
+                return False
+
+            space_remaining = self.state.max_literals - prog_size
+            # An inconsistent program needs one extra literal. Only skip the
+            # test when the budget conclusion holds for either outcome.
+            if space_remaining - 1 >= self.state.search_depth:
+                return False
+            if space_remaining < self.state.search_depth and space_remaining < self.state.min_size:
+                return True
+
+            inconsistent = self.tester.test_prog_inconsistent(prog)
 
         if not self.settings.joiner:
             key = (prog_size, pos_covered, inconsistent)
@@ -354,6 +366,52 @@ class SubsumeChecker:
         # check whether everything is covered
         if not uncovered.any():
             return False
+
+        # These stronger bounds assume independent rules with additive costs,
+        # and that all affordable alternatives are represented in success_sets.
+        ordinary_cover = not (
+            self.settings.joiner
+            or getattr(self.settings, 'recursion_enabled', False)
+            or getattr(self.settings, 'pi_enabled', False)
+        )
+        if ordinary_cover and forced_count:
+            still_uncovered = uncovered.copy()
+            residual_min_size = None
+            residual_hardest_size = 0
+            for cov, size in sorted_success_sets:
+                if size > space_remaining:
+                    break
+                if residual_min_size is None and any_and(uncovered, cov):
+                    residual_min_size = size
+                if any_and(still_uncovered, cov):
+                    residual_hardest_size = size
+                    still_uncovered &= ~cov
+                    if not still_uncovered.any():
+                        break
+            # Forced propagation already checked that affordable rules cover U.
+            assert residual_min_size is not None and not still_uncovered.any()
+            residual_max_rules = 1 + (space_remaining - residual_hardest_size) // residual_min_size
+            min_size = residual_min_size
+            min_uncovered_size = residual_hardest_size
+            max_additional_rules = residual_max_rules
+
+        if ordinary_cover:
+            # A cover needs at least |U| * min(cost / gain) literals. Compare
+            # integer products so rounding cannot cause an incorrect prune.
+            best_cost = best_gain = 0
+            uncovered_count = uncovered.count(1)
+            for cov, size in sorted_success_sets:
+                if size > space_remaining:
+                    break
+                gain = count_and(uncovered, cov)
+                if gain and (not best_gain or size * best_gain < best_cost * gain):
+                    best_cost, best_gain = size, gain
+                    # One sufficiently cheap ratio proves this bound cannot
+                    # prune; scanning more rules could only weaken it further.
+                    if uncovered_count * best_cost <= space_remaining * best_gain:
+                        break
+            if best_gain and uncovered_count * best_cost > space_remaining * best_gain:
+                return True
 
         # MAX TOTAL RULES = 1
         # if this prog + the minimum size prog is too big then this prog must be a single rule hypothesis

@@ -160,8 +160,9 @@ class Tester():
             if tp > prog_size:
                 # maximum size of specialisations allowed
                 max_k_neg1 = min(settings.max_body - (prog_size - 1), self.state.max_literals - prog_size)
-                # conditions which determine whether a program can be part of a solution
-                max_k_neg2 = min(self.state.best_hypothesis_mdl - prog_size, tp - prog_size)
+                # Negatives may already be covered by other selected rules.
+                # Only the incumbent gives a context-independent FP cutoff.
+                max_k_neg2 = self.state.best_hypothesis_mdl - prog_size
                 max_k_neg = max(max_k_neg1, max_k_neg2)
                 neg_covered = []
                 if self.num_neg > 0:

@@ -185,7 +185,7 @@ def build_constraints_noiseless(settings, tester, state, unsatcore_finder, allsa
         with stats.duration('check subsumed and covers_too_few'):
             subsumed = subsumer.check_subsumed(pos_covered, prog_size)
             subsumed_by_two = not subsumed and subsumer.check_subsumed_by_two(pos_covered, prog_size)
-            covers_too_few = not subsumed and not subsumed_by_two and subsumer.check_covers_too_few(prog_size, pos_covered, prog)
+            covers_too_few = not subsumed and not subsumed_by_two and subsumer.check_covers_too_few(prog_size, pos_covered, prog, inconsistent=test_result.inconsistent)
 
         if subsumed or subsumed_by_two or covers_too_few:
             add_spec = True
@@ -322,16 +322,23 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
 
     if too_few_tp or too_many_fp:
         gen_size_ = fn + prog_size
-        if gen_size_ <= prog_size:
-            add_gen = True
-        if gen_size_ < state.max_literals:
-            gen_size = gen_size_
     else:
         gen_size_ = min([fn + prog_size, num_pos - fp, state.best_hypothesis_mdl - mdl + num_pos + prog_size])
-        if gen_size_ <= prog_size:
-            add_gen = True
-        if gen_size_ < state.max_literals:
-            gen_size = gen_size_
+
+    if fp is not None and (settings.recursion_enabled or settings.pi_enabled):
+        # Every generalisation retains these false positives, even when fp is
+        # only a lower bound from truncated negative testing.
+        mdl_gen_size = state.best_hypothesis_mdl - fp
+        best_score = state.best_hypothesis_score
+        if fp == 0 and best_score is not None and (best_score[1] or best_score[3]):
+            # A perfect hypothesis can still win an equal-MDL tie.
+            mdl_gen_size += 1
+        gen_size_ = min(gen_size_, mdl_gen_size)
+
+    if gen_size_ <= prog_size:
+        add_gen = True
+    if gen_size_ < state.max_literals:
+        gen_size = gen_size_
 
     # prune generalisations of rules with redundant literals
     if is_recursive:
@@ -372,7 +379,7 @@ def build_constraints_noisy(settings, tester, state, unsatcore_finder, allsatcor
     if not add_spec and not add_gen:
         new_cons.append((BANISH, prog))
 
-    add_to_combiner = (not too_few_tp) and (not too_many_fp) and (not is_recursive) and (not has_invention) and tp > prog_size + fp and fp + prog_size < state.best_hypothesis_mdl and (not noisy_subsumed)
+    add_to_combiner = (not too_few_tp) and (not too_many_fp) and (not is_recursive) and (not has_invention) and tp > prog_size and fp + prog_size < state.best_hypothesis_mdl and (not noisy_subsumed)
 
     return new_cons, add_to_combiner
 

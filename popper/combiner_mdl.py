@@ -228,8 +228,9 @@ class CombinerMDL:
         if (fp+ prog_size) >= best_mdl:
             print(fp + prog_size, best_mdl, format_prog(prog))
             assert(False)
-        # IF A RULE COSTS MORE (SIZE + ERRORS) THAN THE POSITIVES IT COVERS, IT IS DEAD WEIGHT
-        if tp <= (fp + prog_size):
+        # Removing a rule saves its size, but may remove none of its false
+        # positives: those can also be covered by other selected rules.
+        if tp <= prog_size:
             assert(False)
 
         local_delete = set()
