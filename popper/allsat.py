@@ -91,13 +91,13 @@ class AllSatCoreFinder:
         if not set(literal.arguments).issubset(body_vars):
             return out
 
+        if self.seen_progs.seen_or_add(body, literal):
+            return out
+
         if not connected(body | {literal}):
             for atom in body:
                 new_body = body - {atom}
                 out.extend(self.check_redundant_literal_aux(new_body, literal, allsat_cache, not_all_sat_cache, True))
-            return out
-
-        if self.seen_progs.seen_or_add(body, literal):
             return out
 
         if any(body.issubset(seen_body) for seen_body in not_all_sat_cache):
