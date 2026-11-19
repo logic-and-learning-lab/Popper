@@ -9,7 +9,7 @@ from . import maxsat
 from pysat.formula import IDPool
 from . import stats
 from . import logger
-from . state import update_best_hypothesis
+from . state import update_best_hypothesis, solver_budget, out_of_time, FINAL_COMBINE_TIMEOUT_MSG, ALL_OPT_TIMEOUT_MSG, ALL_OPT_SKIPPED_MSG
 from bitarray.util import subset, any_and
 from . util import rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, reduce_prog, calc_rule_size, print_incomplete_solution
 
@@ -254,10 +254,16 @@ class CombinerSize:
         soft_clauses += [[lit] for lit in rule_soft_lits]
         weights += size_weights
 
+        budget = solver_budget(self.settings, self.state, last_combine_stage)
+        if out_of_time(budget):
+            if last_combine_stage:
+                logger.out(FINAL_COMBINE_TIMEOUT_MSG)
+            return [], False
+
         if last_combine_stage or not self.settings.nuwls:
             _, model = maxsat.exact_maxsat_solve(hard_clauses, soft_clauses, weights)
         else:
-            _, model = maxsat.anytime_maxsat_solve(hard_clauses, soft_clauses, weights, self.settings.anytime_timeout)
+            _, model = maxsat.anytime_maxsat_solve(hard_clauses, soft_clauses, weights, budget)
 
         if model is None:
             return [], False
@@ -290,11 +296,19 @@ class CombinerSize:
         cp_mod, rule_vars, ruleid_to_rule, ruleid_to_size, total_size_expr, covered_vars = \
             self._build_set_cover_model(hard_coverage=hard_coverage, must_use=must_use)
 
+        budget = solver_budget(self.settings, self.state, last_combine_stage)
+        if out_of_time(budget):
+            # the new programs were never combined, so a later combine must not assume they were
+            self.proven = False
+            if last_combine_stage:
+                logger.out(FINAL_COMBINE_TIMEOUT_MSG)
+            return [], False
+
         solver = cp_model.CpSolver()
         solver.parameters.num_search_workers = 1
         solver.parameters.linearization_level = 2
-        if not last_combine_stage:
-            solver.parameters.max_time_in_seconds = float(self.settings.anytime_timeout)
+        if budget is not None:
+            solver.parameters.max_time_in_seconds = float(budget)
 
         if hard_coverage:
             current_best_size = self.state.best_hypothesis_size if self.state.best_hypothesis_score else float('inf')
@@ -330,6 +344,8 @@ class CombinerSize:
 
         # a timeout (UNKNOWN or merely FEASIBLE) proves nothing
         self.proven = hard_coverage and status in (cp_model.OPTIMAL, cp_model.INFEASIBLE)
+        if last_combine_stage and status in (cp_model.FEASIBLE, cp_model.UNKNOWN):
+            logger.out(FINAL_COMBINE_TIMEOUT_MSG)
 
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return [], False
@@ -370,10 +386,17 @@ class CombinerSize:
             cp_mod.Add(fn_expr == int(optimal_fn))
             cp_mod.Add(total_size_expr == int(optimal_size))
 
+        budget = solver_budget(self.settings, self.state, True)
+        if out_of_time(budget):
+            logger.out(ALL_OPT_TIMEOUT_MSG)
+            return [], False
+
         solver = cp_model.CpSolver()
         solver.parameters.num_search_workers = 1
         solver.parameters.linearization_level = 2
         solver.parameters.enumerate_all_solutions = True
+        if budget is not None:
+            solver.parameters.max_time_in_seconds = float(budget)
 
         printer = AllOptPrinter(
             rule_vars=rule_vars,
@@ -386,6 +409,10 @@ class CombinerSize:
         )
 
         status = solver.Solve(cp_mod, printer)
+
+        # a finished enumeration ends OPTIMAL; one cut short by the time limit ends FEASIBLE or UNKNOWN
+        if status in (cp_model.FEASIBLE, cp_model.UNKNOWN):
+            logger.out(ALL_OPT_TIMEOUT_MSG)
 
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return [], False
@@ -548,11 +575,16 @@ class CombinerSize:
         size_ = self.state.best_hypothesis_size if self.state.best_hypothesis_score else float('inf')
 
         while True:
+            budget = solver_budget(self.settings, self.state, last_combine_stage)
+            if out_of_time(budget):
+                if last_combine_stage:
+                    logger.out(FINAL_COMBINE_TIMEOUT_MSG)
+                break
 
             if last_combine_stage or not self.settings.nuwls:
                 _, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights)
             else:
-                _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, self.settings.anytime_timeout)
+                _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, budget)
 
             if model is None:
                 break
@@ -597,8 +629,11 @@ class CombinerSize:
                     logger.info(f'Calling CP solver for final combine stage with {len(self.saved_progs)} rules')
                 new_solution, cost = self.find_combination_norec_cp(last_combine_stage, new_progs)
                 if last_combine_stage and self.settings.all_opt:
-                    logger.info(f'Calling CP solver to find all optimal hypotheses')
-                    self._enumerate_all_optimal()
+                    if self.state.search_timed_out:
+                        logger.out(ALL_OPT_SKIPPED_MSG)
+                    else:
+                        logger.info(f'Calling CP solver to find all optimal hypotheses')
+                        self._enumerate_all_optimal()
             else:
                 if last_combine_stage:
                     logger.info(f'Calling MaxSAT solver for final noiseless combine stage with {len(self.saved_progs)} rules')

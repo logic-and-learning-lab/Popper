@@ -14,7 +14,7 @@ from . import stats
 from . import logger
 from bitarray.util import subset, zeros, count_and, count_or
 from . util import prog_is_recursive, prog_has_invention, calc_prog_size, format_prog, reduce_prog, calc_rule_size, print_incomplete_solution
-from . state import update_best_hypothesis
+from . state import update_best_hypothesis, solver_budget, out_of_time, FINAL_COMBINE_TIMEOUT_MSG, ALL_OPT_TIMEOUT_MSG, ALL_OPT_SKIPPED_MSG
 
 POS_EXAMPLE_WEIGHT = 1
 NEG_EXAMPLE_WEIGHT = 1
@@ -432,10 +432,16 @@ class CombinerMDL:
         #             if r1 < r2:
         #                 encoding.append([-r1, -r2])  # hard clause
 
+        budget = solver_budget(self.settings, self.state, last_combine_stage)
+        if out_of_time(budget):
+            if last_combine_stage:
+                logger.out(FINAL_COMBINE_TIMEOUT_MSG)
+            return [], False
+
         if last_combine_stage or not self.settings.nuwls:
             _, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights)
         else:
-            _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, self.settings.anytime_timeout)
+            _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, budget)
 
         if model is None:
             return [], False
@@ -478,12 +484,18 @@ class CombinerMDL:
                 rule = ruleid_to_rule[k]
                 model.AddHint(var, 1 if hash(rule) in best_set else 0)
 
+        budget = solver_budget(self.settings, self.state, last_combine_stage)
+        if out_of_time(budget):
+            if last_combine_stage:
+                logger.out(FINAL_COMBINE_TIMEOUT_MSG)
+            return [], False
+
         solver = cp_model.CpSolver()
         solver.parameters.num_search_workers = 1
         solver.parameters.linearization_level = 2
 
-        if not last_combine_stage:
-            solver.parameters.max_time_in_seconds = self.settings.anytime_timeout
+        if budget is not None:
+            solver.parameters.max_time_in_seconds = float(budget)
 
         printer = SetCoverProgressPrinter(
             rule_vars=rule_vars,
@@ -498,6 +510,9 @@ class CombinerMDL:
         )
 
         status = solver.Solve(model, printer)
+
+        if last_combine_stage and status in (cp_model.FEASIBLE, cp_model.UNKNOWN):
+            logger.out(FINAL_COMBINE_TIMEOUT_MSG)
 
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return [], False
@@ -518,10 +533,17 @@ class CombinerMDL:
             assert(False)
         model.Add(total_mdl_expr == int(optimal_mdl))
 
+        budget = solver_budget(self.settings, self.state, True)
+        if out_of_time(budget):
+            logger.out(ALL_OPT_TIMEOUT_MSG)
+            return [], False
+
         solver = cp_model.CpSolver()
         solver.parameters.num_search_workers = 1
         solver.parameters.linearization_level = 2
         solver.parameters.enumerate_all_solutions = True
+        if budget is not None:
+            solver.parameters.max_time_in_seconds = float(budget)
 
         printer = OptPrinter(
             rule_vars=rule_vars,
@@ -536,6 +558,10 @@ class CombinerMDL:
         )
 
         status = solver.Solve(model, printer)
+
+        # a finished enumeration ends OPTIMAL; one cut short by the time limit ends FEASIBLE or UNKNOWN
+        if status in (cp_model.FEASIBLE, cp_model.UNKNOWN):
+            logger.out(ALL_OPT_TIMEOUT_MSG)
 
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return [], False
@@ -740,10 +766,16 @@ class CombinerMDL:
             mdl_ = self.state.best_hypothesis_mdl
 
         while True:
+            budget = solver_budget(self.settings, self.state, last_combine_stage)
+            if out_of_time(budget):
+                if last_combine_stage:
+                    logger.out(FINAL_COMBINE_TIMEOUT_MSG)
+                break
+
             if last_combine_stage or not self.settings.nuwls:
                 _, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights)
             else:
-                _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, self.settings.anytime_timeout)
+                _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, budget)
 
             if model is None:
                 print("WARNING: No solution found, exit combiner.")
@@ -869,8 +901,11 @@ class CombinerMDL:
                     logger.info(f'Calling CP solver for final noisy combine stage with {len(self.saved_progs)} rules')
                 new_solution, cost = self.find_combination_norec_cp(last_combine_stage)
                 if last_combine_stage and self.settings.all_opt:
-                    logger.info(f'Calling CP solver to find all optimal hypotheses')
-                    self._enumerate_all_optimal()
+                    if self.state.search_timed_out:
+                        logger.out(ALL_OPT_SKIPPED_MSG)
+                    else:
+                        logger.info(f'Calling CP solver to find all optimal hypotheses')
+                        self._enumerate_all_optimal()
             else:
                 if last_combine_stage:
                     logger.info(f'Calling MaxSAT solver for final noisy combine stage with {len(self.saved_progs)} rules')

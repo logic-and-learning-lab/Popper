@@ -1,4 +1,3 @@
-import time
 from bitarray.util import ones
 from . util import format_rule, rule_is_recursive, prog_is_recursive, prog_has_invention, calc_prog_size, format_literal, GENERALISATION, SPECIALISATION, UNSAT, REDUNDANCY_CONSTRAINT1, REDUNDANCY_CONSTRAINT2, TMP_ANDY, BANISH, canonicalise, format_prog
 from . tester import Tester
@@ -42,6 +41,9 @@ def check_size_change(state, prog_size):
 
 def popper(settings):
     state = SearchState()
+    state.deadline = state._start_time + settings.timeout
+    # stop searching a little early so the final combine has time to run before the deadline
+    combine_reserve = min(settings.anytime_timeout, 0.1 * settings.timeout)
     with stats.duration('load data'):
         tester = Tester(settings, state)
     # nasty as state needs tester and tester needs state
@@ -65,8 +67,9 @@ def popper(settings):
         test_prog = tester.test_prog
 
     for prog in generator.get_prog():
-        if time.time() - state._start_time >= settings.timeout:
+        if state.time_left() <= combine_reserve:
             logger.out(f'TIMEOUT OF {int(settings.timeout)} SECONDS EXCEEDED')
+            state.search_timed_out = True
             break
         stats.stats.total_programs += 1
 

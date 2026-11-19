@@ -29,10 +29,36 @@ class SearchState:
         self.max_literals = 1000
         self._start_time = time.time()
 
-    def time_remaining(self, timeout):
-        time_now = time.time()
-        time_spent = time_now - self._start_time
-        return max(int(timeout-time_spent), 1)
+        # absolute time (as time.time()) by which Popper must finish; None means no deadline
+        self.deadline = None
+        # set when the search loop stops because it reached the timeout
+        self.search_timed_out = False
+
+    def time_left(self):
+        if self.deadline is None:
+            return float('inf')
+        return self.deadline - time.time()
+
+def solver_budget(settings, state, last_combine_stage):
+    """Time limit in seconds for one solver call in the combine stage, or None for no limit.
+
+    The final combine may use all the time left before the deadline. Every other combine is
+    also capped at settings.anytime_timeout. A budget <= 0 means there is no time left, so
+    the caller should skip the solve and keep the current best hypothesis.
+    """
+    left = state.time_left()
+    if not last_combine_stage:
+        left = min(left, settings.anytime_timeout)
+    if left == float('inf'):
+        return None
+    return left
+
+def out_of_time(budget):
+    return budget is not None and budget <= 0
+
+FINAL_COMBINE_TIMEOUT_MSG = 'FINAL COMBINE STOPPED AT THE TIMEOUT: HYPOTHESIS MAY NOT BE OPTIMAL'
+ALL_OPT_TIMEOUT_MSG = 'ALL-OPT ENUMERATION STOPPED AT THE TIMEOUT: THE LIST MAY BE INCOMPLETE'
+ALL_OPT_SKIPPED_MSG = 'SKIPPING ALL-OPT ENUMERATION: THE SEARCH TIMED OUT, SO OPTIMALITY IS NOT PROVEN'
 
 def initialise_noisy_best_hypothesis(state, num_pos, num_neg):
     state.best_hypothesis_score = (0, num_pos, num_neg, 0)
