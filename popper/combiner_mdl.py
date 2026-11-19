@@ -438,10 +438,14 @@ class CombinerMDL:
                 logger.out(FINAL_COMBINE_TIMEOUT_MSG)
             return [], False
 
-        if last_combine_stage or not self.settings.nuwls:
-            _, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights)
-        else:
+        if self.settings.nuwls and not last_combine_stage:
             _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, budget)
+        else:
+            # the cost of a model is its MDL score, so only allow models better than the current best
+            upper_bound = self.state.best_hypothesis_mdl if self.state.best_hypothesis_mdl else None
+            status, _, model = maxsat.cp_maxsat_solve(encoding, soft_clauses, weights, budget, upper_bound)
+            if last_combine_stage and status in (cp_model.FEASIBLE, cp_model.UNKNOWN):
+                logger.out(FINAL_COMBINE_TIMEOUT_MSG)
 
         if model is None:
             return [], False
@@ -765,20 +769,28 @@ class CombinerMDL:
         if self.state.best_hypothesis_mdl:
             mdl_ = self.state.best_hypothesis_mdl
 
+        # the cost of a model is POS_EXAMPLE_WEIGHT * fn + NEG_EXAMPLE_WEIGHT * fp + size, the same
+        # quantity as the improvement check below, so the bound only allows strictly better models
+        upper_bound = mdl_ if (self.state.best_hypothesis_score and self.state.best_hypothesis_mdl) else None
+
+        # set when a solve was stopped by the time limit, so the result may not be optimal
+        cut_short = False
+
         while True:
             budget = solver_budget(self.settings, self.state, last_combine_stage)
             if out_of_time(budget):
-                if last_combine_stage:
-                    logger.out(FINAL_COMBINE_TIMEOUT_MSG)
+                cut_short = True
                 break
 
-            if last_combine_stage or not self.settings.nuwls:
-                _, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights)
-            else:
+            if self.settings.nuwls and not last_combine_stage:
                 _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, budget)
+            else:
+                status, _, model = maxsat.cp_maxsat_solve(encoding, soft_clauses, weights, budget, upper_bound)
+                if status in (cp_model.FEASIBLE, cp_model.UNKNOWN):
+                    cut_short = True
 
+            # no model: no better combination exists, or the time limit stopped the solver first
             if model is None:
-                print("WARNING: No solution found, exit combiner.")
                 break
 
             fn = sum(1 for i in pos_index if model[pos_example_covered_var[i]-1] < 0)
@@ -815,6 +827,9 @@ class CombinerMDL:
                 ids = [rulehash_to_id[hash(rule)] for rule in smaller]
                 clause = [-rule_var[k] for k in ids]
                 encoding.append(clause)
+
+        if last_combine_stage and cut_short:
+            logger.out(FINAL_COMBINE_TIMEOUT_MSG)
 
         best_prog = [ruleid_to_rule[k] for k in best_prog]
         return best_prog, best_fn + best_fp + best_size

@@ -260,10 +260,17 @@ class CombinerSize:
                 logger.out(FINAL_COMBINE_TIMEOUT_MSG)
             return [], False
 
-        if last_combine_stage or not self.settings.nuwls:
-            _, model = maxsat.exact_maxsat_solve(hard_clauses, soft_clauses, weights)
-        else:
+        if self.settings.nuwls and not last_combine_stage:
             _, model = maxsat.anytime_maxsat_solve(hard_clauses, soft_clauses, weights, budget)
+        else:
+            # with hard coverage the cost is the total rule size, so only allow smaller programs;
+            # with soft coverage the cost leaves out examples no rule covers, so the checks below decide
+            upper_bound = None
+            if self.state.solution_found and self.state.best_hypothesis_score:
+                upper_bound = self.state.best_hypothesis_size
+            status, _, model = maxsat.cp_maxsat_solve(hard_clauses, soft_clauses, weights, budget, upper_bound)
+            if last_combine_stage and status in (cp_model.FEASIBLE, cp_model.UNKNOWN):
+                logger.out(FINAL_COMBINE_TIMEOUT_MSG)
 
         if model is None:
             return [], False
@@ -574,17 +581,23 @@ class CombinerSize:
         # Check existing best size
         size_ = self.state.best_hypothesis_size if self.state.best_hypothesis_score else float('inf')
 
+        # set when a solve was stopped by the time limit, so the result may not be optimal
+        cut_short = False
+
         while True:
             budget = solver_budget(self.settings, self.state, last_combine_stage)
             if out_of_time(budget):
-                if last_combine_stage:
-                    logger.out(FINAL_COMBINE_TIMEOUT_MSG)
+                cut_short = True
                 break
 
-            if last_combine_stage or not self.settings.nuwls:
-                _, model = maxsat.exact_maxsat_solve(encoding, soft_clauses, weights)
-            else:
+            if self.settings.nuwls and not last_combine_stage:
                 _, model = maxsat.anytime_maxsat_solve(encoding, soft_clauses, weights, budget)
+            else:
+                # the cost is the total rule size, so the bound only allows strictly smaller programs:
+                # INFEASIBLE then means no smaller combination exists
+                status, _, model = maxsat.cp_maxsat_solve(encoding, soft_clauses, weights, budget, size_)
+                if status in (cp_model.FEASIBLE, cp_model.UNKNOWN):
+                    cut_short = True
 
             if model is None:
                 break
@@ -609,6 +622,9 @@ class CombinerSize:
             ids = [rulehash_to_id[hash(rule)] for rule in smaller]
             clause = [-rule_var[k] for k in ids]
             encoding.append(clause)
+
+        if last_combine_stage and cut_short:
+            logger.out(FINAL_COMBINE_TIMEOUT_MSG)
 
         best_prog = [ruleid_to_rule[k] for k in best_prog]
 
